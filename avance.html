@@ -2239,15 +2239,11 @@ function grpClass(num) {
 const AVANCE_CLIENT_ID = localStorage.getItem('avance_client_id') || ('avance_' + Math.random().toString(36).slice(2) + Date.now().toString(36));
 localStorage.setItem('avance_client_id', AVANCE_CLIENT_ID);
 function getAvanceUserName(){
-  let n=localStorage.getItem('avance_user_name')||'';
-  if(!n){
-    n=prompt('Nombre para identificarte en la planilla:', 'Emilio') || 'Usuario';
-    localStorage.setItem('avance_user_name', n.trim() || 'Usuario');
-  }
-  return n;
+  // No pedir nombre al iniciar: evita el cartel y deja un usuario genérico.
+  return 'Usuario';
 }
-let avanceUserName = localStorage.getItem('avance_user_name') || '';
-function ensureAvanceUserName(){ if(!avanceUserName) avanceUserName=getAvanceUserName(); return avanceUserName; }
+let avanceUserName = 'Usuario';
+function ensureAvanceUserName(){ return avanceUserName || 'Usuario'; }
 function setSyncMetaAvance(txt,warn=false){
   const el=document.getElementById('sync-meta');
   if(el){el.textContent=txt;el.className='sync-meta'+(warn?' warn':'');}
