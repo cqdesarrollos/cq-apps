@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acopio CQ</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#F5F3EF;font-family:'Space Grotesk',sans-serif;color:#1C2B22;min-height:100vh}
+:root{
+  --green:#1C3D35;--green2:#2E7D5E;--green3:#7AAF96;
+  --sand:#F5F3EF;--sand2:#EDE9E1;--sand3:#D5CFC3;
+  --amber:#C8882A;--amberL:#F5E6C8;
+  --red:#C0392B;--redL:#FDECEA;
+  --mono:'JetBrains Mono',monospace;
+}
+
+.hdr{background:var(--green);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.hdr-logo{font-size:15px;font-weight:800;color:#fff;letter-spacing:.04em;cursor:pointer;display:flex;align-items:center;gap:8px}
+.hdr-logo span{color:var(--green3);font-size:11px;font-weight:500}
+.hdr-back{color:var(--green3);font-size:16px}
+.tc-pill{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:4px 10px;display:flex;align-items:center;gap:6px;cursor:pointer}
+.tc-label{font-size:9px;color:var(--green3);font-weight:700;letter-spacing:.06em}
+.tc-val{font-family:var(--mono);font-size:12px;color:#fff;font-weight:600}
+.tc-edit{font-size:10px;color:var(--green3)}
+
+.tabs{background:#fff;border-bottom:1px solid var(--sand3);display:flex;overflow-x:auto;scrollbar-width:none;position:sticky;top:49px;z-index:100}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:11px 16px;font-size:11px;font-weight:800;letter-spacing:.04em;color:#9AAE9A;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s}
+.tab.active{color:var(--green);border-bottom-color:var(--green2)}
+
+.main{padding:12px;max-width:900px;margin:0 auto}
+.sec-ttl{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--green3);margin-bottom:8px;margin-top:4px}
+
+.card{background:#fff;border:1px solid var(--sand3);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.card-hd{padding:10px 14px;border-bottom:1px solid #F0EDE8;display:flex;align-items:center;justify-content:space-between}
+.card-ttl{font-size:12px;font-weight:800;color:var(--green)}
+.card-sub{font-size:10px;font-weight:700;color:#A8BFA8}
+
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.kpi{background:#fff;border:1px solid var(--sand3);border-radius:9px;padding:11px 13px}
+.kpi-label{font-size:9px;font-weight:800;color:var(--green3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.kpi-val{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)}
+.kpi-sub{font-size:9px;color:#A8BFA8;margin-top:2px}
+.kpi.warn .kpi-val{color:var(--amber)}
+.kpi.warn{border-color:#E8C98A}
+
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{background:#F7F6F3;font-size:9px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--green3);padding:8px 10px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--sand3)}
+th.r{text-align:right}
+td{padding:8px 10px;font-size:12px;border-bottom:1px solid #F5F3EF;vertical-align:middle}
+td.mono{font-family:var(--mono);font-size:11px}
+td.r{text-align:right}
+td.edit-cell{cursor:pointer}
+td.edit-cell:hover{background:var(--amberL)}
+tr:last-child td{border-bottom:none}
+tr.subtotal td{background:#F7F6F3;font-weight:800;border-top:1px solid var(--sand3)}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip{padding:6px 13px;border-radius:7px;border:1px solid var(--sand3);background:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:all .15s;white-space:nowrap}
+.chip.active{background:var(--green);border-color:var(--green);color:#fff}
+
+.fld{margin-bottom:10px}
+.fld label{display:block;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--green3);margin-bottom:4px}
+.fld input,.fld select{width:100%;background:#F7F6F3;border:1px solid var(--sand3);border-radius:7px;padding:9px 11px;font-size:13px;font-family:'Space Grotesk',sans-serif;font-weight:600;color:var(--green);outline:none;transition:border-color .15s}
+.fld input:focus,.fld select:focus{border-color:var(--green2)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+
+.btn{padding:9px 18px;border-radius:8px;border:none;font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:12px;cursor:pointer;transition:all .15s;letter-spacing:.03em}
+.btn-p{background:var(--green);color:#fff}.btn-p:hover{background:var(--green2)}
+.btn-s{background:var(--sand2);color:var(--green)}.btn-s:hover{background:var(--sand3)}
+.btn-d{background:var(--redL);color:var(--red)}.btn-d:hover{background:#FAD7D4}
+.btn-sm{padding:6px 12px;font-size:11px}
+.btn-full{width:100%;padding:12px}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(28,45,34,.5);z-index:400;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto}
+.modal-hd{padding:14px 18px 10px;border-bottom:1px solid #EEF4EE;display:flex;align-items:center;justify-content:space-between}
+.modal-ttl{font-weight:800;font-size:14px;color:var(--green)}
+.modal-x{background:none;border:none;font-size:18px;cursor:pointer;color:#9AAE9A;line-height:1}
+.mbody{padding:16px 18px}
+.mfooter{padding:10px 18px 14px;display:flex;gap:8px;justify-content:space-between}
+.mfooter-right{display:flex;gap:8px}
+
+.desc-del{background:none;border:none;cursor:pointer;color:#DDE8DE;font-size:13px;padding:0 3px;transition:color .15s}
+.desc-del:hover{color:var(--red)}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;box-shadow:0 4px 20px rgba(28,61,53,.35);z-index:600;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+
+.search-wrap{position:relative;margin-bottom:10px;flex:1}
+.search-wrap input{background:#fff;border:1px solid var(--sand3);border-radius:8px;padding:9px 11px 9px 32px;font-size:12px;font-family:'Space Grotesk',sans-serif;color:var(--green);outline:none;width:100%}
+.search-wrap input:focus{border-color:var(--green2)}
+.search-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:#A8BFA8}
+
+.empty{padding:28px;text-align:center;color:#A8BFA8;font-size:12px}
+.badge{display:inline-flex;border-radius:999px;font-size:9px;font-weight:800;padding:2px 8px}
+
+/* HOME / LISTA DE ACOPIOS */
+.acopio-card{background:#fff;border:1px solid var(--sand3);border-radius:12px;padding:18px;margin-bottom:12px;cursor:pointer;transition:all .15s;position:relative}
+.acopio-card:hover{border-color:var(--green2);box-shadow:0 4px 16px rgba(28,61,53,.08)}
+.acopio-card-ttl{font-size:15px;font-weight:800;color:var(--green);margin-bottom:4px}
+.acopio-card-sub{font-size:11px;color:#A8BFA8;margin-bottom:12px}
+.acopio-card-stats{display:flex;gap:18px}
+.acopio-stat-label{font-size:9px;font-weight:800;color:var(--green3);text-transform:uppercase;letter-spacing:.05em}
+.acopio-stat-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);margin-top:2px}
+.acopio-card-del{position:absolute;top:14px;right:14px;background:none;border:none;color:#DDE8DE;font-size:15px;cursor:pointer;padding:4px}
+.acopio-card-del:hover{color:var(--red)}
+.home-hero{text-align:center;padding:24px 10px 18px}
+.home-hero h1{font-size:20px;font-weight:800;color:var(--green);margin-bottom:4px}
+.home-hero p{font-size:12px;color:#A8BFA8}
+
+@media(max-width:560px){
+  .row2,.row3{grid-template-columns:1fr}
+  .kpi-row{grid-template-columns:1fr 1fr}
+}
+
+
+.sync-box{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.sync-pill{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:4px 10px;font-size:10px;color:#fff;font-weight:700}
+.sync-pill.err{background:rgba(192,57,43,.35);border-color:rgba(255,255,255,.25)}
+.sync-last{font-size:8px;color:rgba(255,255,255,.68);font-weight:600;max-width:145px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.backup-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #F0EDE8}
+.backup-row:last-child{border-bottom:none}
+.backup-title{font-size:12px;font-weight:800;color:var(--green)}
+.backup-meta{font-size:10px;color:#A8BFA8;margin-top:2px}
+
+
+.report-actions{display:flex;gap:4px;justify-content:flex-end}
+.report-del{background:none;border:none;color:#DDE8DE;cursor:pointer;font-size:13px;padding:0 3px}
+.report-del:hover{color:var(--red)}
+
+</style>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
+    authDomain: "cq-mano-de-obra.firebaseapp.com",
+    projectId: "cq-mano-de-obra",
+    storageBucket: "cq-mano-de-obra.firebasestorage.app",
+    messagingSenderId: "502127540211",
+    appId: "1:502127540211:web:8daefc75bdaafad412c486"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window._cqFirebase = { db, doc, setDoc, getDoc, onSnapshot };
+  window._cqFirebaseReady = true;
+  document.dispatchEvent(new Event("cq-firebase-ready"));
+</script>
+
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════ MODALES ═══════════════ -->
+
+<div class="modal-bg" id="modal-tc">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl">Tipo de cambio</span><button class="modal-x" onclick="closeModal('modal-tc')">×</button></div>
+    <div class="mbody"><div class="fld"><label>Pesos por dólar</label><input type="number" id="tc-input" step="1" min="1"></div></div>
+    <div class="mfooter" style="justify-content:flex-end"><button class="btn btn-s btn-sm" onclick="closeModal('modal-tc')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarTC()">Guardar</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-nuevo-acopio">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl">Nuevo acopio</span><button class="modal-x" onclick="closeModal('modal-nuevo-acopio')">×</button></div>
+    <div class="mbody">
+      <div class="fld"><label>Nombre del acopio</label><input type="text" id="na-nombre" placeholder="ej: Acopio Junio 2026"></div>
+      <div class="fld"><label>Tipo de cambio inicial</label><input type="number" id="na-tc" min="1" step="1" placeholder="1210"></div>
+      <div class="fld">
+        <label>Materiales iniciales</label>
+        <select id="na-copiar">
+          <option value="base">Lista base (40 materiales del Excel)</option>
+          <option value="vacio">Empezar vacío</option>
+        </select>
+      </div>
+    </div>
+    <div class="mfooter" style="justify-content:flex-end"><button class="btn btn-s btn-sm" onclick="closeModal('modal-nuevo-acopio')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarNuevoAcopio()">Crear acopio</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-mat">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl" id="mat-modal-ttl">Nuevo material</span><button class="modal-x" onclick="closeModal('modal-mat')">×</button></div>
+    <div class="mbody">
+      <div class="row2">
+        <div class="fld" style="grid-column:1/-1"><label>Nombre del material</label><input type="text" id="mat-nombre" placeholder="ej: Hierro DN 10mm"></div>
+      </div>
+      <div class="fld"><label>Código (opcional)</label><input type="text" id="mat-codigo" placeholder="ej: 2303583104"></div>
+      <div class="row2">
+        <div class="fld">
+          <label>Precio unitario $</label>
+          <input type="number" id="mat-precio-unit" min="0" step="0.01" placeholder="0" oninput="syncMatPrecioAcord()">
+          <div style="font-size:9px;color:#A8BFA8;margin-top:3px">Precio de lista (con IVA)</div>
+        </div>
+        <div class="fld">
+          <label>Precio acordado $</label>
+          <input type="number" id="mat-precio-acord" min="0" step="0.01" placeholder="0">
+          <div style="font-size:9px;color:#7A9E82;margin-top:3px">El que se usa para descontar</div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="fld"><label>Unidad</label><input type="text" id="mat-unidad" placeholder="c/u, kg, bolsa..."></div>
+        <div class="fld"><label>Categoría</label><select id="mat-cat"></select></div>
+      </div>
+    </div>
+    <div class="mfooter">
+      <div id="mat-delete-wrap"><button class="btn btn-d btn-sm" onclick="borrarMaterialActual()" id="mat-delete-btn" style="display:none">Eliminar material</button></div>
+      <div class="mfooter-right"><button class="btn btn-s btn-sm" onclick="closeModal('modal-mat')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarMaterial()">Guardar</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-pago">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl" id="pago-ttl">Registrar pago</span><button class="modal-x" onclick="closeModal('modal-pago')">×</button></div>
+    <div class="mbody">
+      <div class="row2">
+        <div class="fld"><label>Importe en $</label><input type="number" id="pago-pesos" min="0" step="0.01" placeholder="0" oninput="syncPagoUSD()"></div>
+        <div class="fld"><label>Importe en u$s</label><input type="number" id="pago-usd" min="0" step="0.01" placeholder="0" oninput="syncPagoPesos()"></div>
+      </div>
+      <div class="row2">
+        <div class="fld"><label>Fecha</label><input type="date" id="pago-fecha"></div>
+        <div class="fld"><label>Forma de pago</label>
+          <select id="pago-forma"><option>Transferencia</option><option>Efectivo $</option><option>Efectivo u$s</option><option>Cheque</option></select>
+        </div>
+      </div>
+      <div class="fld"><label>Notas (opcional)</label><input type="text" id="pago-notas" placeholder=""></div>
+    </div>
+    <div class="mfooter" style="justify-content:flex-end"><button class="btn btn-s btn-sm" onclick="closeModal('modal-pago')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarPago()">Guardar</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-obra">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl">Nueva obra</span><button class="modal-x" onclick="closeModal('modal-obra')">×</button></div>
+    <div class="mbody"><div class="fld"><label>Nombre de la obra</label><input type="text" id="obra-nombre" placeholder="ej: 28/100"></div></div>
+    <div class="mfooter" style="justify-content:flex-end"><button class="btn btn-s btn-sm" onclick="closeModal('modal-obra')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarObra()">Agregar</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-retiro">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl" id="retiro-ttl">Editar retiro</span><button class="modal-x" onclick="closeModal('modal-retiro')">×</button></div>
+    <div class="mbody">
+      <div class="row2">
+        <div class="fld"><label>Cantidad</label><input type="number" id="retiro-qty" min="0.01" step="0.01"></div>
+        <div class="fld"><label>Fecha</label><input type="date" id="retiro-fecha"></div>
+      </div>
+    </div>
+    <div class="mfooter" style="justify-content:flex-end"><button class="btn btn-s btn-sm" onclick="closeModal('modal-retiro')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarEditRetiro()">Guardar</button></div>
+  </div>
+</div>
+
+
+<div class="modal-bg" id="modal-backups">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl">Restaurar backup</span><button class="modal-x" onclick="closeModal('modal-backups')">×</button></div>
+    <div class="mbody">
+      <button class="btn btn-p btn-full" onclick="crearBackupManual()">💾 Crear backup manual</button>
+      <div class="sec-ttl" style="margin-top:16px">Elegí un backup para restaurar</div>
+      <div id="backups-list"></div>
+      <div style="font-size:10px;color:#A8BFA8;margin-top:10px;line-height:1.35">
+        Se guardan automáticamente los últimos 20 backups. Al restaurar, se reemplaza el estado completo de la planilla.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<div class="hdr">
+  <div class="hdr-logo" onclick="goHome()"><span class="hdr-back" id="hdr-back" style="display:none">←</span> Acopio CQ <span id="hdr-acopio-name"></span></div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="sync-box">
+      <div class="sync-pill" id="sync-status">Sync: conectando...</div>
+      <div class="sync-last" id="sync-last">Última sync: —</div>
+    </div>
+    <button class="btn btn-s btn-sm" id="backup-manual-btn" onclick="crearBackupManual()" style="display:none;padding:5px 9px;font-size:10px">💾 Backup</button>
+    <button class="btn btn-s btn-sm" id="backup-restore-btn" onclick="openBackups()" style="display:none;padding:5px 9px;font-size:10px">↺ Restaurar</button>
+    <div class="tc-pill" id="tc-pill" onclick="openTC()" style="display:none">
+      <span class="tc-label">TC</span><span class="tc-val" id="tc-display">$1.210</span><span class="tc-edit">✎</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ HOME: LISTA DE ACOPIOS ═══════════════ -->
+<div id="view-home" class="main">
+  <div class="home-hero">
+    <h1>Mis acopios</h1>
+    <p>Elegí un acopio para gestionar o creá uno nuevo</p>
+  </div>
+  <button class="btn btn-p btn-full" onclick="openNuevoAcopio()" style="margin-bottom:16px">+ Nuevo acopio</button>
+  <div id="acopios-list"></div>
+</div>
+
+<!-- ═══════════════ TABS (dentro de un acopio) ═══════════════ -->
+<div class="tabs" id="tabs-acopio" style="display:none">
+  <button class="tab active" id="tab-retirar" onclick="showTab('retirar')">Retirar</button>
+  <button class="tab" id="tab-reporte" onclick="showTab('reporte')">Reporte por obra</button>
+  <button class="tab" id="tab-materiales" onclick="showTab('materiales')">Materiales</button>
+</div>
+
+<div class="main" id="view-acopio" style="display:none">
+
+  <div id="view-materiales">
+    <div class="kpi-row" id="kpi-row"></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <div class="search-wrap" style="margin:0">
+        <span class="search-ico">🔍</span>
+        <input type="text" id="mat-search" placeholder="Buscar material..." oninput="renderMateriales()">
+      </div>
+      <button class="btn btn-p btn-sm" onclick="openPago()">+ Pago</button>
+      <button class="btn btn-s btn-sm" onclick="openNuevoMaterial()">+ Material</button>
+    </div>
+    <div id="materiales-content"></div>
+
+    <div class="sec-ttl" style="margin-top:18px">Pagos registrados</div>
+    <div id="pagos-content"></div>
+  </div>
+
+  <div id="view-retirar" style="display:none">
+    <div class="sec-ttl">Obra</div>
+    <div class="chips" id="retirar-obra-chips"></div>
+    <div id="retirar-del-obra-wrap" style="margin-bottom:12px"></div>
+
+    <div class="card" style="padding:14px 16px">
+      <div class="fld"><label>Material</label><select id="retirar-mat-sel"></select></div>
+      <div class="row2">
+        <div class="fld"><label>Cantidad</label><input type="number" id="retirar-qty" min="0.01" step="0.01" placeholder="0"></div>
+        <div class="fld"><label>Fecha</label><input type="date" id="retirar-fecha"></div>
+      </div>
+      <button class="btn btn-p btn-full" onclick="guardarRetiro()">Registrar retiro</button>
+    </div>
+
+    <div class="sec-ttl" style="margin-top:16px">Historial de retiros — <span id="retirar-obra-label"></span></div>
+    <div id="retirar-historial"></div>
+  </div>
+
+  <div id="view-reporte" style="display:none">
+    <div class="chips" id="reporte-obra-chips"></div>
+    <div id="reporte-content"></div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// DATOS BASE (plantilla para nuevos acopios)
+// ═══════════════════════════════════════════
+var TC_DEFAULT = 1210;
+var OBRAS_BASE = ['4/100','5/94','25/82','12/93','13/93','7/100','6/92','18/78','5/98'];
+var CATS_BASE = ['Ladrillos','Hierros','Cemento','Viguetas','Impermeabilizantes','Revoques','Otros'];
+var CAT_COLORS = {'Ladrillos':'#C0392B','Hierros':'#2B7BE0','Cemento':'#E8880A','Viguetas':'#7B3FA0','Impermeabilizantes':'#1E8DB4','Revoques':'#3A8A20','Otros':'#7A9E82'};
+
+var MATS_TEMPLATE = [
+  {cod:'2203201001',nom:'PALMAR PORTANTE 12 12X19X33 C/U',precioUnit:1021,precioAcord:843.80,cat:'Ladrillos',unidad:'c/u'},
+  {cod:'2203201002',nom:'PALMAR PORTANTE 18 18X19X33 C/U',precioUnit:1234,precioAcord:1019.83,cat:'Ladrillos',unidad:'c/u'},
+  {cod:'2203201203',nom:'PALMAR TECHO 11 11X25X38 C/U',precioUnit:1375,precioAcord:1136.36,cat:'Ladrillos',unidad:'c/u'},
+  {cod:'3207407014',nom:'AGROTILENO NEG.200 MICR.0,20X50 MT EL ROLLO',precioUnit:15511.54,precioAcord:12819.45,cat:'Impermeabilizantes',unidad:'rollo'},
+  {cod:'2303583102',nom:'HIERRO DN BARRA 06 MM ACINDAR',precioUnit:4995,precioAcord:4128.10,cat:'Hierros',unidad:'barra'},
+  {cod:'2303583103',nom:'HIERRO DN BARRA 08 MM ACINDAR',precioUnit:8505.66,precioAcord:7028.64,cat:'Hierros',unidad:'barra'},
+  {cod:'2303583104',nom:'HIERRO DN BARRA 10 MM ACINDAR',precioUnit:13314.47,precioAcord:11003.69,cat:'Hierros',unidad:'barra'},
+  {cod:'2303584310',nom:'MALLA MINI ACINDAR Q188/M 15X15X6 2.4X3.0',precioUnit:53716,precioAcord:44392.56,cat:'Hierros',unidad:'malla'},
+  {cod:'2403594003',nom:'ALAMBRE RECOC.N°17 -1,42 MM EL KG',precioUnit:4005,precioAcord:3309.92,cat:'Hierros',unidad:'kg'},
+  {cod:'2503597004',nom:'CLAVOS PUNTA PARIS 2 1/2 EL KG',precioUnit:3871.97,precioAcord:3199.97,cat:'Hierros',unidad:'kg'},
+  {cod:'4816306011',nom:'CEMENTO PORTLAND HOLCIM X 25 KG',precioUnit:6258,precioAcord:5171.07,cat:'Cemento',unidad:'bolsa'},
+  {cod:'4816306120',nom:'HERCAL CTO. DE ALBAN. BOLSAS DE 25 KGS',precioUnit:6077,precioAcord:5022.31,cat:'Cemento',unidad:'bolsa'},
+  {cod:'2203278005',nom:'VIGUETAS PRETENSADAS 1,40 MTS',precioUnit:3938.14,precioAcord:3254.66,cat:'Viguetas',unidad:'c/u'},
+  {cod:'2203278007',nom:'VIGUETAS PRETENSADAS 1,60 MTS',precioUnit:4508.63,precioAcord:3725.31,cat:'Viguetas',unidad:'c/u'},
+  {cod:'2203278009',nom:'VIGUETAS PRETENSADAS 1,80 MTS',precioUnit:5066.23,precioAcord:4187.79,cat:'Viguetas',unidad:'c/u'},
+  {cod:'2203278011',nom:'VIGUETAS PRETENSADAS 2 MTS',precioUnit:5635.33,precioAcord:4657.30,cat:'Viguetas',unidad:'c/u'},
+  {cod:'2203278019',nom:'VIGUETAS PRETENSADAS 2,80 MTS',precioUnit:7899.27,precioAcord:6528.32,cat:'Viguetas',unidad:'c/u'},
+  {cod:'2203278021',nom:'VIGUETAS PRETENSADAS 3 MTS',precioUnit:8746.72,precioAcord:7228.69,cat:'Viguetas',unidad:'c/u'},
+  {cod:'2203278023',nom:'VIGUETAS PRETENSADAS 3,20 MTS',precioUnit:9495.03,precioAcord:7847.13,cat:'Viguetas',unidad:'c/u'},
+  {cod:'2203278031',nom:'VIGUETAS PRETENSADAS 4 MTS',precioUnit:12767.13,precioAcord:10551.35,cat:'Viguetas',unidad:'c/u'},
+  {cod:'2203278033',nom:'VIGUETAS PRETENSADAS 4,20 MTS',precioUnit:13519.27,precioAcord:11173.78,cat:'Viguetas',unidad:'c/u'},
+  {cod:'4213001005',nom:'SIKA 1 HIDROFUGO CAJA X 20 KG',precioUnit:26856.84,precioAcord:22195.74,cat:'Impermeabilizantes',unidad:'caja'},
+  {cod:'3309315054',nom:'WEBER REV. FINO A LA CAL P/INT X 25KG',precioUnit:8991,precioAcord:7430.58,cat:'Revoques',unidad:'bolsa'},
+  {cod:'3309315053',nom:'WEBER REV. FORTE A LA CAL P/EXT X 25KG',precioUnit:9900,precioAcord:8181.82,cat:'Revoques',unidad:'bolsa'},
+  {cod:'4816306016',nom:'PEGAMENTO HOLCIM PORCELANATO X 25 KG',precioUnit:18184.3,precioAcord:15028.35,cat:'Otros',unidad:'bolsa'},
+  {cod:'4309702201',nom:'TECHI CAU EMAPI CAJA X 18 KGR',precioUnit:25848.63,precioAcord:21577.21,cat:'Impermeabilizantes',unidad:'caja'},
+  {cod:'4816306018',nom:'PEGAMENTO HOLCIM CERAMICO IMPER X 25 KG',precioUnit:8996.25,precioAcord:7434.92,cat:'Otros',unidad:'bolsa'},
+  {cod:'3309301312',nom:'WEBER MEMBRANA LIQUIDA TECHOS PU X 20 KG BCO',precioUnit:86590,precioAcord:71561.98,cat:'Impermeabilizantes',unidad:'balde'},
+  {cod:'4816907001',nom:'LADRILLO COMUN C/U POS',precioUnit:258.68,precioAcord:213.79,cat:'Ladrillos',unidad:'c/u'},
+  {cod:'2203201102',nom:'PALMAR TABIQUE 8 8X18X33 C/U',precioUnit:642,precioAcord:530.58,cat:'Ladrillos',unidad:'c/u'},
+  {cod:'2203201103',nom:'PALMAR TABIQUE 12 12X18X33 C/U',precioUnit:795,precioAcord:657.02,cat:'Ladrillos',unidad:'c/u'},
+  {cod:'2203201104',nom:'PALMAR TABIQUE 18 18X18X33 C/U',precioUnit:1021,precioAcord:843.80,cat:'Ladrillos',unidad:'c/u'},
+  {cod:'3309401',nom:'YESO EL ENTRE RIOS BOLSA X 30KG',precioUnit:8702,precioAcord:7191.74,cat:'Revoques',unidad:'bolsa'},
+  {cod:'3210035101',nom:'GUARDACANTO YESERO ZINCADO X 2,00 MTS.',precioUnit:2342,precioAcord:1935.54,cat:'Otros',unidad:'c/u'},
+  {cod:'2303584323',nom:'MALLA MINI ACINDAR CERRAM 15X25X3,7MM',precioUnit:13379,precioAcord:11057.85,cat:'Hierros',unidad:'malla'},
+  {cod:'2303584309',nom:'MALLA MINI ACINDAR Q131/M 15X15X5MM',precioUnit:36273,precioAcord:29977.69,cat:'Hierros',unidad:'malla'},
+  {cod:'310520071',nom:'ATRIM 1381 GUARDACANTO ARCO AL.CR.BRILL.',precioUnit:18214,precioAcord:15052.07,cat:'Otros',unidad:'c/u'},
+  {cod:'310520031',nom:'ATRIM 430/01 LISTELLO SPECTRUM CLASICO',precioUnit:10475,precioAcord:8657.02,cat:'Otros',unidad:'c/u'},
+  {cod:'361000167',nom:'CAÑUELA CERAMICA LILLE PULIDO 61,3X123',precioUnit:16437.55,precioAcord:13586.41,cat:'Otros',unidad:'m²'},
+  {cod:'361000170',nom:'CAÑUELA CERAMICA CANNES PULIDO 61,3X123',precioUnit:16437.55,precioAcord:13586.41,cat:'Otros',unidad:'m²'},
+];
+
+// ═══════════════════════════════════════════
+// ESTADO GLOBAL: lista de acopios independientes
+// ═══════════════════════════════════════════
+var DB_KEY='acopio_cq_v3';
+var FIRESTORE_COLLECTION='acopio_cq';
+var FIRESTORE_DOC_ID='acopio_cq_compartido_v3';
+var firebaseSaving=false;
+var saveTimer=null;
+var suppressRemoteUntil=0;
+var firebaseUnsub=null;
+var lastAutoBackupAt=0;
+var lastSaveKind='manual';
+
+function loadDB(){
+  try{var s=JSON.parse(localStorage.getItem(DB_KEY)||'null');if(s)return sanitizeDB(s);}catch(e){}
+  return {acopios:[],backups:[]}; // each acopio: {id,nombre,creado,tc,obras,mats,pagos,retiros}
+}
+function sanitizeDB(s){
+  s=s||{};
+  if(!Array.isArray(s.acopios)) s.acopios=[];
+  if(!Array.isArray(s.backups)) s.backups=[];
+  s.acopios=s.acopios.map(function(a){
+    a=a||{};
+    return {
+      id:a.id||Date.now(),
+      nombre:a.nombre||'Acopio',
+      creado:a.creado||todayISO(),
+      tc:parseFloat(a.tc)||TC_DEFAULT,
+      obras:Array.isArray(a.obras)?a.obras:OBRAS_BASE.slice(),
+      mats:Array.isArray(a.mats)?a.mats:[],
+      pagos:Array.isArray(a.pagos)?a.pagos:[],
+      retiros:Array.isArray(a.retiros)?a.retiros:[]
+    };
+  });
+  s.backups=s.backups.slice(0,20);
+  return s;
+}
+var DB=loadDB();
+
+function formatDateTime(v){
+  if(!v)return '—';
+  var d=new Date(v);
+  if(isNaN(d.getTime()))return String(v);
+  return d.toLocaleDateString('es-AR')+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function setSyncStatus(txt,err,at){
+  var el=document.getElementById('sync-status');
+  if(el){
+    el.textContent=txt;
+    el.className='sync-pill'+(err?' err':'');
+  }
+  var last=document.getElementById('sync-last');
+  if(last && at) last.textContent='Última sync: '+formatDateTime(at);
+}
+
+function cloneDBSinBackups(){
+  var clean=sanitizeDB(JSON.parse(JSON.stringify(DB)));
+  clean.backups=[];
+  return clean;
+}
+function createBackup(kind){
+  DB=sanitizeDB(DB);
+  if(!Array.isArray(DB.backups))DB.backups=[];
+  var now=new Date().toISOString();
+  DB.backups.unshift({
+    id:Date.now(),
+    kind:kind||'manual',
+    createdAt:now,
+    data:cloneDBSinBackups()
+  });
+  DB.backups=DB.backups.slice(0,20);
+  localStorage.setItem(DB_KEY,JSON.stringify(DB));
+}
+function maybeAutoBackup(){
+  var now=Date.now();
+  // Un backup automático cada 10 segundos como máximo.
+  // Esto evita que se llene de copias, pero asegura que aparezca backup al usar la app.
+  if(now-lastAutoBackupAt<10000)return;
+  createBackup('auto');
+  lastAutoBackupAt=now;
+}
+function crearBackupManual(){
+  createBackup('manual');
+  lastSaveKind='manual';
+  localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  saveToFirebase();
+  toast('✓ Backup manual creado');
+  renderBackups();
+}
+function openBackups(){
+  renderBackups();
+  openModal('modal-backups');
+}
+function renderBackups(){
+  var el=document.getElementById('backups-list');
+  if(!el)return;
+  DB=sanitizeDB(DB);
+  var backups=(DB.backups||[]);
+  if(!backups.length){
+    el.innerHTML='<div class="empty">Todavía no hay backups para restaurar</div>';
+    return;
+  }
+  el.innerHTML=backups.map(function(b){
+    return '<div class="backup-row"><div><div class="backup-title">'+(b.kind==='auto'?'Automático':'Manual')+'</div><div class="backup-meta">'+formatDateTime(b.createdAt)+'</div></div><button class="btn btn-p btn-sm" onclick="restaurarBackup('+b.id+')">Restaurar</button></div>';
+  }).join('');
+}
+function restaurarBackup(id){
+  var b=(DB.backups||[]).find(function(x){return x.id===id;});
+  if(!b||!b.data){alert('Backup no encontrado');return;}
+  if(!confirm('¿Restaurar este backup? Se reemplazará el estado actual.'))return;
+  var actuales=DB.backups||[];
+  DB=sanitizeDB(JSON.parse(JSON.stringify(b.data)));
+  DB.backups=actuales;
+  createBackup('auto');
+  localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  lastSaveKind='restore';
+  saveToFirebase();
+  closeModal('modal-backups');
+  toast('✓ Backup restaurado');
+  if(curAcopioId && !getAcopio())curAcopioId=null;
+  if(curAcopioId)abrirAcopio(curAcopioId);else goHome();
+}
+
+function buildFirebasePayload(){
+  return {
+    db:sanitizeDB(DB),
+    updatedAt:new Date().toISOString(),
+    updatedBy:'Usuario'
+  };
+}
+function persist(){
+  DB=sanitizeDB(DB);
+  maybeAutoBackup();
+  localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  scheduleFirebaseSave();
+}
+function scheduleFirebaseSave(){
+  if(!window._cqFirebaseReady||!window._cqFirebase)return;
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveToFirebase,650);
+}
+async function saveToFirebase(){
+  if(!window._cqFirebaseReady||!window._cqFirebase||firebaseSaving)return;
+  try{
+    firebaseSaving=true;
+    setSyncStatus('Sync: guardando...');
+    suppressRemoteUntil=Date.now()+1200;
+    var f=window._cqFirebase;
+    await f.setDoc(f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID),buildFirebasePayload());
+    setSyncStatus('Sync: ON',false,new Date().toISOString());
+  }catch(e){
+    console.warn(e);
+    setSyncStatus('Sync: error',true);
+  }finally{
+    firebaseSaving=false;
+  }
+}
+async function loadFromFirebase(){
+  if(!window._cqFirebaseReady||!window._cqFirebase)return;
+  try{
+    setSyncStatus('Sync: cargando...');
+    var f=window._cqFirebase;
+    var ref=f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID);
+    var snap=await f.getDoc(ref);
+    if(snap.exists()&&snap.data().db){
+      var localBackups=(DB&&DB.backups)||[];
+      DB=sanitizeDB(snap.data().db);
+      if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
+      localStorage.setItem(DB_KEY,JSON.stringify(DB));
+    }else{
+      await f.setDoc(ref,buildFirebasePayload());
+    }
+    setSyncStatus('Sync: ON',false,(snap.exists()&&snap.data().updatedAt)?snap.data().updatedAt:new Date().toISOString());
+    listenFirebase();
+    if(curAcopioId && !getAcopio()) curAcopioId=null;
+    if(curAcopioId) abrirAcopio(curAcopioId); else goHome();
+  }catch(e){
+    console.warn(e);
+    setSyncStatus('Sync: error',true);
+    goHome();
+  }
+}
+function listenFirebase(){
+  if(firebaseUnsub||!window._cqFirebaseReady||!window._cqFirebase)return;
+  var f=window._cqFirebase;
+  firebaseUnsub=f.onSnapshot(f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID),function(snap){
+    if(Date.now()<suppressRemoteUntil)return;
+    if(snap.exists()&&snap.data().db){
+      var localBackups=(DB&&DB.backups)||[];
+      DB=sanitizeDB(snap.data().db);
+      if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
+      localStorage.setItem(DB_KEY,JSON.stringify(DB));
+      setSyncStatus('Sync: actualizado',false,snap.data().updatedAt||new Date().toISOString());
+      if(curAcopioId && !getAcopio()) curAcopioId=null;
+      if(curAcopioId) abrirAcopio(curAcopioId); else goHome();
+    }
+  },function(e){
+    console.warn(e);
+    setSyncStatus('Sync: error',true);
+  });
+}
+document.addEventListener('cq-firebase-ready',loadFromFirebase);
+setTimeout(function(){
+  if(!window._cqFirebaseReady){
+    setSyncStatus('Sync: sin conexión',true);
+    goHome();
+  }
+},2500);
+
+function makeMatsFromTemplate(){
+  var id=1;
+  return MATS_TEMPLATE.map(function(m){return Object.assign({},m,{id:id++});});
+}
+
+var curAcopioId=null;
+function getAcopio(){return DB.acopios.find(function(a){return a.id===curAcopioId;});}
+function getAllMats(){var a=getAcopio();return a?a.mats:[];}
+function getObras(){var a=getAcopio();return a?a.obras:[];}
+function getMat(id){return getAllMats().find(function(m){return m.id===id;});}
+
+function fmtN(n,dec){if(n==null||isNaN(n))return '-';dec=dec!=null?dec:1;return parseFloat(n).toLocaleString('es-AR',{maximumFractionDigits:dec});}
+function fmtP(n){return '$'+fmtN(n,0);}
+function fmtU(n){return 'u$s '+fmtN(n,2);}
+function toUSD(p){var a=getAcopio();return p/((a&&a.tc)||TC_DEFAULT);}
+function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function fmtFecha(iso){if(!iso)return '';var p=iso.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+// ═══════════════════════════════════════════
+// HOME — LISTA DE ACOPIOS
+// ═══════════════════════════════════════════
+function goHome(){
+  curAcopioId=null;
+  document.getElementById('view-home').style.display='block';
+  document.getElementById('view-acopio').style.display='none';
+  document.getElementById('tabs-acopio').style.display='none';
+  document.getElementById('tc-pill').style.display='none';
+  document.getElementById('backup-manual-btn').style.display='inline-block';
+  document.getElementById('backup-restore-btn').style.display='none';
+  document.getElementById('hdr-back').style.display='none';
+  document.getElementById('hdr-acopio-name').textContent='';
+  renderHome();
+}
+
+function calcAcopioTotales(a){
+  var totalPagado=(a.pagos||[]).reduce(function(s,p){return s+p.montoPesos;},0);
+  var totalConsumido=0;
+  (a.retiros||[]).forEach(function(r){
+    var m=a.mats.find(function(m){return m.id===r.matId;});
+    if(m) totalConsumido+=r.qty*m.precioAcord;
+  });
+  return {totalPagado:totalPagado,totalConsumido:totalConsumido,saldo:totalPagado-totalConsumido};
+}
+
+function renderHome(){
+  var list=document.getElementById('acopios-list');
+  if(!DB.acopios.length){
+    list.innerHTML='<div class="empty card" style="padding:32px">Todavía no creaste ningún acopio.<br>Usá el botón de arriba para empezar.</div>';
+    return;
+  }
+  var sorted=DB.acopios.slice().sort(function(a,b){return (b.creado||'').localeCompare(a.creado||'');});
+  list.innerHTML=sorted.map(function(a){
+    var t=calcAcopioTotales(a);
+    var usd=t.totalPagado/( a.tc||TC_DEFAULT);
+    return '<div class="acopio-card" onclick="abrirAcopio('+a.id+')">'
+      +'<button class="acopio-card-del" onclick="event.stopPropagation();confirmarBorrarAcopio('+a.id+')">✕</button>'
+      +'<div class="acopio-card-ttl">'+a.nombre+'</div>'
+      +'<div class="acopio-card-sub">Creado '+fmtFecha(a.creado)+' · TC $'+fmtN(a.tc||TC_DEFAULT,0)+' · '+a.mats.length+' materiales</div>'
+      +'<div class="acopio-card-stats">'
+      +'<div><div class="acopio-stat-label">Pagado</div><div class="acopio-stat-val">$'+fmtN(t.totalPagado,0)+'</div></div>'
+      +'<div><div class="acopio-stat-label">Consumido</div><div class="acopio-stat-val">$'+fmtN(t.totalConsumido,0)+'</div></div>'
+      +'<div><div class="acopio-stat-label">Saldo</div><div class="acopio-stat-val" style="color:'+(t.saldo<0?'#C8882A':'#1C3D35')+'">$'+fmtN(t.saldo,0)+'</div></div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function openNuevoAcopio(){
+  document.getElementById('na-nombre').value='';
+  document.getElementById('na-tc').value=TC_DEFAULT;
+  document.getElementById('na-copiar').value='base';
+  openModal('modal-nuevo-acopio');
+}
+function guardarNuevoAcopio(){
+  var nombre=document.getElementById('na-nombre').value.trim();
+  var tc=parseFloat(document.getElementById('na-tc').value)||TC_DEFAULT;
+  var copiar=document.getElementById('na-copiar').value;
+  if(!nombre){alert('Ingresá un nombre para el acopio');return;}
+  var nuevo={
+    id:Date.now(),
+    nombre:nombre,
+    creado:todayISO(),
+    tc:tc,
+    obras:OBRAS_BASE.slice(),
+    mats:copiar==='base'?makeMatsFromTemplate():[],
+    pagos:[],
+    retiros:[]
+  };
+  DB.acopios.push(nuevo);
+  persist();
+  closeModal('modal-nuevo-acopio');
+  toast('✓ Acopio "'+nombre+'" creado');
+  abrirAcopio(nuevo.id);
+}
+var pendingDeleteAcopioId=null;
+function confirmarBorrarAcopio(id){
+  if(pendingDeleteAcopioId===id){
+    DB.acopios=DB.acopios.filter(function(a){return a.id!==id;});
+    persist();pendingDeleteAcopioId=null;toast('Acopio eliminado');renderHome();
+  } else {
+    pendingDeleteAcopioId=id;
+    toast('Tocá de nuevo ✕ para confirmar eliminación');
+    setTimeout(function(){pendingDeleteAcopioId=null;},3000);
+  }
+}
+
+function abrirAcopio(id){
+  curAcopioId=id;
+  var a=getAcopio();
+  document.getElementById('view-home').style.display='none';
+  document.getElementById('view-acopio').style.display='block';
+  document.getElementById('tabs-acopio').style.display='flex';
+  document.getElementById('tc-pill').style.display='flex';
+  document.getElementById('backup-manual-btn').style.display='inline-block';
+  document.getElementById('backup-restore-btn').style.display='inline-block';
+  document.getElementById('hdr-back').style.display='inline';
+  document.getElementById('hdr-acopio-name').textContent=a.nombre;
+  document.getElementById('tc-display').textContent='$'+fmtN(a.tc||TC_DEFAULT,0);
+  curRetirarObra=0;curReporteObra=0;
+  showTab('retirar');
+}
+
+// ═══════════════════════════════════════════
+// TABS (dentro de un acopio)
+// ═══════════════════════════════════════════
+var curRetirarObra=0, curReporteObra=0;
+function showTab(t){
+  ['materiales','retirar','reporte'].forEach(function(x){
+    document.getElementById('view-'+x).style.display=x===t?'block':'none';
+    document.getElementById('tab-'+x).classList.toggle('active',x===t);
+  });
+  if(t==='materiales') renderMateriales();
+  else if(t==='retirar') renderRetirar();
+  else if(t==='reporte') renderReporte();
+}
+
+// ═══════════════════════════════════════════
+// TIPO DE CAMBIO
+// ═══════════════════════════════════════════
+function openTC(){var a=getAcopio();document.getElementById('tc-input').value=a.tc||TC_DEFAULT;openModal('modal-tc');}
+function guardarTC(){
+  var v=parseFloat(document.getElementById('tc-input').value);
+  if(!v||v<=0){alert('TC inválido');return;}
+  var a=getAcopio();a.tc=v;persist();
+  document.getElementById('tc-display').textContent='$'+fmtN(v,0);
+  closeModal('modal-tc');toast('✓ TC actualizado');
+  var activeTab=document.querySelector('.tab.active').id.replace('tab-','');
+  showTab(activeTab);
+}
+
+// ═══════════════════════════════════════════
+// MATERIALES
+// ═══════════════════════════════════════════
+function renderKPIs(){
+  var a=getAcopio();
+  var t=calcAcopioTotales(a);
+  document.getElementById('kpi-row').innerHTML=
+    kpi('Total pagado','$'+fmtN(t.totalPagado,0),'u$s '+fmtN(toUSD(t.totalPagado),2))
+    +kpi('TC actual','$'+fmtN(a.tc||TC_DEFAULT,0),'por dólar')
+    +kpi('Total consumido','$'+fmtN(t.totalConsumido,0),'u$s '+fmtN(toUSD(t.totalConsumido),2))
+    +kpi('Saldo a retirar','$'+fmtN(t.saldo,0),'u$s '+fmtN(toUSD(t.saldo),2),t.saldo<0);
+}
+function kpi(label,val,sub,warn){
+  return '<div class="kpi'+(warn?' warn':'')+'"><div class="kpi-label">'+label+'</div><div class="kpi-val">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';
+}
+
+function renderMateriales(){
+  renderKPIs();
+  var q=(document.getElementById('mat-search').value||'').toLowerCase();
+  var mats=getAllMats().filter(function(m){return !q||m.nom.toLowerCase().indexOf(q)>=0||(m.cod||'').toLowerCase().indexOf(q)>=0;});
+  var cats={};
+  mats.forEach(function(m){if(!cats[m.cat])cats[m.cat]=[];cats[m.cat].push(m);});
+
+  var html='';
+  Object.keys(cats).forEach(function(cat){
+    var col=CAT_COLORS[cat]||'#7A9E82';
+    html+='<div class="card" style="border-top:3px solid '+col+'">';
+    html+='<div class="card-hd"><span class="card-ttl" style="color:'+col+'">'+cat+'</span></div>';
+    html+='<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="r">P. Unitario $</th><th class="r">P. Acordado $</th><th></th></tr></thead><tbody>';
+    cats[cat].forEach(function(m){
+      html+='<tr>'
+        +'<td><div style="font-weight:600;font-size:12px">'+m.nom+'</div>'+(m.cod?'<div style="font-size:9px;color:#A8BFA8;margin-top:2px">'+m.cod+'</div>':'')+'</td>'
+        +'<td class="mono r">'+fmtP(m.precioUnit)+'</td>'
+        +'<td class="mono r" style="color:var(--green);font-weight:700">'+fmtP(m.precioAcord)+'</td>'
+        +'<td class="r"><button class="btn btn-s btn-sm" onclick="openEditMaterial('+m.id+')" style="padding:4px 10px;font-size:10px">✎</button></td>'
+        +'</tr>';
+    });
+    html+='</tbody></table></div></div>';
+  });
+  if(!html) html='<div class="empty card" style="padding:24px">No se encontraron materiales. Usá "+ Material" para agregar.</div>';
+  document.getElementById('materiales-content').innerHTML=html;
+  renderPagosList();
+}
+
+function openNuevoMaterial(){
+  editMatId=null;
+  document.getElementById('mat-modal-ttl').textContent='Nuevo material';
+  document.getElementById('mat-nombre').value='';
+  document.getElementById('mat-codigo').value='';
+  document.getElementById('mat-precio-unit').value='';
+  document.getElementById('mat-precio-acord').value='';
+  document.getElementById('mat-unidad').value='';
+  document.getElementById('mat-delete-btn').style.display='none';
+  var catSel=document.getElementById('mat-cat');
+  catSel.innerHTML=CATS_BASE.map(function(c){return '<option>'+c+'</option>';}).join('');
+  openModal('modal-mat');
+}
+var editMatId=null;
+function openEditMaterial(id){
+  editMatId=id;
+  var m=getMat(id);
+  document.getElementById('mat-modal-ttl').textContent='Editar material';
+  document.getElementById('mat-nombre').value=m.nom;
+  document.getElementById('mat-codigo').value=m.cod||'';
+  document.getElementById('mat-precio-unit').value=m.precioUnit;
+  document.getElementById('mat-precio-acord').value=m.precioAcord;
+  document.getElementById('mat-unidad').value=m.unidad;
+  document.getElementById('mat-delete-btn').style.display='inline-block';
+  var catSel=document.getElementById('mat-cat');
+  catSel.innerHTML=CATS_BASE.map(function(c){return '<option'+(c===m.cat?' selected':'')+'>'+c+'</option>';}).join('');
+  openModal('modal-mat');
+}
+function syncMatPrecioAcord(){
+  var v=parseFloat(document.getElementById('mat-precio-unit').value)||0;
+  if(v>0) document.getElementById('mat-precio-acord').value=(v/1.21).toFixed(2);
+}
+function guardarMaterial(){
+  var nom=document.getElementById('mat-nombre').value.trim();
+  var cod=document.getElementById('mat-codigo').value.trim();
+  var pu=parseFloat(document.getElementById('mat-precio-unit').value)||0;
+  var pa=parseFloat(document.getElementById('mat-precio-acord').value)||(pu/1.21);
+  var unidad=document.getElementById('mat-unidad').value.trim()||'c/u';
+  var cat=document.getElementById('mat-cat').value;
+  if(!nom){alert('Ingresá un nombre');return;}
+  var a=getAcopio();
+  if(editMatId){
+    a.mats=a.mats.map(function(m){return m.id===editMatId?Object.assign({},m,{nom:nom,cod:cod,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat}):m;});
+    toast('✓ Material actualizado');
+  } else {
+    var maxId=1;a.mats.forEach(function(m){if(m.id>=maxId)maxId=m.id+1;});
+    a.mats.push({id:maxId,cod:cod,nom:nom,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat});
+    toast('✓ Material "'+nom+'" agregado');
+  }
+  persist();closeModal('modal-mat');renderMateriales();
+}
+function borrarMaterialActual(){
+  if(!editMatId) return;
+  var a=getAcopio();
+  var usado=(a.retiros||[]).some(function(r){return r.matId===editMatId;});
+  if(usado){
+    if(!confirm('Este material tiene retiros registrados. Si lo eliminás, esos retiros quedarán huérfanos. ¿Continuar?')) return;
+  }
+  a.mats=a.mats.filter(function(m){return m.id!==editMatId;});
+  persist();closeModal('modal-mat');toast('Material eliminado');renderMateriales();
+}
+
+// ═══════════════════════════════════════════
+// PAGOS
+// ═══════════════════════════════════════════
+var editPagoId=null;
+function openPago(id){
+  editPagoId=id||null;
+  var a=getAcopio();
+  var pago=id?(a.pagos||[]).find(function(p){return p.id===id;}):null;
+  document.getElementById('pago-fecha').value=pago?pago.fecha:todayISO();
+  document.getElementById('pago-pesos').value=pago?pago.montoPesos:'';
+  document.getElementById('pago-usd').value=pago?fmtN(toUSD(pago.montoPesos),2):'';
+  document.getElementById('pago-notas').value=pago?pago.notas:'';
+  document.getElementById('pago-forma').value=pago?pago.forma:'Transferencia';
+  document.getElementById('pago-ttl').textContent=pago?'Editar pago':'Registrar pago';
+  openModal('modal-pago');
+}
+function syncPagoUSD(){var p=parseFloat(document.getElementById('pago-pesos').value)||0;document.getElementById('pago-usd').value=p>0?fmtN(toUSD(p),2):'';}
+function syncPagoPesos(){var u=parseFloat(document.getElementById('pago-usd').value)||0;var a=getAcopio();document.getElementById('pago-pesos').value=u>0?fmtN(u*(a.tc||TC_DEFAULT),2):'';}
+function guardarPago(){
+  var montoPesos=parseFloat(document.getElementById('pago-pesos').value)||0;
+  var fecha=document.getElementById('pago-fecha').value;
+  var notas=document.getElementById('pago-notas').value.trim();
+  var forma=document.getElementById('pago-forma').value;
+  if(!montoPesos||montoPesos<=0){alert('Ingresá un importe');return;}
+  if(!fecha){alert('Seleccioná una fecha');return;}
+  var a=getAcopio();
+  if(!a.pagos)a.pagos=[];
+  if(editPagoId){
+    a.pagos=a.pagos.map(function(p){return p.id===editPagoId?Object.assign({},p,{montoPesos:montoPesos,fecha:fecha,notas:notas,forma:forma}):p;});
+    toast('✓ Pago actualizado');
+  } else {
+    a.pagos.push({id:Date.now(),montoPesos:montoPesos,fecha:fecha,notas:notas,forma:forma});
+    toast('✓ Pago registrado: $'+fmtN(montoPesos,0));
+  }
+  persist();closeModal('modal-pago');renderMateriales();
+}
+function borrarPago(id){
+  var a=getAcopio();
+  a.pagos=(a.pagos||[]).filter(function(p){return p.id!==id;});
+  persist();toast('Pago eliminado');renderMateriales();
+}
+function renderPagosList(){
+  var a=getAcopio();
+  var pagos=(a.pagos||[]).slice().sort(function(x,y){return y.fecha.localeCompare(x.fecha)||y.id-x.id;});
+  if(!pagos.length){document.getElementById('pagos-content').innerHTML='<div class="card"><div class="empty">Sin pagos registrados</div></div>';return;}
+  var rows=pagos.map(function(p){
+    return '<tr>'
+      +'<td class="mono" style="color:#A8BFA8">'+fmtFecha(p.fecha)+'</td>'
+      +'<td><span class="badge" style="background:#EBF7F0;color:#0A6E3A">'+p.forma+'</span></td>'
+      +'<td class="mono r" style="font-weight:700">'+fmtP(p.montoPesos)+'</td>'
+      +'<td class="mono r" style="color:#7A9E82">'+fmtU(toUSD(p.montoPesos))+'</td>'
+      +'<td style="font-size:11px;color:#A8BFA8">'+(p.notas||'')+'</td>'
+      +'<td class="r" style="white-space:nowrap"><button class="btn btn-s btn-sm" onclick="openPago('+p.id+')" style="padding:3px 9px;font-size:10px;margin-right:4px">✎</button><button class="desc-del" onclick="borrarPago('+p.id+')">✕</button></td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('pagos-content').innerHTML='<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Forma</th><th class="r">$</th><th class="r">u$s</th><th>Notas</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+
+// ═══════════════════════════════════════════
+// RETIRAR
+// ═══════════════════════════════════════════
+function renderRetirar(){
+  var obras=getObras();
+  document.getElementById('retirar-obra-chips').innerHTML=obras.map(function(o,i){
+    return '<button class="chip'+(i===curRetirarObra?' active':'')+'" onclick="selectRetirarObra('+i+')">'+o+'</button>';
+  }).join('')+'<button class="chip" onclick="openNuevaObra()" style="border-style:dashed;color:var(--green3)">+ Obra</button>';
+  document.getElementById('retirar-del-obra-wrap').innerHTML=obras.length
+    ?'<button onclick="confirmarBorrarObra()" style="background:none;border:none;color:#B8C4B8;font-size:10px;font-weight:600;cursor:pointer;font-family:\'Space Grotesk\',sans-serif;padding:2px 0">Eliminar obra "'+(obras[curRetirarObra]||'')+'"</button>'
+    :'';
+
+  var matSel=document.getElementById('retirar-mat-sel');
+  var mats=getAllMats();
+  var cats={};
+  mats.forEach(function(m){if(!cats[m.cat])cats[m.cat]=[];cats[m.cat].push(m);});
+  var opts='';
+  Object.keys(cats).forEach(function(cat){
+    opts+='<optgroup label="'+cat+'">';
+    cats[cat].forEach(function(m){opts+='<option value="'+m.id+'">'+m.nom+'</option>';});
+    opts+='</optgroup>';
+  });
+  matSel.innerHTML=opts||'<option value="">Sin materiales</option>';
+
+  document.getElementById('retirar-fecha').value=todayISO();
+  document.getElementById('retirar-obra-label').textContent=obras[curRetirarObra]||'';
+  renderRetirarHistorial();
+}
+function selectRetirarObra(i){curRetirarObra=i;renderRetirar();}
+function guardarRetiro(){
+  var matId=parseInt(document.getElementById('retirar-mat-sel').value);
+  var qty=parseFloat(document.getElementById('retirar-qty').value);
+  var fecha=document.getElementById('retirar-fecha').value;
+  if(!matId){alert('Seleccioná un material');return;}
+  if(!qty||qty<=0){alert('Ingresá una cantidad válida');return;}
+  if(!fecha){alert('Seleccioná una fecha');return;}
+  var a=getAcopio();
+  if(!a.retiros)a.retiros=[];
+  a.retiros.push({id:Date.now(),matId:matId,qty:qty,obraIdx:curRetirarObra,fecha:fecha});
+  persist();
+  var m=getMat(matId);
+  toast('✓ Retirado: '+fmtN(qty,2)+' '+m.unidad+' de '+m.nom.split(' ').slice(0,3).join(' '));
+  document.getElementById('retirar-qty').value='';
+  renderRetirarHistorial();
+}
+function renderRetirarHistorial(){
+  var a=getAcopio();
+  var retiros=(a.retiros||[]).filter(function(r){return r.obraIdx===curRetirarObra;}).slice().sort(function(x,y){return y.fecha.localeCompare(x.fecha)||y.id-x.id;});
+  if(!retiros.length){document.getElementById('retirar-historial').innerHTML='<div class="card"><div class="empty">Sin retiros para esta obra</div></div>';return;}
+  var rows=retiros.map(function(r){
+    var m=getMat(r.matId);
+    var val=r.qty*(m?m.precioAcord:0);
+    return '<tr>'
+      +'<td class="mono" style="color:#A8BFA8">'+fmtFecha(r.fecha)+'</td>'
+      +'<td style="font-size:12px;font-weight:600">'+(m?m.nom:'(material eliminado)')+'</td>'
+      +'<td class="mono r" style="font-weight:700">'+fmtN(r.qty,2)+' '+(m?m.unidad:'')+'</td>'
+      +'<td class="mono r">'+fmtP(val)+'</td>'
+      +'<td class="mono r" style="color:#7A9E82">'+fmtU(toUSD(val))+'</td>'
+      +'<td class="r" style="white-space:nowrap"><button class="btn btn-s btn-sm" onclick="openEditRetiro('+r.id+')" style="padding:3px 9px;font-size:10px;margin-right:4px">✎</button><button class="desc-del" onclick="borrarRetiro('+r.id+')">✕</button></td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('retirar-historial').innerHTML='<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Material</th><th class="r">Cantidad</th><th class="r">$</th><th class="r">u$s</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+var editRetiroId=null;
+function openEditRetiro(id){
+  editRetiroId=id;
+  var a=getAcopio();
+  var r=(a.retiros||[]).find(function(r){return r.id===id;});
+  document.getElementById('retiro-qty').value=r.qty;
+  document.getElementById('retiro-fecha').value=r.fecha;
+  openModal('modal-retiro');
+}
+function guardarEditRetiro(){
+  var qty=parseFloat(document.getElementById('retiro-qty').value);
+  var fecha=document.getElementById('retiro-fecha').value;
+  if(!qty||qty<=0){alert('Cantidad inválida');return;}
+  var a=getAcopio();
+  a.retiros=(a.retiros||[]).map(function(r){return r.id===editRetiroId?Object.assign({},r,{qty:qty,fecha:fecha}):r;});
+  persist();closeModal('modal-retiro');toast('✓ Retiro actualizado');renderRetirarHistorial();
+}
+function borrarRetiro(id){
+  var a=getAcopio();
+  a.retiros=(a.retiros||[]).filter(function(r){return r.id!==id;});
+  persist();toast('Retiro eliminado');renderRetirarHistorial();
+}
+
+// ═══════════════════════════════════════════
+// NUEVA OBRA
+// ═══════════════════════════════════════════
+function openNuevaObra(){document.getElementById('obra-nombre').value='';openModal('modal-obra');}
+function guardarObra(){
+  var nom=document.getElementById('obra-nombre').value.trim();
+  if(!nom){alert('Ingresá un nombre');return;}
+  var a=getAcopio();
+  if(!a.obras)a.obras=[];
+  a.obras.push(nom);
+  persist();closeModal('modal-obra');toast('✓ Obra "'+nom+'" agregada');
+  curRetirarObra=getObras().length-1;
+  curReporteObra=getObras().length-1;
+  var activeTab=document.querySelector('.tab.active').id.replace('tab-','');
+  showTab(activeTab);
+}
+var pendingDeleteObraIdx=null;
+function confirmarBorrarObra(){
+  var a=getAcopio();
+  var obras=getObras();
+  if(!obras.length) return;
+  var idx=curRetirarObra;
+  if(pendingDeleteObraIdx===idx){
+    var nom=obras[idx];
+    var tieneRetiros=(a.retiros||[]).some(function(r){return r.obraIdx===idx;});
+    if(tieneRetiros && !confirm('La obra "'+nom+'" tiene retiros registrados. Si la eliminás, esos retiros se pierden también. ¿Continuar?')){
+      pendingDeleteObraIdx=null;return;
+    }
+    // Eliminar retiros de esa obra y reindexar los de obras posteriores
+    a.retiros=(a.retiros||[]).filter(function(r){return r.obraIdx!==idx;}).map(function(r){
+      return r.obraIdx>idx?Object.assign({},r,{obraIdx:r.obraIdx-1}):r;
+    });
+    a.obras.splice(idx,1);
+    persist();
+    pendingDeleteObraIdx=null;
+    toast('Obra "'+nom+'" eliminada');
+    curRetirarObra=Math.max(0,idx-1);
+    curReporteObra=curRetirarObra;
+    renderRetirar();
+  } else {
+    pendingDeleteObraIdx=idx;
+    toast('Tocá de nuevo "Eliminar obra" para confirmar');
+    setTimeout(function(){pendingDeleteObraIdx=null;},3000);
+  }
+}
+
+// ═══════════════════════════════════════════
+// REPORTE POR OBRA (con subtotales por rubro)
+// ═══════════════════════════════════════════
+function renderReporte(){
+  var obras=getObras();
+  document.getElementById('reporte-obra-chips').innerHTML=obras.map(function(o,i){
+    return '<button class="chip'+(i===curReporteObra?' active':'')+'" onclick="selectReporteObra('+i+')">'+o+'</button>';
+  }).join('');
+
+  var mats=getAllMats();
+  var a=getAcopio();
+  var cats={};
+  mats.forEach(function(m){
+    var qty=(a.retiros||[]).filter(function(r){return r.matId===m.id&&r.obraIdx===curReporteObra;}).reduce(function(s,r){return s+r.qty;},0);
+    if(qty>0){if(!cats[m.cat])cats[m.cat]=[];cats[m.cat].push({m:m,qty:qty});}
+  });
+
+  var totalQty=0,totalPesos=0;
+  Object.values(cats).forEach(function(items){items.forEach(function(x){totalQty+=x.qty;totalPesos+=x.qty*x.m.precioAcord;});});
+
+  var html='<div class="kpi-row" style="grid-template-columns:1fr 1fr 1fr">'
+    +kpi('Obra',obras[curReporteObra]||'-',Object.keys(cats).length+' rubros')
+    +kpi('Total $',fmtP(totalPesos),'')
+    +kpi('Total u$s',fmtU(toUSD(totalPesos)),'')
+    +'</div>';
+
+  if(!Object.keys(cats).length){
+    html+='<div class="card"><div class="empty">Sin retiros registrados para esta obra</div></div>';
+  } else {
+    Object.keys(cats).forEach(function(cat){
+      var col=CAT_COLORS[cat]||'#7A9E82';
+      var catTotalPesos=0;
+      cats[cat].forEach(function(x){catTotalPesos+=x.qty*x.m.precioAcord;});
+      html+='<div class="card" style="border-top:3px solid '+col+'">';
+      html+='<div class="card-hd"><span class="card-ttl" style="color:'+col+'">'+cat+'</span><span class="card-sub">'+fmtP(catTotalPesos)+' · '+fmtU(toUSD(catTotalPesos))+'</span></div>';
+      html+='<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="r">Cantidad</th><th class="r">P. Acordado</th><th class="r">Total $</th><th class="r">Total u$s</th><th></th></tr></thead><tbody>';
+      cats[cat].forEach(function(x){
+        var val=x.qty*x.m.precioAcord;
+        html+='<tr>'
+          +'<td style="font-weight:600;font-size:12px">'+x.m.nom+'</td>'
+          +'<td class="mono r"><strong>'+fmtN(x.qty,2)+'</strong> '+x.m.unidad+'</td>'
+          +'<td class="mono r">'+fmtP(x.m.precioAcord)+'</td>'
+          +'<td class="mono r">'+fmtP(val)+'</td>'
+          +'<td class="mono r" style="color:#7A9E82">'+fmtU(toUSD(val))+'</td>'
+          +'<td class="r"><div class="report-actions"><button class="btn btn-s btn-sm" onclick="editarRetiroDesdeReporte('+x.m.id+')" style="padding:3px 9px;font-size:10px">✎</button><button class="report-del" onclick="eliminarRetirosDesdeReporte('+x.m.id+')">✕</button></div></td>'
+          +'</tr>';
+      });
+      html+='<tr class="subtotal"><td colspan="3">Subtotal '+cat+'</td>'
+        +'<td class="mono r">'+fmtP(catTotalPesos)+'</td>'
+        +'<td class="mono r">'+fmtU(toUSD(catTotalPesos))+'</td><td></td></tr>';
+      html+='</tbody></table></div></div>';
+    });
+  }
+  document.getElementById('reporte-content').innerHTML=html;
+}
+function selectReporteObra(i){curReporteObra=i;renderReporte();}
+
+function getRetirosReporteMaterial(matId){
+  var a=getAcopio();
+  return (a.retiros||[]).filter(function(r){return r.obraIdx===curReporteObra && r.matId===matId;});
+}
+function editarRetiroDesdeReporte(matId){
+  var arr=getRetirosReporteMaterial(matId);
+  if(!arr.length){alert('No hay retiros para editar');return;}
+  if(arr.length===1){
+    openEditRetiro(arr[0].id);
+    return;
+  }
+  var m=getMat(matId);
+  alert('Hay '+arr.length+' retiros de '+(m?m.nom:'este material')+' para esta obra. Para modificar uno puntual, entrá en la solapa Retirar y editá el movimiento del historial.');
+  showTab('retirar');
+}
+function eliminarRetirosDesdeReporte(matId){
+  var arr=getRetirosReporteMaterial(matId);
+  if(!arr.length){alert('No hay retiros para eliminar');return;}
+  var m=getMat(matId);
+  var qty=arr.reduce(function(s,r){return s+r.qty;},0);
+  var msg=arr.length===1
+    ?'¿Eliminar el retiro de '+fmtN(qty,2)+' '+(m?m.unidad:'')+' de '+(m?m.nom:'material')+'?'
+    :'Hay '+arr.length+' retiros de '+(m?m.nom:'este material')+' para esta obra, total '+fmtN(qty,2)+' '+(m?m.unidad:'')+'. ¿Eliminar TODOS esos retiros?';
+  if(!confirm(msg))return;
+  var ids=arr.map(function(r){return r.id;});
+  var a=getAcopio();
+  a.retiros=(a.retiros||[]).filter(function(r){return ids.indexOf(r.id)===-1;});
+  persist();
+  toast('✓ Retiro eliminado');
+  renderReporte();
+}
+
+
+// ═══════════════════════════════════════════
+// MODAL CLOSE ON BG CLICK
+// ═══════════════════════════════════════════
+document.querySelectorAll('.modal-bg').forEach(function(m){
+  m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open');});
+});
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+goHome();
+</script>
+</body>
+</html>
