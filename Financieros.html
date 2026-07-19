@@ -1,0 +1,2258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Índice CQ — Indicadores Comerciales y Financieros</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  :root{
+    --verde:#1C3D35;
+    --verde2:#274F45;
+    --sand:#F5F3EF;
+    --card:#FFFFFF;
+    --ink:#1E2620;
+    --muted:#73807A;
+    --border:#E4E0D6;
+    --g:#2F8F5B; --g-bg:#E3F3EA; --g-bd:#BFE2CD;
+    --y:#C8862B; --y-bg:#FBEFDA; --y-bd:#F0D7A6;
+    --r:#C1473A; --r-bg:#F8E4E1; --r-bd:#EFC3BC;
+    --n-bg:#EEECE6; --n-bd:#DCD8CC; --n:#8A8F87;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--sand);
+    color:var(--ink);
+    font-family:'Space Grotesk',sans-serif;
+    -webkit-tap-highlight-color:transparent;
+    padding-bottom:32px;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  #app{max-width:520px;margin:0 auto;}
+
+  header.topbar{
+    background:var(--verde);
+    color:var(--sand);
+    padding:18px 18px 16px;
+    border-radius:0 0 18px 18px;
+    position:relative;
+  }
+  header.topbar .brand{
+    font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    color:#BFD0C8;font-weight:600;
+  }
+  header.topbar h1{
+    margin:2px 0 0;font-size:23px;font-weight:700;letter-spacing:-0.01em;
+    display:flex;align-items:center;gap:8px;
+  }
+  header.topbar .sub{font-size:12.5px;color:#A9BDB5;margin-top:2px;}
+
+  .selector{padding:14px 16px 0;}
+  .chiprow{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;}
+  .chiprow::-webkit-scrollbar{display:none;}
+  .chip{
+    flex:0 0 auto;padding:7px 14px;border-radius:999px;border:1px solid var(--border);
+    background:var(--card);font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:600;
+    color:var(--muted);cursor:pointer;white-space:nowrap;position:relative;
+  }
+  .chip.active{background:var(--verde);color:#fff;border-color:var(--verde);}
+  .chip:disabled{opacity:.32;cursor:not-allowed;}
+  .chip .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--g);margin-left:6px;vertical-align:middle;}
+
+  nav.tabs{display:flex;gap:4px;padding:10px 12px 4px;}
+  nav.tabs button{
+    flex:1;padding:9px 0;border:none;border-radius:10px;background:transparent;
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;color:var(--muted);cursor:pointer;
+  }
+  nav.tabs button.active{background:var(--card);color:var(--verde);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+
+  main{padding:8px 16px 0;}
+  .tabpanel{display:none;}
+  .tabpanel.active{display:block;}
+
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:14px;
+    padding:14px 14px;margin-bottom:12px;
+  }
+  .card h2{font-size:14px;margin:0 0 10px;color:var(--verde);font-weight:700;}
+  .card h2 .em{margin-right:6px;}
+
+  .field{margin-bottom:10px;}
+  .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px;font-weight:500;}
+  .field input{
+    width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:9px;
+    font-family:'JetBrains Mono',monospace;font-size:14.5px;background:#FBFAF8;color:var(--ink);
+  }
+  .field input:focus{outline:2px solid var(--verde2);outline-offset:1px;border-color:var(--verde2);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .hint{font-size:11px;color:var(--muted);margin-top:3px;}
+  .auto-link{font-size:11.5px;color:var(--verde2);text-decoration:underline;cursor:pointer;margin-top:3px;display:inline-block;}
+  .fieldtag{font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;margin-left:5px;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle;}
+  .fieldtag.auto{background:var(--g-bg);color:var(--g);}
+  .fieldtag.manual{background:var(--y-bg);color:var(--y);}
+  .field input.auto-value, input.auto-value{color:var(--g);font-weight:700;border-color:var(--g-bd);background:var(--g-bg);}
+  .field input.manual-value{color:var(--ink);}
+
+  .util-row{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 18px;}
+  .util-btn{
+    flex:1 1 auto;min-width:46%;padding:10px 8px;border-radius:10px;border:1px solid var(--border);
+    background:var(--card);color:var(--verde2);font-family:'Space Grotesk',sans-serif;font-weight:600;
+    font-size:12.5px;cursor:pointer;text-align:center;
+  }
+  .util-btn.danger{color:var(--r);border-color:var(--r-bd);}
+  .util-btn.primary{background:#25D366;color:#fff;border-color:#25D366;min-width:100%;}
+  input[type=file]{display:none;}
+
+  /* hero score */
+  .hero{
+    background:var(--verde);color:#fff;border-radius:16px;padding:18px;margin-bottom:14px;
+    display:flex;align-items:center;gap:16px;
+  }
+  .hero .ring{
+    width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;font-family:'JetBrains Mono',monospace;font-weight:800;font-size:24px;
+    border:6px solid rgba(255,255,255,.18);position:relative;
+  }
+  .hero .ring.g{border-color:#5fce95;}
+  .hero .ring.y{border-color:#e8b561;}
+  .hero .ring.r{border-color:#e08077;}
+  .hero .txt .label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#A9BDB5;font-weight:600;}
+  .hero .txt .status{font-size:17px;font-weight:700;margin-top:2px;}
+  .hero .txt .period{font-size:12px;color:#BFD0C8;margin-top:3px;}
+
+  .indlist{display:flex;flex-direction:column;gap:8px;}
+  .ind{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:#FBFAF8;
+  }
+  .ind .left{display:flex;align-items:center;gap:9px;min-width:0;}
+  .ind .em{font-size:16px;flex:0 0 auto;}
+  .ind .name{font-size:12.8px;font-weight:600;color:var(--ink);}
+  .ind .cat{font-size:10.5px;color:var(--muted);}
+  .ind .right{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+  .ind .val{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;}
+  .badge{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+  .badge.g{background:var(--g);} .badge.y{background:var(--y);} .badge.r{background:var(--r);} .badge.n{background:var(--n);}
+  .ind.g{background:var(--g-bg);border-color:var(--g-bd);}
+  .ind.y{background:var(--y-bg);border-color:var(--y-bd);}
+  .ind.r{background:var(--r-bg);border-color:var(--r-bd);}
+  .ind .rule{font-size:10px;color:var(--muted);margin-top:1px;}
+
+  .tablewrap{overflow-x:auto;border-radius:12px;border:1px solid var(--border);}
+  table.annual{border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11px;min-width:760px;}
+  table.annual th,table.annual td{padding:7px 8px;text-align:center;border-bottom:1px solid var(--border);}
+  table.annual th{background:#F1EFE8;color:var(--verde);font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10.5px;position:sticky;top:0;}
+  table.annual td.name{
+    text-align:left;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:11px;
+    position:sticky;left:0;background:#fff;min-width:148px;border-right:1px solid var(--border);
+  }
+  table.annual td.cell{font-weight:700;}
+  table.annual td.cell.g{background:var(--g-bg);color:var(--g);}
+  table.annual td.cell.y{background:var(--y-bg);color:var(--y);}
+  table.annual td.cell.r{background:var(--r-bg);color:var(--r);}
+  table.annual td.cell.n{background:var(--n-bg);color:var(--n);}
+  table.annual td.curcol, table.annual th.curcol{background:#EFEAD9 !important;}
+  table.annual td.name.curcol{background:#EFEAD9 !important;}
+
+  .legend{display:flex;gap:14px;padding:10px 4px 2px;font-size:10.5px;color:var(--muted);flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:4px;}
+  .legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+
+  .chartcard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;}
+  .chartcard h2{font-size:13.5px;margin:0 0 10px;color:var(--verde);font-weight:700;}
+  canvas{max-width:100%;}
+
+  .empty{text-align:center;padding:24px 14px;color:var(--muted);font-size:13px;}
+  .section-title{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:14px 4px 8px;}
+
+  /* cartera */
+  .obra-card{border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;}
+  .obra-head{display:flex;align-items:center;justify-content:space-between;background:#F1EFE8;padding:9px 12px;}
+  .obra-code{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:13.5px;color:var(--verde);}
+  .obra-del{border:none;background:transparent;color:var(--r);font-size:18px;font-weight:700;cursor:pointer;line-height:1;padding:0 4px;}
+  .obra-move{border:1px solid var(--border);background:#fff;color:var(--verde2);width:27px;height:27px;border-radius:999px;font-size:13px;font-weight:800;cursor:pointer;line-height:1;}
+  .obra-move:disabled{opacity:.25;cursor:not-allowed;}
+  .obra-head-actions{display:flex;align-items:center;gap:7px;margin-top:10px;}
+  .obra-toggle{
+    border:1px solid var(--border);background:#fff;color:var(--verde2);border-radius:999px;
+    padding:6px 10px;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;cursor:pointer;
+  }
+  .obra-toggle.open{background:var(--verde2);color:#fff;border-color:var(--verde2);}
+  .obra-mini{font-size:10.5px;color:var(--muted);font-weight:600;margin-left:6px;display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+  .obra-status-pill{display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;font-size:9.5px;font-weight:800;letter-spacing:.01em;}
+  .obra-status-pill.no{background:var(--n-bg);color:var(--n);}
+  .obra-status-pill.construccion{background:#E4EEF8;color:#2F6690;}
+  .obra-status-pill.terminada{background:var(--g-bg);color:var(--g);}
+  .obra-status-pill.vt{background:var(--r-bg);color:var(--r);}
+  .obra-status-pill.vp{background:var(--y-bg);color:var(--y);}
+  .obra-status-pill.base{background:#F1EFE8;color:var(--muted);}
+  .state-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .state-tag{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;font-size:9.5px;font-weight:800;letter-spacing:.01em;}
+  .state-tag.no{background:var(--n-bg);color:var(--n);}
+  .state-tag.construccion{background:#E4EEF8;color:#2F6690;}
+  .state-tag.terminada{background:var(--g-bg);color:var(--g);}
+  .state-tag.vt{background:var(--r-bg);color:var(--r);}
+  .state-tag.vp{background:var(--y-bg);color:var(--y);}
+  .state-tag.base{background:#F1EFE8;color:var(--muted);}
+  .casa-row{padding:10px 12px;border-top:1px solid var(--border);}
+  .casa-label{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;}
+  .casa-del{border:none;background:transparent;color:var(--muted);font-size:13px;cursor:pointer;padding:2px 4px;}
+  .schiprow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+  .schiprow.comercial{margin-top:7px;}
+  .obra-state-editor{background:#fff;border:1px solid var(--border);border-radius:12px;margin:12px 13px;padding:10px;}
+  .casa-subttl{font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:8px 0 5px;}
+  .schip{
+    padding:8px 6px;border-radius:10px;border:1px solid var(--border);background:#FBFAF8;
+    font-family:'Space Grotesk',sans-serif;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;
+    white-space:normal;text-align:center;line-height:1.25;
+  }
+  .schip.active{background:var(--verde2);color:#fff;border-color:var(--verde2);}
+  .meses-field{margin-top:8px;max-width:160px;}
+  .meses-field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;}
+  .meses-field input{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:13px;background:#fff;}
+
+  .casa-row.casa-techada{background:#EFEDE6;}
+  .casa-techada .casa-label{color:var(--muted);}
+  .techada-badge{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--n-bg);color:var(--n);margin-left:4px;text-transform:uppercase;letter-spacing:.03em;}
+  .techada-info{font-size:12.5px;color:var(--muted);font-weight:600;margin-top:2px;}
+  .casa-techada .auto-link{font-size:11px;}
+
+  .resumen-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .resumen-item{background:#FBFAF8;border:1px solid var(--border);border-radius:10px;padding:8px 10px;}
+  .resumen-item .rlabel{font-size:10.5px;color:var(--muted);font-weight:600;}
+  .resumen-item .rval{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:15px;color:var(--verde);margin-top:2px;}
+
+
+  /* cartera rediseñada */
+  .cartera-intro{font-size:12px;color:var(--muted);line-height:1.4;margin:-2px 0 12px;}
+  .obra-card.pro{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:12px;box-shadow:0 1px 2px rgba(28,61,53,.04);}
+  .obra-head.pro{display:block;background:#fff;padding:14px 13px 13px;}
+  .obra-title-wrap{min-width:0;}
+  .obra-title-line{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+  .obra-title{display:flex;align-items:center;gap:8px;min-width:0;}
+  .obra-emoji{width:30px;height:30px;border-radius:10px;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto;}
+  .obra-code.big,.obra-code{font-size:16px;color:var(--verde);line-height:1.05;display:inline-block;font-family:'JetBrains Mono',monospace;font-weight:800;}
+  .obra-state-main{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;font-size:9.5px;font-weight:800;margin-left:6px;vertical-align:2px;}
+  .obra-state-main.no{background:var(--n-bg);color:var(--n);}
+  .obra-state-main.construccion{background:#E4EEF8;color:#2F6690;}
+  .obra-state-main.terminada{background:var(--g-bg);color:var(--g);}
+  .obra-sub{font-size:10.5px;color:var(--muted);font-weight:600;margin-top:2px;}
+  .obra-actions-compact{display:flex;align-items:center;gap:5px;flex:0 0 auto;}
+  .obra-actions-compact .obra-move{width:27px;height:27px;}
+  .obra-actions-compact .obra-del{font-size:18px;}
+  .obra-mini.pro,.obra-badges{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 0;}
+  .obra-status-pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:6px 9px;font-size:10.5px;font-weight:800;letter-spacing:.01em;line-height:1.15;}
+  .obra-status-pill.no{background:var(--n-bg);color:var(--n);}
+  .obra-status-pill.construccion{background:#E4EEF8;color:#2F6690;}
+  .obra-status-pill.terminada{background:var(--g-bg);color:var(--g);}
+  .obra-status-pill.vt{background:var(--r-bg);color:var(--r);}
+  .obra-status-pill.vp{background:var(--y-bg);color:var(--y);}
+  .obra-status-pill.base{background:#F1EFE8;color:var(--muted);}
+  .pill-origin{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;opacity:.78;margin-left:2px;}
+  .obra-toggle-row{padding:0 13px 13px;}
+  .obra-toggle.full{width:100%;border:1px solid var(--verde2);background:#fff;color:var(--verde2);border-radius:12px;padding:9px 10px;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:800;cursor:pointer;}
+  .obra-toggle.full.open{background:var(--verde2);color:#fff;}
+  .casas-wrap.pro{border-top:1px solid var(--border);background:#FBFAF8;}
+  .casa-row.pro{padding:13px;border-top:none;border-bottom:1px solid var(--border);background:#FBFAF8;}
+  .casa-row.pro:last-child{border-bottom:none;}
+  .casa-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+  .casa-title strong{font-size:13.5px;color:var(--ink);}
+  .state-summary{display:grid;grid-template-columns:1fr;gap:6px;margin-bottom:10px;}
+  .state-line{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);background:#fff;border-radius:11px;padding:9px 10px;}
+  .state-line .main{font-size:12px;font-weight:800;}
+  .state-line .origin{font-size:10.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+  .state-line.no{border-color:var(--n-bd);background:var(--n-bg);}
+  .state-line.construccion{border-color:#BFD3E2;background:#E4EEF8;}
+  .state-line.terminada{border-color:var(--g-bd);background:var(--g-bg);}
+  .state-line.vt{border-color:var(--r-bd);background:var(--r-bg);}
+  .state-line.vp{border-color:var(--y-bd);background:var(--y-bg);}
+  .editor-block{background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px;margin-top:8px;}
+  .casa-subttl{margin:0 0 6px;}
+  .meses-field.pro{max-width:none;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px;margin-top:8px;}
+  .meses-field.pro label{font-size:11.5px;font-weight:700;color:var(--muted);}
+  .meses-field.pro input{background:#FBFAF8;}
+  .resumen-grid.pro{grid-template-columns:1fr 1fr;}
+  .resumen-item.pro{padding:11px;border-radius:12px;}
+  .resumen-item.pro .rval{font-size:18px;}
+
+
+  .obra-status-pill.base{background:#F1EFE8;color:var(--muted);}
+  .obra-state-editor{padding:10px 12px;border-top:1px solid var(--border);background:#FBFAF8;}
+  .state-summary.commercial-only{grid-template-columns:1fr;}
+
+
+  /* ajustes visuales cartera */
+  .obra-card.pro{position:relative;}
+  .obra-card.pro .obra-del{
+    position:absolute;
+    top:10px;
+    right:11px;
+    width:28px;
+    height:28px;
+    border-radius:999px;
+    background:var(--r-bg);
+    border:1px solid var(--r-bd);
+    color:var(--r);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    font-weight:900;
+    line-height:1;
+    z-index:2;
+  }
+  .obra-card.pro .obra-head.pro{padding-right:46px;}
+  .obra-card.pro .obra-head-actions{gap:8px;margin-top:12px;}
+  .obra-card.pro .obra-toggle{
+    min-width:92px;
+    padding:10px 16px;
+    border-radius:13px;
+    border-color:var(--verde2);
+    color:var(--verde2);
+    font-size:13px;
+    font-weight:900;
+  }
+  .obra-card.pro .obra-toggle.open{
+    background:var(--verde2);
+    color:#fff;
+    border-color:var(--verde2);
+  }
+
+
+.archived-toggle-row{display:flex;gap:8px;margin:10px 0 12px}
+.obra-archive{border:1px solid var(--border);background:#fff;color:var(--muted);width:28px;height:28px;border-radius:999px;font-size:13px;font-weight:800;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center}
+.obra-archive:hover{background:var(--n-bg);color:var(--verde2)}
+.obra-card.pro.archived{opacity:.72;background:#FAFAF8}
+
+
+.sale-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sale-months-mini{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--border);border-radius:999px;padding:3px 7px;font-size:10px;color:var(--muted);font-weight:700}
+.sale-months-mini input{width:52px;border:0;background:transparent;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;color:var(--verde);padding:0;text-align:right;outline:none}
+.state-line .main.sale-inline{font-size:12px}
+
+</style>
+
+
+<style id="cq-ui-botones-solapas-premium">
+/* CQ UI premium — solo estética de botones y solapas, sin tocar lógica */
+:root{
+  --cq-shadow-soft:0 8px 22px rgba(28,61,53,.08);
+  --cq-shadow-btn:0 6px 16px rgba(28,61,53,.10), inset 0 1px 0 rgba(255,255,255,.85);
+  --cq-shadow-btn-active:0 3px 9px rgba(28,61,53,.10), inset 0 1px 0 rgba(255,255,255,.55);
+  --cq-accent:#D39A39;
+  --cq-accent2:#F3C766;
+}
+
+/* Solapas principales */
+nav.tabs{
+  background:rgba(255,255,255,.74) !important;
+  border:1px solid rgba(28,61,53,.10) !important;
+  border-radius:18px !important;
+  padding:5px !important;
+  margin:8px 12px 2px !important;
+  gap:5px !important;
+  box-shadow:var(--cq-shadow-soft) !important;
+  backdrop-filter:blur(10px) !important;
+}
+nav.tabs button{
+  min-height:42px !important;
+  border-radius:14px !important;
+  font-size:11.5px !important;
+  font-weight:850 !important;
+  letter-spacing:.01em !important;
+  color:#7A877F !important;
+  background:transparent !important;
+  border:1px solid transparent !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:5px !important;
+  position:relative !important;
+  overflow:hidden !important;
+  transition:transform .14s ease, box-shadow .14s ease, background .14s ease, color .14s ease, border-color .14s ease !important;
+}
+nav.tabs button::before{
+  font-size:14px !important;
+  line-height:1 !important;
+  filter:saturate(.95) !important;
+}
+nav.tabs button[data-tab="cartera"]::before{content:"🏘️";}
+nav.tabs button[data-tab="cargar"]::before{content:"⚡";}
+nav.tabs button[data-tab="panel"]::before{content:"📊";}
+nav.tabs button[data-tab="tendencia"]::before{content:"📈";}
+nav.tabs button:hover{background:rgba(28,61,53,.045) !important;color:var(--verde) !important;}
+nav.tabs button.active{
+  color:#fff !important;
+  border-color:rgba(255,255,255,.28) !important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,0) 44%),
+    linear-gradient(135deg,var(--verde),var(--verde2)) !important;
+  box-shadow:0 8px 18px rgba(28,61,53,.22), inset 0 1px 0 rgba(255,255,255,.20) !important;
+}
+nav.tabs button:active{transform:scale(.985) !important;box-shadow:var(--cq-shadow-btn-active) !important;}
+
+/* Chips año/mes */
+.chip{
+  border-radius:999px !important;
+  min-height:34px !important;
+  padding:7px 14px !important;
+  border:1px solid rgba(28,61,53,.11) !important;
+  background:linear-gradient(180deg,#FFFFFF,#F7F6F1) !important;
+  box-shadow:0 4px 12px rgba(28,61,53,.055), inset 0 1px 0 rgba(255,255,255,.9) !important;
+  transition:transform .14s ease, box-shadow .14s ease, background .14s ease, color .14s ease !important;
+}
+.chip:hover{transform:translateY(-1px) !important;box-shadow:0 7px 16px rgba(28,61,53,.09), inset 0 1px 0 rgba(255,255,255,.95) !important;}
+.chip.active{
+  background:linear-gradient(135deg,var(--verde),#2F6C58) !important;
+  border-color:rgba(28,61,53,.48) !important;
+  color:#fff !important;
+  box-shadow:0 8px 18px rgba(28,61,53,.20), inset 0 1px 0 rgba(255,255,255,.22) !important;
+}
+.chip:disabled{box-shadow:none !important;}
+.chip .dot{width:7px !important;height:7px !important;background:#30D774 !important;box-shadow:0 0 8px rgba(48,215,116,.75) !important;}
+
+/* Botones generales */
+button,
+.util-btn,
+.obra-toggle,
+.obra-move,
+.obra-del,
+.obra-archive,
+.casa-del,
+.schip,
+.auto-link{
+  -webkit-tap-highlight-color:transparent !important;
+  transition:transform .14s ease, box-shadow .14s ease, background .14s ease, border-color .14s ease, color .14s ease, opacity .14s ease !important;
+}
+.util-btn,
+.obra-toggle,
+.obra-move,
+.obra-archive,
+.schip{
+  border-radius:14px !important;
+  border:1px solid rgba(28,61,53,.13) !important;
+  background:linear-gradient(180deg,#FFFFFF,#F7F6F1) !important;
+  color:var(--verde2) !important;
+  font-weight:850 !important;
+  box-shadow:var(--cq-shadow-btn) !important;
+}
+.util-btn:hover,
+.obra-toggle:hover,
+.obra-move:hover:not(:disabled),
+.obra-archive:hover,
+.schip:hover{
+  transform:translateY(-1px) !important;
+  border-color:rgba(39,79,69,.30) !important;
+  box-shadow:0 10px 22px rgba(28,61,53,.13), inset 0 1px 0 rgba(255,255,255,.92) !important;
+}
+.util-btn:active,
+.obra-toggle:active,
+.obra-move:active,
+.obra-archive:active,
+.schip:active{
+  transform:scale(.985) !important;
+}
+
+/* Acción WhatsApp destacada */
+.util-btn.primary,
+#btnWhatsapp{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,0) 44%),
+    linear-gradient(135deg,#18B75F,#25D366) !important;
+  color:#fff !important;
+  border-color:rgba(37,211,102,.62) !important;
+  min-height:48px !important;
+  border-radius:16px !important;
+  font-size:13px !important;
+  box-shadow:0 12px 24px rgba(37,211,102,.25), inset 0 1px 0 rgba(255,255,255,.25) !important;
+}
+#btnWhatsapp::before{content:"📲 ";}
+
+/* Botones de alta/gestión */
+#btnAddObra::before{content:"＋ ";font-weight:950;}
+#btnAddObra{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,0) 45%),
+    linear-gradient(135deg,var(--verde),#2F6C58) !important;
+  color:#fff !important;
+  border-color:rgba(28,61,53,.50) !important;
+}
+.util-btn.danger{
+  background:linear-gradient(180deg,#FFFFFF,#FBEDEB) !important;
+  color:var(--r) !important;
+  border-color:var(--r-bd) !important;
+}
+
+/* Botones dentro de obras */
+.obra-toggle.full,
+.obra-card.pro .obra-toggle{
+  border-radius:15px !important;
+  min-height:40px !important;
+  font-size:12.5px !important;
+}
+.obra-toggle.full::before,
+.obra-card.pro .obra-toggle::before{content:"▾ ";font-weight:900;}
+.obra-toggle.full.open::before,
+.obra-card.pro .obra-toggle.open::before{content:"▴ ";}
+.obra-toggle.full.open,
+.obra-card.pro .obra-toggle.open{
+  background:linear-gradient(135deg,var(--verde),var(--verde2)) !important;
+  color:#fff !important;
+  border-color:var(--verde2) !important;
+  box-shadow:0 8px 18px rgba(28,61,53,.18), inset 0 1px 0 rgba(255,255,255,.18) !important;
+}
+.obra-move,
+.obra-archive{
+  display:inline-grid !important;
+  place-items:center !important;
+  width:31px !important;
+  height:31px !important;
+  padding:0 !important;
+  border-radius:50% !important;
+  font-size:13px !important;
+}
+.obra-del,
+.casa-del{
+  border-radius:999px !important;
+  background:var(--r-bg) !important;
+  border:1px solid var(--r-bd) !important;
+  color:var(--r) !important;
+  box-shadow:0 4px 11px rgba(193,71,58,.08) !important;
+}
+.obra-del:hover,
+.casa-del:hover{transform:translateY(-1px) !important;box-shadow:0 8px 16px rgba(193,71,58,.14) !important;}
+
+/* Selectores de estado */
+.schip{
+  min-height:38px !important;
+  padding:8px 7px !important;
+  line-height:1.15 !important;
+  font-size:11px !important;
+}
+.schip.active{
+  background:linear-gradient(135deg,var(--verde),#2F6C58) !important;
+  color:#fff !important;
+  border-color:rgba(28,61,53,.45) !important;
+  box-shadow:0 8px 16px rgba(28,61,53,.18), inset 0 1px 0 rgba(255,255,255,.18) !important;
+}
+.schip:nth-child(1)::before{content:"⏸️ ";}
+.schip:nth-child(2)::before{content:"🏗️ ";}
+.schip:nth-child(3)::before{content:"✅ ";}
+.schiprow.comercial .schip:nth-child(1)::before{content:"⚪ ";}
+.schiprow.comercial .schip:nth-child(2)::before{content:"🏠 ";}
+.schiprow.comercial .schip:nth-child(3)::before{content:"🧱 ";}
+
+/* Tarjetas: levísimo refinamiento para acompañar botones */
+.card,
+.chartcard,
+.obra-card.pro,
+.resumen-item,
+.ind{
+  box-shadow:0 8px 22px rgba(28,61,53,.055) !important;
+}
+.card h2 .em,
+.chartcard h2::first-letter{filter:saturate(1.05) !important;}
+
+/* Mobile más compacto */
+@media(max-width:560px){
+  nav.tabs{margin:7px 10px 1px !important;border-radius:16px !important;}
+  nav.tabs button{min-height:39px !important;font-size:10.8px !important;gap:3px !important;}
+  nav.tabs button::before{font-size:13px !important;}
+  .util-btn{min-height:40px !important;}
+  .chip{min-height:32px !important;padding:6px 12px !important;}
+}
+
+/* Meses visibles completos: 6 por fila, sin desplazamiento horizontal */
+#monthChips{
+  display:grid !important;
+  grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+  gap:6px !important;
+  overflow:visible !important;
+  padding-bottom:4px !important;
+}
+#monthChips .chip{
+  width:100% !important;
+  min-width:0 !important;
+  padding:6px 2px !important;
+  min-height:31px !important;
+  font-size:11px !important;
+  text-align:center !important;
+}
+#monthChips .chip .dot{
+  width:5px !important;
+  height:5px !important;
+  margin-left:3px !important;
+}
+@media(max-width:380px){
+  #monthChips{gap:4px !important;}
+  #monthChips .chip{font-size:10px !important;padding:5px 1px !important;}
+}
+
+</style>
+
+
+<style id="cq-online-status-style">
+.cq-online-status{
+  display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:999px;
+  background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.19);
+  color:#eef5f1;font-size:10px;font-weight:800;white-space:nowrap;
+}
+.cq-online-dot{
+  width:8px;height:8px;border-radius:50%;background:#34d27b;
+  box-shadow:0 0 0 4px rgba(52,210,123,.14);
+}
+.cq-online-status.offline .cq-online-dot{
+  background:#dc5b50;box-shadow:0 0 0 4px rgba(220,91,80,.14);
+}
+</style>
+
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+      <div>
+        <div class="brand">CQ Desarrollos</div>
+        <h1>🧠 Índice CQ</h1>
+        <div class="sub">Dashboard comercial y financiero</div>
+      </div>
+      <div class="cq-online-status"><span class="cq-online-dot"></span><span class="cq-online-text">Con conexión</span></div>
+    </div>
+  </header>
+
+  <div class="selector">
+    <div class="chiprow" id="yearChips"></div>
+    <div class="chiprow" id="monthChips"></div>
+  </div>
+
+  <nav class="tabs">
+    <button data-tab="cartera" class="active">Cartera</button>
+    <button data-tab="cargar">Cargar</button>
+    <button data-tab="panel">Indicadores</button>
+    <button data-tab="tendencia">Tendencia</button>
+  </nav>
+
+  <main>
+    <section id="tab-cartera" class="tabpanel active">
+      <div class="card">
+        <h2><span class="em">🏘️</span>Obras y casas</h2>
+        <div class="hint" style="margin-bottom:10px;">Estado de obra arriba y estado comercial abajo, sin abrir las casas. Tocá “Ver casas” solo para editar.</div>
+        <div id="obrasList"></div>
+        <button class="util-btn" id="btnAddObra" style="margin-top:8px;width:100%;">➕ Agregar obra</button>
+      </div>
+      <div class="card" id="carteraResumen"></div>
+    </section>
+
+    <section id="tab-cargar" class="tabpanel">
+      <div id="cargarLockedMsg" style="display:none;"></div>
+      <div id="cargarForms">
+      <div class="card">
+        <h2><span class="em">📊</span>Resumen ventas y stock</h2>
+        <div class="hint" style="margin-bottom:10px;">Se completa solo con la Cartera. Si hace falta, lo podés pisar a mano.</div>
+        <div id="autoFieldsWrap"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="em">🏗️</span>Obras y caja</h2>
+        <div class="row2">
+          <div class="field">
+            <label>Obras activas <span class="fieldtag auto">auto</span></label>
+            <input type="number" inputmode="numeric" id="i_obrasActivas" min="0" readonly>
+            <div class="hint">Se toma de las obras marcadas como En construcción.</div>
+          </div>
+          <div class="field">
+            <label>Obras iniciadas este mes <span class="fieldtag auto">auto</span></label>
+            <input type="number" inputmode="numeric" id="i_obrasIniciadas" min="0" readonly>
+            <div class="hint">Se toma del mes en que marcás una obra como En construcción.</div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Caja disponible — USD (inicio de mes)</label>
+          <input type="number" inputmode="decimal" id="i_cajaDisponible" min="0">
+        </div>
+        <div class="field">
+          <label>Caja necesidad — USD (próximos 3 meses)</label>
+          <input type="number" inputmode="decimal" id="i_cajaNecesidad" min="0" placeholder="0">
+        </div>
+      </div>
+      </div>
+
+      <div class="util-row">
+        <button class="util-btn primary" id="btnWhatsapp">📲 Enviar PDF por WhatsApp</button>
+      </div>
+    </section>
+
+    <section id="tab-panel" class="tabpanel">
+      <div class="hero">
+        <div class="ring" id="heroRing">--</div>
+        <div class="txt">
+          <div class="label">Índice CQ</div>
+          <div class="status" id="heroStatus">—</div>
+          <div class="period" id="heroPeriod">—</div>
+        </div>
+      </div>
+
+      <div class="section-title">Indicadores del mes</div>
+      <div class="indlist" id="indList"></div>
+
+      <div class="section-title">Panel anual</div>
+      <div class="legend">
+        <span><i style="background:var(--g);"></i>Sano</span>
+        <span><i style="background:var(--y);"></i>Atención</span>
+        <span><i style="background:var(--r);"></i>Riesgo</span>
+        <span><i style="background:var(--n);"></i>Sin datos</span>
+      </div>
+      <div class="tablewrap">
+        <table class="annual" id="annualTable"></table>
+      </div>
+    </section>
+
+    <section id="tab-tendencia" class="tabpanel">
+      <div class="hint" style="margin:2px 4px 10px;">Todos los indicadores del año, mes a mes. El borde oscuro marca el mes seleccionado.</div>
+      <div id="tendenciaCharts"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+if(typeof ChartDataLabels!=='undefined'){ Chart.register(ChartDataLabels); }
+
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MESES_C = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const STORAGE_KEY = 'cq_indicadores_v2';
+
+const DEFAULT_INPUT = ()=>({
+  vpManual:'', vtManual:'', stockManual:'', stockViejoManual:'', stockPromManual:'',
+  diasTerminadaManual:'', diasPozoManual:'',
+  obrasActivas:'', obrasIniciadas:'',
+  cajaDisponible:'', cajaNecesidadManual:''
+});
+
+const DEMO_DATA = {
+  1:{vpManual:1,vtManual:0,stockManual:0,stockViejoManual:0,stockPromManual:0,diasTerminadaManual:'',diasPozoManual:1,obrasActivas:9,obrasIniciadas:2,cajaDisponible:453862,cajaNecesidadManual:324000},
+  2:{vpManual:0,vtManual:0,stockManual:2,stockViejoManual:1,stockPromManual:1,diasTerminadaManual:'',diasPozoManual:'',obrasActivas:7,obrasIniciadas:0,cajaDisponible:312740,cajaNecesidadManual:252000},
+  3:{vpManual:1,vtManual:2,stockManual:2,stockViejoManual:2,stockPromManual:1.5,diasTerminadaManual:0.83,diasPozoManual:1.47,obrasActivas:7,obrasIniciadas:0,cajaDisponible:568450,cajaNecesidadManual:252000},
+  4:{vpManual:2,vtManual:0,stockManual:4,stockViejoManual:3,stockPromManual:1,diasTerminadaManual:'',diasPozoManual:2.3,obrasActivas:9,obrasIniciadas:3,cajaDisponible:572250,cajaNecesidadManual:496913},
+  5:{vpManual:1,vtManual:1,stockManual:3,stockViejoManual:2,stockPromManual:2,diasTerminadaManual:2.33,diasPozoManual:0.93,obrasActivas:9,obrasIniciadas:1,cajaDisponible:689296,cajaNecesidadManual:351553},
+  6:{vpManual:2,vtManual:2,stockManual:4,stockViejoManual:3,stockPromManual:0.75,diasTerminadaManual:2.0,diasPozoManual:0,obrasActivas:10,obrasIniciadas:3,cajaDisponible:787252,cajaNecesidadManual:622385}
+};
+
+const SEED_OBRAS_CODES = ['25.82','3.85','25100','19.99','5.94','27.77','4.100','12.93','13.93','7.100'];
+
+let state = { year:'2026', month:6, data:{}, obras:[], casas:{}, obraEstados:{} };
+let tendenciaChartInstances = [];
+let carteraOpen = {};
+let showArchivedObras = false;
+
+function ordOf(year,month){ return parseInt(year)*12+parseInt(month); }
+function realNowOrd(){ const d=new Date(); return d.getFullYear()*12+(d.getMonth()+1); }
+function isFutureMonth(year,month){ return ordOf(year,month) > realNowOrd(); }
+function obraCasas(ob){ return (ob && ob.casas) || ['A','B']; }
+
+function freshInstallSeed(){
+  state.data = {'2026':{}};
+  Object.keys(DEMO_DATA).forEach(m=>{ state.data['2026'][m] = Object.assign(DEFAULT_INPUT(), DEMO_DATA[m]); });
+  state.obras = SEED_OBRAS_CODES.map((code,i)=>({id:'ob'+(i+1), code, casas:['A','B']}));
+  state.casas = {};
+  state.obraEstados = {};
+  state.year='2026';
+  state.month = Math.min(6, realNowOrd()-2026*12);
+  if(state.month<1) state.month=1;
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      state.data = parsed.data || {};
+      state.obras = parsed.obras || [];
+      state.casas = parsed.casas || {};
+      state.obraEstados = parsed.obraEstados || {};
+      state.year = parsed.year || state.year;
+      state.month = parsed.month || state.month;
+      repairStateConsistency();
+      if(migrateObraEstadosFromCasaHistory()) saveState();
+      repairJulioErroresPuntuales();
+      repair25100MesesVenta();
+    } else {
+      freshInstallSeed();
+      repairJulioErroresPuntuales();
+    }
+  }catch(e){ freshInstallSeed(); repairJulioErroresPuntuales(); repair25100MesesVenta(); }
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({year:state.year,month:state.month,data:state.data,obras:state.obras,casas:state.casas,obraEstados:state.obraEstados}));
+}
+
+function repairStateConsistency(){
+  // Corrige historiales donde una venta quedó trasladada a meses posteriores.
+  // Una casa vendida debe contar una sola vez: en el primer mes real de venta.
+  // Meses posteriores pueden mostrarla como vendida en cartera, pero quedan marcados como heredados.
+  if(!state.casas) return;
+  const byCasa = {};
+  Object.keys(state.casas).forEach(y=>{
+    const yearObj = state.casas[y] || {};
+    Object.keys(yearObj).forEach(m=>{
+      const monthObj = yearObj[m] || {};
+      Object.keys(monthObj).forEach(k=>{
+        if(!byCasa[k]) byCasa[k]=[];
+        byCasa[k].push({year:y, month:parseInt(m), ord:ordOf(y,m), raw:monthObj[k]});
+      });
+    });
+  });
+
+  let changed=false;
+  Object.keys(byCasa).forEach(k=>{
+    byCasa[k].sort((a,b)=>a.ord-b.ord);
+    let firstSaleOrd=null;
+    let firstSaleStatus='';
+
+    byCasa[k].forEach(e=>{
+      const n = normalizeCasa(e.raw);
+      const sale = n.saleStatus || '';
+      if(!sale) return;
+
+      if(firstSaleOrd===null){
+        firstSaleOrd = e.ord;
+        firstSaleStatus = sale;
+        if(e.raw._saleInherited){ delete e.raw._saleInherited; changed=true; }
+      } else if(e.ord > firstSaleOrd){
+        // Aunque cambie entre "pozo" y "terminada", sigue siendo la misma unidad ya vendida.
+        // No debe volver a sumar ventas en julio ni en ningún mes posterior.
+        if(!e.raw._saleInherited){ e.raw._saleInherited = true; changed=true; }
+        if(!e.raw.saleStatus){ e.raw.saleStatus = firstSaleStatus; changed=true; }
+      }
+    });
+  });
+
+  if(changed) saveState();
+}
+
+
+function normalizeCodeCQ(v){
+  return String(v||'').replace(/[\/\s]/g,'.').replace(/\.+/g,'.').trim();
+}
+function findObraByCode(code){
+  const target = normalizeCodeCQ(code);
+  return state.obras.find(o=>normalizeCodeCQ(o.code)===target);
+}
+
+function repair25100MesesVenta(){
+  const ob = state.obras.find(o=>{
+    const c=normalizeCodeCQ(o.code);
+    return c==='25.100' || c==='25100';
+  });
+  if(!ob || !state.casas)return;
+  let changed=false;
+  Object.keys(state.casas).forEach(y=>{
+    Object.keys(state.casas[y]||{}).forEach(m=>{
+      obraCasas(ob).forEach(letra=>{
+        const key=ob.id+'_'+letra;
+        const raw=state.casas[y][m][key];
+        if(!raw)return;
+        const n=normalizeCasa(raw);
+        if(n.saleStatus && raw.meses!==0 && raw.meses!=='0'){
+          raw.meses=0;
+          changed=true;
+        }
+      });
+    });
+  });
+  if(changed)saveState();
+}
+
+function repairJulioErroresPuntuales(){
+  let changed = false;
+
+  // 4.100: si julio tiene una venta arrastrada o mal cargada, se elimina.
+  // Junio queda como referencia: si en junio no estaba vendida, julio tampoco puede arrancar vendida.
+  const ob4100 = findObraByCode('4.100');
+  if(ob4100 && state.casas && state.casas['2026'] && state.casas['2026'][7]){
+    obraCasas(ob4100).forEach(letra=>{
+      const key = ob4100.id+'_'+letra;
+      const rawJul = state.casas['2026'][7][key];
+      if(!rawJul) return;
+      const nJun = getCasaEffectiveState(key, '2026', 6);
+      if(!nJun || !nJun.saleStatus){
+        if(rawJul.saleStatus || rawJul._saleInherited || rawJul.saleCarried || rawJul.status==='vendida_terminada' || rawJul.status==='vendida_pozo'){
+          delete rawJul.saleStatus;
+          delete rawJul._saleInherited;
+          delete rawJul.saleCarried;
+          if(rawJul.status==='vendida_terminada' || rawJul.status==='vendida_pozo') delete rawJul.status;
+          changed = true;
+        }
+      }
+    });
+  }
+
+  // 19.99: si la obra fue finalizada en abril, ese estado debe seguir vigente.
+  // Se elimina cualquier registro posterior que la vuelva a construcción por arrastre/error.
+  const ob1999 = findObraByCode('19.99');
+  if(ob1999){
+    if(!state.obraEstados) state.obraEstados = {};
+    if(!state.obraEstados['2026']) state.obraEstados['2026'] = {};
+    if(!state.obraEstados['2026'][4]) state.obraEstados['2026'][4] = {};
+    const abril = state.obraEstados['2026'][4][ob1999.id];
+    if(!abril || normalizeObraStatus(typeof abril==='string'?abril:abril.status)!=='terminada'){
+      state.obraEstados['2026'][4][ob1999.id] = {status:'terminada'};
+      changed = true;
+    }
+    [5,6,7,8,9,10,11,12].forEach(m=>{
+      const slot = state.obraEstados['2026'] && state.obraEstados['2026'][m];
+      if(slot && slot[ob1999.id]){
+        const st = normalizeObraStatus(typeof slot[ob1999.id]==='string'?slot[ob1999.id]:slot[ob1999.id].status);
+        if(st==='construccion'){
+          delete slot[ob1999.id];
+          changed = true;
+        }
+      }
+    });
+  }
+
+  if(changed) saveState();
+}
+
+
+
+function migrateObraEstadosFromCasaHistory(){
+  // Convierte el estado constructivo viejo por casa en estado constructivo único por obra.
+  // Si ambas casas tienen el mismo estado en el mismo mes, ese mes queda como fecha del proyecto.
+  if(!state.obraEstados) state.obraEstados = {};
+  let changed = false;
+  state.obras.forEach(ob=>{
+    const hasProjectHistory = Object.keys(state.obraEstados).some(y=>{
+      const yearObj = state.obraEstados[y] || {};
+      return Object.keys(yearObj).some(m=> yearObj[m] && yearObj[m][ob.id]);
+    });
+    if(hasProjectHistory) return;
+
+    const byOrd = {};
+    Object.keys(state.casas || {}).forEach(y=>{
+      const yearObj = state.casas[y] || {};
+      Object.keys(yearObj).forEach(m=>{
+        const monthObj = yearObj[m] || {};
+        const ord = ordOf(y,m);
+        const vals = [];
+        obraCasas(ob).forEach(letra=>{
+          const raw = monthObj[ob.id+'_'+letra];
+          if(!raw) return;
+          vals.push(normalizeCasa(raw).obraStatus);
+        });
+        if(vals.length && vals.every(v=>v===vals[0])){
+          const st = normalizeObraStatus(vals[0]);
+          if(st!=='no_iniciada') byOrd[ord] = {year:y, month:parseInt(m), status:st};
+        }
+      });
+    });
+    const entries = Object.values(byOrd).sort((a,b)=>a.year===b.year ? a.month-b.month : parseInt(a.year)-parseInt(b.year));
+    let lastStatus = 'no_iniciada';
+    entries.forEach(e=>{
+      if(e.status===lastStatus) return;
+      if(!state.obraEstados[e.year]) state.obraEstados[e.year] = {};
+      if(!state.obraEstados[e.year][e.month]) state.obraEstados[e.year][e.month] = {};
+      state.obraEstados[e.year][e.month][ob.id] = {status:e.status};
+      lastStatus = e.status;
+      changed = true;
+    });
+  });
+  return changed;
+}
+
+function getInput(year,month){
+  if(!state.data[year]) state.data[year] = {};
+  if(!state.data[year][month]) state.data[year][month] = DEFAULT_INPUT();
+  return state.data[year][month];
+}
+function num(v){ return (v===''||v===null||v===undefined||Number.isNaN(Number(v)))?null:Number(v); }
+
+
+function normalizeObraStatus(v){
+  if(v==='construccion' || v==='terminada' || v==='no_iniciada') return v;
+  return 'no_iniciada';
+}
+function ensureObraEstadoSlot(){
+  if(!state.obraEstados) state.obraEstados = {};
+  if(!state.obraEstados[state.year]) state.obraEstados[state.year] = {};
+  if(!state.obraEstados[state.year][state.month]) state.obraEstados[state.year][state.month] = {};
+}
+function getObraEntriesUntil(obraId, targetOrd){
+  const rawEntries=[];
+  if(!state.obraEstados) state.obraEstados = {};
+  Object.keys(state.obraEstados).forEach(y=>{
+    const yearObj = state.obraEstados[y] || {};
+    Object.keys(yearObj).forEach(m=>{
+      const ord = parseInt(y)*12+parseInt(m);
+      if(ord > targetOrd) return;
+      const raw = yearObj[m][obraId];
+      if(!raw) return;
+      const status = normalizeObraStatus(typeof raw === 'string' ? raw : raw.status);
+      rawEntries.push({ord, year:y, month:parseInt(m), status});
+    });
+  });
+  rawEntries.sort((a,b)=>a.ord-b.ord);
+
+  // Importante: si el mismo estado quedó guardado varias veces en meses siguientes
+  // (por migraciones o por herencia), conservamos el primer mes real del cambio.
+  // Ej.: Finalizada en Febrero debe seguir mostrando Febrero al navegar Marzo/Abril/Mayo.
+  const entries=[];
+  rawEntries.forEach(e=>{
+    const last = entries[entries.length-1];
+    if(last && last.status===e.status) return;
+    entries.push(e);
+  });
+  return entries;
+}
+function inferObraStatusFromOldCasas(ob, year, month){
+  const casas = obraCasas(ob).map(letra=>getCasaEffectiveState(ob.id+'_'+letra, year, month));
+  if(!casas.length) return 'no_iniciada';
+  const allNo = casas.every(c=>!c || c.obraStatus==='no_iniciada');
+  const allTerminada = casas.every(c=>c && c.obraStatus==='terminada');
+  if(allNo) return 'no_iniciada';
+  if(allTerminada) return 'terminada';
+  return 'construccion';
+}
+function getObraEffectiveStatus(obraId, year, month){
+  if(isFutureMonth(year,month)) return {status:'no_iniciada', carried:false, origin:null};
+  const targetOrd = parseInt(year)*12+month;
+  const entries = getObraEntriesUntil(obraId, targetOrd);
+  if(entries.length){
+    const last = entries[entries.length-1];
+    return {status:last.status, carried:last.ord!==targetOrd, origin:{year:last.year, month:last.month, ord:last.ord}};
+  }
+
+  // Compatibilidad con datos viejos: si todavía no hay historial de proyecto,
+  // reconstruimos la primera fecha real del estado desde los estados viejos de las casas.
+  const ob = state.obras.find(o=>o.id===obraId);
+  if(ob){
+    let inferred = 'no_iniciada';
+    let origin = null;
+    let lastStatus = 'no_iniciada';
+    for(let ord = ordOf(state.year,1); ord <= targetOrd; ord++){
+      const y = String(Math.floor((ord-1)/12));
+      const m = ord - parseInt(y)*12;
+      if(isFutureMonth(y,m)) continue;
+      const st = inferObraStatusFromOldCasas(ob, y, m);
+      if(st!==lastStatus){
+        lastStatus = st;
+        if(st!=='no_iniciada') origin = {year:y, month:m, ord};
+      }
+      inferred = st;
+    }
+    return {status:inferred, carried:true, origin: inferred==='no_iniciada' ? null : origin};
+  }
+  return {status:'no_iniciada', carried:false, origin:null};
+}
+function setObraStatus(obraId,status){
+  ensureObraEstadoSlot();
+  state.obraEstados[state.year][state.month][obraId] = {status:normalizeObraStatus(status)};
+  saveState();
+  renderAll();
+}
+
+function normalizeCasa(c){
+  c = c || {};
+  let obraStatus = c.obraStatus || '';
+  let saleStatus = c.saleStatus || '';
+  if(!obraStatus && c.status){
+    if(c.status==='no_iniciada' || c.status==='construccion' || c.status==='stock') obraStatus = c.status==='stock' ? 'terminada' : c.status;
+    else if(c.status==='vendida_terminada'){ saleStatus='vendida_terminada'; obraStatus='terminada'; }
+    else if(c.status==='vendida_pozo'){ saleStatus='vendida_pozo'; obraStatus='construccion'; }
+  }
+  if(!obraStatus) obraStatus='no_iniciada';
+  return {obraStatus, saleStatus, meses:c.meses, carried:!!c.carried, saleCarried:!!c.saleCarried || !!c._saleInherited, _saleInherited:!!c._saleInherited};
+}
+function isConstruccionStatus(c){ return normalizeCasa(c).obraStatus==='construccion'; }
+function countObrasEnConstruccion(year,month){
+  let count = 0;
+  state.obras.forEach(ob=>{
+    const e = getObraEffectiveStatus(ob.id, year, month);
+    if(e && e.status==='construccion') count++;
+  });
+  return count;
+}
+function countObrasIniciadasAuto(year,month){
+  // Excepción histórica:
+  // Enero 2026 fue el primer mes del informe. Había obras ya iniciadas de antes,
+  // por eso no corresponde contar todos los cambios cargados en enero.
+  // Para ese mes se fija el indicador en 2.
+  if(String(year)==='2026' && parseInt(month)===1) return 2;
+
+  const targetOrd = ordOf(year,month);
+  let count = 0;
+  state.obras.forEach(ob=>{
+    const entries = getObraEntriesUntil(ob.id, targetOrd);
+    const exact = entries.find(e=>e.ord===targetOrd && e.status==='construccion');
+    if(exact) count++;
+  });
+  return count;
+}
+function obraEstadoGeneral(ob,year,month){
+  const e = getObraEffectiveStatus(ob.id, year, month);
+  const key = statusClassObra(e.status);
+  return {key, text:obraStatusText(e.status), status:e.status, origin:e.origin, carried:e.carried};
+}
+function pluralVendida(n){ return n>1 ? 'vendidas' : 'vendida'; }
+function commercialLabel(status,n){
+  if(status==='vendida_terminada') return `${n} ${pluralVendida(n)} terminada${n>1?'s':''}`;
+  if(status==='vendida_pozo') return `${n} ${pluralVendida(n)} en pozo`;
+  return `${n} sin vender`;
+}
+function pillOrigin(origin){ return origin ? `<span class="pill-origin">(${mesOrigenTxt(origin)})</span>` : ''; }
+function obraComercialBadges(ob,year,month){
+  const groups = {};
+  let sinVender = 0;
+  obraCasas(ob).forEach(letra=>{
+    const c = getCasaEffectiveState(ob.id+'_'+letra, year, month);
+    if(c.saleStatus==='vendida_terminada' || c.saleStatus==='vendida_pozo'){
+      const originTxt = c.saleOrigin ? mesOrigenTxt(c.saleOrigin) : '';
+      const key = c.saleStatus+'|'+originTxt;
+      if(!groups[key]) groups[key] = {status:c.saleStatus, origin:c.saleOrigin, count:0};
+      groups[key].count++;
+    } else {
+      sinVender++;
+    }
+  });
+  const parts=[];
+  Object.values(groups).forEach(g=>{
+    const cls = statusClassVenta(g.status);
+    parts.push(`<span class="obra-status-pill ${cls}">${commercialLabel(g.status,g.count)} ${pillOrigin(g.origin)}</span>`);
+  });
+  if(sinVender) parts.push(`<span class="obra-status-pill base">${commercialLabel('',sinVender)}</span>`);
+  return parts.join('');
+}
+function obraResumenBadges(ob,year,month){
+  return obraComercialBadges(ob,year,month);
+}
+
+function computeCasasAgg(year,month){
+  const stockList=[], vtList=[], vpList=[], stockDetail=[], vtDetail=[], vpDetail=[];
+  let hasCartera = false;
+  const targetOrd = ordOf(year,month);
+
+  state.obras.forEach(ob=>{
+    const estadoObra = getObraEffectiveStatus(ob.id, year, month).status;
+    if(estadoObra!=='no_iniciada') hasCartera = true;
+
+    obraCasas(ob).forEach(letra=>{
+      const key = ob.id+'_'+letra;
+      const c = getCasaEffectiveState(key, year, month);
+      if(!c) return;
+
+      // Que una casa siga figurando como vendida en meses posteriores sirve para verla en cartera,
+      // pero NO debe volver a computarse como venta del mes.
+      if(c.saleStatus || estadoObra!=='no_iniciada') hasCartera = true;
+
+      const meses = (c.meses===''||c.meses===null||c.meses===undefined) ? 0 : Number(c.meses);
+      const ventaAnterior = c.saleStatus && meses < 0;
+      const ventaDelMes = !!(c.saleStatus && c.saleOrigin && c.saleOrigin.ord===targetOrd && !c.saleCarried && !ventaAnterior);
+
+      // Stock = casas de una obra terminada y todavía no vendidas.
+      if(estadoObra==='terminada' && !c.saleStatus){
+        stockList.push(meses);
+        stockDetail.push({code:ob.code,letra,meses});
+      }
+
+      // Venta del mes = únicamente la primera marca real de venta en este mes.
+      // Las ventas heredadas desde meses anteriores no se trasladan a julio ni a meses posteriores.
+      if(ventaDelMes && c.saleStatus==='vendida_terminada'){
+        vtList.push(meses);
+        vtDetail.push({code:ob.code,letra,meses});
+      } else if(ventaDelMes && c.saleStatus==='vendida_pozo'){
+        vpList.push(meses);
+        vpDetail.push({code:ob.code,letra,meses});
+      }
+    });
+  });
+
+  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+  return {
+    year, month, hasCartera,
+    stock: stockList.length,
+    stockViejo: stockList.length ? Math.max(...stockList) : null,
+    stockProm: avg(stockList),
+    diasTerminadaMeses: avg(vtList),
+    diasPozoMeses: avg(vpList),
+    vt: vtList.length,
+    vp: vpList.length,
+    stockDetail, vtDetail, vpDetail
+  };
+}
+
+function monthHasData(year,month){
+  if(isFutureMonth(year,month)) return false;
+  const yearData = state.data[year];
+  const inp = yearData && yearData[month];
+  const manualFilled = inp ? Object.values(inp).some(v=>v!==''&&v!==null&&v!==undefined) : false;
+  const agg = computeCasasAgg(year,month);
+  return manualFilled || agg.stock>0 || agg.vt>0 || agg.vp>0;
+}
+
+function pick(manualVal, autoVal, fallbackZero){
+  const m = num(manualVal);
+  if(m!==null) return m;
+  if(autoVal===null || autoVal===undefined) return fallbackZero ? 0 : null;
+  return autoVal;
+}
+
+function calc(inp, agg){
+  agg = agg || {year:state.year,month:state.month,hasCartera:false,stock:0,stockViejo:null,stockProm:null,diasTerminadaMeses:null,diasPozoMeses:null,vt:0,vp:0};
+
+  // Si hay Cartera en el mes, los indicadores comerciales salen de ahí.
+  // Ventas NO se trasladan: VP/VT cuentan solo ventas marcadas por primera vez en ese mes.
+  const preferAuto = !!agg.hasCartera;
+  const pickAuto = (manualVal, autoVal, fallbackZero)=>{
+    if(preferAuto){
+      if(autoVal===null || autoVal===undefined) return fallbackZero ? 0 : null;
+      return autoVal;
+    }
+    return pick(manualVal, autoVal, fallbackZero);
+  };
+
+  const vp = preferAuto ? (agg.vp||0) : pick(inp.vpManual, agg.vp, true);
+  const vt = preferAuto ? (agg.vt||0) : pick(inp.vtManual, agg.vt, true);
+  const ventas = vp+vt;
+  const stock = pickAuto(inp.stockManual, agg.stock, true);
+  const stockViejo = pickAuto(inp.stockViejoManual, agg.stockViejo, true);
+  const stockProm = pickAuto(inp.stockPromManual, agg.stockProm, true);
+  const diasTerminada = pickAuto(inp.diasTerminadaManual, agg.diasTerminadaMeses, false);
+  const diasPozo = pickAuto(inp.diasPozoManual, agg.diasPozoMeses, false);
+
+  const obrasActivas = countObrasEnConstruccion(agg.year||state.year, agg.month||state.month);
+  const obrasIniciadas = countObrasIniciadasAuto(agg.year||state.year, agg.month||state.month);
+  const cajaDisponible = num(inp.cajaDisponible)||0;
+  const cajaNecesidad = num(inp.cajaNecesidadManual)||0;
+
+  let stockVentas;
+  if(stock===0 && vt===0) stockVentas = null;
+  else if(stock>0 && vt===0) stockVentas = 999;
+  else stockVentas = stock/vt;
+
+  const pctPozo = ventas===0 ? 0 : vp/ventas;
+
+  let riesgoOp;
+  if(ventas===0) riesgoOp = obrasActivas>0 ? 999 : null;
+  else riesgoOp = Math.round((obrasActivas/ventas)*100)/100;
+
+  const liquidez = cajaDisponible - cajaNecesidad;
+
+  const scoreVentas = ventas>=2?20:(ventas===1?10:0);
+  const scoreStockViejo = stockViejo<=4?15:(stockViejo<=7?8:0);
+  const scoreDiasTerminada = diasTerminada===null?0:(diasTerminada<=2?15:(diasTerminada<=3?8:0));
+  const scoreStockVentas = stockVentas===null?0:(stockVentas<=3?15:(stockVentas<=5?8:0));
+  const scoreLiquidez = liquidez>50000?20:(liquidez>=0?10:0);
+  const scoreRiesgoOp = riesgoOp===null?0:(riesgoOp<=4?15:(riesgoOp<=6?8:0));
+
+  const indiceCQ = scoreVentas+scoreStockViejo+scoreDiasTerminada+scoreStockVentas+scoreLiquidez+scoreRiesgoOp;
+
+  return {vp,vt,ventas,stock,stockViejo,stockProm,obrasActivas,obrasIniciadas,cajaDisponible,cajaNecesidad,
+    diasTerminada,diasPozo,stockVentas,pctPozo,riesgoOp,liquidez,indiceCQ};
+}
+
+function zVentas(v){ return v>=2?'g':(v===1?'y':'r'); }
+function zStockCant(v){ return v<=6?'g':(v<=8?'y':'r'); }
+function zStockViejo(v){ return v<=4?'g':(v<=7?'y':'r'); }
+function zStockProm(v){ return v<=3?'g':(v<=5?'y':'r'); }
+function zStockVentas(v){ if(v===null) return 'n'; return v<=3?'g':(v<=5?'y':'r'); }
+function zDiasTerminada(v){ if(v===null) return 'n'; return v<=2?'g':(v<=3?'y':'r'); }
+function zDiasPozo(v){ if(v===null) return 'n'; return v<=2?'g':(v<=4?'y':'r'); }
+function zPctPozo(v){ return v>=0.4?'g':(v>=0.20?'y':'r'); }
+function zObrasActivas(v){ return v<=10?'g':(v<=12?'y':'r'); }
+function zLiquidez(v){ return v>50000?'g':(v>=0?'y':'r'); }
+function zRiesgoOp(v){ if(v===null) return 'n'; return v<=4?'g':(v<7?'y':'r'); }
+function zObrasIniciadas(v){ return v>=2?'g':(v===1?'y':'r'); }
+function zIndiceCQ(v){ return v>=80?'g':(v>=60?'y':'r'); }
+
+function fmtNum(v,d){ if(v===null||v===undefined) return '—'; return Number(v).toFixed(d===undefined?0:d).replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,''); }
+function fmtUSD(v){ if(v===null||v===undefined) return '—'; const n=Math.round(v); return (n<0?'-':'')+'$'+Math.abs(n).toLocaleString('es-AR'); }
+function fmtPct(v){ if(v===null||v===undefined) return '—'; return Math.round(v*100)+'%'; }
+function fmtRatio(v){ if(v===null) return 'Sin datos'; if(v===999) return 'Sin ventas'; return fmtNum(v,2)+'x'; }
+function fmtMeses(v){ if(v===null||v===undefined) return 'Sin datos'; return fmtNum(v,1)+' m'; }
+function fmtRiesgo(v){ if(v===null) return 'Sin datos'; if(v===999) return 'Sin ventas'; return fmtNum(v,2); }
+
+const INDICATORS = [
+  {key:'ventas', em:'🏠', name:'Ventas totales', cat:'LIQUIDEZ', get:c=>c.ventas, z:c=>zVentas(c.ventas), fmt:c=>fmtNum(c.ventas), rule:'🟢 ≥2 · 🟡 =1 · 🔴 =0'},
+  {key:'stockCant', em:'📦', name:'Stock (cant.)', cat:'RIESGO', get:c=>c.stock, z:c=>zStockCant(c.stock), fmt:c=>fmtNum(c.stock), rule:'🟢 ≤6 · 🟡 7–8 · 🔴 ≥9'},
+  {key:'stockViejo', em:'⏳', name:'Stock más vieja', cat:'RIESGO', get:c=>c.stockViejo, z:c=>zStockViejo(c.stockViejo), fmt:c=>fmtNum(c.stockViejo,1)+' m', rule:'🟢 ≤4m · 🟡 5–7m · 🔴 ≥8m'},
+  {key:'stockProm', em:'🕒', name:'Stock tiempo prom.', cat:'ROTACIÓN', get:c=>c.stockProm, z:c=>zStockProm(c.stockProm), fmt:c=>fmtNum(c.stockProm,1)+' m', rule:'🟢 ≤3m · 🟡 4–5m · 🔴 ≥6m'},
+  {key:'stockVentas', em:'🔁', name:'Stock / Ventas', cat:'ROTACIÓN', get:c=>c.stockVentas, z:c=>zStockVentas(c.stockVentas), fmt:c=>fmtRatio(c.stockVentas), rule:'🟢 ≤3 · 🟡 4–5 · 🔴 ≥6'},
+  {key:'diasTerminada', em:'⚡', name:'Meses venta terminada', cat:'ROTACIÓN', get:c=>c.diasTerminada, z:c=>zDiasTerminada(c.diasTerminada), fmt:c=>fmtMeses(c.diasTerminada), rule:'🟢 ≤2m · 🟡 2–3m · 🔴 >3m'},
+  {key:'diasPozo', em:'🧱', name:'Meses venta pozo', cat:'ROTACIÓN', get:c=>c.diasPozo, z:c=>zDiasPozo(c.diasPozo), fmt:c=>fmtMeses(c.diasPozo), rule:'🟢 ≤2m · 🟡 2–4m · 🔴 >4m'},
+  {key:'pctPozo', em:'🧱', name:'% venta pozo', cat:'LIQUIDEZ', get:c=>c.pctPozo, z:c=>zPctPozo(c.pctPozo), fmt:c=>fmtPct(c.pctPozo), rule:'🟢 40–60% · 🟡 20–39% · 🔴 <20%'},
+  {key:'obrasActivas', em:'🏗️', name:'Obras activas', cat:'RIESGO', get:c=>c.obrasActivas, z:c=>zObrasActivas(c.obrasActivas), fmt:c=>fmtNum(c.obrasActivas), rule:'🟢 ≤10 · 🟡 11–12 · 🔴 ≥13'},
+  {key:'liquidez', em:'💵', name:'Liquidez', cat:'LIQUIDEZ', get:c=>c.liquidez, z:c=>zLiquidez(c.liquidez), fmt:c=>fmtUSD(c.liquidez), rule:'🟢 >50k · 🟡 0–50k · 🔴 <0'},
+  {key:'riesgoOp', em:'⚠️', name:'Riesgo operativo', cat:'RIESGO', get:c=>c.riesgoOp, z:c=>zRiesgoOp(c.riesgoOp), fmt:c=>fmtRiesgo(c.riesgoOp), rule:'🟢 ≤4 · 🟡 5–6 · 🔴 ≥7'},
+  {key:'obrasIniciadas', em:'🏗️', name:'Obras iniciadas', cat:'CRECIMIENTO', get:c=>c.obrasIniciadas, z:c=>zObrasIniciadas(c.obrasIniciadas), fmt:c=>fmtNum(c.obrasIniciadas), rule:'🟢 ≥2 · 🟡 =1 · 🔴 =0'},
+];
+
+const AUTO_FIELDS = [
+  {key:'vp', manualKey:'vpManual', label:'Unidades vendidas — Pozo', step:'1', suffix:''},
+  {key:'vt', manualKey:'vtManual', label:'Unidades vendidas — Terminadas', step:'1', suffix:''},
+  {key:'stock', manualKey:'stockManual', label:'Unidades en stock (obra finalizada)', step:'1', suffix:''},
+  {key:'stockViejo', manualKey:'stockViejoManual', label:'Antigüedad stock más vieja', step:'0.1', suffix:' m'},
+  {key:'stockProm', manualKey:'stockPromManual', label:'Antigüedad promedio del stock', step:'0.1', suffix:' m'},
+  {key:'diasTerminada', manualKey:'diasTerminadaManual', label:'Meses promedio venta Terminada', step:'0.1', suffix:' m'},
+  {key:'diasPozo', manualKey:'diasPozoManual', label:'Meses promedio venta Pozo', step:'0.1', suffix:' m'}
+];
+function autoRawFor(key, agg){
+  switch(key){
+    case 'vp': return agg.vp;
+    case 'vt': return agg.vt;
+    case 'stock': return agg.stock;
+    case 'stockViejo': return agg.stockViejo;
+    case 'stockProm': return agg.stockProm;
+    case 'diasTerminada': return agg.diasTerminadaMeses;
+    case 'diasPozo': return agg.diasPozoMeses;
+  }
+}
+
+// ---------- chips ----------
+function renderChips(){
+  const years = new Set(Object.keys(state.data));
+  years.add(state.year);
+  const sorted = Array.from(years).sort();
+  const yc = document.getElementById('yearChips');
+  yc.innerHTML='';
+  sorted.forEach(y=>{
+    const b=document.createElement('button');
+    b.className='chip'+(y===state.year?' active':'');
+    b.textContent=y;
+    b.onclick=()=>{ state.year=y; saveState(); renderAll(); };
+    yc.appendChild(b);
+  });
+  const addY=document.createElement('button');
+  addY.className='chip'; addY.textContent='+ año';
+  addY.onclick=()=>{ const y=prompt('Año (ej. 2027):'); if(y && /^\d{4}$/.test(y)){ state.year=y; if(!state.data[y]) state.data[y]={}; saveState(); renderAll(); } };
+  yc.appendChild(addY);
+
+  const mc = document.getElementById('monthChips');
+  mc.innerHTML='';
+  MESES_C.forEach((m,i)=>{
+    const mn=i+1;
+    const locked = isFutureMonth(state.year,mn);
+    const has = !locked && monthHasData(state.year,mn);
+    const b=document.createElement('button');
+    b.className='chip'+(mn===state.month?' active':'');
+    b.innerHTML = m + (has?'<span class="dot"></span>':'');
+    if(locked){
+      b.disabled = true;
+    } else {
+      b.onclick=()=>{ state.month=mn; saveState(); renderAll(); };
+    }
+    mc.appendChild(b);
+  });
+}
+
+// ---------- cartera ----------
+function lockedMessage(){
+  return `<div class="empty">📅 ${MESES[state.month-1]} ${state.year} todavía no llegó.<br>Se habilita solo cuando empiece ese mes.</div>`;
+}
+function renderObrasList(){
+  const wrap = document.getElementById('obrasList');
+  if(isFutureMonth(state.year,state.month)){
+    wrap.innerHTML = lockedMessage();
+    return;
+  }
+  if(state.obras.length===0){
+    wrap.innerHTML = '<div class="empty">Todavía no agregaste ninguna obra.</div>';
+    return;
+  }
+
+  const archivedCount = state.obras.filter(o=>o.archived).length;
+  const visibles = state.obras.filter(o=>showArchivedObras ? !!o.archived : !o.archived);
+  const toggleHtml = archivedCount ? `<div class="archived-toggle-row"><button class="util-btn" style="min-width:100%" onclick="toggleArchivedObrasView()">${showArchivedObras?'← Ver obras activas':'📦 Ver obras archivadas'} (${archivedCount})</button></div>` : '';
+
+  if(!visibles.length){
+    wrap.innerHTML = toggleHtml + '<div class="empty">No hay obras '+(showArchivedObras?'archivadas':'activas')+'.</div>';
+    return;
+  }
+
+  const monthCasas = (state.casas[state.year] && state.casas[state.year][state.month]) || {};
+  wrap.innerHTML = toggleHtml + visibles.map((ob)=>{
+    const idx = state.obras.findIndex(o=>o.id===ob.id);
+    const letras = obraCasas(ob);
+    const rows = letras.length ? letras.map(letra=>renderCasaRow(ob,letra,monthCasas)).join('') : '<div class="casa-row pro"><span class="hint">Sin casas — eliminá la obra si ya no aplica.</span></div>';
+    const abierta = !!carteraOpen[ob.id];
+    const estadoObra = obraEstadoGeneral(ob,state.year,state.month);
+    const resumen = obraComercialBadges(ob,state.year,state.month) || '<span class="obra-status-pill base">Sin datos comerciales</span>';
+    const obraStatuses = [
+      {v:'no_iniciada', em:'⏸️', t:'No iniciada'},
+      {v:'construccion', em:'🏗️', t:'En construcción'},
+      {v:'terminada', em:'🏁', t:'Finalizada'}
+    ];
+    return `
+    <div class="obra-card pro ${ob.archived?'archived':''}">
+      <button class="obra-del" data-id="${ob.id}" title="Eliminar obra">×</button>
+      <div class="obra-head pro">
+        <div class="obra-title-wrap">
+          <div class="obra-title-line">
+            <span class="obra-code">${ob.code}</span>
+            <span class="obra-status-pill ${estadoObra.key}">${estadoObra.text} ${pillOrigin(estadoObra.origin)}</span>
+            ${ob.archived?'<span class="obra-status-pill base">Archivada</span>':''}
+          </div>
+          <div class="obra-mini pro">${resumen}</div>
+        </div>
+        <div class="obra-head-actions">
+          <button class="obra-move" data-move="up" data-id="${ob.id}" ${idx===0?'disabled':''}>↑</button>
+          <button class="obra-move" data-move="down" data-id="${ob.id}" ${idx===state.obras.length-1?'disabled':''}>↓</button>
+          <button class="obra-archive" data-archive="${ob.id}" title="${ob.archived?'Restaurar obra':'Archivar obra'}">${ob.archived?'↺':'📦'}</button>
+          <button class="obra-toggle ${abierta?'open':''}" data-toggle="${ob.id}">${abierta?'Ocultar casas':'Ver casas'}</button>
+        </div>
+      </div>
+      <div class="casas-wrap" style="display:${abierta?'block':'none'}">
+        <div class="obra-state-editor">
+          <div class="casa-subttl">Estado de obra</div>
+          <div class="schiprow">
+            ${obraStatuses.map(s=>`<button class="schip obra-chip ${estadoObra.status===s.v?'active':''}" data-obra-status="${s.v}" data-obra-id="${ob.id}">${s.em} ${s.t}</button>`).join('')}
+          </div>
+          <div class="hint">Este estado aplica a toda la obra.</div>
+        </div>
+        ${rows}
+      </div>
+    </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('.obra-move').forEach(btn=>{
+    btn.onclick=()=>{ moverObra(btn.dataset.id, btn.dataset.move==='up' ? -1 : 1); };
+  });
+  wrap.querySelectorAll('.obra-toggle').forEach(btn=>{
+    btn.onclick=()=>{ const id = btn.dataset.toggle; carteraOpen[id] = !carteraOpen[id]; renderObrasList(); };
+  });
+  wrap.querySelectorAll('[data-archive]').forEach(btn=>{
+    btn.onclick=()=>{ toggleObraArchivada(btn.dataset.archive); };
+  });
+  wrap.querySelectorAll('[data-obra-status]').forEach(btn=>{
+    btn.onclick=()=>{ setObraStatus(btn.dataset.obraId, btn.dataset.obraStatus); };
+  });
+  wrap.querySelectorAll('.obra-del').forEach(btn=>{
+    btn.onclick=()=>{
+      if(!confirm('¿Eliminar esta obra de la cartera?')) return;
+      state.obras = state.obras.filter(o=>o.id!==btn.dataset.id);
+      if(state.obraEstados){
+        Object.keys(state.obraEstados).forEach(y=>{
+          Object.keys(state.obraEstados[y]).forEach(m=>{ delete state.obraEstados[y][m][btn.dataset.id]; });
+        });
+      }
+      saveState(); renderAll();
+    };
+  });
+  wrap.querySelectorAll('.casa-del').forEach(btn=>{
+    btn.onclick=()=>{
+      const ob = state.obras.find(o=>o.id===btn.dataset.obra);
+      if(!ob) return;
+      if(!confirm('¿Eliminar la Casa '+btn.dataset.letra+' de '+ob.code+'? Se borra todo su historial.')) return;
+      ob.casas = obraCasas(ob).filter(l=>l!==btn.dataset.letra);
+      const key = ob.id+'_'+btn.dataset.letra;
+      Object.keys(state.casas).forEach(y=>{
+        Object.keys(state.casas[y]).forEach(m=>{ delete state.casas[y][m][key]; });
+      });
+      saveState(); renderAll();
+    };
+  });
+  wrap.querySelectorAll('.schip[data-kind="venta"]').forEach(btn=>{
+    btn.onclick=()=>{ setCasaStatus(btn.dataset.casa, btn.dataset.status, btn.dataset.kind); };
+  });
+  wrap.querySelectorAll('.meses-input').forEach(inp=>{
+    inp.oninput=()=>{ setCasaMeses(inp.dataset.casa, inp.value); };
+  });
+}
+
+function moverObra(id, dir){
+  const idx = state.obras.findIndex(o=>o.id===id);
+  if(idx<0) return;
+  const ni = idx + dir;
+  if(ni<0 || ni>=state.obras.length) return;
+  const tmp = state.obras[idx];
+  state.obras[idx] = state.obras[ni];
+  state.obras[ni] = tmp;
+  saveState();
+  renderAll();
+}
+
+
+function toggleArchivedObrasView(){
+  showArchivedObras = !showArchivedObras;
+  renderObrasList();
+}
+function toggleObraArchivada(id){
+  const ob = state.obras.find(o=>o.id===id);
+  if(!ob) return;
+  ob.archived = !ob.archived;
+  if(ob.archived) ob.archivedAt = new Date().toISOString();
+  saveState();
+  renderAll();
+}
+
+
+function getCasaSaleInfo(casaKey){
+  let earliest = null;
+  Object.keys(state.casas).forEach(y=>{
+    const yearObj = state.casas[y] || {};
+    Object.keys(yearObj).forEach(m=>{
+      const raw = yearObj[m][casaKey];
+      const c = normalizeCasa(raw);
+      if(c && (c.saleStatus==='vendida_terminada' || c.saleStatus==='vendida_pozo')){
+        const ord = parseInt(y)*12+parseInt(m);
+        if(!earliest || ord < earliest.ord){
+          earliest = {year:y, month:parseInt(m), saleStatus:c.saleStatus, meses:c.meses, ord};
+        }
+      }
+    });
+  });
+  return earliest;
+}
+function getMostRecentPriorEntry(casaKey, targetOrd){
+  let best = null;
+  Object.keys(state.casas).forEach(y=>{
+    const yearObj = state.casas[y] || {};
+    Object.keys(yearObj).forEach(m=>{
+      const ord = parseInt(y)*12+parseInt(m);
+      if(ord >= targetOrd) return;
+      const c = yearObj[m][casaKey];
+      if(!c) return;
+      if(!best || ord > best.ord){
+        const n = normalizeCasa(c);
+        best = {ord, obraStatus:n.obraStatus, saleStatus:n.saleStatus, meses:n.meses, year:y, month:parseInt(m)};
+      }
+    });
+  });
+  return best;
+}
+
+function getCasaEntriesUntil(casaKey, targetOrd){
+  const entries = [];
+  Object.keys(state.casas).forEach(y=>{
+    const yearObj = state.casas[y] || {};
+    Object.keys(yearObj).forEach(m=>{
+      const ord = parseInt(y)*12+parseInt(m);
+      if(ord > targetOrd) return;
+      const raw = yearObj[m][casaKey];
+      if(!raw) return;
+      entries.push({ord, year:y, month:parseInt(m), raw, n:normalizeCasa(raw)});
+    });
+  });
+  entries.sort((a,b)=>a.ord-b.ord);
+  return entries;
+}
+
+function getCasaEffectiveState(casaKey, year, month){
+  if(isFutureMonth(year,month)) return {obraStatus:'no_iniciada', saleStatus:'', meses:'', carried:false, saleCarried:false, obraOrigin:null, saleOrigin:null};
+  const targetOrd = parseInt(year)*12+month;
+  const entries = getCasaEntriesUntil(casaKey, targetOrd);
+  const explicitHere = entries.find(e=>e.ord===targetOrd);
+
+  let obraStatus = 'no_iniciada';
+  let saleStatus = '';
+  let meses = '';
+  let obraOrigin = null;
+  let saleOrigin = null;
+  let lastOrd = null;
+
+  entries.forEach(e=>{
+    const n = e.n;
+
+    if(n.obraStatus !== obraStatus){
+      obraStatus = n.obraStatus || 'no_iniciada';
+      obraOrigin = {year:e.year, month:e.month, ord:e.ord};
+    } else if(!obraOrigin && obraStatus !== 'no_iniciada'){
+      obraOrigin = {year:e.year, month:e.month, ord:e.ord};
+    }
+
+    // La venta se toma del primer mes real. Registros posteriores con venta
+    // son solo arrastre para mostrar la cartera, no ventas nuevas.
+    if(n.saleStatus && !saleStatus){
+      saleStatus = n.saleStatus;
+      saleOrigin = {year:e.year, month:e.month, ord:e.ord};
+    }
+
+    if(n.meses!==undefined && !n._saleInherited) meses = n.meses;
+    lastOrd = e.ord;
+  });
+
+  // Si una casa quedó terminada y sin vender, arrastra el tiempo de stock mes a mes.
+  if(obraStatus==='terminada' && !saleStatus && lastOrd!==null && lastOrd < targetOrd){
+    const baseMeses = (meses===''||meses===null||meses===undefined) ? 0 : Number(meses);
+    meses = Math.round((baseMeses + (targetOrd-lastOrd))*10)/10;
+  }
+
+  const carried = !explicitHere;
+  const explicitInheritedSale = !!(explicitHere && normalizeCasa(explicitHere.raw)._saleInherited);
+  const saleCarried = !!(saleStatus && saleOrigin && saleOrigin.ord < targetOrd) || explicitInheritedSale;
+
+  return {obraStatus, saleStatus, meses, carried, saleCarried, obraOrigin, saleOrigin};
+}
+
+function mesOrigenTxt(origin){
+  if(!origin) return 'Ene '+state.year;
+  return MESES_C[origin.month-1]+' '+origin.year;
+}
+function obraStatusText(v){
+  if(v==='construccion') return 'En construcción';
+  if(v==='terminada') return 'Finalizada';
+  return 'No iniciada';
+}
+function ventaStatusText(v){
+  if(v==='vendida_terminada') return 'Vendida terminada';
+  if(v==='vendida_pozo') return 'Vendida en pozo';
+  return 'Sin vender';
+}
+function statusClassObra(v){
+  if(v==='construccion') return 'construccion';
+  if(v==='terminada') return 'terminada';
+  return 'no';
+}
+function statusClassVenta(v){
+  if(v==='vendida_terminada') return 'vt';
+  if(v==='vendida_pozo') return 'vp';
+  return 'base';
+}
+
+
+function getObraInicioConstruccionOrigin(obraId, year, month){
+  const targetOrd = ordOf(year,month);
+  const entries = getObraEntriesUntil(obraId, targetOrd);
+  const first = entries.find(e=>e.status==='construccion' || e.status==='terminada');
+  if(first) return {year:first.year, month:first.month, ord:first.ord};
+
+  const e = getObraEffectiveStatus(obraId, year, month);
+  return e && e.origin ? e.origin : null;
+}
+function calcMesesVentaAuto(casaKey, year, month){
+  const obraId = String(casaKey).split('_')[0];
+  const ob = state.obras.find(o=>o.id===obraId);
+
+  // Corrección puntual: 25.100 / 25100 se vendió en el mismo momento,
+  // por lo tanto los meses de venta deben ser 0.
+  const codeNorm = ob ? normalizeCodeCQ(ob.code) : '';
+  if(codeNorm==='25.100' || codeNorm==='25100') return 0;
+
+  const venta = getCasaEffectiveState(casaKey, year, month);
+  const ventaOrigin = venta && venta.saleOrigin ? venta.saleOrigin : {year:year, month:month, ord:ordOf(year,month)};
+  const inicio = getObraInicioConstruccionOrigin(obraId, ventaOrigin.year, ventaOrigin.month);
+  if(!inicio) return 0;
+  return Math.max(0, ventaOrigin.ord - inicio.ord);
+}
+function pdfEscape(s){
+  return String(s==null?'':s).replace(/[\\()]/g,'\\$&').replace(/[^\x20-\x7E]/g,function(ch){
+    const map={'á':'a','é':'e','í':'i','ó':'o','ú':'u','ñ':'n','Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ñ':'N','—':'-','·':'-','≥':'>=','≤':'<=','🟢':'','🟡':'','🔴':'','🏠':'','📦':'','⏳':'','🕒':'','🔁':'','⚡':'','🧱':'','🏗️':'','💵':'','⚠️':''};
+    return map[ch] || '';
+  });
+}
+function simplePDFBlob(lines){
+  const pageW = 595, pageH = 842;
+  const ops = [];
+  function esc(s){return pdfEscape(s);}
+  function rgb(r,g,b){ops.push((r/255).toFixed(3)+' '+(g/255).toFixed(3)+' '+(b/255).toFixed(3)+' rg');ops.push((r/255).toFixed(3)+' '+(g/255).toFixed(3)+' '+(b/255).toFixed(3)+' RG');}
+  function rect(x,y,w,h,r,g,b){rgb(r,g,b);ops.push(x+' '+y+' '+w+' '+h+' re f');}
+  function strokeRect(x,y,w,h,r,g,b){rgb(r,g,b);ops.push(x+' '+y+' '+w+' '+h+' re S');}
+  function text(t,x,y,size,bold,r,g,b){
+    rgb(r||30,g||38,b||32);
+    ops.push('BT /'+(bold?'F2':'F1')+' '+size+' Tf '+x+' '+y+' Td ('+esc(t)+') Tj ET');
+  }
+  function pill(txt,x,y,w,fill,ink){
+    rect(x,y,w,18,fill[0],fill[1],fill[2]);
+    text(txt,x+7,y+6,8,true,ink[0],ink[1],ink[2]);
+  }
+
+  // Fondo
+  rect(0,0,pageW,pageH,245,243,239);
+
+  // Header
+  rect(34,742,527,64,28,61,53);
+  text('CQ DESARROLLOS',50,786,9,true,191,208,200);
+  text(lines.title||'Indice CQ',50,765,22,true,255,255,255);
+  text(lines.periodo||'',50,749,11,false,191,208,200);
+
+  // Cartel superior compacto: el numero va separado del texto para que 100 no se superponga.
+  const scoreNum = Number(lines.score||0);
+  const scoreTxt = String(lines.score||'--');
+  const riskCol = scoreNum>=80 ? [47,143,91] : (scoreNum>=60 ? [200,134,43] : [193,71,58]);
+  const riskBg  = scoreNum>=80 ? [227,243,234] : (scoreNum>=60 ? [251,239,218] : [248,228,225]);
+  rect(432,754,112,38,riskBg[0],riskBg[1],riskBg[2]);
+  strokeRect(432,754,112,38,riskCol[0],riskCol[1],riskCol[2]);
+  const scoreSize = scoreTxt.length >= 3 ? 21 : 24;
+  text(scoreTxt,444,764,scoreSize,true,riskCol[0],riskCol[1],riskCol[2]);
+  text(lines.estado||'',498,776,7,true,riskCol[0],riskCol[1],riskCol[2]);
+  text('Indice CQ',498,765,6,false,115,128,122);
+
+  let y=710;
+  text('Resumen ejecutivo',42,y,14,true,28,61,53); y-=24;
+  const kpis = lines.kpis||[];
+  kpis.forEach((k,i)=>{
+    const x = 42 + (i%2)*260;
+    const yy = y - Math.floor(i/2)*58;
+    rect(x,yy,240,42,255,255,255);
+    strokeRect(x,yy,240,42,228,224,214);
+    text(k.label,x+12,yy+25,8,true,115,128,122);
+    text(k.value,x+12,yy+9,16,true,28,61,53);
+  });
+  y -= Math.ceil(kpis.length/2)*58 + 8;
+
+  text('Indicadores del mes',42,y,14,true,28,61,53); y-=20;
+  const inds = lines.indicadores||[];
+  inds.forEach(ind=>{
+    if(y<60)return;
+    const col = ind.z==='g'?[47,143,91]:(ind.z==='y'?[200,134,43]:(ind.z==='r'?[193,71,58]:[138,143,135]));
+    rect(42,y-8,511,28,255,255,255);
+    strokeRect(42,y-8,511,28,228,224,214);
+    rect(42,y-8,6,28,col[0],col[1],col[2]);
+    text(ind.name,58,y+7,10,true,30,38,32);
+    text(ind.cat,58,y-3,7,false,115,128,122);
+    text(ind.value,505,y+3,11,true,col[0],col[1],col[2]);
+    y-=34;
+  });
+
+  text('Generado desde Indice CQ',230,24,8,false,138,143,135);
+
+  const stream = ops.join('\n');
+  const objs = [
+    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+    '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 '+pageW+' '+pageH+'] /Resources << /Font << /F1 4 0 R /F2 6 0 R >> >> /Contents 5 0 R >> endobj',
+    '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+    '5 0 obj << /Length '+stream.length+' >> stream\n'+stream+'\nendstream endobj',
+    '6 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj'
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objs.forEach(o=>{ offsets.push(pdf.length); pdf += o+'\n'; });
+  const xref = pdf.length;
+  pdf += 'xref\n0 '+(objs.length+1)+'\n0000000000 65535 f \n';
+  for(let i=1;i<offsets.length;i++) pdf += String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+  pdf += 'trailer << /Size '+(objs.length+1)+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+  return new Blob([pdf], {type:'application/pdf'});
+}
+
+function renderCasaRow(ob,letra,monthCasas){
+  const casaKey = ob.id+'_'+letra;
+  const c = getCasaEffectiveState(casaKey, state.year, state.month);
+  const saleStatuses = [
+    {v:'', em:'○', t:'Sin vender'},
+    {v:'vendida_terminada', em:'✅', t:'Vendida terminada'},
+    {v:'vendida_pozo', em:'🧱', t:'Vendida en pozo'}
+  ];
+  const mesesVal = c.saleStatus ? ((c.meses!==''&&c.meses!==null&&c.meses!==undefined) ? c.meses : calcMesesVentaAuto(casaKey,state.year,state.month)) : '';
+  const estadoVenta = c.saleStatus
+    ? `<div class="state-line ${statusClassVenta(c.saleStatus)}"><span class="main sale-inline"><span>${ventaStatusText(c.saleStatus)}</span><span class="sale-months-mini">Meses <input type="number" step="0.1" class="meses-input" data-casa="${casaKey}" value="${mesesVal}"></span></span><span class="origin">${c.saleOrigin ? mesOrigenTxt(c.saleOrigin) : '—'}</span></div>`
+    : `<div class="state-line base"><span class="main">Sin vender</span><span class="origin">—</span></div>`;
+  return `
+    <div class="casa-row pro">
+      <div class="casa-title">
+        <strong>Casa ${letra}</strong>
+        <button class="casa-del" data-obra="${ob.id}" data-letra="${letra}">🗑️</button>
+      </div>
+      <div class="state-summary commercial-only">${estadoVenta}</div>
+      <div class="editor-block">
+        <div class="casa-subttl">Estado comercial</div>
+        <div class="schiprow comercial">
+          ${saleStatuses.map(s=>`<button class="schip ${c.saleStatus===s.v?'active':''}" data-casa="${casaKey}" data-kind="venta" data-status="${s.v}">${s.em} ${s.t}</button>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function ensureCasaSlot(){
+  if(!state.casas[state.year]) state.casas[state.year]={};
+  if(!state.casas[state.year][state.month]) state.casas[state.year][state.month]={};
+}
+function setCasaStatus(casaKey,status,kind){
+  ensureCasaSlot();
+  const existing = state.casas[state.year][state.month][casaKey];
+  const eff = existing ? normalizeCasa(existing) : getCasaEffectiveState(casaKey, state.year, state.month);
+  const cur = {obraStatus: eff.obraStatus, saleStatus: eff.saleStatus, meses: eff.meses};
+  cur.saleStatus = status || '';
+
+  if(cur.saleStatus && !eff.saleStatus){
+    cur.meses = calcMesesVentaAuto(casaKey,state.year,state.month);
+  }
+  if(!cur.saleStatus){
+    cur.meses = '';
+    delete cur._saleInherited;
+  }
+  if(cur.saleStatus && eff.saleStatus===cur.saleStatus && eff.saleOrigin && eff.saleOrigin.ord < ordOf(state.year,state.month)){
+    cur._saleInherited = true;
+  }
+  state.casas[state.year][state.month][casaKey]=cur;
+  saveState(); renderAll();
+}
+function setCasaMeses(casaKey,val){
+  const currentOrd = ordOf(state.year,state.month);
+  const eff = getCasaEffectiveState(casaKey, state.year, state.month);
+
+  // Si la casa ya fue vendida en un mes anterior, el tiempo de venta pertenece
+  // al mes original de venta. Lo guardamos ahí para que el mes siguiente lo tome automático
+  // y no haya que volver a escribirlo.
+  if(eff.saleStatus && eff.saleOrigin && eff.saleOrigin.ord < currentOrd){
+    if(!state.casas[eff.saleOrigin.year]) state.casas[eff.saleOrigin.year] = {};
+    if(!state.casas[eff.saleOrigin.year][eff.saleOrigin.month]) state.casas[eff.saleOrigin.year][eff.saleOrigin.month] = {};
+    const originRaw = state.casas[eff.saleOrigin.year][eff.saleOrigin.month][casaKey] || {};
+    const originNorm = normalizeCasa(originRaw);
+    state.casas[eff.saleOrigin.year][eff.saleOrigin.month][casaKey] = Object.assign({}, originRaw, {
+      obraStatus: originNorm.obraStatus,
+      saleStatus: originNorm.saleStatus || eff.saleStatus,
+      meses: val
+    });
+
+    // Si este mes tiene un registro explícito por otro cambio, lo mantenemos,
+    // pero marcado como venta heredada para que no duplique la venta.
+    const existingHere = state.casas[state.year] && state.casas[state.year][state.month] && state.casas[state.year][state.month][casaKey];
+    if(existingHere){
+      existingHere._saleInherited = true;
+      existingHere.meses = val;
+    }
+
+    saveState();
+    renderAll();
+    return;
+  }
+
+  ensureCasaSlot();
+  const existing = state.casas[state.year][state.month][casaKey];
+  const base = existing ? normalizeCasa(existing) : eff;
+  const cur = {obraStatus: base.obraStatus, saleStatus: base.saleStatus, meses: val};
+  state.casas[state.year][state.month][casaKey]=cur;
+  saveState();
+  renderCarteraResumen();
+  renderChips();
+  renderAutoCard();
+}
+function renderCarteraResumen(){
+  const card = document.getElementById('carteraResumen');
+  const agg = computeCasasAgg(state.year,state.month);
+  const obrasActivas = countObrasEnConstruccion(state.year,state.month);
+  let html = `<h2>📋 Resumen cartera — ${MESES[state.month-1]} ${state.year}</h2>
+  <div class="resumen-grid pro">
+    <div class="resumen-item pro"><div class="rlabel">🏗️ Obras activas</div><div class="rval">${obrasActivas}</div></div>
+    <div class="resumen-item pro"><div class="rlabel">📦 Stock</div><div class="rval">${agg.stock}</div></div>
+    <div class="resumen-item pro"><div class="rlabel">🧱 Vend. pozo</div><div class="rval">${agg.vp}</div></div>
+    <div class="resumen-item pro"><div class="rlabel">✅ Vend. terminada</div><div class="rval">${agg.vt}</div></div>
+    <div class="resumen-item pro"><div class="rlabel">⏳ Stock más vieja</div><div class="rval">${agg.stockViejo===null?'—':fmtNum(agg.stockViejo,1)+' m'}</div></div>
+    <div class="resumen-item pro"><div class="rlabel">🕒 Stock promedio</div><div class="rval">${agg.stockProm===null?'—':fmtNum(agg.stockProm,1)+' m'}</div></div>
+    <div class="resumen-item pro"><div class="rlabel">⚡ Venta term.</div><div class="rval">${agg.diasTerminadaMeses===null?'—':fmtNum(agg.diasTerminadaMeses,1)+' m'}</div></div>
+    <div class="resumen-item pro"><div class="rlabel">🧱 Venta pozo</div><div class="rval">${agg.diasPozoMeses===null?'—':fmtNum(agg.diasPozoMeses,1)+' m'}</div></div>
+  </div>`;
+  card.innerHTML = html;
+}
+
+// ---------- cargar: campos auto ----------
+function autoShownValue(autoRaw){
+  if(autoRaw===null||autoRaw===undefined) return '';
+  return Number.isInteger(autoRaw) ? autoRaw : Math.round(autoRaw*10)/10;
+}
+function renderAutoCard(){
+  const lockedEl = document.getElementById('cargarLockedMsg');
+  const formsEl = document.getElementById('cargarForms');
+  if(isFutureMonth(state.year,state.month)){
+    lockedEl.innerHTML = lockedMessage();
+    lockedEl.style.display='block';
+    formsEl.style.display='none';
+    return;
+  }
+  lockedEl.style.display='none';
+  formsEl.style.display='block';
+  const wrap = document.getElementById('autoFieldsWrap');
+  const inp = getInput(state.year,state.month);
+  const agg = computeCasasAgg(state.year,state.month);
+  wrap.innerHTML = AUTO_FIELDS.map(f=>{
+    const manualVal = inp[f.manualKey];
+    const isAuto = agg.hasCartera || manualVal===''||manualVal===null||manualVal===undefined;
+    const shown = isAuto ? autoShownValue(autoRawFor(f.key, agg)) : manualVal;
+    return `<div class="field">
+      <label>${f.label} <span class="fieldtag ${isAuto?'auto':'manual'}" data-tagfor="${f.manualKey}">${isAuto?'auto':'manual'}</span></label>
+      <input type="number" step="${f.step}" class="${isAuto?'auto-value':'manual-value'}" data-field="${f.manualKey}" value="${shown}">
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('input[data-field]').forEach(inputEl=>{
+    inputEl.oninput = (e)=>{
+      const inp2 = getInput(state.year,state.month);
+      const key = e.target.dataset.field;
+      inp2[key] = e.target.value;
+      saveState();
+      renderChips();
+      renderPanel();
+      updateAutoFieldStyle(key, e.target);
+    };
+  });
+}
+function updateAutoFieldStyle(manualKey, inputEl){
+  const inp = getInput(state.year,state.month);
+  const manualVal = inp[manualKey];
+  const isAuto = manualVal===''||manualVal===null||manualVal===undefined;
+  inputEl.classList.toggle('auto-value', isAuto);
+  inputEl.classList.toggle('manual-value', !isAuto);
+  const tag = document.querySelector(`[data-tagfor="${manualKey}"]`);
+  if(tag){
+    tag.textContent = isAuto ? 'auto' : 'manual';
+    tag.classList.toggle('auto', isAuto);
+    tag.classList.toggle('manual', !isAuto);
+  }
+  if(isAuto){
+    const f = AUTO_FIELDS.find(x=>x.manualKey===manualKey);
+    const agg = computeCasasAgg(state.year,state.month);
+    inputEl.value = autoShownValue(autoRawFor(f.key, agg));
+  }
+}
+
+// ---------- cargar: obras y caja ----------
+function renderObrasCajaForm(){
+  const inp = getInput(state.year,state.month);
+  const oa = document.getElementById('i_obrasActivas');
+  oa.value = countObrasEnConstruccion(state.year,state.month);
+  oa.readOnly = true;
+  oa.classList.add('auto-value');
+  const oi = document.getElementById('i_obrasIniciadas');
+  oi.value = countObrasIniciadasAuto(state.year,state.month);
+  oi.readOnly = true;
+  oi.classList.add('auto-value');
+  document.getElementById('i_cajaDisponible').value = inp.cajaDisponible;
+  document.getElementById('i_cajaNecesidad').value = inp.cajaNecesidadManual;
+}
+function bindObrasCajaForm(){
+  const map = {cajaDisponible:'i_cajaDisponible', cajaNecesidadManual:'i_cajaNecesidad'};
+  Object.keys(map).forEach(f=>{
+    document.getElementById(map[f]).addEventListener('input',(e)=>{
+      const inp = getInput(state.year,state.month);
+      inp[f] = e.target.value;
+      saveState();
+      renderChips();
+      renderPanel();
+    });
+  });
+}
+
+// ---------- panel ----------
+function renderPanel(){
+  if(isFutureMonth(state.year,state.month)){
+    document.getElementById('heroRing').textContent='--';
+    document.getElementById('heroRing').className='ring';
+    document.getElementById('heroStatus').textContent='—';
+    document.getElementById('heroPeriod').textContent = MESES[state.month-1]+' '+state.year;
+    document.getElementById('indList').innerHTML = lockedMessage();
+    renderAnnualTable();
+    return;
+  }
+  const inp = getInput(state.year,state.month);
+  const agg = computeCasasAgg(state.year,state.month);
+  const c = calc(inp,agg);
+  const z = zIndiceCQ(c.indiceCQ);
+  const ring = document.getElementById('heroRing');
+  ring.textContent = c.indiceCQ;
+  ring.className = 'ring '+z;
+  const statusTxt = z==='g'?'Muy sano':(z==='y'?'Atención':'Riesgo');
+  document.getElementById('heroStatus').textContent = statusTxt;
+  document.getElementById('heroPeriod').textContent = MESES[state.month-1]+' '+state.year;
+
+  const list = document.getElementById('indList');
+  list.innerHTML = INDICATORS.map(ind=>{
+    const zz = ind.z(c);
+    return `<div class="ind ${zz}">
+      <div class="left">
+        <span class="em">${ind.em}</span>
+        <div>
+          <div class="name">${ind.name}</div>
+          <div class="cat">${ind.cat} · <span class="rule">${ind.rule}</span></div>
+        </div>
+      </div>
+      <div class="right">
+        <span class="val">${ind.fmt(c)}</span>
+        <span class="badge ${zz}"></span>
+      </div>
+    </div>`;
+  }).join('');
+
+  renderAnnualTable();
+}
+function renderAnnualTable(){
+  const table = document.getElementById('annualTable');
+  let thead = '<thead><tr><th>Indicador</th>';
+  MESES_C.forEach((m,i)=>{ thead += `<th class="${i+1===state.month?'curcol':''}">${m}</th>`; });
+  thead += '</tr></thead>';
+
+  const rows = INDICATORS.concat([{key:'indiceCQ',em:'🧠',name:'Índice CQ',z:c=>zIndiceCQ(c.indiceCQ),fmt:c=>fmtNum(c.indiceCQ)}]);
+  let tbody = '<tbody>';
+  rows.forEach(ind=>{
+    tbody += `<tr><td class="name">${ind.em} ${ind.name}</td>`;
+    for(let m=1;m<=12;m++){
+      const inp = (state.data[state.year] && state.data[state.year][m]) || DEFAULT_INPUT();
+      const agg = computeCasasAgg(state.year,m);
+      const c = calc(inp, agg);
+      const has = monthHasData(state.year,m);
+      const zz = has ? ind.z(c) : 'n';
+      const txt = has ? ind.fmt(c) : '—';
+      tbody += `<td class="cell ${zz} ${m===state.month?'curcol':''}">${txt}</td>`;
+    }
+    tbody += '</tr>';
+  });
+  tbody += '</tbody>';
+  table.innerHTML = thead+tbody;
+}
+
+// ---------- tendencia: todos los indicadores ----------
+function zColor(zz){ return zz==='g'?'#2F8F5B':(zz==='y'?'#C8862B':(zz==='r'?'#C1473A':'#DCD8CC')); }
+function buildIndicatorSeries(ind){
+  const values=[], colors=[], labels=[];
+  for(let m=1;m<=12;m++){
+    const inp = (state.data[state.year] && state.data[state.year][m]) || DEFAULT_INPUT();
+    const agg = computeCasasAgg(state.year,m);
+    const c = calc(inp, agg);
+    const has = monthHasData(state.year,m);
+    let v = has ? ind.get(c) : null;
+    if(v===999) v = null;
+    values.push(v);
+    colors.push(v===null ? '#DCD8CC' : zColor(ind.z(c)));
+    labels.push(has ? ind.fmt(c) : '');
+  }
+  return {values,colors,labels};
+}
+function renderTendenciaCharts(){
+  const wrap = document.getElementById('tendenciaCharts');
+  tendenciaChartInstances.forEach(ch=>{ try{ch.destroy();}catch(e){} });
+  tendenciaChartInstances = [];
+  wrap.innerHTML='';
+
+  if(typeof Chart === 'undefined'){
+    wrap.innerHTML = '<div class="empty">No se pudieron cargar los gráficos (sin conexión a internet). Probá de nuevo cuando tengas señal.</div>';
+    return;
+  }
+
+  const all = [{key:'indiceCQ',em:'🧠',name:'Índice CQ',get:c=>c.indiceCQ,z:c=>zIndiceCQ(c.indiceCQ),fmt:c=>fmtNum(c.indiceCQ)}].concat(INDICATORS);
+  const curIdx = state.month-1;
+  const hasDatalabels = typeof ChartDataLabels !== 'undefined';
+
+  all.forEach(ind=>{
+    const card = document.createElement('div');
+    card.className='chartcard';
+    card.innerHTML = `<h2>${ind.em} ${ind.name}</h2><canvas></canvas>`;
+    wrap.appendChild(card);
+    const canvas = card.querySelector('canvas');
+    const {values,colors,labels} = buildIndicatorSeries(ind);
+    const borderColors = values.map((v,i)=> i===curIdx ? '#1C3D35' : 'rgba(0,0,0,0)');
+
+    const ch = new Chart(canvas, {
+      type:'bar',
+      data:{ labels:MESES_C, datasets:[{ data:values, backgroundColor:colors, borderRadius:5, borderWidth:2, borderColor:borderColors }] },
+      options:{
+        responsive:true,
+        plugins:Object.assign({legend:{display:false}}, hasDatalabels ? {
+          datalabels:{
+            anchor:'end', align:'top', color:'#3A4540',
+            font:{family:"'JetBrains Mono', monospace", size:9, weight:'700'},
+            formatter:(val,ctx)=> labels[ctx.dataIndex] || ''
+          }
+        } : {}),
+        scales:{ x:{grid:{display:false}, ticks:{font:{size:9}}}, y:{display:false} },
+        layout:{padding:{top:18}}
+      }
+    });
+    tendenciaChartInstances.push(ch);
+  });
+}
+
+// ---------- tabs ----------
+function bindTabs(){
+  document.querySelectorAll('nav.tabs button').forEach(btn=>{
+    btn.onclick = ()=>{
+      document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab==='tendencia') renderTendenciaCharts();
+    };
+  });
+}
+
+// ---------- utilidades ----------
+function resumenTexto(){
+  const inp = getInput(state.year,state.month);
+  const agg = computeCasasAgg(state.year,state.month);
+  const c = calc(inp,agg);
+  const z = zIndiceCQ(c.indiceCQ);
+  const status = z==='g'?'Muy sano':z==='y'?'Atención':'Riesgo';
+  return `ÍNDICE CQ — ${MESES[state.month-1]} ${state.year}\n\n`+
+    `Índice CQ: ${c.indiceCQ}/100 (${status})\n`+
+    `Ventas totales: ${c.ventas} (${c.vp} pozo / ${c.vt} terminada)\n`+
+    `Stock: ${c.stock} unidades — Stock/Ventas: ${fmtRatio(c.stockVentas)}\n`+
+    `% venta pozo: ${fmtPct(c.pctPozo)}\n`+
+    `Obras activas: ${c.obrasActivas} — Riesgo operativo: ${fmtRiesgo(c.riesgoOp)}\n`+
+    `Liquidez: ${fmtUSD(c.liquidez)} (caja ${fmtUSD(c.cajaDisponible)} − necesidad ${fmtUSD(c.cajaNecesidad)})\n`;
+}
+function copiarResumen(){
+  const texto = resumenTexto();
+  const fallback=()=>{
+    const ta=document.createElement('textarea');
+    ta.value=texto; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try{ document.execCommand('copy'); alert('Resumen copiado ✅'); }
+    catch(e){ alert('No se pudo copiar. Copiá el texto manualmente.'); }
+    document.body.removeChild(ta);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(texto).then(()=>alert('Resumen copiado ✅')).catch(fallback);
+  } else fallback();
+}
+function generarPDFIndicadoresBlob(){
+  const inp = getInput(state.year,state.month);
+  const agg = computeCasasAgg(state.year,state.month);
+  const c = calc(inp,agg);
+  const z = zIndiceCQ(c.indiceCQ);
+  const estado = z==='g'?'Muy sano':(z==='y'?'Atención':'Riesgo');
+  const periodo = MESES[state.month-1]+' '+state.year;
+
+  const kpis = [
+    {label:'Ventas totales', value:fmtNum(c.ventas)},
+    {label:'Stock disponible', value:fmtNum(c.stock)},
+    {label:'Obras activas', value:fmtNum(c.obrasActivas)},
+    {label:'Liquidez', value:fmtUSD(c.liquidez)},
+    {label:'Riesgo operativo', value:fmtRiesgo(c.riesgoOp)},
+    {label:'Obras iniciadas', value:fmtNum(c.obrasIniciadas)}
+  ];
+
+  const indicadores = INDICATORS.map(ind=>({
+    name: ind.name,
+    cat: ind.cat,
+    value: ind.fmt(c),
+    z: ind.z(c)
+  }));
+
+  return simplePDFBlob({
+    title:'Indice CQ - Indicadores',
+    periodo:periodo,
+    score:c.indiceCQ,
+    estado:estado,
+    kpis:kpis,
+    indicadores:indicadores
+  });
+}
+
+async function enviarWhatsapp(){
+  if(isFutureMonth(state.year,state.month)){
+    alert('Ese mes todavía no está habilitado.');
+    return;
+  }
+
+  const blob = generarPDFIndicadoresBlob();
+  if(!blob)return;
+
+  const periodoTxt = MESES[state.month-1]+' '+state.year;
+  const periodoFile = MESES[state.month-1].toLowerCase()+'_'+state.year;
+  const fileName = 'indicadores_cq_'+periodoFile+'.pdf';
+  const file = new File([blob], fileName, {type:'application/pdf'});
+  const msg = 'Indicadores CQ — '+periodoTxt;
+
+  try{
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:msg, text:msg});
+      return;
+    }
+  }catch(e){
+    if(e && e.name==='AbortError')return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),2500);
+  setTimeout(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg+' — PDF generado para adjuntar.'),'_blank'),500);
+}
+function exportBackup(){
+  const blob = new Blob([JSON.stringify({data:state.data, obras:state.obras, casas:state.casas, obraEstados:state.obraEstados},null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='indicadores_cq_backup_'+state.year+'.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importBackup(file){
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const parsed = JSON.parse(e.target.result);
+      if(parsed && parsed.data){
+        state.data = parsed.data;
+        state.obras = parsed.obras || state.obras;
+        state.casas = parsed.casas || state.casas;
+        state.obraEstados = parsed.obraEstados || state.obraEstados || {};
+        state.obraEstados = parsed.obraEstados || state.obraEstados || {};
+        saveState(); renderAll();
+        alert('Backup importado ✅');
+      } else alert('Archivo inválido.');
+    }catch(err){ alert('No se pudo leer el archivo: '+err.message); }
+  };
+  reader.readAsText(file);
+}
+function borrarMes(){
+  if(!confirm('¿Borrar los datos de '+MESES[state.month-1]+' '+state.year+'? (incluye la cartera de ese mes)')) return;
+  if(state.data[state.year]) delete state.data[state.year][state.month];
+  if(state.casas[state.year]) delete state.casas[state.year][state.month];
+  saveState(); renderAll();
+}
+function bindUtils(){
+  document.getElementById('btnWhatsapp').onclick = enviarWhatsapp;
+  document.getElementById('btnAddObra').onclick = ()=>{
+    const code = prompt('Código de la obra (ej. 4/100):');
+    if(code && code.trim()){
+      state.obras.push({id:'ob'+Date.now()+Math.floor(Math.random()*1000), code:code.trim(), casas:['A','B'], archived:false});
+      saveState(); renderAll();
+    }
+  };
+}
+
+function renderAll(){
+  renderChips();
+  renderObrasList();
+  renderCarteraResumen();
+  renderAutoCard();
+  renderObrasCajaForm();
+  renderPanel();
+  if(document.getElementById('tab-tendencia').classList.contains('active')) renderTendenciaCharts();
+}
+
+loadState();
+
+// Al abrir la app, mostrar siempre el mes y año actuales.
+// Durante el uso se puede navegar a otros meses normalmente.
+const fechaInicio = new Date();
+state.year = String(fechaInicio.getFullYear());
+state.month = fechaInicio.getMonth() + 1;
+if(!state.data[state.year]) state.data[state.year] = {};
+saveState();
+
+bindObrasCajaForm();
+bindTabs();
+bindUtils();
+renderAll();
+
+document.addEventListener('wheel', function(){
+  const a = document.activeElement;
+  if(a && a.tagName==='INPUT' && a.type==='number') a.blur();
+}, {passive:true});
+</script>
+
+<script id="cq-online-status-js">
+(function(){
+  function actualizarConexion(){
+    document.querySelectorAll('.cq-online-status').forEach(function(el){
+      const online=navigator.onLine;
+      el.classList.toggle('offline',!online);
+      const txt=el.querySelector('.cq-online-text');
+      if(txt) txt.textContent=online?'Con conexión':'Sin conexión';
+      el.title=online?'Dispositivo conectado a internet':'Dispositivo sin conexión a internet';
+    });
+  }
+  window.addEventListener('online',actualizarConexion);
+  window.addEventListener('offline',actualizarConexion);
+  document.addEventListener('DOMContentLoaded',actualizarConexion);
+  actualizarConexion();
+})();
+</script>
+
+</body>
+</html>

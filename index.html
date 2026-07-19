@@ -188,6 +188,48 @@ body{
 .footer span:first-child::after{content:"Gastos · Materiales · Acopio · Avances · Indicadores";font-size:11px;}
 </style>
 
+
+
+<style id="cq-indicadores-selector">
+.indicadores-modal-bg{
+  display:none;position:fixed;inset:0;z-index:999;
+  background:radial-gradient(circle at 85% 8%,rgba(0,206,124,.22),transparent 28%),linear-gradient(160deg,rgba(7,19,51,.96),rgba(11,27,81,.98));
+  backdrop-filter:blur(12px);align-items:center;justify-content:center;padding:18px;
+}
+.indicadores-modal-bg.open{display:flex}
+.indicadores-modal{width:100%;max-width:500px;color:#eef4f2;animation:cqModalUp .24s ease}
+@keyframes cqModalUp{from{transform:translateY(22px) scale(.985);opacity:0}to{transform:none;opacity:1}}
+.indicadores-modal-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
+.indicadores-modal-kicker{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#aeb9c8;font-weight:800}
+.indicadores-modal-title{margin-top:4px;font-size:27px;line-height:1.05;font-weight:900;letter-spacing:-.025em}
+.indicadores-modal-sub{font-size:12.5px;color:#c3cedb;margin-top:7px;line-height:1.45;max-width:360px}
+.indicadores-modal-x{width:38px;height:38px;border:1px solid rgba(255,255,255,.16);border-radius:13px;background:rgba(255,255,255,.10);color:#fff;font-size:22px;cursor:pointer;flex:0 0 auto}
+.indicadores-options{display:grid;gap:13px}
+.indicadores-option{
+  position:relative;display:flex;align-items:center;gap:14px;min-height:112px;text-decoration:none;color:#0b1b51;
+  background:linear-gradient(180deg,rgba(255,255,255,.99),rgba(247,249,250,.97));border:1px solid rgba(255,255,255,.72);
+  border-radius:23px;padding:16px;box-shadow:0 18px 42px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.95);
+  overflow:hidden;transition:transform .16s ease,box-shadow .16s ease;
+}
+.indicadores-option::after{content:"";position:absolute;width:120px;height:120px;border-radius:50%;right:-48px;top:-54px;opacity:.34}
+.indicadores-option:nth-child(1)::after{background:#9be8c5}.indicadores-option:nth-child(2)::after{background:#aebef7}
+.indicadores-option:active{transform:scale(.985)}.indicadores-option:hover{transform:translateY(-2px);box-shadow:0 22px 48px rgba(0,0,0,.25)}
+.indicadores-option-icon{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;font-size:27px;flex:0 0 auto}
+.indicadores-option:nth-child(1) .indicadores-option-icon{background:linear-gradient(145deg,#dff7eb,#bcebd2)}
+.indicadores-option:nth-child(2) .indicadores-option-icon{background:linear-gradient(145deg,#e7ecff,#cdd7ff)}
+.indicadores-option-text{flex:1;min-width:0;position:relative;z-index:1}
+.indicadores-option-title{display:block;font-size:17px;line-height:1.1;font-weight:900;letter-spacing:-.015em}
+.indicadores-option-desc{display:block;font-size:11.5px;color:#6c7a91;margin-top:6px;line-height:1.42;max-width:290px}
+.indicadores-option-tag{display:inline-flex;align-items:center;margin-top:9px;padding:4px 8px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
+.indicadores-option:nth-child(1) .indicadores-option-tag{background:#e1f5ea;color:#19794d}
+.indicadores-option:nth-child(2) .indicadores-option-tag{background:#e7ecff;color:#4259a8}
+.indicadores-option-arrow{width:34px;height:34px;border-radius:999px;background:#edf1f5;display:grid;place-items:center;font-size:23px;font-weight:700;position:relative;z-index:1}
+.indicadores-modal-foot{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:15px;color:#aeb9c8;font-size:10.5px;font-weight:700}
+.indicadores-modal-foot-dot{width:7px;height:7px;border-radius:50%;background:#00ce7c;box-shadow:0 0 0 4px rgba(0,206,124,.12)}
+@media(max-height:690px){.indicadores-option{min-height:96px;padding:13px}.indicadores-option-icon{width:50px;height:50px;font-size:23px}.indicadores-modal-title{font-size:23px}}
+</style>
+
+
 </head>
 <body>
 <div class="app">
@@ -224,7 +266,7 @@ body{
           <span class="btn-left"><span class="icon">📋</span>Avances</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-indicadores" href="indicadores.html">
+        <a class="btn btn-indicadores" href="#" id="btnIndicadoresMenu">
           <span class="btn-left"><span class="icon">📊</span>Indicadores</span>
           <span class="arrow">›</span>
         </a>
@@ -237,5 +279,59 @@ body{
     <span>Córdoba</span>
   </footer>
 </div>
+
+
+<div class="indicadores-modal-bg" id="indicadoresModal" aria-hidden="true">
+  <div class="indicadores-modal" role="dialog" aria-modal="true" aria-labelledby="indicadoresModalTitle">
+    <div class="indicadores-modal-hd">
+      <div>
+        <div class="indicadores-modal-kicker">CQ Desarrollos</div>
+        <div class="indicadores-modal-title" id="indicadoresModalTitle">Centro de indicadores</div>
+        <div class="indicadores-modal-sub">Elegí el tablero que querés consultar. Cada módulo está pensado para una lectura distinta del negocio.</div>
+      </div>
+      <button class="indicadores-modal-x" id="cerrarIndicadoresModal" aria-label="Cerrar">×</button>
+    </div>
+    <div class="indicadores-options">
+      <a class="indicadores-option" href="Financieros.html">
+        <span class="indicadores-option-icon">💼</span>
+        <span class="indicadores-option-text">
+          <span class="indicadores-option-title">Financieros</span>
+          <span class="indicadores-option-desc">Cartera, ventas, evolución mensual, estado comercial y lectura consolidada del negocio.</span>
+          <span class="indicadores-option-tag">Tablero general</span>
+        </span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+      <a class="indicadores-option" href="Roe-Tir.html">
+        <span class="indicadores-option-icon">📈</span>
+        <span class="indicadores-option-text">
+          <span class="indicadores-option-title">ROE &amp; TIR</span>
+          <span class="indicadores-option-desc">Rentabilidad por obra, retorno del capital, flujo financiero y comparación entre proyectos.</span>
+          <span class="indicadores-option-tag">Análisis de rentabilidad</span>
+        </span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+    </div>
+    <div class="indicadores-modal-foot">
+      <span class="indicadores-modal-foot-dot"></span>
+      Dos tableros conectados a CQ
+    </div>
+  </div>
+</div>
+
+<script id="cq-indicadores-selector-js">
+(function(){
+  const btn=document.getElementById('btnIndicadoresMenu');
+  const modal=document.getElementById('indicadoresModal');
+  const close=document.getElementById('cerrarIndicadoresModal');
+  if(!btn||!modal) return;
+  const abrir=()=>{modal.classList.add('open');modal.setAttribute('aria-hidden','false');};
+  const cerrar=()=>{modal.classList.remove('open');modal.setAttribute('aria-hidden','true');};
+  btn.addEventListener('click',e=>{e.preventDefault();abrir();});
+  close && close.addEventListener('click',cerrar);
+  modal.addEventListener('click',e=>{if(e.target===modal) cerrar();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape') cerrar();});
+})();
+</script>
+
 </body>
 </html>

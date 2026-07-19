@@ -1,0 +1,2220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ROE &amp; TIR · CQ Desarrollos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --verde:#1C3D35;
+    --verde-2:#274F45;
+    --verde-3:#345E52;
+    --sand:#F5F3EF;
+    --sand-2:#EAE6DC;
+    --card:#FFFFFF;
+    --texto:#1C3D35;
+    --texto-sub:#6B7A74;
+    --borde:rgba(28,61,53,0.12);
+    --ok:#3E7D5A;
+    --ok-bg:#E7F1EA;
+    --warn:#B8843A;
+    --warn-bg:#F7EDDB;
+    --bad:#A8503F;
+    --bad-bg:#F5E4DF;
+    --gris:#8E8A80;
+    --gris-bg:#EDEBE5;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--sand);
+    color:var(--texto);
+    font-family:'Space Grotesk',sans-serif;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--sand);}
+
+  /* Header */
+  .topbar{
+    background:var(--verde);
+    color:var(--sand);
+    padding:18px 18px 14px;
+    display:flex;align-items:center;justify-content:space-between;
+    position:sticky;top:0;z-index:20;
+  }
+  .topbar h1{font-size:18px;font-weight:700;margin:0;letter-spacing:.2px;}
+  .topbar .sub{font-size:11px;color:#B9C7C0;font-family:'JetBrains Mono',monospace;margin-top:2px;}
+  .icon-btn{
+    background:rgba(245,243,239,0.12);
+    border:1px solid rgba(245,243,239,0.25);
+    color:var(--sand);
+    width:34px;height:34px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:15px;cursor:pointer;flex-shrink:0;
+  }
+
+  /* Tabs */
+  .tabs{
+    display:flex;gap:6px;padding:10px 14px;background:var(--verde);
+    position:sticky;top:62px;z-index:19;
+  }
+  .tab-btn{
+    flex:1;padding:9px 4px;border:none;border-radius:999px;
+    background:rgba(245,243,239,0.1);color:#CBD6D1;
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;
+    cursor:pointer;transition:.15s;
+  }
+  .tab-btn.active{background:var(--sand);color:var(--verde);}
+
+  main{flex:1;padding:16px 14px 90px;}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;animation:fade .15s ease;}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+
+  /* Cards */
+  .card{
+    background:var(--card);
+    border:1px solid var(--borde);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .card h2{font-size:14px;margin:0 0 12px;color:var(--verde);font-weight:700;}
+  .card h2 .n{color:var(--texto-sub);font-weight:500;font-size:12px;margin-left:6px;}
+
+  .field{margin-bottom:12px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{
+    display:block;font-size:11.5px;color:var(--texto-sub);margin-bottom:5px;font-weight:500;
+  }
+  .field input, .field select{
+    width:100%;padding:10px 11px;border:1px solid var(--borde);border-radius:10px;
+    font-size:14.5px;font-family:'JetBrains Mono',monospace;color:var(--texto);
+    background:var(--sand);
+  }
+  .field input:focus, .field select:focus{outline:2px solid var(--verde-3);outline-offset:1px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .hint{font-size:11px;color:var(--texto-sub);margin-top:5px;}
+
+  /* Chips */
+  .chip-group{display:flex;gap:8px;}
+  .chip{
+    flex:1;text-align:center;padding:9px 6px;border-radius:999px;
+    border:1px solid var(--borde);background:var(--sand);color:var(--texto-sub);
+    font-weight:600;font-size:13px;cursor:pointer;
+  }
+  .chip.active{background:var(--verde);color:var(--sand);border-color:var(--verde);}
+
+  /* Cost rows */
+  .cost-row{display:grid;grid-template-columns:70px 1fr 30px;gap:8px;align-items:center;margin-bottom:8px;}
+  .cost-row input{padding:8px 9px;}
+  .row-del{
+    width:28px;height:28px;border-radius:50%;border:none;background:var(--bad-bg);
+    color:var(--bad);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .add-row-btn{
+    width:100%;padding:9px;border:1.5px dashed var(--borde);border-radius:10px;
+    background:transparent;color:var(--verde-3);font-weight:600;font-size:13px;cursor:pointer;
+    margin-top:2px;
+  }
+  .total-line{
+    display:flex;justify-content:space-between;font-size:12.5px;margin-top:10px;
+    padding-top:10px;border-top:1px dashed var(--borde);color:var(--texto-sub);
+  }
+  .total-line b{color:var(--texto);font-family:'JetBrains Mono',monospace;}
+  .total-line.warn b{color:var(--warn);}
+
+  /* Buttons */
+  .btn-primary{
+    width:100%;padding:13px;border:none;border-radius:12px;
+    background:var(--verde);color:var(--sand);font-weight:700;font-size:14.5px;
+    cursor:pointer;font-family:'Space Grotesk',sans-serif;
+  }
+  .btn-secondary{
+    width:100%;padding:12px;border:1px solid var(--verde);border-radius:12px;
+    background:transparent;color:var(--verde);font-weight:600;font-size:13.5px;
+    cursor:pointer;margin-top:8px;font-family:'Space Grotesk',sans-serif;
+  }
+
+  /* KPI badges */
+  .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;}
+  .kpi{
+    border-radius:12px;padding:10px 12px;border:1px solid var(--borde);
+  }
+  .kpi .label{font-size:10.5px;color:var(--texto-sub);font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
+  .kpi .value{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;margin-top:2px;}
+  .kpi .band{font-size:11px;margin-top:3px;font-weight:600;}
+  .kpi.green{background:var(--ok-bg);} .kpi.green .value, .kpi.green .band{color:var(--ok);}
+  .kpi.yellow{background:var(--warn-bg);} .kpi.yellow .value, .kpi.yellow .band{color:var(--warn);}
+  .kpi.red{background:var(--bad-bg);} .kpi.red .value, .kpi.red .band{color:var(--bad);}
+  .kpi.gray{background:var(--gris-bg);} .kpi.gray .value, .kpi.gray .band{color:var(--gris);}
+
+  .res-line{display:flex;justify-content:space-between;padding:7px 0;font-size:13.5px;border-bottom:1px solid var(--borde);}
+  .res-line:last-child{border-bottom:none;}
+  .res-line .v{font-family:'JetBrains Mono',monospace;font-weight:600;}
+  .res-line.ganancia .v{color:var(--ok);font-weight:700;}
+
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;
+    font-size:12px;font-weight:700;
+  }
+  .badge.green{background:var(--ok-bg);color:var(--ok);}
+  .badge.yellow{background:var(--warn-bg);color:var(--warn);}
+  .badge.red{background:var(--bad-bg);color:var(--bad);}
+  .badge.gray{background:var(--gris-bg);color:var(--gris);}
+
+  .cell-green{color:var(--ok);font-weight:700;}
+  .cell-yellow{color:var(--warn);font-weight:700;}
+  .cell-red{color:var(--bad);font-weight:700;}
+  .cell-gray{color:var(--gris);font-weight:600;}
+
+  /* Flujo table */
+  .flujo-toggle{
+    text-align:center;font-size:12.5px;color:var(--verde-3);font-weight:600;cursor:pointer;padding:4px 0;
+  }
+  .table-wrap{overflow-x:auto;margin-top:10px;-webkit-overflow-scrolling:touch;}
+  table{border-collapse:collapse;width:100%;font-family:'JetBrains Mono',monospace;font-size:11.5px;}
+  table th, table td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--borde);white-space:nowrap;}
+  table th{color:var(--texto-sub);font-weight:600;text-align:right;position:sticky;top:0;background:var(--card);}
+  table td:first-child, table th:first-child{text-align:left;}
+  table tr.neg td{color:var(--bad);}
+
+  /* Obras list */
+  .obra-card{
+    background:var(--card);border:1px solid var(--borde);border-radius:var(--radius);
+    padding:14px;margin-bottom:10px;
+  }
+  .obra-top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .obra-nombre{font-weight:700;font-size:15px;}
+  .obra-stats{display:flex;gap:14px;margin-top:8px;font-size:12px;}
+  .obra-stats .s b{display:block;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--texto);}
+  .obra-stats .s span{color:var(--texto-sub);font-size:10.5px;}
+  .obra-actions{display:flex;gap:8px;margin-top:10px;}
+  .obra-actions button{
+    flex:1;padding:8px;border-radius:9px;border:1px solid var(--borde);background:var(--sand);
+    font-size:12px;font-weight:600;color:var(--verde);cursor:pointer;
+  }
+  .obra-actions button.del{color:var(--bad);}
+
+  .empty-state{
+    text-align:center;padding:50px 20px;color:var(--texto-sub);
+  }
+  .empty-state .ic{font-size:34px;margin-bottom:10px;}
+  .empty-state p{font-size:13.5px;margin:0;line-height:1.5;}
+
+  /* Comparar */
+  .compare-pick{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .pick-chip{
+    padding:8px 13px;border-radius:999px;border:1px solid var(--borde);background:var(--card);
+    font-size:12.5px;font-weight:600;color:var(--texto-sub);cursor:pointer;
+  }
+  .pick-chip.active{background:var(--verde);color:var(--sand);border-color:var(--verde);}
+  .compare-table{margin-top:6px;}
+  .compare-table th{font-family:'Space Grotesk',sans-serif;}
+
+  /* Modal */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(28,61,53,0.5);z-index:50;
+    display:none;align-items:flex-end;justify-content:center;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal{
+    background:var(--sand);width:100%;max-width:480px;border-radius:20px 20px 0 0;
+    padding:20px;max-height:82vh;overflow-y:auto;
+  }
+  .modal h3{margin:0 0 4px;font-size:16px;color:var(--verde);}
+  .modal .close{
+    float:right;background:none;border:none;font-size:20px;color:var(--texto-sub);cursor:pointer;
+  }
+  .leg-block{margin-top:16px;}
+  .leg-block h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--texto-sub);margin:0 0 6px;}
+  .leg-item{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--borde);}
+  .leg-item span:last-child{font-family:'JetBrains Mono',monospace;font-weight:600;}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--verde);color:var(--sand);padding:11px 20px;border-radius:999px;
+    font-size:13px;font-weight:600;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+</style>
+
+<style id="cq-redisenio-estetico-premium-v2">
+/* Rediseño estético CQ — solo CSS, sin tocar cálculos ni funciones */
+:root{
+  --verde:#16372F !important;
+  --verde-2:#236450 !important;
+  --verde-3:#2F8B69 !important;
+  --sand:#F4F0E8 !important;
+  --sand-2:#E8E0D2 !important;
+  --card:#FFFDF8 !important;
+  --texto:#152E28 !important;
+  --texto-sub:#6E7B74 !important;
+  --borde:rgba(22,55,47,.12) !important;
+  --radius:18px !important;
+  --shadow:0 12px 34px rgba(22,55,47,.10);
+  --shadow-soft:0 6px 18px rgba(22,55,47,.07);
+}
+body{
+  background:
+    radial-gradient(circle at top left, rgba(47,139,105,.16), transparent 34%),
+    linear-gradient(180deg,#F8F5EF 0%, var(--sand) 54%, #EEE7DA 100%) !important;
+}
+.app{
+  max-width:520px !important;
+  background:transparent !important;
+}
+
+/* HEADER más premium */
+.topbar{
+  background:
+    radial-gradient(circle at 90% -20%, rgba(255,255,255,.20), transparent 32%),
+    linear-gradient(135deg,#102B25 0%, #1C4B3F 52%, #2F8B69 120%) !important;
+  padding:20px 18px 18px !important;
+  border-radius:0 0 26px 26px !important;
+  box-shadow:0 18px 38px rgba(16,43,37,.24) !important;
+}
+.topbar h1{
+  font-size:22px !important;
+  letter-spacing:-.03em !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:9px !important;
+}
+.topbar h1::before{
+  content:"📈";
+  width:34px;
+  height:34px;
+  border-radius:12px;
+  display:inline-grid;
+  place-items:center;
+  background:rgba(255,255,255,.13);
+  border:1px solid rgba(255,255,255,.18);
+  font-size:17px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+}
+.topbar .sub{
+  margin-top:3px !important;
+  font-size:11.5px !important;
+  color:rgba(245,243,239,.76) !important;
+  letter-spacing:.04em !important;
+}
+.icon-btn{
+  width:38px !important;
+  height:38px !important;
+  border-radius:14px !important;
+  background:rgba(255,255,255,.13) !important;
+  border-color:rgba(255,255,255,.24) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 8px 20px rgba(0,0,0,.12) !important;
+}
+
+/* SOLAPAS: estilo app moderna */
+.tabs{
+  top:72px !important;
+  padding:11px 14px 12px !important;
+  gap:8px !important;
+  background:linear-gradient(180deg,rgba(22,55,47,.98),rgba(22,55,47,.88)) !important;
+  backdrop-filter:blur(10px);
+  box-shadow:0 10px 22px rgba(22,55,47,.16) !important;
+}
+.tab-btn{
+  padding:10px 6px !important;
+  border-radius:15px !important;
+  border:1px solid rgba(255,255,255,.12) !important;
+  background:rgba(255,255,255,.08) !important;
+  color:rgba(245,243,239,.72) !important;
+  font-size:12.5px !important;
+  font-weight:800 !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10) !important;
+}
+.tab-btn:nth-child(1)::before{content:"🧮 ";font-size:13px}
+.tab-btn:nth-child(2)::before{content:"🏗️ ";font-size:13px}
+.tab-btn:nth-child(3)::before{content:"⚖️ ";font-size:13px}
+.tab-btn.active{
+  background:linear-gradient(180deg,#FFFDF8,#F1EEE7) !important;
+  color:var(--verde) !important;
+  border-color:rgba(255,255,255,.50) !important;
+  box-shadow:0 10px 22px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.95) !important;
+  transform:translateY(-1px);
+}
+
+main{padding:14px 14px 96px !important}
+
+/* Cards */
+.card,.obra-card{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.94),rgba(255,253,248,.98)) !important;
+  border:1px solid rgba(22,55,47,.10) !important;
+  border-radius:22px !important;
+  padding:16px !important;
+  box-shadow:var(--shadow-soft) !important;
+}
+.card h2{
+  font-size:14.5px !important;
+  letter-spacing:-.01em !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:7px !important;
+  margin-bottom:13px !important;
+}
+.card h2::after{
+  content:"";
+  flex:1;
+  height:1px;
+  background:linear-gradient(90deg,rgba(22,55,47,.13),transparent);
+}
+
+/* Inputs */
+.field label{
+  font-size:11px !important;
+  text-transform:uppercase !important;
+  letter-spacing:.055em !important;
+  font-weight:800 !important;
+  color:rgba(21,46,40,.55) !important;
+}
+.field input,.field select{
+  border-radius:15px !important;
+  padding:12px 12px !important;
+  background:linear-gradient(180deg,#FFFFFF,#F7F3EC) !important;
+  border:1px solid rgba(22,55,47,.12) !important;
+  box-shadow:inset 0 1px 2px rgba(22,55,47,.035) !important;
+}
+.field input:focus,.field select:focus{
+  outline:none !important;
+  border-color:rgba(47,139,105,.62) !important;
+  box-shadow:0 0 0 4px rgba(47,139,105,.13), inset 0 1px 2px rgba(22,55,47,.04) !important;
+}
+
+/* Chips tipo selector */
+.chip,.pick-chip{
+  border-radius:999px !important;
+  background:linear-gradient(180deg,#FFFFFF,#F6F2EA) !important;
+  border:1px solid rgba(22,55,47,.12) !important;
+  color:rgba(21,46,40,.62) !important;
+  box-shadow:0 4px 12px rgba(22,55,47,.045), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+.chip.active,.pick-chip.active{
+  background:linear-gradient(135deg,#17463B,#2F8B69) !important;
+  color:#FFFDF8 !important;
+  border-color:rgba(47,139,105,.65) !important;
+  box-shadow:0 9px 20px rgba(47,139,105,.20), inset 0 1px 0 rgba(255,255,255,.2) !important;
+}
+
+/* Botones */
+button,.chip,.pick-chip{
+  -webkit-tap-highlight-color:transparent !important;
+  transition:transform .14s ease, box-shadow .14s ease, background .14s ease, border-color .14s ease, color .14s ease !important;
+}
+button:active,.chip:active,.pick-chip:active{transform:scale(.985)}
+.btn-primary{
+  border-radius:18px !important;
+  padding:15px !important;
+  font-size:15px !important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,0) 42%),
+    linear-gradient(135deg,#123A31,#2F8B69) !important;
+  box-shadow:0 14px 26px rgba(47,139,105,.24), inset 0 1px 0 rgba(255,255,255,.22) !important;
+}
+.btn-primary::before{content:"💾 ";font-size:15px}
+.btn-secondary,.add-row-btn,.obra-actions button{
+  border-radius:16px !important;
+  background:linear-gradient(180deg,#FFFFFF,#F5F1E9) !important;
+  border:1px solid rgba(22,55,47,.14) !important;
+  color:var(--verde) !important;
+  font-weight:800 !important;
+  box-shadow:0 6px 16px rgba(22,55,47,.07), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+.add-row-btn{
+  border-style:solid !important;
+  border-color:rgba(47,139,105,.22) !important;
+  color:#236450 !important;
+}
+.add-row-btn::before{content:"＋ ";font-weight:900}
+.btn-secondary:hover,.add-row-btn:hover,.obra-actions button:hover,.icon-btn:hover{
+  transform:translateY(-1px);
+  box-shadow:0 10px 22px rgba(22,55,47,.11), inset 0 1px 0 rgba(255,255,255,.95) !important;
+}
+.row-del{
+  border-radius:12px !important;
+  background:linear-gradient(180deg,#FFF,#F9E5DF) !important;
+  border:1px solid rgba(168,80,63,.18) !important;
+  box-shadow:0 5px 12px rgba(168,80,63,.09) !important;
+}
+
+/* Filas costo más limpias */
+.cost-row{
+  grid-template-columns:72px 1fr 34px !important;
+  gap:9px !important;
+}
+.cost-row input{
+  min-height:39px !important;
+}
+
+/* Resultados y KPIs */
+.res-line{
+  padding:10px 0 !important;
+  font-size:13.5px !important;
+}
+.kpi-grid{
+  gap:11px !important;
+  margin-top:12px !important;
+}
+.kpi{
+  border-radius:18px !important;
+  padding:12px 13px !important;
+  border:1px solid rgba(22,55,47,.10) !important;
+  box-shadow:0 7px 16px rgba(22,55,47,.045) !important;
+  position:relative;
+  overflow:hidden;
+}
+.kpi::before{
+  content:"";
+  position:absolute;
+  inset:0 auto 0 0;
+  width:5px;
+  background:currentColor;
+  opacity:.75;
+}
+.kpi .label{
+  font-size:9.8px !important;
+  letter-spacing:.06em !important;
+}
+.kpi .value{
+  font-size:19px !important;
+  letter-spacing:-.035em !important;
+}
+.badge{
+  border-radius:999px !important;
+  padding:6px 11px !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55) !important;
+}
+
+/* Obras guardadas */
+.obra-card{
+  padding:15px !important;
+  overflow:hidden;
+  position:relative;
+}
+.obra-card::before{
+  content:"";
+  position:absolute;
+  left:0;top:0;bottom:0;
+  width:5px;
+  background:linear-gradient(180deg,#2F8B69,#C8862B);
+}
+.obra-nombre{
+  font-size:16px !important;
+  letter-spacing:-.02em !important;
+  padding-left:2px !important;
+}
+.obra-stats{
+  gap:10px !important;
+  margin-top:12px !important;
+}
+.obra-stats .s{
+  flex:1;
+  background:#F7F3EC;
+  border:1px solid rgba(22,55,47,.08);
+  border-radius:14px;
+  padding:9px 8px;
+}
+.obra-stats .s b{
+  font-size:13.5px !important;
+}
+.obra-stats .s span{
+  font-size:9.5px !important;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.obra-actions{
+  gap:7px !important;
+}
+.obra-actions button:nth-child(1)::before{content:"✏️ "}
+.obra-actions button:nth-child(2)::before{content:"📋 "}
+.obra-actions button.del::before{content:"🗑️ "}
+.obra-actions button.del{
+  color:var(--bad) !important;
+  border-color:rgba(168,80,63,.18) !important;
+  background:linear-gradient(180deg,#FFF,#F8E4DF) !important;
+}
+
+/* Comparar */
+.compare-pick{
+  gap:7px !important;
+}
+.pick-chip{
+  padding:9px 13px !important;
+  font-weight:800 !important;
+}
+.chartcard, .table-wrap{
+  border-radius:18px !important;
+}
+.table-wrap{
+  border:1px solid rgba(22,55,47,.10);
+  background:#FFFDF8;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.88);
+}
+table th{
+  background:#F0EADF !important;
+  color:var(--verde) !important;
+  font-family:'Space Grotesk',sans-serif !important;
+  font-size:10.5px !important;
+}
+table td{
+  background:rgba(255,253,248,.65);
+}
+
+/* Modal / toast */
+.modal{
+  border-radius:26px 26px 0 0 !important;
+  background:linear-gradient(180deg,#FFFDF8,#F4F0E8) !important;
+  box-shadow:0 -18px 44px rgba(0,0,0,.18) !important;
+}
+.modal h3{
+  font-size:18px !important;
+}
+.toast{
+  box-shadow:0 10px 24px rgba(22,55,47,.22) !important;
+}
+
+/* Mobile: más compacto sin perder estética */
+@media(max-width:420px){
+  .topbar{padding:18px 16px 15px !important}
+  .topbar h1{font-size:20px !important}
+  .tabs{top:68px !important;padding:9px 10px 10px !important}
+  .tab-btn{font-size:11.5px !important;padding:9px 3px !important}
+  main{padding:12px 10px 92px !important}
+  .card,.obra-card{border-radius:20px !important;padding:14px !important}
+  .row2{gap:8px !important}
+  .kpi-grid{gap:8px !important}
+  .kpi{padding:11px 10px !important}
+  .kpi .value{font-size:17px !important}
+}
+
+
+/* === CQ rediseño visual v2: obras completas, sin recomendaciones === */
+body{
+  background:
+    radial-gradient(circle at 18% -8%, rgba(46,125,94,.18), transparent 34%),
+    radial-gradient(circle at 92% 2%, rgba(200,136,42,.12), transparent 28%),
+    linear-gradient(180deg,#F8F5EE 0%,#ECE7DC 100%) !important;
+}
+.app{background:transparent !important;}
+.topbar{
+  border-radius:0 0 28px 28px !important;
+  padding:20px 18px 16px !important;
+  background:
+    linear-gradient(145deg,rgba(255,255,255,.08),rgba(255,255,255,0) 38%),
+    linear-gradient(135deg,#12372E 0%,#245A4A 100%) !important;
+  box-shadow:0 16px 34px rgba(18,55,46,.26) !important;
+}
+.topbar h1{font-size:21px !important;letter-spacing:-.03em !important;}
+.topbar .sub{opacity:.9 !important;}
+.tabs{
+  top:72px !important;
+  padding:10px 13px 12px !important;
+  gap:7px !important;
+  background:rgba(18,55,46,.96) !important;
+  backdrop-filter:blur(10px);
+  box-shadow:0 10px 22px rgba(18,55,46,.12) !important;
+}
+.tab-btn{
+  min-height:38px !important;
+  border-radius:14px !important;
+  font-weight:850 !important;
+  font-size:12.5px !important;
+  letter-spacing:-.01em !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12) !important;
+}
+.tab-btn[data-tab="calc"]::before{content:"🧮 ";}
+.tab-btn[data-tab="obras"]::before{content:"🏗️ ";}
+.tab-btn[data-tab="comparar"]::before{content:"📊 ";}
+.tab-btn.active{
+  background:linear-gradient(180deg,#FFFDF8,#EFE9DC) !important;
+  box-shadow:0 10px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+main{padding-top:18px !important;}
+.card,.obra-card{
+  border-radius:22px !important;
+  border:1px solid rgba(28,61,53,.10) !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(255,253,248,.94)) !important;
+  box-shadow:0 14px 30px rgba(28,61,53,.08), inset 0 1px 0 rgba(255,255,255,.92) !important;
+}
+.card h2{
+  font-size:15px !important;
+  letter-spacing:-.02em !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:6px !important;
+}
+.field input,.field select{
+  border-radius:15px !important;
+  background:#FBF8F1 !important;
+  min-height:43px !important;
+}
+.btn-primary{
+  border-radius:18px !important;
+  min-height:50px !important;
+  background:linear-gradient(135deg,#12372E,#2F8B69) !important;
+  box-shadow:0 14px 28px rgba(28,61,53,.24), inset 0 1px 0 rgba(255,255,255,.25) !important;
+}
+.btn-primary::before{content:"💾 ";}
+.btn-secondary,.add-row-btn,.obra-actions button,.pick-chip{
+  border-radius:15px !important;
+  box-shadow:0 8px 18px rgba(28,61,53,.06), inset 0 1px 0 rgba(255,255,255,.8) !important;
+}
+.add-row-btn::before{content:"＋ ";font-weight:900;}
+
+.obra-card-full{padding:16px 15px 14px !important;}
+.obra-top-full{align-items:center !important;margin-bottom:10px;}
+.obra-mini-label{
+  font-size:9.5px;
+  color:var(--texto-sub);
+  text-transform:uppercase;
+  letter-spacing:.11em;
+  font-weight:900;
+  margin-bottom:2px;
+}
+.obra-card-full .obra-nombre{
+  font-size:18px !important;
+  font-family:'JetBrains Mono',monospace;
+  letter-spacing:-.04em !important;
+}
+.obra-stats-full{
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:8px !important;
+  margin-top:10px !important;
+}
+.obra-stats-full .s{
+  min-width:0;
+  padding:10px 10px !important;
+  border-radius:16px !important;
+  background:linear-gradient(180deg,#FAF7EF,#F2ECE0) !important;
+  border:1px solid rgba(28,61,53,.08) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.76) !important;
+}
+.obra-stats-full .s.main{grid-column:1/-1;}
+.obra-stats-full .s b{
+  font-size:16px !important;
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  letter-spacing:-.055em;
+}
+.obra-stats-full .s span{
+  display:block;
+  margin-top:3px;
+  font-size:9.2px !important;
+  letter-spacing:.075em !important;
+  opacity:.82;
+}
+.obra-stats-full .s.green{background:linear-gradient(180deg,#F7FFF9,#E4F3EA)!important;border-color:#BFE2CD!important;}
+.obra-stats-full .s.yellow{background:linear-gradient(180deg,#FFFDF7,#F7EDDB)!important;border-color:#F0D7A6!important;}
+.obra-stats-full .s.red{background:linear-gradient(180deg,#FFF8F6,#F5E4DF)!important;border-color:#EFC3BC!important;}
+.obra-stats-full .s.gray{background:linear-gradient(180deg,#FAFAF7,#EDEBE5)!important;border-color:#D8D3C8!important;}
+.obra-actions{margin-top:12px !important;}
+.obra-actions button{
+  min-height:38px !important;
+  font-weight:850 !important;
+  background:linear-gradient(180deg,#FFFFFF,#F4EFE5) !important;
+}
+.compare-table h2::before{content:"📋";}
+#compare-result .card:first-child h2::before{content:"📈";}
+.badge{display:none !important;}
+</style>
+
+
+<style id="cq-comparar-premium-v3">
+/* Mejoras específicas para Comparar */
+.compare-panel{
+  background:linear-gradient(180deg,#FFFDF8 0%,#F8F3EA 100%);
+  border:1px solid rgba(22,55,47,.12);
+  border-radius:22px;
+  padding:14px;
+  margin-bottom:14px;
+  box-shadow:0 14px 34px rgba(22,55,47,.10);
+}
+.compare-panel h2{
+  display:flex;align-items:center;gap:8px;
+  font-size:15px!important;margin:0 0 12px!important;
+}
+.compare-summary-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px;
+}
+.compare-sum-card{
+  border-radius:16px;border:1px solid rgba(22,55,47,.10);
+  background:rgba(255,255,255,.78);
+  padding:11px 12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
+}
+.compare-sum-card .lbl{
+  font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+  color:#6E7B74;font-weight:800;margin-bottom:3px;
+}
+.compare-sum-card .val{
+  font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:900;color:#16372F;
+}
+.compare-sum-card.gain{background:linear-gradient(180deg,#FFFFFF,#EAF6EF);border-color:#BFE2CD}
+.compare-sum-card.cap{background:linear-gradient(180deg,#FFFFFF,#F7EDDB);border-color:#F0D7A6}
+.compare-chart-card{
+  background:linear-gradient(180deg,#FFFFFF,#FBF7EF);
+  border:1px solid rgba(22,55,47,.12);
+  border-radius:22px;
+  padding:15px 13px 13px;
+  margin-bottom:14px;
+  box-shadow:0 14px 34px rgba(22,55,47,.10);
+}
+.compare-chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.compare-chart-head h2{margin:0!important;font-size:15px!important}
+.compare-chart-sub{font-size:11px;color:#6E7B74;font-weight:600;margin-top:2px}
+.compare-indicator-pills{display:flex;gap:7px;overflow-x:auto;padding:2px 1px 10px;scrollbar-width:none}
+.compare-indicator-pills::-webkit-scrollbar{display:none}
+.compare-indicator-pills .pick-chip{
+  flex:0 0 auto;
+  background:#FFFFFF;
+  border:1px solid rgba(22,55,47,.12);
+  color:#596860;
+  box-shadow:0 4px 12px rgba(22,55,47,.05);
+}
+.compare-indicator-pills .pick-chip.active{
+  background:linear-gradient(135deg,#16372F,#2F8B69)!important;
+  color:#fff!important;border-color:transparent!important;
+}
+.chart-shell{
+  background:#fff;border:1px solid rgba(22,55,47,.08);
+  border-radius:18px;padding:10px 8px 4px;
+}
+.compare-table-premium{
+  border:1px solid rgba(22,55,47,.12);
+  border-radius:22px;
+  overflow:hidden;
+  background:#fff;
+  box-shadow:0 14px 34px rgba(22,55,47,.10);
+}
+.compare-table-premium h2{padding:15px 14px 2px;margin:0!important;font-size:15px!important}
+.compare-table-premium .table-wrap{margin-top:8px;border-top:1px solid rgba(22,55,47,.08)}
+.compare-table-premium table{font-size:11px;border-collapse:separate;border-spacing:0;width:100%}
+.compare-table-premium th{
+  background:#F3EFE6!important;color:#16372F!important;
+  font-family:'Space Grotesk',sans-serif!important;font-size:10.5px!important;
+  text-transform:uppercase;letter-spacing:.04em;
+}
+.compare-table-premium td,.compare-table-premium th{padding:9px 10px!important;border-bottom:1px solid rgba(22,55,47,.08)!important}
+.compare-table-premium td:first-child{
+  font-family:'Space Grotesk',sans-serif!important;font-weight:800;color:#16372F;
+  background:#FFFDF8;position:sticky;left:0;z-index:1;
+}
+.compare-table-premium .sum-col{
+  background:#EEF7F1!important;color:#16372F!important;font-weight:900!important;
+  box-shadow:inset 3px 0 0 #2F8B69;
+}
+.compare-table-premium th.sum-col{background:#DDEFE4!important}
+.compare-table-premium tr.money-row td{background:#FBFEFC}
+.compare-table-premium tr.money-row td:first-child{background:#F6FBF8}
+
+.compare-summary-grid.avg-grid{margin-top:-4px;margin-bottom:12px}
+.compare-sum-card.avg{background:linear-gradient(180deg,#FFFFFF,#EEF6F1);border-color:#D3E8D9}
+.compare-sum-card.avg .val{color:#246B52}
+.compare-table-premium tr.avg-row td{background:#FFFDF8}
+.compare-table-premium tr.avg-row td:first-child{background:#F7F2E8}
+.compare-table-premium .sum-mini{display:block;font-family:'Space Grotesk',sans-serif;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:#6D7B73;margin-bottom:2px;font-weight:900}
+.compare-table-premium .sum-col{min-width:92px}
+
+@media(max-width:560px){
+  .compare-summary-grid{grid-template-columns:1fr 1fr}
+  .compare-sum-card{padding:10px}
+  .compare-sum-card .val{font-size:13.5px}
+}
+</style>
+
+
+<style id="cq-ultra-premium-visual-v3">
+/* CQ ULTRA PREMIUM — solo estética: botones, solapas, cards, cuadros y gráficos */
+:root{
+  --cq-bg:#F3F0E8;
+  --cq-paper:#FFFDF8;
+  --cq-ink:#102D25;
+  --cq-muted:#6D7B73;
+  --cq-line:rgba(16,45,37,.105);
+  --cq-green:#173B32;
+  --cq-green-2:#246B52;
+  --cq-green-3:#34A36F;
+  --cq-gold:#C8953B;
+  --cq-gold-soft:#FFF5E3;
+  --cq-blue:#2F6FA3;
+  --cq-blue-soft:#EAF3FA;
+  --cq-red:#B5483D;
+  --cq-red-soft:#FBE9E6;
+  --cq-radius-xl:24px;
+  --cq-radius-lg:18px;
+  --cq-shadow:0 18px 46px rgba(16,45,37,.10);
+  --cq-shadow-soft:0 8px 24px rgba(16,45,37,.07);
+}
+html,body{background:radial-gradient(circle at 20% -10%,rgba(52,163,111,.18),transparent 33%),linear-gradient(180deg,#F7F4ED 0%,#EFEADF 100%)!important;color:var(--cq-ink)!important}
+.app{max-width:520px!important;background:transparent!important}
+.topbar{
+  margin:10px 10px 0!important;
+  border-radius:26px 26px 20px 20px!important;
+  padding:19px 17px 15px!important;
+  background:
+    radial-gradient(circle at 92% 10%,rgba(52,163,111,.34),transparent 34%),
+    linear-gradient(135deg,#102D25 0%,#1D5B48 60%,#1A4238 100%)!important;
+  box-shadow:0 20px 44px rgba(16,45,37,.24)!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+}
+.topbar h1{font-size:20px!important;letter-spacing:-.02em!important;display:flex!important;align-items:center!important;gap:8px!important}
+.topbar h1::before{content:"📈";font-size:18px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.16);width:34px;height:34px;border-radius:13px;display:inline-grid;place-items:center}
+.topbar .sub{font-size:10.5px!important;letter-spacing:.10em!important;text-transform:uppercase!important;color:rgba(255,255,255,.62)!important;margin-top:3px!important}
+.icon-btn{width:38px!important;height:38px!important;border-radius:14px!important;background:rgba(255,255,255,.13)!important;border:1px solid rgba(255,255,255,.18)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)!important;backdrop-filter:blur(10px)}
+.tabs{
+  margin:0 10px!important;
+  padding:9px!important;
+  top:74px!important;
+  border-radius:0 0 22px 22px!important;
+  background:linear-gradient(180deg,rgba(18,55,47,.98),rgba(18,55,47,.90))!important;
+  box-shadow:0 14px 30px rgba(16,45,37,.16)!important;
+  gap:8px!important;
+}
+.tab-btn{
+  border-radius:16px!important;
+  padding:11px 5px!important;
+  color:rgba(255,255,255,.68)!important;
+  background:rgba(255,255,255,.07)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+  font-size:12px!important;
+  font-weight:850!important;
+  letter-spacing:-.01em!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07)!important;
+}
+.tab-btn.active{
+  color:var(--cq-green)!important;
+  background:linear-gradient(180deg,#FFFDF7,#EFEADF)!important;
+  border-color:rgba(255,255,255,.55)!important;
+  box-shadow:0 10px 24px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.9)!important;
+  transform:translateY(1px);
+}
+.tab-btn[data-tab="calc"]::before{content:"🧮 ";}
+.tab-btn[data-tab="obras"]::before{content:"🏗️ ";}
+.tab-btn[data-tab="comparar"]::before{content:"⚖️ ";}
+main{padding:14px 12px 96px!important}
+.card,.obra-card,.compare-table-premium,.compare-chart-card,.compare-panel{
+  background:linear-gradient(180deg,rgba(255,253,248,.98),rgba(255,251,243,.95))!important;
+  border:1px solid var(--cq-line)!important;
+  border-radius:var(--cq-radius-xl)!important;
+  box-shadow:var(--cq-shadow-soft)!important;
+  overflow:hidden;
+}
+.card{padding:17px!important;margin-bottom:14px!important}
+.card h2{font-size:15px!important;letter-spacing:-.02em!important;color:var(--cq-green)!important;margin-bottom:13px!important;display:flex;align-items:center;gap:7px}
+.card h2::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,rgba(23,59,50,.13),transparent);margin-left:4px}
+.field label{font-size:10.8px!important;text-transform:uppercase!important;letter-spacing:.06em!important;font-weight:800!important;color:var(--cq-muted)!important;margin-bottom:6px!important}
+.field input,.field select{
+  background:linear-gradient(180deg,#FFFFFF,#F9F6EF)!important;
+  border:1px solid rgba(16,45,37,.13)!important;
+  border-radius:15px!important;
+  min-height:43px!important;
+  box-shadow:inset 0 1px 2px rgba(16,45,37,.035)!important;
+}
+.field input:focus,.field select:focus{outline:none!important;border-color:rgba(36,107,82,.55)!important;box-shadow:0 0 0 4px rgba(52,163,111,.13),inset 0 1px 2px rgba(16,45,37,.03)!important;background:#fff!important}
+.btn-primary,.btn-secondary,.add-row-btn,.obra-actions button,.util-btn,.pick-chip,.chip,.row-del,.icon-btn{
+  transition:transform .14s ease, box-shadow .14s ease, background .14s ease, border-color .14s ease!important;
+}
+.btn-primary{
+  min-height:52px!important;
+  border-radius:18px!important;
+  background:linear-gradient(135deg,#1C5B49 0%,#34A36F 100%)!important;
+  box-shadow:0 16px 28px rgba(52,163,111,.25),inset 0 1px 0 rgba(255,255,255,.25)!important;
+  letter-spacing:.01em!important;
+}
+.btn-primary::before{content:"💾 ";}
+.btn-secondary,.add-row-btn,.obra-actions button,.util-btn{
+  border-radius:16px!important;
+  border:1px solid rgba(16,45,37,.13)!important;
+  background:linear-gradient(180deg,#FFFFFF,#F4F1E9)!important;
+  color:var(--cq-green)!important;
+  font-weight:850!important;
+  box-shadow:0 8px 18px rgba(16,45,37,.06),inset 0 1px 0 rgba(255,255,255,.88)!important;
+}
+.btn-primary:hover,.btn-secondary:hover,.add-row-btn:hover,.obra-actions button:hover,.util-btn:hover,.pick-chip:hover,.chip:hover{transform:translateY(-1px)!important;box-shadow:0 14px 28px rgba(16,45,37,.11)!important}
+.row-del{border-radius:12px!important;background:var(--cq-red-soft)!important;color:var(--cq-red)!important;border:1px solid rgba(181,72,61,.15)!important}
+.chip,.pick-chip{
+  border-radius:999px!important;
+  background:linear-gradient(180deg,#FFFFFF,#F5F2EA)!important;
+  color:var(--cq-muted)!important;
+  border:1px solid rgba(16,45,37,.12)!important;
+  box-shadow:0 6px 15px rgba(16,45,37,.055)!important;
+}
+.chip.active,.pick-chip.active{
+  color:white!important;
+  border-color:rgba(52,163,111,.65)!important;
+  background:linear-gradient(135deg,#173B32,#34A36F)!important;
+  box-shadow:0 12px 24px rgba(52,163,111,.22)!important;
+}
+.cost-row{grid-template-columns:76px 1fr 34px!important;gap:9px!important;background:rgba(255,255,255,.64);padding:7px;border:1px solid rgba(16,45,37,.07);border-radius:16px;margin-bottom:8px!important}
+.cost-row input{border-radius:12px!important;background:#fff!important}
+.total-line{border-top:1px dashed rgba(16,45,37,.16)!important;background:rgba(245,242,235,.7);padding:12px!important;border-radius:14px;margin-top:12px!important}
+.kpi-grid{gap:9px!important}.kpi{border-radius:18px!important;border:1px solid rgba(16,45,37,.10)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.55)!important;padding:12px!important}.kpi .label{font-size:9.5px!important;letter-spacing:.07em!important}.kpi .value{font-size:19px!important;letter-spacing:-.04em!important}.kpi.green{background:linear-gradient(180deg,#FFFFFF,#E6F4EB)!important}.kpi.yellow{background:linear-gradient(180deg,#FFFFFF,#FFF2DA)!important}.kpi.red{background:linear-gradient(180deg,#FFFFFF,#FBE8E4)!important}.kpi.gray{background:linear-gradient(180deg,#FFFFFF,#EEECE6)!important}
+.res-line{padding:10px 0!important;font-size:13px!important}.res-line .v{font-size:13px!important}.res-line.ganancia{background:linear-gradient(90deg,rgba(52,163,111,.10),transparent);margin:4px -6px 6px;padding:11px 6px!important;border-radius:12px}
+.obra-card{padding:15px!important;margin-bottom:12px!important;position:relative}.obra-card::before{content:"";position:absolute;left:0;top:18px;bottom:18px;width:5px;border-radius:0 999px 999px 0;background:linear-gradient(180deg,var(--cq-green-3),var(--cq-green-2))}.obra-nombre{font-size:16px!important;letter-spacing:-.02em}.obra-stats{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin-top:12px!important}.obra-stats .s{background:rgba(245,242,235,.72);border:1px solid rgba(16,45,37,.07);border-radius:14px;padding:10px!important}.obra-stats .s b{font-size:15px!important}.obra-actions{gap:7px!important}.obra-actions button{padding:10px 7px!important;font-size:11.5px!important}.obra-actions button:nth-child(1)::before{content:"✏️ ";}.obra-actions button:nth-child(2)::before{content:"⧉ ";}.obra-actions button.del::before{content:"🗑️ ";}
+.compare-panel{padding:0!important}.compare-panel h2{background:linear-gradient(135deg,#173B32,#246B52)!important;color:#fff!important;margin:0!important;padding:15px 16px!important}.compare-panel h2::after{display:none}.compare-summary-grid{padding:14px!important;gap:10px!important}.compare-sum-card{border-radius:18px!important;border:1px solid rgba(16,45,37,.09)!important;box-shadow:0 10px 20px rgba(16,45,37,.06)!important}.compare-sum-card .lbl{font-size:9px!important;letter-spacing:.08em!important}.compare-sum-card .val{font-size:15px!important;letter-spacing:-.04em!important}.compare-chart-card{padding:0!important}.compare-chart-head{padding:15px 16px 2px!important}.compare-chart-head h2::after{display:none}.compare-chart-sub{font-size:11px!important;color:var(--cq-muted)!important}.compare-indicator-pills{padding:8px 14px 13px!important}.chart-shell{margin:0 12px 14px!important;background:linear-gradient(180deg,#FFFFFF,#FAF7F0)!important;border:1px solid rgba(16,45,37,.08)!important;border-radius:20px!important;padding:10px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.8)!important}
+.compare-table-premium{padding:0!important}.compare-table-premium h2{background:linear-gradient(180deg,#FFFFFF,#F7F3EA)!important;border-bottom:1px solid rgba(16,45,37,.08);padding:15px 16px!important}.compare-table-premium h2::after{display:none}.table-wrap{border-radius:18px!important;border:1px solid rgba(16,45,37,.08)!important;background:#fff!important}.compare-table-premium .table-wrap{border-radius:0 0 24px 24px!important;border-left:0!important;border-right:0!important;border-bottom:0!important}.compare-table-premium table{border-collapse:separate!important;border-spacing:0!important}.compare-table-premium th{background:#F0EAE0!important;color:var(--cq-green)!important;text-transform:uppercase!important;letter-spacing:.05em!important;font-size:9px!important}.compare-table-premium td:first-child{font-family:'Space Grotesk',sans-serif!important;font-weight:850!important;color:var(--cq-green)!important;background:#FBF8F1!important}.compare-table-premium td,.compare-table-premium th{padding:10px 10px!important}.compare-table-premium .sum-col{background:#E8F6EE!important;color:#14513D!important;font-weight:900!important;border-left:1px solid rgba(20,81,61,.12)!important}.compare-table-premium tr.money-row td{background:#FDFEFB!important}.compare-table-premium tr.money-row .sum-col{background:#DFF2E8!important}
+.modal{border-radius:26px 26px 0 0!important;background:linear-gradient(180deg,#FFFDF7,#F1EDE4)!important;box-shadow:0 -20px 50px rgba(16,45,37,.20)!important}.modal h3{font-size:18px!important}.modal .close{background:#fff!important;border:1px solid rgba(16,45,37,.10)!important;border-radius:12px!important;width:34px;height:34px}.toast{box-shadow:0 14px 32px rgba(16,45,37,.25)!important;background:linear-gradient(135deg,#173B32,#34A36F)!important}
+@media(max-width:420px){.topbar{margin:8px 8px 0!important}.tabs{margin:0 8px!important;top:72px!important}.tab-btn{font-size:11.3px!important}.card{padding:15px!important}.row2,.row3{gap:8px!important}.obra-stats{grid-template-columns:1fr 1fr!important}.compare-summary-grid{grid-template-columns:1fr 1fr!important}.compare-sum-card .val{font-size:13.5px!important}.kpi .value{font-size:17px!important}}
+</style>
+
+
+<style id="cq-redisenio-visual-real-v4">
+/* REDISEÑO VISUAL REAL — cambia fuertemente estética sin tocar cálculos ni datos */
+:root{
+  --verde:#0D2F28!important;
+  --verde-2:#185F4A!important;
+  --verde-3:#2FB978!important;
+  --sand:#ECE6D8!important;
+  --sand-2:#DED5C3!important;
+  --card:#FFFDF8!important;
+  --texto:#10251F!important;
+  --texto-sub:#697872!important;
+  --borde:rgba(13,47,40,.12)!important;
+  --ok:#208756!important;
+  --ok-bg:#E6F5EC!important;
+  --warn:#B77B22!important;
+  --warn-bg:#FFF2D7!important;
+  --bad:#B5473D!important;
+  --bad-bg:#FCE8E5!important;
+  --radius:22px!important;
+}
+html,body{
+  background:
+    radial-gradient(circle at 10% 0%,rgba(47,185,120,.16),transparent 28%),
+    radial-gradient(circle at 100% 6%,rgba(183,123,34,.12),transparent 24%),
+    linear-gradient(180deg,#F8F4EA 0%,#ECE5D7 42%,#E5DDCD 100%)!important;
+  color:#10251F!important;
+}
+.app{max-width:560px!important;background:transparent!important;padding:0 10px 18px!important;}
+.topbar{
+  position:sticky!important;top:8px!important;z-index:50!important;
+  margin:10px 0 0!important;
+  padding:18px!important;
+  min-height:94px!important;
+  border-radius:30px!important;
+  background:
+    linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,0) 35%),
+    radial-gradient(circle at 88% 14%,rgba(47,185,120,.38),transparent 30%),
+    linear-gradient(135deg,#081F1A 0%,#103B32 45%,#176B51 100%)!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  box-shadow:0 22px 48px rgba(8,31,26,.28)!important;
+  overflow:hidden!important;
+}
+.topbar::before{
+  content:"CQ";position:absolute;right:18px;bottom:-16px;font-size:78px;line-height:1;font-weight:900;
+  color:rgba(255,255,255,.055);letter-spacing:-.08em;pointer-events:none;
+}
+.topbar h1{font-size:25px!important;font-weight:900!important;letter-spacing:-.055em!important;color:#FFF9ED!important;margin:0!important;}
+.topbar h1::before{
+  content:"📊"!important;width:42px!important;height:42px!important;border-radius:16px!important;margin-right:4px!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,.08))!important;
+  border:1px solid rgba(255,255,255,.20)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.24)!important;
+}
+.topbar .sub{
+  margin-top:6px!important;font-size:11px!important;text-transform:uppercase!important;letter-spacing:.16em!important;color:rgba(255,249,237,.66)!important;
+}
+.icon-btn{width:42px!important;height:42px!important;border-radius:16px!important;background:rgba(255,255,255,.13)!important;color:#FFF9ED!important;border:1px solid rgba(255,255,255,.22)!important;}
+.tabs{
+  top:114px!important;z-index:45!important;margin:10px 0 8px!important;padding:6px!important;border-radius:22px!important;
+  background:rgba(255,253,248,.82)!important;backdrop-filter:blur(16px)!important;
+  border:1px solid rgba(13,47,40,.10)!important;box-shadow:0 14px 30px rgba(13,47,40,.12)!important;
+}
+.tab-btn{
+  height:48px!important;border-radius:17px!important;background:transparent!important;color:#7A817C!important;border:0!important;
+  font-size:0!important;font-weight:900!important;letter-spacing:-.02em!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;
+  box-shadow:none!important;position:relative!important;overflow:hidden!important;
+}
+.tab-btn::before{font-size:16px!important;margin:0!important;}
+.tab-btn[data-tab="calc"]::after{content:"Calcular";font-size:12.5px!important;}
+.tab-btn[data-tab="obras"]::after{content:"Obras";font-size:12.5px!important;}
+.tab-btn[data-tab="comparar"]::after{content:"Comparar";font-size:12.5px!important;}
+.tab-btn.active{
+  color:#fff!important;background:linear-gradient(135deg,#0D2F28,#2FB978)!important;
+  box-shadow:0 10px 22px rgba(47,185,120,.26),inset 0 1px 0 rgba(255,255,255,.22)!important;transform:none!important;
+}
+main{padding:7px 0 96px!important;}
+.card,.obra-card,.compare-chart-card,.compare-panel,.compare-table-premium{
+  border-radius:28px!important;background:rgba(255,253,248,.92)!important;border:1px solid rgba(13,47,40,.105)!important;
+  box-shadow:0 16px 36px rgba(13,47,40,.095),inset 0 1px 0 rgba(255,255,255,.82)!important;
+  backdrop-filter:blur(10px)!important;margin-bottom:14px!important;overflow:hidden!important;
+}
+.card{padding:18px!important;}
+.card h2{
+  margin:-2px -2px 16px!important;font-size:15.5px!important;font-weight:900!important;color:#0D2F28!important;
+  letter-spacing:-.035em!important;display:flex!important;align-items:center!important;gap:9px!important;
+}
+.card h2::after{content:""!important;height:1px!important;flex:1!important;background:linear-gradient(90deg,rgba(13,47,40,.16),transparent)!important;}
+.field{margin-bottom:12px!important;}
+.field label{font-size:10px!important;font-weight:900!important;letter-spacing:.09em!important;text-transform:uppercase!important;color:#7A817C!important;margin-bottom:7px!important;}
+.field input,.field select{
+  min-height:47px!important;border-radius:18px!important;background:linear-gradient(180deg,#FFFFFF,#F7F1E6)!important;border:1px solid rgba(13,47,40,.13)!important;
+  color:#10251F!important;font-size:14px!important;font-weight:700!important;box-shadow:inset 0 1px 2px rgba(13,47,40,.04)!important;
+}
+.field input:focus,.field select:focus{outline:none!important;border-color:rgba(47,185,120,.65)!important;box-shadow:0 0 0 4px rgba(47,185,120,.14)!important;background:#fff!important;}
+.btn-primary{
+  min-height:56px!important;border-radius:22px!important;background:linear-gradient(135deg,#0D2F28 0%,#2FB978 100%)!important;
+  color:#fff!important;font-size:15px!important;font-weight:950!important;box-shadow:0 16px 30px rgba(47,185,120,.28),inset 0 1px 0 rgba(255,255,255,.24)!important;
+}
+.btn-primary::before{content:"✓ "!important;}
+.btn-secondary,.add-row-btn,.obra-actions button,.util-btn,.pick-chip,.chip{
+  min-height:42px!important;border-radius:18px!important;background:linear-gradient(180deg,#FFFFFF,#F4EDE2)!important;border:1px solid rgba(13,47,40,.12)!important;
+  color:#0D2F28!important;font-weight:900!important;box-shadow:0 8px 18px rgba(13,47,40,.055),inset 0 1px 0 rgba(255,255,255,.9)!important;
+}
+.btn-secondary::before{content:"↺ "!important;}.add-row-btn::before{content:"＋ "!important;}
+.cost-row{grid-template-columns:70px 1fr 38px!important;background:#F8F3EA!important;border:1px solid rgba(13,47,40,.08)!important;border-radius:20px!important;padding:8px!important;margin-bottom:9px!important;}
+.cost-row input{background:#fff!important;border-radius:15px!important;}
+.row-del{width:34px!important;height:34px!important;border-radius:14px!important;background:#FBE8E5!important;color:#B5473D!important;border:1px solid rgba(181,71,61,.16)!important;}
+.total-line{background:#F6F0E6!important;border:1px dashed rgba(13,47,40,.16)!important;border-radius:18px!important;padding:13px!important;}
+.kpi-grid{grid-template-columns:1fr 1fr!important;gap:10px!important;}
+.kpi{border-radius:22px!important;padding:14px!important;border:0!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.65),0 8px 18px rgba(13,47,40,.06)!important;}
+.kpi .label{font-size:9px!important;letter-spacing:.10em!important;font-weight:950!important;color:rgba(16,37,31,.58)!important;}
+.kpi .value{font-size:21px!important;font-weight:950!important;letter-spacing:-.06em!important;}
+.kpi.green{background:linear-gradient(135deg,#F8FFFA,#DFF4E8)!important}.kpi.yellow{background:linear-gradient(135deg,#FFFDF7,#FFECC4)!important}.kpi.red{background:linear-gradient(135deg,#FFF8F7,#FADDD8)!important}.kpi.gray{background:linear-gradient(135deg,#FFFFFF,#EDE9DF)!important}
+.res-line{padding:11px 0!important;font-size:13.5px!important;border-bottom:1px solid rgba(13,47,40,.08)!important;}
+.res-line.ganancia{margin:6px -8px 8px!important;padding:13px 10px!important;border-radius:18px!important;background:linear-gradient(90deg,rgba(47,185,120,.15),rgba(47,185,120,.02))!important;}
+.obra-card{padding:18px!important;position:relative!important;}
+.obra-card::before{content:""!important;position:absolute!important;left:0!important;top:22px!important;bottom:22px!important;width:6px!important;border-radius:0 999px 999px 0!important;background:linear-gradient(180deg,#2FB978,#0D2F28)!important;}
+.obra-top{align-items:center!important;}
+.obra-nombre{font-size:18px!important;font-weight:950!important;letter-spacing:-.05em!important;}
+.obra-stats{display:grid!important;grid-template-columns:1fr 1fr!important;gap:9px!important;margin-top:14px!important;}
+.obra-stats .s{background:linear-gradient(180deg,#FFFFFF,#F6F0E6)!important;border:1px solid rgba(13,47,40,.08)!important;border-radius:18px!important;padding:11px!important;}
+.obra-stats .s b{font-size:15.5px!important;letter-spacing:-.04em!important;}
+.obra-stats .s span{font-size:9px!important;text-transform:uppercase!important;letter-spacing:.08em!important;font-weight:900!important;}
+.obra-actions{display:grid!important;grid-template-columns:1fr 1fr 1fr!important;gap:8px!important;}
+.obra-actions button{padding:11px 8px!important;font-size:11.5px!important;}
+.obra-actions button:nth-child(1)::before{content:"✏️ ";}.obra-actions button:nth-child(2)::before{content:"⧉ ";}.obra-actions button.del{color:#B5473D!important;background:#FFF2EF!important}.obra-actions button.del::before{content:"🗑️ ";}
+.badge{border-radius:999px!important;font-size:10.5px!important;font-weight:950!important;padding:7px 10px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.52)!important;}
+.compare-pick{gap:8px!important;}.pick-chip{padding:10px 14px!important;}.pick-chip.active,.chip.active{background:linear-gradient(135deg,#0D2F28,#2FB978)!important;color:#fff!important;}
+.compare-panel h2,.compare-chart-card h2,.compare-table-premium h2{font-size:16px!important;font-weight:950!important;letter-spacing:-.04em!important;}
+.compare-panel h2{background:linear-gradient(135deg,#0D2F28,#176B51)!important;color:#fff!important;padding:17px 18px!important;}
+.compare-summary-grid{padding:16px!important;gap:11px!important;}
+.compare-sum-card{border-radius:22px!important;background:linear-gradient(180deg,#FFFFFF,#F4EFE6)!important;border:1px solid rgba(13,47,40,.09)!important;box-shadow:0 10px 20px rgba(13,47,40,.07)!important;}
+.compare-sum-card .lbl{font-size:9px!important;letter-spacing:.10em!important;font-weight:950!important;}.compare-sum-card .val{font-size:16px!important;font-weight:950!important;letter-spacing:-.06em!important;}
+.compare-chart-card{padding:0!important;}.compare-chart-head{padding:18px 18px 0!important;}.compare-indicator-pills{padding:10px 16px 14px!important;}
+.chart-shell{margin:0 14px 16px!important;padding:12px!important;border-radius:24px!important;background:#FFFDF8!important;border:1px solid rgba(13,47,40,.09)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.85)!important;}
+.table-wrap{border-radius:22px!important;background:#fff!important;border:1px solid rgba(13,47,40,.08)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.8)!important;}
+table th{background:#EEE6D7!important;color:#0D2F28!important;text-transform:uppercase!important;font-size:9px!important;letter-spacing:.07em!important;font-weight:950!important;}
+table td{padding:10px 9px!important;border-bottom:1px solid rgba(13,47,40,.075)!important;}table td:first-child{font-family:'Space Grotesk',sans-serif!important;font-weight:950!important;color:#0D2F28!important;}
+.modal{background:linear-gradient(180deg,#FFFDF8,#ECE6D8)!important;border-radius:30px 30px 0 0!important;box-shadow:0 -26px 60px rgba(13,47,40,.28)!important;}
+.toast{background:linear-gradient(135deg,#0D2F28,#2FB978)!important;color:#fff!important;border-radius:18px!important;box-shadow:0 18px 34px rgba(13,47,40,.28)!important;}
+@media(max-width:430px){.app{padding:0 8px 16px!important}.topbar{top:6px!important;border-radius:26px!important}.tabs{top:110px!important}.card{padding:16px!important}.kpi .value{font-size:19px!important}.obra-stats{grid-template-columns:1fr 1fr!important}.compare-summary-grid{grid-template-columns:1fr 1fr!important}}
+</style>
+
+
+
+<style id="cq-fix-scroll-colores-obras">
+/* Mantener el carrusel de indicadores en la misma posición al cambiar el gráfico */
+.compare-indicator-pills{
+  scroll-behavior:auto !important;
+  -webkit-overflow-scrolling:touch !important;
+}
+
+/* Solapa Obras: semáforos mucho más visibles */
+.obra-stats-full .s.green,
+.obra-card-full .s.green{
+  background:linear-gradient(135deg,#D9F7E7,#A8E8C5) !important;
+  border:1.5px solid #28A66A !important;
+  box-shadow:0 7px 18px rgba(40,166,106,.18) !important;
+}
+.obra-stats-full .s.green b,
+.obra-card-full .s.green b,
+.cell-green{
+  color:#087541 !important;
+  font-weight:900 !important;
+}
+
+.obra-stats-full .s.yellow,
+.obra-card-full .s.yellow{
+  background:linear-gradient(135deg,#FFF2CF,#FFD889) !important;
+  border:1.5px solid #D89519 !important;
+  box-shadow:0 7px 18px rgba(216,149,25,.20) !important;
+}
+.obra-stats-full .s.yellow b,
+.obra-card-full .s.yellow b,
+.cell-yellow{
+  color:#9B6200 !important;
+  font-weight:900 !important;
+}
+
+.obra-stats-full .s.red,
+.obra-card-full .s.red{
+  background:linear-gradient(135deg,#FFE1DC,#FFB4A8) !important;
+  border:1.5px solid #D64A37 !important;
+  box-shadow:0 7px 18px rgba(214,74,55,.20) !important;
+}
+.obra-stats-full .s.red b,
+.obra-card-full .s.red b,
+.cell-red{
+  color:#A82416 !important;
+  font-weight:900 !important;
+}
+
+.obra-stats-full .s.gray,
+.obra-card-full .s.gray{
+  background:linear-gradient(135deg,#F1EFE8,#E2DED3) !important;
+  border:1.5px solid #B9B1A3 !important;
+}
+.obra-stats-full .s.gray b,
+.obra-card-full .s.gray b,
+.cell-gray{
+  color:#6F6A61 !important;
+  font-weight:850 !important;
+}
+</style>
+
+
+<style id="cq-online-status-style">
+.cq-online-status{
+  display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:999px;
+  background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.19);
+  color:#eef5f1;font-size:10px;font-weight:800;white-space:nowrap;
+}
+.cq-online-dot{
+  width:8px;height:8px;border-radius:50%;background:#34d27b;
+  box-shadow:0 0 0 4px rgba(52,210,123,.14);
+}
+.cq-online-status.offline .cq-online-dot{
+  background:#dc5b50;box-shadow:0 0 0 4px rgba(220,91,80,.14);
+}
+</style>
+
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div>
+      <h1>ROE &amp; TIR</h1>
+      <div class="sub">CQ Desarrollos</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;">
+      <div class="cq-online-status"><span class="cq-online-dot"></span><span class="cq-online-text">Con conexión</span></div>
+      <button class="icon-btn" onclick="openModal('legend')">ℹ️</button>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="calc">Calculadora</button>
+    <button class="tab-btn" data-tab="obras">Obras</button>
+    <button class="tab-btn" data-tab="comparar">Comparar</button>
+  </nav>
+
+  <main>
+
+    <!-- ===================== TAB CALCULADORA ===================== -->
+    <section id="tab-calc" class="tab-content active">
+
+      <div class="card">
+        <h2>Datos del proyecto</h2>
+        <div class="field">
+          <label>Código de obra</label>
+          <input type="text" id="f-nombre" placeholder="ej. 6.44, Comarca, 27/99">
+        </div>
+        <div class="field">
+          <label>Costo total proyecto ($)</label>
+          <input type="number" id="f-costoTotal" placeholder="165000">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Costo por mes <span class="n" id="costos-count"></span></h2>
+        <div id="costos-rows"></div>
+        <button class="add-row-btn" onclick="addCostoRow()">+ Agregar mes</button>
+        <button class="btn-secondary" onclick="repartirSaldo()">↻ Repartir saldo en 7 meses iguales</button>
+        <div class="total-line" id="costos-total-line">
+          <span>Total distribuido</span><b class="mono" id="costos-total">$0</b>
+        </div>
+      </div>
+
+      <div class="card" id="unidad-card-0"></div>
+      <div class="card" id="unidad-card-1"></div>
+
+      <button class="btn-primary" onclick="guardarObra()">Guardar obra</button>
+      <button class="btn-secondary" onclick="limpiarForm()">Limpiar formulario</button>
+
+      <div id="resultados-wrap"></div>
+
+    </section>
+
+    <!-- ===================== TAB OBRAS ===================== -->
+    <section id="tab-obras" class="tab-content">
+      <div class="obra-actions" style="margin-bottom:14px;">
+        <button onclick="exportarDatos()">⬇ Exportar datos</button>
+        <button onclick="document.getElementById('import-file').click()">⬆ Importar datos</button>
+        <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importarDatos(event)">
+      </div>
+      <div id="obras-list"></div>
+      <div id="obras-tabla-wrap"></div>
+    </section>
+
+    <!-- ===================== TAB COMPARAR ===================== -->
+    <section id="tab-comparar" class="tab-content">
+      <div class="card">
+        <h2>Elegí las obras a comparar</h2>
+        <div class="compare-pick" id="compare-pick"></div>
+      </div>
+      <div id="compare-result"></div>
+    </section>
+
+  </main>
+</div>
+
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================ ESTADO ============================ */
+const STORAGE_KEY = 'cq_roetir_obras';
+let obras = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+migrarObras();
+function migrarObras(){
+  let changed = false;
+  obras.forEach(o=>{
+    if(!o.costos){
+      o.costos = repartoParejo(o.costoTotal, o.mes0);
+      changed = true;
+    }
+    (o.unidades||[]).forEach(u=>{
+      if(u.comisionPct===undefined){
+        u.comisionPct = (o.comisionPct!=null ? o.comisionPct : 2.5);
+        changed = true;
+      }
+      if(u.tipo==='Pozo' && !u.cuotas){
+        const cant = Number(u.cantCuotas||0);
+        const m1 = Number(u.mes1raCuota||0);
+        const val = cant>0 ? (Number(u.precio||0)-Number(u.anticipo||0))/cant : 0;
+        u.cuotas = [];
+        for(let k=0;k<cant;k++) u.cuotas.push({mes:m1+k, monto:val});
+        changed = true;
+      }
+    });
+  });
+  if(changed) saveStorage();
+}
+let editingId = null;
+let comparePicked = [];
+
+function unidadDefault(){ return { tipo:'Pozo', precio:0, comisionPct:2.5, mesVenta:1, anticipo:0, cuotas:[{mes:2, monto:0}], mesCobro:1, comisionMes:1 }; }
+
+let draft = {
+  nombre:'', costoTotal:0, costos:[{mes:0, monto:0}],
+  unidades:[ unidadDefault(), unidadDefault() ]
+};
+
+/* ============================ UTILS ============================ */
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function fmtMoney(n){ if(n==null||isNaN(n)) return '—'; return '$'+Math.round(n).toLocaleString('es-AR'); }
+function fmtPct(n){ if(n==null||isNaN(n)||!isFinite(n)) return '—'; return (n*100).toFixed(1)+'%'; }
+function fmtNum(n,d=0){ if(n==null||isNaN(n)||!isFinite(n)) return '—'; return Number(n).toFixed(d).replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,''); }
+function fmtMes(n){ if(n==null) return '—'; return n+(n===1?' mes':' meses'); }
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+function saveStorage(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obras)); }
+
+/* ============================ MOTOR DE CÁLCULO ============================ */
+function repartoParejo(costoTotal, mes0){
+  const total = Number(costoTotal||0), m0 = Number(mes0||0);
+  const resto = Math.max(total - m0, 0);
+  const porMes = Math.round(resto/7);
+  const arr = [{mes:0, monto:m0}];
+  for(let m=1;m<=7;m++) arr.push({mes:m, monto:porMes});
+  return arr;
+}
+
+function computeFlujo(esc){
+  const costosArr = esc.costos || [];
+  let maxMes = 0;
+  costosArr.forEach(c=> maxMes=Math.max(maxMes, c.mes));
+  esc.unidades.forEach(u=>{
+    if(u.tipo==='Pozo'){
+      const cuotaMeses = (u.cuotas||[]).map(c=>c.mes);
+      maxMes = Math.max(maxMes, u.mesVenta||0, ...(cuotaMeses.length?cuotaMeses:[0]));
+    } else {
+      maxMes = Math.max(maxMes, u.mesCobro);
+    }
+    maxMes = Math.max(maxMes, u.comisionMes);
+  });
+  const costoMap = {};
+  costosArr.forEach(c=> costoMap[c.mes] = (costoMap[c.mes]||0) + Number(c.monto||0));
+
+  const flujo=[]; let acumulado=0;
+  for(let m=0;m<=maxMes;m++){
+    const costoProyecto = costoMap[m]||0;
+    let ingresos=[0,0], comisiones=[0,0];
+    esc.unidades.forEach((u,idx)=>{
+      let ingreso=0;
+      if(u.tipo==='Pozo'){
+        if(m===u.mesVenta) ingreso = Number(u.anticipo||0);
+        else {
+          const cs = (u.cuotas||[]).filter(c=>c.mes===m);
+          if(cs.length) ingreso = cs.reduce((a,c)=>a+Number(c.monto||0),0);
+        }
+      } else {
+        if(m===u.mesCobro) ingreso = Number(u.precio||0);
+      }
+      const comision = (m===u.comisionMes) ? Number(u.precio||0)*(Number(u.comisionPct||0)/100) : 0;
+      ingresos[idx]=ingreso; comisiones[idx]=comision;
+    });
+    const flujoNeto = ingresos[0]+ingresos[1]-costoProyecto-comisiones[0]-comisiones[1];
+    acumulado += flujoNeto;
+    flujo.push({mes:m, costoProyecto, ingresoU1:ingresos[0], comisionU1:comisiones[0], ingresoU2:ingresos[1], comisionU2:comisiones[1], flujoNeto, acumulado});
+  }
+  return flujo;
+}
+
+function npv(rate, flows){
+  let s=0;
+  for(let t=0;t<flows.length;t++) s += flows[t]/Math.pow(1+rate,t);
+  return s;
+}
+function irr(flows){
+  // TIR robusta: busca cambios de signo de VAN en varios tramos.
+  // Esto evita que algunas obras queden "sin datos" cuando el flujo tiene varios cambios de signo
+  // o cuando la raíz no queda encerrada entre -99% y 5000% en el primer intento.
+  const clean = (flows||[]).map(f=>Number(f)||0);
+  const hasPos = clean.some(f=>f>0), hasNeg = clean.some(f=>f<0);
+  if(!hasPos || !hasNeg) return null;
+
+  function bisect(lo, hi){
+    let fLo=npv(lo,clean), fHi=npv(hi,clean);
+    if(!isFinite(fLo) || !isFinite(fHi) || fLo*fHi>0) return null;
+    for(let i=0;i<180;i++){
+      const mid=(lo+hi)/2, fMid=npv(mid,clean);
+      if(!isFinite(fMid)) return null;
+      if(Math.abs(fMid)<1e-7) return mid;
+      if((fLo<0 && fMid<0)||(fLo>0 && fMid>0)){ lo=mid; fLo=fMid; }
+      else { hi=mid; fHi=fMid; }
+    }
+    return (lo+hi)/2;
+  }
+
+  // Escaneo fino en tasas mensuales razonables: -99% a 300% mensual.
+  // Incluye muchos casos reales sin forzar resultados absurdos.
+  let roots=[];
+  let prevR=-0.99, prevV=npv(prevR,clean);
+  const steps=1200, maxR=3;
+  for(let i=1;i<=steps;i++){
+    const r = -0.99 + (maxR+0.99)*i/steps;
+    const v = npv(r,clean);
+    if(!isFinite(prevV) || !isFinite(v)){ prevR=r; prevV=v; continue; }
+    if(Math.abs(v)<1e-7){ roots.push(r); }
+    else if(prevV*v<0){
+      const root=bisect(prevR,r);
+      if(root!=null && isFinite(root)) roots.push(root);
+    }
+    prevR=r; prevV=v;
+  }
+  if(!roots.length) return null;
+
+  // Si hay más de una raíz, usamos la positiva más baja; si no, la mayor negativa.
+  const positivas = roots.filter(r=>r>=0).sort((a,b)=>a-b);
+  if(positivas.length) return positivas[0];
+  return roots.sort((a,b)=>b-a)[0];
+}
+
+function computeResultados(esc){
+  const flujo = computeFlujo(esc);
+  const ingresoTotal = flujo.reduce((a,f)=>a+f.ingresoU1+f.ingresoU2,0);
+  const comisionTotal = flujo.reduce((a,f)=>a+f.comisionU1+f.comisionU2,0);
+  const costoTotal = flujo.reduce((a,f)=>a+f.costoProyecto,0);
+  const ganancia = ingresoTotal - comisionTotal - costoTotal;
+  const acumulados = flujo.map(f=>f.acumulado);
+  const capitalMaximo = -Math.min(0, Math.min(...acumulados));
+  const roe = capitalMaximo>0 ? ganancia/capitalMaximo : null;
+  const tirMensual = irr(flujo.map(f=>f.flujoNeto));
+  const tirAnual = tirMensual!=null ? Math.pow(1+tirMensual,12)-1 : null;
+  let payback = null;
+  for(let i=0;i<acumulados.length;i++){ if(acumulados[i]>=0){ payback=i; break; } }
+  const capitalCosto = costoTotal>0 ? capitalMaximo/costoTotal : null;
+  return { flujo, ingresoTotal, comisionTotal, costoTotal, ganancia, capitalMaximo, roe, tirMensual, tirAnual, payback, capitalCosto };
+}
+
+/* ============================ BANDAS / SEMÁFORO ============================ */
+function bandROE(roe){
+  if(roe==null) return {color:'gray', label:'—', sub:'sin datos'};
+  const p=roe*100;
+  if(p<40) return {color:'red', label:'Bajo', sub:'no conviene'};
+  if(p<70) return {color:'yellow', label:'Aceptable', sub:'evaluar'};
+  if(p<=120) return {color:'green', label:'Bueno', sub:'avanzar'};
+  return {color:'green', label:'Excelente', sub:'escalar'};
+}
+function bandTirAnual(t){
+  if(t==null) return {color:'gray', label:'—', sub:'sin datos'};
+  const p=t*100;
+  if(p<60) return {color:'red', label:'Mala', sub:'no conviene'};
+  if(p<100) return {color:'yellow', label:'Floja', sub:'evaluar'};
+  if(p<=200) return {color:'green', label:'Buena', sub:'avanzar'};
+  return {color:'green', label:'Excelente', sub:'acelerar'};
+}
+function bandTirMensual(t){
+  if(t==null) return {color:'gray', label:'—', sub:'sin datos'};
+  const p=t*100;
+  if(p<4) return {color:'red', label:'Mala', sub:''};
+  if(p<6) return {color:'yellow', label:'Floja', sub:''};
+  if(p<10) return {color:'green', label:'Buena', sub:''};
+  return {color:'green', label:'Excelente', sub:''};
+}
+function bandPayback(p){
+  if(p==null) return {color:'gray', label:'—', sub:'no recupera'};
+  if(p>10) return {color:'red', label:'Lento', sub:''};
+  if(p>=8) return {color:'yellow', label:'Revisar', sub:''};
+  if(p>=6) return {color:'green', label:'Bueno', sub:''};
+  return {color:'green', label:'Excelente', sub:''};
+}
+function bandCapitalCosto(cc){
+  if(cc==null) return {color:'gray', label:'—', sub:''};
+  const p=cc*100;
+  if(p>70) return {color:'red', label:'Pesado', sub:''};
+  if(p>=50) return {color:'yellow', label:'Evaluar', sub:''};
+  if(p>=30) return {color:'green', label:'Bueno', sub:''};
+  return {color:'green', label:'Liviano', sub:''};
+}
+
+function bandCapitalInvertido(cap){
+  if(cap==null) return {color:'gray', label:'—', sub:''};
+  if(cap<80000) return {color:'green', label:'Cómodo', sub:''};
+  if(cap<=120000) return {color:'yellow', label:'Cuidar', sub:''};
+  return {color:'red', label:'Limitar', sub:''};
+}
+function cellSpan(text, color){ return `<span class="cell-${color}">${text}</span>`; }
+
+const COLOR_HEX = { green:'#3E7D5C', yellow:'#B8843A', red:'#A8503F', gray:'#8E8A80' };
+const INDICADORES_CHART = {
+  'Ganancia':       { get:r=>r.ganancia,      isPct:false, isMonths:false, band:null },
+  'Ingreso total':  { get:r=>r.ingresoTotal,  isPct:false, isMonths:false, band:null },
+  'Capital máximo': { get:r=>r.capitalMaximo, isPct:false, isMonths:false, band:bandCapitalInvertido },
+  'ROE':            { get:r=>r.roe,           isPct:true,  isMonths:false, band:bandROE },
+  'TIR anual':      { get:r=>r.tirAnual,      isPct:true,  isMonths:false, band:bandTirAnual },
+  'TIR mensual':    { get:r=>r.tirMensual,    isPct:true,  isMonths:false, band:bandTirMensual },
+  'Payback':        { get:r=>r.payback,       isPct:false, isMonths:true,  band:bandPayback },
+  'Capital/Costo':  { get:r=>r.capitalCosto,  isPct:true,  isMonths:false, band:bandCapitalCosto },
+};
+let chartIndicador = 'Ganancia';
+let chartInstance = null;
+function pickChartIndicador(key){
+  const pills = document.querySelector('.compare-indicator-pills');
+  const savedScroll = pills ? pills.scrollLeft : 0;
+  chartIndicador = key;
+  renderCompareResult();
+  requestAnimationFrame(()=>{
+    const newPills = document.querySelector('.compare-indicator-pills');
+    if(newPills) newPills.scrollLeft = savedScroll;
+  });
+}
+function renderCompareChart(datos){
+  const canvas = document.getElementById('compare-chart');
+  if(!canvas || typeof Chart==='undefined') return;
+  const def = INDICADORES_CHART[chartIndicador];
+  const labels = datos.map(d=>d.o.nombre||'—');
+  const raw = datos.map(d=>def.get(d.r));
+  const values = raw.map(v=> v==null ? 0 : (def.isPct ? v*100 : v));
+  const colors = datos.map(d=>{
+    const v = def.get(d.r);
+    return def.band ? COLOR_HEX[def.band(v).color] : '#236450';
+  });
+
+  function chartLabel(v){
+    if(v==null) return '';
+    if(def.isPct) return fmtPct(v);
+    if(def.isMonths) return v+'m';
+    return fmtMoney(v);
+  }
+
+  const barValueLabels = {
+    id:'barValueLabelsPremium',
+    afterDatasetsDraw(chart){
+      const {ctx} = chart;
+      const meta = chart.getDatasetMeta(0);
+      ctx.save();
+      ctx.font = "700 10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = '#16372F';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      meta.data.forEach((bar, i)=>{
+        const label = chartLabel(raw[i]);
+        if(!label) return;
+        const pos = bar.tooltipPosition();
+        ctx.fillText(label, pos.x, pos.y - 7);
+      });
+      ctx.restore();
+    }
+  };
+
+  if(chartInstance){ chartInstance.destroy(); }
+  const maxVal = Math.max(...values, 0);
+  chartInstance = new Chart(canvas, {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{
+        data:values,
+        backgroundColor:colors,
+        borderRadius:12,
+        borderSkipped:false,
+        maxBarThickness:42,
+        categoryPercentage:.62,
+        barPercentage:.82
+      }]
+    },
+    plugins:[barValueLabels],
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      layout:{ padding:{ top:28, right:8, bottom:2, left:2 } },
+      animation:{ duration:450, easing:'easeOutQuart' },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          backgroundColor:'#16372F',
+          titleFont:{family:"'Space Grotesk', sans-serif", size:12, weight:'700'},
+          bodyFont:{family:"'JetBrains Mono', monospace", size:12, weight:'700'},
+          padding:10,
+          cornerRadius:10,
+          callbacks:{ label:(ctx)=>{
+            const v = raw[ctx.dataIndex];
+            if(v==null) return 'Sin datos';
+            if(def.isPct) return fmtPct(v);
+            if(def.isMonths) return v+' meses';
+            return fmtMoney(v);
+          }}
+        }
+      },
+      scales:{
+        y:{
+          beginAtZero:true,
+          suggestedMax:maxVal*1.18,
+          grid:{ color:'rgba(22,55,47,.08)', drawBorder:false },
+          ticks:{
+            font:{family:"'JetBrains Mono', monospace", size:10, weight:'600'},
+            color:'#6E7B74',
+            callback:(v)=> def.isPct? v+'%' : (def.isMonths? v+'m' : (Math.abs(v)>=1000 ? '$'+Math.round(v/1000)+'k' : v))
+          }
+        },
+        x:{
+          grid:{ display:false, drawBorder:false },
+          ticks:{ font:{family:"'Space Grotesk', sans-serif", size:11, weight:'800'}, color:'#16372F' }
+        }
+      }
+    }
+  });
+}
+function decision(r){
+  if(r.tirAnual==null || r.roe==null) return {color:'gray', label:'SIN DATOS', desc:'completá los dos escenarios para comparar'};
+  const tir = r.tirAnual*100, roe = r.roe*100, cap = r.capitalMaximo;
+  if(tir>120 && roe>70 && cap<80000) return {color:'green', label:'IR A POZO', desc:'Bajar precio si hace falta · acelerar ventas · maximizar rotación'};
+  if(tir>=60 && tir<=120 && roe>=60 && roe<=100 && cap>=60000 && cap<=100000) return {color:'yellow', label:'MANTENER', desc:'Equilibrio · riesgo controlado · negocio estable'};
+  if(tir<60 && roe<60 && cap>100000) return {color:'red', label:'NO FORZAR', desc:'Vender terminado · no bajar precio de más · cuidar margen'};
+  return {color:'gray', label:'MIXTO', desc:'No cumple todas las condiciones de una regla — evaluar caso a caso'};
+}
+
+/* ============================ RENDER: TABS ============================ */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='obras') renderObras();
+    if(btn.dataset.tab==='comparar') renderComparar();
+  });
+});
+
+/* ============================ RENDER: UNIDADES ============================ */
+function renderUnidad(idx){
+  const u = draft.unidades[idx];
+  const card = document.getElementById('unidad-card-'+idx);
+  const esPozo = u.tipo==='Pozo';
+  card.innerHTML = `
+    <h2>Unidad ${idx+1}</h2>
+    <div class="field">
+      <label>Tipo de venta</label>
+      <div class="chip-group">
+        <div class="chip ${esPozo?'active':''}" onclick="setTipoUnidad(${idx},'Pozo')">Pozo</div>
+        <div class="chip ${!esPozo?'active':''}" onclick="setTipoUnidad(${idx},'Terminada')">Terminada</div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Precio unidad ($)</label>
+        <input type="number" value="${u.precio||''}" onchange="updU(${idx},'precio',this.value)">
+      </div>
+      <div class="field">
+        <label>% comisión</label>
+        <input type="number" step="0.1" value="${u.comisionPct||''}" onchange="updU(${idx},'comisionPct',this.value)">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Mes de ${esPozo?'seña':'cobro'}</label>
+        <input type="number" value="${esPozo?u.mesVenta:u.mesCobro}" onchange="updU(${idx},'${esPozo?'mesVenta':'mesCobro'}',this.value)">
+      </div>
+      ${esPozo ? `
+      <div class="field">
+        <label>Anticipo ($)</label>
+        <input type="number" value="${u.anticipo||''}" onchange="updU(${idx},'anticipo',this.value)">
+      </div>
+      ` : `
+      <div class="field">
+        <label>Mes de comisión</label>
+        <input type="number" value="${u.comisionMes||''}" onchange="updU(${idx},'comisionMes',this.value)">
+      </div>
+      `}
+    </div>
+    ${esPozo ? `
+    <div class="field">
+      <label>Cuotas (${(u.cuotas||[]).length})</label>
+      <div id="cuotas-rows-${idx}">
+        ${(u.cuotas||[]).map((c,i)=>`
+          <div class="cost-row">
+            <input type="number" value="${c.mes}" onchange="updateCuotaMes(${idx},${i},this.value)" placeholder="Mes">
+            <input type="number" value="${c.monto}" onchange="updateCuotaMonto(${idx},${i},this.value)" placeholder="Monto $">
+            <button class="row-del" onclick="delCuotaRow(${idx},${i})">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="add-row-btn" onclick="addCuotaRow(${idx})">+ Agregar cuota</button>
+      <div class="total-line ${Math.abs(totalCuotas(u)-((u.precio||0)-(u.anticipo||0)))>1?'warn':''}">
+        <span>Total cuotas (precio − anticipo: ${fmtMoney((u.precio||0)-(u.anticipo||0))})</span><b class="mono">${fmtMoney(totalCuotas(u))}</b>
+      </div>
+    </div>
+    <div class="field">
+      <label>Mes de comisión</label>
+      <input type="number" value="${u.comisionMes||''}" onchange="updU(${idx},'comisionMes',this.value)">
+    </div>
+    ` : ``}
+  `;
+}
+function totalCuotas(u){ return (u.cuotas||[]).reduce((a,c)=>a+Number(c.monto||0),0); }
+function addCuotaRow(idx){
+  const u = draft.unidades[idx];
+  if(!u.cuotas) u.cuotas=[];
+  const maxMes = u.cuotas.length ? Math.max(...u.cuotas.map(c=>c.mes)) : (Number(u.mesVenta)||0);
+  u.cuotas.push({mes:maxMes+1, monto:0});
+  renderUnidad(idx); recalc();
+}
+function delCuotaRow(idx,i){ draft.unidades[idx].cuotas.splice(i,1); renderUnidad(idx); recalc(); }
+function updateCuotaMes(idx,i,v){ draft.unidades[idx].cuotas[i].mes = Number(v)||0; renderUnidad(idx); recalc(); }
+function updateCuotaMonto(idx,i,v){ draft.unidades[idx].cuotas[i].monto = Number(v)||0; renderUnidad(idx); recalc(); }
+
+function setTipoUnidad(idx, tipo){
+  draft.unidades[idx].tipo = tipo;
+  if(tipo==='Terminada'){ draft.unidades[idx].comisionMes = draft.unidades[idx].mesCobro || draft.unidades[idx].comisionMes; }
+  else {
+    draft.unidades[idx].comisionMes = draft.unidades[idx].mesVenta || draft.unidades[idx].comisionMes;
+    if(!draft.unidades[idx].cuotas || !draft.unidades[idx].cuotas.length){
+      draft.unidades[idx].cuotas = [{mes:(Number(draft.unidades[idx].mesVenta)||0)+1, monto:0}];
+    }
+  }
+  renderUnidad(idx); recalc();
+}
+function updU(idx, key, val){
+  draft.unidades[idx][key] = Number(val)||0;
+  if(key==='mesCobro' && draft.unidades[idx].tipo==='Terminada'){} // libre
+  renderUnidad(idx); recalc();
+}
+
+/* ============================ RENDER: COSTOS ============================ */
+function renderCostos(){
+  const wrap = document.getElementById('costos-rows');
+  if(!wrap) return;
+  wrap.innerHTML = draft.costos.map((c,i)=>`
+    <div class="cost-row">
+      <input type="number" value="${c.mes}" onchange="updateCostoMes(${i}, this.value)" placeholder="Mes">
+      <input type="number" value="${c.monto}" onchange="updateCostoMonto(${i}, this.value)" placeholder="Monto $">
+      <button class="row-del" onclick="delCostoRow(${i})">✕</button>
+    </div>
+  `).join('');
+  document.getElementById('costos-count').textContent = '('+draft.costos.length+')';
+  const total = draft.costos.reduce((a,c)=>a+Number(c.monto||0),0);
+  document.getElementById('costos-total').textContent = fmtMoney(total);
+  const line = document.getElementById('costos-total-line');
+  if(line) line.classList.toggle('warn', draft.costoTotal>0 && Math.abs(total-draft.costoTotal)>1);
+}
+function addCostoRow(){
+  const maxMes = draft.costos.length ? Math.max(...draft.costos.map(c=>c.mes)) : -1;
+  draft.costos.push({mes:maxMes+1, monto:0});
+  recalc();
+}
+function delCostoRow(i){ draft.costos.splice(i,1); recalc(); }
+function updateCostoMes(i,v){ draft.costos[i].mes = Number(v)||0; recalc(); }
+function updateCostoMonto(i,v){ draft.costos[i].monto = Number(v)||0; recalc(); }
+function repartirSaldo(){
+  const total = draft.costoTotal||0;
+  const mes0Row = draft.costos.find(c=>c.mes===0);
+  const mes0 = mes0Row ? Number(mes0Row.monto)||0 : 0;
+  const nuevos = repartoParejo(total, mes0);
+  draft.costos = draft.costos.filter(c=> c.mes===0 || c.mes>7 || c.mes<0);
+  nuevos.slice(1).forEach(c=> draft.costos.push(c));
+  draft.costos.sort((a,b)=>a.mes-b.mes);
+  recalc();
+  toast('Saldo repartido en 7 meses');
+}
+
+/* ============================ RENDER: RESULTADOS ============================ */
+let flujoVisible = false;
+function recalc(){
+  renderCostos();
+  const camposListos = draft.unidades.every(u=>u.precio>0) || draft.costos.some(c=>Number(c.monto)>0) || draft.costoTotal>0;
+  const wrap = document.getElementById('resultados-wrap');
+  if(!camposListos){ wrap.innerHTML=''; return; }
+
+  const esc = { ...draft };
+  const r = computeResultados(esc);
+  const bROE = bandROE(r.roe), bTM = bandTirMensual(r.tirMensual), bTA = bandTirAnual(r.tirAnual),
+        bP = bandPayback(r.payback), bCC = bandCapitalCosto(r.capitalCosto), bCI = bandCapitalInvertido(r.capitalMaximo);
+
+  wrap.innerHTML = `
+    <div class="card">
+      <h2>Resultados</h2>
+      <div class="res-line"><span>Ingreso total</span><span class="v">${fmtMoney(r.ingresoTotal)}</span></div>
+      <div class="res-line"><span>Comisión total</span><span class="v">${fmtMoney(r.comisionTotal)}</span></div>
+      <div class="res-line"><span>Costo total</span><span class="v">${fmtMoney(r.costoTotal)}</span></div>
+      <div class="res-line ganancia"><span>Ganancia</span><span class="v">${fmtMoney(r.ganancia)}</span></div>
+
+      <div class="kpi-grid">
+        <div class="kpi ${bROE.color}"><div class="label">ROE</div><div class="value">${fmtPct(r.roe)}</div><div class="band">${bROE.label}</div></div>
+        <div class="kpi ${bTA.color}"><div class="label">TIR anual</div><div class="value">${fmtPct(r.tirAnual)}</div><div class="band">${bTA.label}</div></div>
+        <div class="kpi ${bTM.color}"><div class="label">TIR mensual</div><div class="value">${fmtPct(r.tirMensual)}</div><div class="band">${bTM.label}</div></div>
+        <div class="kpi ${bP.color}"><div class="label">Payback</div><div class="value">${r.payback==null?'—':r.payback+'m'}</div><div class="band">${bP.label}</div></div>
+        <div class="kpi ${bCI.color}"><div class="label">Capital máx. invertido</div><div class="value">${fmtMoney(r.capitalMaximo)}</div><div class="band">${bCI.label}</div></div>
+        <div class="kpi ${bCC.color}"><div class="label">Capital / Costo</div><div class="value">${fmtPct(r.capitalCosto)}</div><div class="band">${bCC.label}</div></div>
+      </div>
+
+      <div class="flujo-toggle" onclick="toggleFlujo()">${flujoVisible?'▲ Ocultar':'▼ Ver'} flujo de caja mensual</div>
+      <div id="flujo-table-wrap" style="display:${flujoVisible?'block':'none'};"></div>
+    </div>
+  `;
+  if(flujoVisible) renderFlujoTable(r.flujo);
+}
+function toggleFlujo(){
+  flujoVisible = !flujoVisible;
+  recalc();
+}
+function renderFlujoTable(flujo){
+  const w = document.getElementById('flujo-table-wrap');
+  if(!w) return;
+  w.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Mes</th><th>Costo</th><th>Ing. U1</th><th>Ing. U2</th><th>Com.</th><th>Neto</th><th>Acum.</th></tr></thead>
+        <tbody>
+          ${flujo.map(f=>`
+            <tr class="${f.flujoNeto<0?'neg':''}">
+              <td>${f.mes}</td>
+              <td>${fmtMoney(f.costoProyecto)}</td>
+              <td>${fmtMoney(f.ingresoU1)}</td>
+              <td>${fmtMoney(f.ingresoU2)}</td>
+              <td>${fmtMoney(f.comisionU1+f.comisionU2)}</td>
+              <td>${fmtMoney(f.flujoNeto)}</td>
+              <td>${fmtMoney(f.acumulado)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ============================ GUARDAR / CARGAR / LIMPIAR ============================ */
+function syncFormToDraft(){
+  draft.nombre = document.getElementById('f-nombre').value.trim();
+  draft.costoTotal = Number(document.getElementById('f-costoTotal').value)||0;
+}
+['f-nombre','f-costoTotal'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', ()=>{ syncFormToDraft(); recalc(); });
+});
+
+function guardarObra(){
+  syncFormToDraft();
+  if(!draft.nombre){ toast('Poné un código de obra'); return; }
+  const esc = JSON.parse(JSON.stringify(draft));
+  if(editingId){
+    const i = obras.findIndex(o=>o.id===editingId);
+    if(i>-1) obras[i] = {...obras[i], ...esc, updatedAt:Date.now()};
+  } else {
+    obras.push({...esc, id:uid(), createdAt:Date.now(), updatedAt:Date.now()});
+  }
+  saveStorage();
+  toast('Obra guardada');
+  limpiarForm();
+  document.querySelector('.tab-btn[data-tab="obras"]').click();
+}
+
+function limpiarForm(){
+  editingId = null;
+  draft = { nombre:'', costoTotal:0, costos:[{mes:0, monto:0}], unidades:[ unidadDefault(), unidadDefault() ] };
+  document.getElementById('f-nombre').value='';
+  document.getElementById('f-costoTotal').value='';
+  flujoVisible=false;
+  renderCostos(); renderUnidad(0); renderUnidad(1); recalc();
+}
+
+function cargarObra(id){
+  const o = obras.find(x=>x.id===id);
+  if(!o) return;
+  editingId = id;
+  draft = JSON.parse(JSON.stringify(o));
+  document.getElementById('f-nombre').value = draft.nombre;
+  document.getElementById('f-costoTotal').value = draft.costoTotal || '';
+  renderCostos(); renderUnidad(0); renderUnidad(1); recalc();
+  document.querySelector('.tab-btn[data-tab="calc"]').click();
+}
+
+function duplicarObra(id){
+  const o = obras.find(x=>x.id===id);
+  if(!o) return;
+  const copia = JSON.parse(JSON.stringify(o));
+  copia.id = uid(); copia.nombre = o.nombre + ' (copia)'; copia.createdAt = Date.now(); copia.updatedAt = Date.now();
+  obras.push(copia); saveStorage(); renderObras();
+  toast('Obra duplicada');
+}
+
+function eliminarObra(id){
+  if(!confirm('¿Eliminar esta obra?')) return;
+  obras = obras.filter(o=>o.id!==id);
+  saveStorage(); renderObras();
+}
+
+function exportarDatos(){
+  const blob = new Blob([JSON.stringify(obras, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fecha = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `obras_roe_tir_${fecha}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+function importarDatos(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!Array.isArray(data)) throw new Error('formato inválido');
+      const reemplazar = obras.length===0 || confirm('¿Reemplazar las obras actuales por las importadas?\n\nAceptar = reemplazar todo.\nCancelar = combinar con las que ya tenés.');
+      if(reemplazar){
+        obras = data;
+      } else {
+        data.forEach(o=>{
+          if(obras.find(x=>x.id===o.id)) o = {...o, id:uid()};
+          obras.push(o);
+        });
+      }
+      migrarObras();
+      saveStorage();
+      renderObras();
+      toast('Datos importados');
+    }catch(err){
+      toast('El archivo no es un JSON válido de esta app');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+/* ============================ TAB OBRAS ============================ */
+function renderObras(){
+  const list = document.getElementById('obras-list');
+  if(!obras.length){
+    list.innerHTML = `<div class="empty-state"><div class="ic">🏗️</div><p>Todavía no guardaste ninguna obra.<br>Armá un escenario en la Calculadora y guardalo.</p></div>`;
+    document.getElementById('obras-tabla-wrap').innerHTML='';
+    return;
+  }
+  list.innerHTML = obras.map(o=>{
+    const r = computeResultados(o);
+    const bGan = r.ganancia>0 ? 'green' : (r.ganancia<0 ? 'red' : 'gray');
+    return `
+      <div class="obra-card obra-card-full">
+        <div class="obra-top obra-top-full">
+          <div>
+            <div class="obra-mini-label">Obra</div>
+            <div class="obra-nombre">${o.nombre||'(sin nombre)'}</div>
+          </div>
+        </div>
+        <div class="obra-stats obra-stats-full">
+          <div class="s main ${bGan}"><b>${fmtMoney(r.ganancia)}</b><span>Ganancia</span></div>
+          <div class="s"><b>${fmtMoney(r.ingresoTotal)}</b><span>Ingreso total</span></div>
+          <div class="s"><b>${fmtMoney(r.comisionTotal)}</b><span>Comisión</span></div>
+          <div class="s"><b>${fmtMoney(r.costoTotal)}</b><span>Costo total</span></div>
+          <div class="s ${bandCapitalInvertido(r.capitalMaximo).color}"><b>${fmtMoney(r.capitalMaximo)}</b><span>Capital máximo</span></div>
+          <div class="s ${bandROE(r.roe).color}"><b>${fmtPct(r.roe)}</b><span>ROE</span></div>
+          <div class="s ${bandTirMensual(r.tirMensual).color}"><b>${fmtPct(r.tirMensual)}</b><span>TIR mensual</span></div>
+          <div class="s ${bandTirAnual(r.tirAnual).color}"><b>${fmtPct(r.tirAnual)}</b><span>TIR anual</span></div>
+          <div class="s ${bandPayback(r.payback).color}"><b>${r.payback==null?'—':r.payback+'m'}</b><span>Payback</span></div>
+          <div class="s ${bandCapitalCosto(r.capitalCosto).color}"><b>${fmtPct(r.capitalCosto)}</b><span>Capital/Costo</span></div>
+        </div>
+        <div class="obra-actions">
+          <button onclick="cargarObra('${o.id}')">Editar</button>
+          <button onclick="duplicarObra('${o.id}')">Duplicar</button>
+          <button class="del" onclick="eliminarObra('${o.id}')">Eliminar</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  renderObrasTabla();
+}
+
+function renderObrasTabla(){
+  const wrap = document.getElementById('obras-tabla-wrap');
+  if(obras.length<2){ wrap.innerHTML=''; return; }
+  const rows = [
+    ['Ingreso total', o=>{ const v=fmtMoney(computeResultados(o).ingresoTotal); return v; }],
+    ['Comisión total', o=>{ const v=fmtMoney(computeResultados(o).comisionTotal); return v; }],
+    ['Costo total', o=>{ const v=fmtMoney(computeResultados(o).costoTotal); return v; }],
+    ['Ganancia', o=>{ const v=fmtMoney(computeResultados(o).ganancia); return v; }],
+    ['Capital máximo', o=>{ const r=computeResultados(o); return cellSpan(fmtMoney(r.capitalMaximo), bandCapitalInvertido(r.capitalMaximo).color); }],
+    ['ROE', o=>{ const r=computeResultados(o); return cellSpan(fmtPct(r.roe), bandROE(r.roe).color); }],
+    ['TIR mensual', o=>{ const r=computeResultados(o); return cellSpan(fmtPct(r.tirMensual), bandTirMensual(r.tirMensual).color); }],
+    ['TIR anual', o=>{ const r=computeResultados(o); return cellSpan(fmtPct(r.tirAnual), bandTirAnual(r.tirAnual).color); }],
+    ['Payback', o=>{ const r=computeResultados(o); const txt=r.payback==null?'—':r.payback+'m'; return cellSpan(txt, bandPayback(r.payback).color); }],
+    ['Capital/Costo', o=>{ const r=computeResultados(o); return cellSpan(fmtPct(r.capitalCosto), bandCapitalCosto(r.capitalCosto).color); }],
+  ];
+  wrap.innerHTML = `
+    <div class="card">
+      <h2>Comparativa de todas las obras</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Indicador</th>${obras.map(o=>`<th>${o.nombre||'—'}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${rows.map(([label,fn])=>`<tr><td>${label}</td>${obras.map(o=>`<td>${fn(o)}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================ TAB COMPARAR ============================ */
+function renderComparar(){
+  const pickWrap = document.getElementById('compare-pick');
+  if(!obras.length){
+    pickWrap.innerHTML = `<div class="empty-state" style="padding:20px;"><p>Guardá al menos 2 obras para comparar.</p></div>`;
+    document.getElementById('compare-result').innerHTML='';
+    return;
+  }
+  pickWrap.innerHTML = obras.map(o=>`
+    <div class="pick-chip ${comparePicked.includes(o.id)?'active':''}" onclick="togglePick('${o.id}')">${o.nombre||'(sin nombre)'}</div>
+  `).join('');
+  renderCompareResult();
+}
+function togglePick(id){
+  if(comparePicked.includes(id)){
+    comparePicked = comparePicked.filter(x=>x!==id);
+  } else {
+    comparePicked.push(id);
+  }
+  renderComparar();
+}
+function renderCompareResult(){
+  const wrap = document.getElementById('compare-result');
+  const picked = obras.filter(o=>comparePicked.includes(o.id));
+  if(picked.length<2){ wrap.innerHTML=''; return; }
+
+  const datos = picked.map(o=>({o, r:computeResultados(o)}));
+  const validNums = arr => arr.filter(v=>v!==null && v!==undefined && isFinite(Number(v))).map(Number);
+  const avgRaw = key => {
+    const vals = validNums(datos.map(d=>d.r[key]));
+    return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+  };
+  const sumMoney = key => datos.reduce((a,d)=>a+(Number(d.r[key])||0),0);
+  const sums = {
+    ingresoTotal: sumMoney('ingresoTotal'),
+    comisionTotal: sumMoney('comisionTotal'),
+    costoTotal: sumMoney('costoTotal'),
+    ganancia: sumMoney('ganancia'),
+    capitalMaximo: sumMoney('capitalMaximo')
+  };
+  const avgs = {
+    roe: avgRaw('roe'),
+    tirMensual: avgRaw('tirMensual'),
+    tirAnual: avgRaw('tirAnual'),
+    payback: avgRaw('payback'),
+    capitalCosto: avgRaw('capitalCosto')
+  };
+
+  const rows = [
+    ['Ingreso total', 'ingresoTotal', d=>fmtMoney(d.r.ingresoTotal), true, fmtMoney(sums.ingresoTotal), 'Total'],
+    ['Comisión total', 'comisionTotal', d=>fmtMoney(d.r.comisionTotal), true, fmtMoney(sums.comisionTotal), 'Total'],
+    ['Costo total', 'costoTotal', d=>fmtMoney(d.r.costoTotal), true, fmtMoney(sums.costoTotal), 'Total'],
+    ['Ganancia', 'ganancia', d=>fmtMoney(d.r.ganancia), true, fmtMoney(sums.ganancia), 'Total'],
+    ['Capital máximo', 'capitalMaximo', d=>cellSpan(fmtMoney(d.r.capitalMaximo), bandCapitalInvertido(d.r.capitalMaximo).color), true, cellSpan(fmtMoney(sums.capitalMaximo), bandCapitalInvertido(sums.capitalMaximo).color), 'Total'],
+    ['ROE', 'roe', d=>cellSpan(fmtPct(d.r.roe), bandROE(d.r.roe).color), false, cellSpan(fmtPct(avgs.roe), bandROE(avgs.roe).color), 'Prom.'],
+    ['TIR mensual', 'tirMensual', d=>cellSpan(fmtPct(d.r.tirMensual), bandTirMensual(d.r.tirMensual).color), false, cellSpan(fmtPct(avgs.tirMensual), bandTirMensual(avgs.tirMensual).color), 'Prom.'],
+    ['TIR anual', 'tirAnual', d=>cellSpan(fmtPct(d.r.tirAnual), bandTirAnual(d.r.tirAnual).color), false, cellSpan(fmtPct(avgs.tirAnual), bandTirAnual(avgs.tirAnual).color), 'Prom.'],
+    ['Payback', 'payback', d=>cellSpan(d.r.payback==null?'—':d.r.payback+'m', bandPayback(d.r.payback).color), false, cellSpan(avgs.payback==null?'—':fmtNum(avgs.payback,1)+'m', bandPayback(avgs.payback).color), 'Prom.'],
+    ['Capital/Costo', 'capitalCosto', d=>cellSpan(fmtPct(d.r.capitalCosto), bandCapitalCosto(d.r.capitalCosto).color), false, cellSpan(fmtPct(avgs.capitalCosto), bandCapitalCosto(avgs.capitalCosto).color), 'Prom.'],
+  ];
+
+  wrap.innerHTML = `
+    <div class="compare-panel">
+      <h2>∑ Sumatoria de obras comparadas</h2>
+      <div class="compare-summary-grid">
+        <div class="compare-sum-card"><div class="lbl">Ingreso total</div><div class="val">${fmtMoney(sums.ingresoTotal)}</div></div>
+        <div class="compare-sum-card"><div class="lbl">Costo total</div><div class="val">${fmtMoney(sums.costoTotal)}</div></div>
+        <div class="compare-sum-card gain"><div class="lbl">Ganancia total</div><div class="val">${fmtMoney(sums.ganancia)}</div></div>
+        <div class="compare-sum-card cap"><div class="lbl">Capital máximo</div><div class="val">${fmtMoney(sums.capitalMaximo)}</div></div>
+      </div>
+      <div class="compare-summary-grid avg-grid">
+        <div class="compare-sum-card avg"><div class="lbl">ROE promedio</div><div class="val">${fmtPct(avgs.roe)}</div></div>
+        <div class="compare-sum-card avg"><div class="lbl">TIR anual prom.</div><div class="val">${fmtPct(avgs.tirAnual)}</div></div>
+        <div class="compare-sum-card avg"><div class="lbl">TIR mensual prom.</div><div class="val">${fmtPct(avgs.tirMensual)}</div></div>
+        <div class="compare-sum-card avg"><div class="lbl">Payback prom.</div><div class="val">${avgs.payback==null?'—':fmtNum(avgs.payback,1)+'m'}</div></div>
+      </div>
+      <div class="hint">Los importes se suman. Los porcentajes, ratios y payback se muestran como promedio del conjunto comparado.</div>
+    </div>
+
+    <div class="compare-chart-card">
+      <div class="compare-chart-head">
+        <div>
+          <h2>📊 Gráfico comparativo</h2>
+          <div class="compare-chart-sub">Elegí el indicador para ver cada obra lado a lado.</div>
+        </div>
+      </div>
+      <div class="compare-indicator-pills">
+        ${Object.keys(INDICADORES_CHART).map(k=>`
+          <div class="pick-chip ${chartIndicador===k?'active':''}" onclick="pickChartIndicador('${k}')">${k}</div>
+        `).join('')}
+      </div>
+      <div class="chart-shell"><canvas id="compare-chart" height="260" style="height:260px"></canvas></div>
+    </div>
+
+    <div class="compare-table-premium compare-table">
+      <h2>📋 Cuadro comparativo</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Indicador</th>${datos.map(d=>`<th>${d.o.nombre||'—'}</th>`).join('')}<th class="sum-col">Total / Prom.</th></tr></thead>
+          <tbody>
+            ${rows.map(([label,key,fn,isMoney,total,totalLabel])=>`<tr class="${isMoney?'money-row':'avg-row'}"><td>${label}</td>${datos.map(d=>`<td>${fn(d)}</td>`).join('')}<td class="sum-col"><span class="sum-mini">${totalLabel}</span>${total}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  renderCompareChart(datos);
+}
+
+/* ============================ MODAL: CÓMO LEERLO ============================ */
+function openModal(which){
+  const body = document.getElementById('modal-body');
+  if(which==='legend'){
+    body.innerHTML = `
+      <button class="close" onclick="closeModal()">✕</button>
+      <h3>Cómo leerlo</h3>
+      <div class="leg-block">
+        <h4>Capital invertido</h4>
+        <div class="leg-item"><span>&lt; 80k</span><span>Cómodo</span></div>
+        <div class="leg-item"><span>80k–120k</span><span>Cuidar</span></div>
+        <div class="leg-item"><span>&gt; 120k</span><span>Limitar</span></div>
+      </div>
+      <div class="leg-block">
+        <h4>ROE</h4>
+        <div class="leg-item"><span>&lt; 40%</span><span>❌ Bajo</span></div>
+        <div class="leg-item"><span>40–70%</span><span>⚠️ Aceptable</span></div>
+        <div class="leg-item"><span>70–120%</span><span>✔️ Bueno</span></div>
+        <div class="leg-item"><span>&gt; 120%</span><span>🚀 Excelente</span></div>
+      </div>
+      <div class="leg-block">
+        <h4>TIR anual</h4>
+        <div class="leg-item"><span>&lt; 60%</span><span>❌ Mala</span></div>
+        <div class="leg-item"><span>60–100%</span><span>⚠️ Floja</span></div>
+        <div class="leg-item"><span>100–200%</span><span>✔️ Buena</span></div>
+        <div class="leg-item"><span>&gt; 200%</span><span>🚀 Excelente</span></div>
+      </div>
+      <div class="leg-block">
+        <h4>TIR mensual</h4>
+        <div class="leg-item"><span>&lt; 4%</span><span>Mala</span></div>
+        <div class="leg-item"><span>4–6%</span><span>Floja</span></div>
+        <div class="leg-item"><span>6–10%</span><span>Buena</span></div>
+        <div class="leg-item"><span>&gt; 10%</span><span>Excelente</span></div>
+      </div>
+      <div class="leg-block">
+        <h4>Payback</h4>
+        <div class="leg-item"><span>&gt; 10 meses</span><span>❌ Lento</span></div>
+        <div class="leg-item"><span>8–10</span><span>⚠️ Revisar</span></div>
+        <div class="leg-item"><span>6–8</span><span>✔️ Bueno</span></div>
+        <div class="leg-item"><span>&lt; 6</span><span>🔥 Excelente</span></div>
+      </div>
+      <div class="leg-block">
+        <h4>Capital / Costo</h4>
+        <div class="leg-item"><span>&gt; 70%</span><span>🔴 Pesado</span></div>
+        <div class="leg-item"><span>50–70%</span><span>🟡 Evaluar</span></div>
+        <div class="leg-item"><span>30–50%</span><span>✔️ Bueno</span></div>
+        <div class="leg-item"><span>&lt; 30%</span><span>🔥 Liviano</span></div>
+      </div>
+    `;
+  }
+  document.getElementById('modal-overlay').classList.add('show');
+}
+function closeModal(){ document.getElementById('modal-overlay').classList.remove('show'); }
+
+/* ============================ INIT ============================ */
+renderCostos();
+renderUnidad(0);
+renderUnidad(1);
+recalc();
+</script>
+
+<script id="cq-redisenio-visual-real-js">
+(function(){
+  function enhance(){
+    document.querySelectorAll('.card h2').forEach(function(h){
+      var t=h.textContent.trim();
+      if(h.dataset.icoDone) return;
+      if(/Datos del proyecto/i.test(t)) h.insertAdjacentHTML('afterbegin','<span style="font-size:18px">🏷️</span>');
+      else if(/Costo por mes/i.test(t)) h.insertAdjacentHTML('afterbegin','<span style="font-size:18px">📅</span>');
+      else if(/Unidad 1/i.test(t)) h.insertAdjacentHTML('afterbegin','<span style="font-size:18px">🏠</span>');
+      else if(/Unidad 2/i.test(t)) h.insertAdjacentHTML('afterbegin','<span style="font-size:18px">🏠</span>');
+      else if(/Resultados/i.test(t)) h.insertAdjacentHTML('afterbegin','<span style="font-size:18px">📈</span>');
+      else if(/Elegí/i.test(t)) h.insertAdjacentHTML('afterbegin','<span style="font-size:18px">🎯</span>');
+      else if(/Comparación/i.test(t)) h.insertAdjacentHTML('afterbegin','<span style="font-size:18px">📋</span>');
+      else if(/Gráfico/i.test(t)) h.insertAdjacentHTML('afterbegin','<span style="font-size:18px">📊</span>');
+      h.dataset.icoDone='1';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', enhance);
+  document.addEventListener('click', function(){setTimeout(enhance,80)});
+  setTimeout(enhance,200);
+})();
+</script>
+
+
+<script id="cq-online-status-js">
+(function(){
+  function actualizarConexion(){
+    document.querySelectorAll('.cq-online-status').forEach(function(el){
+      const online=navigator.onLine;
+      el.classList.toggle('offline',!online);
+      const txt=el.querySelector('.cq-online-text');
+      if(txt) txt.textContent=online?'Con conexión':'Sin conexión';
+      el.title=online?'Dispositivo conectado a internet':'Dispositivo sin conexión a internet';
+    });
+  }
+  window.addEventListener('online',actualizarConexion);
+  window.addEventListener('offline',actualizarConexion);
+  document.addEventListener('DOMContentLoaded',actualizarConexion);
+  actualizarConexion();
+})();
+</script>
+
+</body>
+</html>
