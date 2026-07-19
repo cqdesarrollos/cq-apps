@@ -610,6 +610,16 @@ button,
 }
 </style>
 
+
+<style id="cq-backup-buttons-style">
+#btnExportBackup::before{content:"💾 ";font-size:13px}
+#btnImportBackup::before{content:"📂 ";font-size:13px}
+#btnExportBackup,#btnImportBackup{
+  min-height:44px !important;
+  background:linear-gradient(180deg,#FFFFFF,#F5F7F3) !important;
+}
+</style>
+
 </head>
 <body>
 <div id="app">
@@ -683,6 +693,9 @@ button,
 
       <div class="util-row">
         <button class="util-btn primary" id="btnWhatsapp">📲 Enviar PDF por WhatsApp</button>
+        <button class="util-btn" id="btnExportBackup">⬇️ Exportar datos</button>
+        <button class="util-btn" id="btnImportBackup">⬆️ Importar datos</button>
+        <input type="file" id="backupFileInput" accept=".json,application/json">
       </div>
     </section>
 
@@ -2163,29 +2176,64 @@ async function enviarWhatsapp(){
   setTimeout(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg+' — PDF generado para adjuntar.'),'_blank'),500);
 }
 function exportBackup(){
-  const blob = new Blob([JSON.stringify({data:state.data, obras:state.obras, casas:state.casas, obraEstados:state.obraEstados},null,2)], {type:'application/json'});
+  const backup = {
+    app:'CQ Financieros',
+    version:1,
+    exportedAt:new Date().toISOString(),
+    storageKey:STORAGE_KEY,
+    year:state.year,
+    month:state.month,
+    data:state.data,
+    obras:state.obras,
+    casas:state.casas,
+    obraEstados:state.obraEstados
+  };
+  const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href=url; a.download='indicadores_cq_backup_'+state.year+'.json';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const fecha = new Date().toISOString().slice(0,10);
+  a.href=url;
+  a.download='Financieros_CQ_backup_'+fecha+'.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function importBackup(file){
+  if(!file) return;
   const reader = new FileReader();
   reader.onload = (e)=>{
     try{
       const parsed = JSON.parse(e.target.result);
-      if(parsed && parsed.data){
-        state.data = parsed.data;
-        state.obras = parsed.obras || state.obras;
-        state.casas = parsed.casas || state.casas;
-        state.obraEstados = parsed.obraEstados || state.obraEstados || {};
-        state.obraEstados = parsed.obraEstados || state.obraEstados || {};
-        saveState(); renderAll();
-        alert('Backup importado ✅');
-      } else alert('Archivo inválido.');
-    }catch(err){ alert('No se pudo leer el archivo: '+err.message); }
+      const payload = parsed && parsed.state ? parsed.state : parsed;
+      if(!payload || typeof payload!=='object' || !payload.data){
+        alert('El archivo no corresponde a un backup de Financieros.');
+        return;
+      }
+      if(!confirm('¿Importar este backup? Los datos actuales de Financieros serán reemplazados.')) return;
+
+      state.data = payload.data || {};
+      state.obras = Array.isArray(payload.obras) ? payload.obras : [];
+      state.casas = payload.casas || {};
+      state.obraEstados = payload.obraEstados || {};
+      state.year = String(payload.year || state.year || new Date().getFullYear());
+      state.month = Number(payload.month || state.month || (new Date().getMonth()+1));
+
+      repairStateConsistency();
+      migrateObraEstadosFromCasaHistory();
+      repairJulioErroresPuntuales();
+      repair25100MesesVenta();
+      saveState();
+      renderAll();
+      alert('Datos importados correctamente ✅');
+    }catch(err){
+      alert('No se pudo importar el archivo. Verificá que sea un JSON exportado desde Financieros.');
+    }finally{
+      const input=document.getElementById('backupFileInput');
+      if(input) input.value='';
+    }
   };
+  reader.onerror = ()=>alert('No se pudo leer el archivo seleccionado.');
   reader.readAsText(file);
 }
 function borrarMes(){
@@ -2196,6 +2244,15 @@ function borrarMes(){
 }
 function bindUtils(){
   document.getElementById('btnWhatsapp').onclick = enviarWhatsapp;
+
+  const exportBtn = document.getElementById('btnExportBackup');
+  const importBtn = document.getElementById('btnImportBackup');
+  const fileInput = document.getElementById('backupFileInput');
+
+  if(exportBtn) exportBtn.onclick = exportBackup;
+  if(importBtn && fileInput) importBtn.onclick = ()=>fileInput.click();
+  if(fileInput) fileInput.onchange = (e)=>importBackup(e.target.files && e.target.files[0]);
+
   document.getElementById('btnAddObra').onclick = ()=>{
     const code = prompt('Código de la obra (ej. 4/100):');
     if(code && code.trim()){
