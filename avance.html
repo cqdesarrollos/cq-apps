@@ -1563,6 +1563,69 @@ button[onclick="createRestorePoint()"]{display:none!important}
 }
 </style>
 
+
+<style id="cq-pendiente-certificar-color">
+/* Tareas con avance nuevo todavía no incluido en un certificado */
+.item-row.pending-cert{
+  background:linear-gradient(90deg,#FFF4D8 0%,#FFF9EC 100%)!important;
+  border-left:4px solid #E59A19!important;
+  box-shadow:inset 0 0 0 1px rgba(229,154,25,.18)!important;
+}
+.item-row.pending-cert .item-desc{
+  color:#7A4A00!important;
+}
+.item-row.pending-cert .item-check{
+  border-color:#E59A19!important;
+  background:#FFF1C8!important;
+  color:#A96500!important;
+}
+.item-row.pending-cert .item-devengado{
+  color:#B46A00!important;
+}
+
+/* Semana/rubro que contiene al menos una tarea pendiente de certificar */
+.semana-block.pending-cert-week{
+  border:2px solid #E59A19!important;
+  box-shadow:0 3px 12px rgba(229,154,25,.22)!important;
+}
+.semana-block.pending-cert-week .semana-header{
+  background:linear-gradient(90deg,#FFE7AE 0%,#FFF5D8 100%)!important;
+}
+.semana-block.pending-cert-week .semana-num,
+.semana-block.pending-cert-week .semana-etapa{
+  color:#7A4A00!important;
+}
+.week-pending-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:3px 8px;
+  border-radius:999px;
+  background:#E59A19;
+  color:#fff;
+  font-size:8.5px;
+  font-weight:900;
+  letter-spacing:.03em;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+
+.pending-cert-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  margin-left:7px;
+  padding:2px 7px;
+  border-radius:999px;
+  background:#E59A19;
+  color:#fff;
+  font-size:8.5px;
+  font-weight:900;
+  letter-spacing:.03em;
+  vertical-align:1px;
+  white-space:nowrap;
+}
+</style>
 </head>
 <body>
 <div id="cert-sticky-real" class="cert-sticky-real">
@@ -2503,7 +2566,7 @@ const SEMANAS = [
      {desc:"Yeso unidad A", avance:0, monto:500000},
      {desc:"Pared divisorias / Colocacion caños pérgola", avance:0, monto:500000},
      {desc:"Revoque y fretachado", avance:0, monto:500000},
-     {desc:"Banquinas interiores", avance:0, monto:500000},
+     {desc:"Banquinas interiores", avance:0, monto:416000},
    ]},
   {num:19, etapa:"Yeso / Frente / Ingreso autos", pagoMax:2000000, pctObra:0.05263,
    items:[
@@ -2551,6 +2614,19 @@ function normalizeState(s, meta={}) {
   if(!s.pagosFuera) s.pagosFuera = [];
   if(!s.constructor) s.constructor = meta.constructor || 'Constructor';
   if(!s.obraNum) s.obraNum = meta.obraNum || '';
+
+  // Corrección puntual solicitada para las dos obras de Nelson:
+  // Banquinas interiores (Semana 18, ítem 4) debe estar al 100%
+  // y sumar al Devengado avances. No modifica certificados ni pagos en Finanzas.
+  const obraRef = String(s.obraNum || meta.obraNum || meta.label || '')
+    .toLowerCase()
+    .replace(/lote|l|mz|manzana|\s/g,'')
+    .replace(/-/g,'/');
+  if(obraRef.includes('12/93') || obraRef.includes('13/93')){
+    s.items['18-3'] = 1;
+    s._banquinasInteriores100 = true;
+  }
+
   if(!s.montos) s.montos = {};
   if(!s.customTasks) s.customTasks = {};
   if(!s.taskOverrides) s.taskOverrides = {};
@@ -2580,6 +2656,38 @@ obrasConfig.forEach((o,idx)=>{
   estadosObras[o.id] = normalizeState(saved, o);
 });
 let state = estadosObras[curObraId];
+async function asegurarBanquinasInterioresNelson(){
+  const afectadas = obrasConfig.filter(o=>{
+    const ref=String(o.obraNum||o.label||'').toLowerCase()
+      .replace(/lote|l|mz|manzana|\s/g,'')
+      .replace(/-/g,'/');
+    return ref.includes('12/93') || ref.includes('13/93');
+  });
+
+  let huboCambio=false;
+  for(const obra of afectadas){
+    const st=estadosObras[obra.id] || normalizeState(null,obra);
+    if(Number(st.items?.['18-3']||0)!==1){
+      if(!st.items)st.items={};
+      st.items['18-3']=1;
+      st._banquinasInteriores100=true;
+      estadosObras[obra.id]=st;
+      localStorage.setItem('mano_obra_'+obra.id,JSON.stringify(st));
+      huboCambio=true;
+      if(window._dbReady){
+        try{
+          await window._setDoc(window._doc(window._db,'obras',obra.id),JSON.parse(JSON.stringify(st)));
+        }catch(e){ console.warn('No se pudo guardar Banquinas interiores en',obra.label,e); }
+      }
+    }
+  }
+
+  if(huboCambio && estadosObras[curObraId]){
+    state=estadosObras[curObraId];
+  }
+  return huboCambio;
+}
+
 function setFirebaseStatus(text, cls='local'){
   const el = document.getElementById('firebase-status');
   if(!el) return;
@@ -2824,9 +2932,9 @@ function constructorStats(cid){
   obs.forEach(o=>{
     const st=estadosObras[o.id] || normalizeState(null,o);
     const oldState=state; state=st;
-    const t=calcTotal(); const pf=calcPagosFuera();
+    const t=calcTotal(); const pf=calcPagosFuera(); const cert=sumCertificados();
     pctSum += t.pctTotal || 0;
-    saldoSum += (st.acuerdo||0) - (t.totalDev + pf.neto);
+    saldoSum += (st.acuerdo||0) - (cert + pf.neto);
     state=oldState;
   });
   return {count:obs.length, avg:obs.length ? pctSum/obs.length : 0, saldo:saldoSum};
@@ -2834,8 +2942,8 @@ function constructorStats(cid){
 function obraStats(o){
   const st=estadosObras[o.id] || normalizeState(null,o);
   const oldState=state; state=st;
-  const t=calcTotal(); const pf=calcPagosFuera();
-  const saldo=(st.acuerdo||0) - (t.totalDev + pf.neto);
+  const t=calcTotal(); const pf=calcPagosFuera(); const cert=sumCertificados();
+  const saldo=(st.acuerdo||0) - (cert + pf.neto);
   state=oldState;
   return {pct:t.pctTotal||0, saldo};
 }
@@ -2941,7 +3049,6 @@ function switchObra(id){
   showObraView();
   renderKPIs();
   renderSemanas();
-  if(document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
 }
 function getAv(snum,idx){ return state.items[`${snum}-${idx}`] ?? 0; }
 function setAv(snum,idx,val){
@@ -3179,6 +3286,11 @@ function renderKPIs(){
   const pf = calcPagosFuera();
   const certData = calcCertificacion();
   const cert = sumCertificados();
+
+  // Criterio único de saldo:
+  // acuerdo - certificados emitidos - pagos fuera de avance.
+  // Así una tarea incluida en un certificado (aunque su avance luego cambie)
+  // continúa computándose como pagada.
   const totalPagado = cert + pf.neto;
   const semComp = getSemanas().filter(s=>calcSemana(s).pctSem>=0.99).length;
   const semParcial = getSemanas().filter(s=>{const p=calcSemana(s).pctSem;return p>0&&p<0.99;}).length;
@@ -3207,15 +3319,23 @@ function semStatus(pctSem){
   return             {cls:'',            badgeCls:'badge-pendiente',label:'Pendiente'};
 }
 
+function semanaTienePendiente(snum){
+  return getItems(snum).some(function(it,i){
+    return getAv(snum,i) > getLockedAv(snum,i) + 0.000001;
+  });
+}
+
 function renderSemanas(){
   const cont=document.getElementById('semanas-container');
   cont.innerHTML=getSemanas().map(s=>{
     const {totalMonto,devengado,pctSem}=calcSemana(s);
     const st=semStatus(pctSem);
-    return `<div class="semana-block ${st.cls} ${grpClass(s.num)}" id="sb-${s.num}">
+    const hasPendingCert=semanaTienePendiente(s.num);
+    return `<div class="semana-block ${st.cls} ${grpClass(s.num)} ${hasPendingCert?'pending-cert-week':''}" id="sb-${s.num}">
       <div class="semana-header" onclick="toggleSemana(${s.num})">
         <span class="semana-num">S${s.num}</span>
         <span class="semana-etapa">${s.etapa}</span>
+        ${hasPendingCert?'<span class="week-pending-badge">⏳ Para certificar</span>':''}
         <span class="semana-badge ${st.badgeCls}">${st.label}</span>
         <span class="semana-monto">${fmt(devengado)} / ${fmt(totalMonto)}</span>
         <button class="task-mini" onclick="event.stopPropagation();editSemana(${s.num})">✏ Rubro</button>
@@ -3228,10 +3348,12 @@ function renderSemanas(){
       <div class="semana-items" id="si-${s.num}">
         ${getItems(s.num).map((it,i)=>{
           const av=getAv(s.num,i); const done=av>=1;
-          return `<div class="item-row">
+          const locked=getLockedAv(s.num,i);
+          const pendingCert=av>locked+0.000001;
+          return `<div class="item-row ${pendingCert?'pending-cert':''}">
             <div class="item-row-top">
               <div class="item-check ${done?'on':av>0?'partial':''}" onclick="toggleCheck(${s.num},${i})">${done?'✓':av>0?'':''}</div>
-              <span class="item-desc ${done?'done':''}">${it.desc}${!it.base && it.comentario ? `<small style="display:block;margin-top:3px;font-size:10px;font-weight:500;color:#7B887E;line-height:1.25">💬 ${escHtml(it.comentario)}</small>` : ''}</span>
+              <span class="item-desc ${done?'done':''}">${it.desc}${pendingCert?'<span class="pending-cert-badge">⏳ Pendiente</span>':''}${!it.base && it.comentario ? `<small style="display:block;margin-top:3px;font-size:10px;font-weight:500;color:#7B887E;line-height:1.25">💬 ${escHtml(it.comentario)}</small>` : ''}</span>
               <div class="task-actions"><button class="task-mini" onclick="event.stopPropagation();editTarea(${s.num},${i})">✏</button><button class="task-mini del" onclick="event.stopPropagation();deleteTarea(${s.num},${i})">✕</button></div>
             </div>
             <div class="item-row-bottom">
@@ -3329,15 +3451,29 @@ function refreshSemana(snum){
   const s=getSemanaByNum(snum);
   const {totalMonto,devengado,pctSem}=calcSemana(s);
   const st=semStatus(pctSem);
+  const hasPendingCert=semanaTienePendiente(snum);
   const block=document.getElementById('sb-'+snum);
-  block.className='semana-block '+st.cls+' '+grpClass(s.num);
+  block.className='semana-block '+st.cls+' '+grpClass(s.num)+(hasPendingCert?' pending-cert-week':'');
   block.querySelector('.semana-badge').className='semana-badge '+st.badgeCls;
   block.querySelector('.semana-badge').textContent=st.label;
   block.querySelector('.semana-monto').textContent=fmt(devengado)+' / '+fmt(totalMonto);
+
+  const header=block.querySelector('.semana-header');
+  let pendingBadge=header.querySelector('.week-pending-badge');
+  if(hasPendingCert && !pendingBadge){
+    pendingBadge=document.createElement('span');
+    pendingBadge.className='week-pending-badge';
+    pendingBadge.textContent='⏳ Para certificar';
+    header.insertBefore(pendingBadge, header.querySelector('.semana-badge'));
+  }else if(!hasPendingCert && pendingBadge){
+    pendingBadge.remove();
+  }
+
   const fill=block.querySelector('.semana-progfill');
   fill.style.width=(pctSem*100).toFixed(0)+'%';
   fill.className='semana-progfill'+(pctSem>=0.99?' completa':'');
 }
+
 function refreshAll(){
   renderKPIs();
   getSemanas().forEach(s=>refreshSemana(s.num));
@@ -3346,10 +3482,12 @@ function refreshAll(){
     const s=getSemanaByNum(snum);
     el.innerHTML=getItems(snum).map((it,i)=>{
       const av=getAv(snum,i); const done=av>=1;
-      return `<div class="item-row">
+      const locked=getLockedAv(snum,i);
+      const pendingCert=av>locked+0.000001;
+      return `<div class="item-row ${pendingCert?'pending-cert':''}">
         <div class="item-row-top">
           <div class="item-check ${done?'on':av>0?'partial':''}" onclick="toggleCheck(${snum},${i})">${done?'✓':av>0?'':''}</div>
-          <span class="item-desc ${done?'done':''}">${it.desc}${!it.base && it.comentario ? `<small style="display:block;margin-top:3px;font-size:10px;font-weight:500;color:#7B887E;line-height:1.25">💬 ${escHtml(it.comentario)}</small>` : ''}</span>
+          <span class="item-desc ${done?'done':''}">${it.desc}${pendingCert?'<span class="pending-cert-badge">⏳ Pendiente</span>':''}${!it.base && it.comentario ? `<small style="display:block;margin-top:3px;font-size:10px;font-weight:500;color:#7B887E;line-height:1.25">💬 ${escHtml(it.comentario)}</small>` : ''}</span>
           <div class="task-actions"><button class="task-mini" onclick="event.stopPropagation();editTarea(${snum},${i})">✏</button><button class="task-mini del" onclick="event.stopPropagation();deleteTarea(${snum},${i})">✕</button></div>
         </div>
         <div class="item-row-bottom">
@@ -3560,10 +3698,11 @@ function renderFinanzas(){
   renderCardCQ();
   const {totalDev} = calcTotal();
   const pf = calcPagosFuera();
-  const totalPagado = totalDev + pf.neto;
+  const cert = sumCertificados();
+  const totalPagado = cert + pf.neto;
   const saldo = state.acuerdo - totalPagado;
 
-  document.getElementById('f-pagado-av').textContent = fmt(totalDev);
+  document.getElementById('f-pagado-av').textContent = fmt(cert);
   document.getElementById('f-fuera-af').textContent  = fmt(pf.afavor);
   document.getElementById('f-fuera-ec').textContent  = fmt(pf.encontra);
   document.getElementById('f-total-pag').textContent = fmt(totalPagado);
@@ -3622,6 +3761,7 @@ function renderFinanzas(){
 // ─── NAVEGACIÓN INICIO / CONSTRUCTORES ─────────────────────────────────
 let currentScreen = 'home';
 let currentConstructorId = null;
+let currentObraTab = 'avances'; // se conserva al cambiar de obra dentro del mismo constructor
 let appInitialized = false;
 function hideMainViews(){
   ['view-home','view-constructor','view-avances','view-finanzas','view-terminadas'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -3631,6 +3771,7 @@ function setHeaderForHome(){
   document.title='CQ Desarrollos — Mano de obra';
 }
 function showHome(){
+  currentObraTab='avances';
   currentScreen='home'; currentConstructorId=null;
   const _hb=document.getElementById('header-home-btn'); if(_hb) _hb.style.display='none';
   hideMainViews();
@@ -3666,6 +3807,7 @@ function renderHome(){
   }).join('') || '<div class="empty">Sin constructores cargados.</div>';
 }
 function openConstructor(cid){
+  currentObraTab='avances';
   currentScreen='constructor'; currentConstructorId=cid;
   const _hb=document.getElementById('header-home-btn'); if(_hb) _hb.style.display='inline-flex';
   hideMainViews();
@@ -3771,19 +3913,37 @@ function renderTerminadas(){
 }
 function showObraView(){
   currentScreen='obra';
+  asegurarBanquinasInterioresNelson().then(cambio=>{
+    if(cambio){
+      renderKPIs();
+      renderSemanas();
+      if(document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
+    }
+  });
   const _hb=document.getElementById('header-home-btn'); if(_hb) _hb.style.display='inline-flex';
   if(!currentConstructorId && currentObra()?.constructorId) currentConstructorId = currentObra().constructorId;
   hideMainViews();
-  document.getElementById('view-avances').style.display='';
-  document.getElementById('view-finanzas').style.display='none';
+
+  const tab = ['avances','finanzas','reporte'].includes(currentObraTab) ? currentObraTab : 'avances';
+
+  document.getElementById('view-avances').style.display = tab==='avances' ? '' : 'none';
+  document.getElementById('view-finanzas').style.display = tab==='finanzas' ? '' : 'none';
+  const vr=document.getElementById('view-reporte'); if(vr) vr.style.display = tab==='reporte' ? 'block' : 'none';
+
   const sw=document.getElementById('obra-switch'); if(sw) sw.classList.remove('home-hidden');
   document.getElementById('tab-avances')?.style.setProperty('display','');
   document.getElementById('tab-finanzas')?.style.setProperty('display','');
   document.getElementById('tab-reporte')?.style.setProperty('display','');
   renderObraSwitch();
-  document.getElementById('tab-avances').className='tab-btn active';
-  document.getElementById('tab-finanzas').className='tab-btn';
+
+  document.getElementById('tab-avances').className='tab-btn'+(tab==='avances'?' active':'');
+  document.getElementById('tab-finanzas').className='tab-btn'+(tab==='finanzas'?' active':'');
+  const tr=document.getElementById('tab-reporte'); if(tr) tr.className='tab-btn'+(tab==='reporte'?' active':'');
+
+  if(tab==='finanzas') renderFinanzas();
+  if(tab==='reporte') renderReporteAvance();
 }
+
 function renderConstructorSelect(selectedId){
   const sel=document.getElementById('eo-constructor-id'); if(!sel) return;
   normalizeConstructoresConfig();
@@ -3843,7 +4003,8 @@ function reportCalcForObra(o){
   state=st;
   const total=calcTotal();
   const pf=calcPagosFuera();
-  const totalPagado=total.totalDev + pf.neto;
+  const cert=sumCertificados();
+  const totalPagado=cert + pf.neto;
   const saldo=(st.acuerdo||0)-totalPagado;
   const semanas=getSemanas();
   const completas=semanas.filter(s=>calcSemana(s).pctSem>=0.99).length;
@@ -3965,7 +4126,7 @@ function calcReporteConstructor(){
   // neto positivo = pago en contra del constructor; neto negativo = a favor del constructor.
   const pf = (typeof calcPagosFuera==='function') ? calcPagosFuera() : {afavor:0,encontra:0,neto:0};
   const acuerdo = (state && typeof state.acuerdo==='number') ? state.acuerdo : contrato;
-  const totalPagadoFinanzas = total + pf.neto;
+  const totalPagadoFinanzas = certificado + pf.neto;
   const saldoConstructor = acuerdo - totalPagadoFinanzas;
 
   return {obra, constructor, rows, total, certificado, pendiente, pendienteHasta23, contrato, semanaLimite, pf, acuerdo, totalPagadoFinanzas, saldoConstructor};
@@ -4230,6 +4391,7 @@ async function compartirReporteConstructorPDF(){
 
 
 function showTab(tab){
+  currentObraTab = ['avances','finanzas','reporte'].includes(tab) ? tab : 'avances';
   if(currentScreen!=='obra') switchObra(curObraId);
   currentScreen='obra';
   const sw=document.getElementById('obra-switch'); if(sw) sw.classList.remove('home-hidden');

@@ -1369,6 +1369,70 @@ button[onclick*="crearBackupManual"]{
 }
 </style>
 
+
+
+<style id="cq-carga-masiva-materiales">
+.bulk-mat-modal{max-width:760px!important}
+.bulk-mat-grid{
+  display:grid;
+  grid-template-columns:.78fr 1.35fr .82fr;
+  gap:10px;
+}
+.bulk-mat-col{
+  border:1px solid rgba(28,61,53,.11);
+  border-radius:14px;
+  padding:10px;
+  background:#FBFCFA;
+}
+.bulk-mat-col label{
+  display:block;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--green3);
+  margin-bottom:7px;
+}
+.bulk-mat-col textarea{
+  width:100%;
+  resize:vertical;
+  min-height:210px;
+  background:#fff;
+  border:1px solid var(--sand3);
+  border-radius:11px;
+  padding:11px;
+  font-family:var(--mono);
+  font-size:11px;
+  line-height:1.55;
+  color:var(--green);
+  outline:none;
+}
+.bulk-mat-col textarea:focus{
+  border-color:rgba(46,125,94,.55);
+  box-shadow:0 0 0 4px rgba(46,125,94,.10);
+}
+@media(max-width:620px){
+  .bulk-mat-modal{max-width:96vw!important}
+  .bulk-mat-grid{
+    grid-template-columns:.82fr 1.3fr .82fr;
+    gap:6px;
+  }
+  .bulk-mat-col{
+    padding:7px;
+    border-radius:11px;
+  }
+  .bulk-mat-col label{
+    font-size:8px;
+    min-height:20px;
+  }
+  .bulk-mat-col textarea{
+    min-height:230px;
+    padding:8px;
+    font-size:10px;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -1441,6 +1505,49 @@ button[onclick*="crearBackupManual"]{
   </div>
 </div>
 
+
+
+
+<div class="modal-bg" id="modal-carga-masiva-mat">
+  <div class="modal bulk-mat-modal">
+    <div class="modal-hd">
+      <span class="modal-ttl">Carga masiva de materiales</span>
+      <button class="modal-x" onclick="closeModal('modal-carga-masiva-mat')">×</button>
+    </div>
+    <div class="mbody">
+      <div style="font-size:11px;color:#7A9E82;line-height:1.45;margin-bottom:12px">
+        Pegá cada dato en su columna y en el mismo orden: línea 1 con línea 1, línea 2 con línea 2, etc.
+        El precio acordado se calcula automáticamente dividiendo el precio unitario por 1,21.
+      </div>
+
+      <div class="bulk-mat-grid">
+        <div class="bulk-mat-col">
+          <label>Códigos</label>
+          <textarea id="bulk-mat-codigos" rows="10" placeholder="2303583104&#10;2303583105&#10;2303583106"></textarea>
+        </div>
+        <div class="bulk-mat-col">
+          <label>Artículos</label>
+          <textarea id="bulk-mat-articulos" rows="10" placeholder="Ladrillo cerámico 18&#10;Ladrillo cerámico 12&#10;Cemento"></textarea>
+        </div>
+        <div class="bulk-mat-col">
+          <label>Precio unitario</label>
+          <textarea id="bulk-mat-precios" rows="10" inputmode="decimal" placeholder="1250&#10;980&#10;8500"></textarea>
+        </div>
+      </div>
+
+      <div class="fld" style="margin-top:12px">
+        <label>Categoría compartida</label>
+        <select id="bulk-mat-cat"></select>
+      </div>
+
+      <div id="bulk-mat-preview" style="font-size:11px;color:#7A9E82;font-weight:700"></div>
+    </div>
+    <div class="mfooter" style="justify-content:flex-end">
+      <button class="btn btn-s btn-sm" onclick="closeModal('modal-carga-masiva-mat')">Cancelar</button>
+      <button class="btn btn-p btn-sm" onclick="guardarCargaMasivaMateriales()">Agregar materiales</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-bg" id="modal-categorias">
   <div class="modal">
@@ -1586,6 +1693,7 @@ button[onclick*="crearBackupManual"]{
       </div>
       <button class="btn btn-p btn-sm" onclick="openPago()">+ Pago</button>
       <button class="btn btn-s btn-sm" onclick="openNuevoMaterial()">+ Material</button>
+      <button class="btn btn-s btn-sm" onclick="openCargaMasivaMateriales()">Carga masiva</button>
       <button class="btn btn-s btn-sm" onclick="openCategoriasMateriales()">Categorías</button>
     </div>
     <div id="materiales-content"></div>
@@ -2458,6 +2566,135 @@ function renderMateriales(){
   renderPagosList();
 }
 
+
+function lastMatCatStorageKey(){
+  return 'cq_acopio_last_mat_cat_'+(curAcopioId||'general');
+}
+function getLastMatCat(){
+  var saved='';
+  try{saved=localStorage.getItem(lastMatCatStorageKey())||'';}catch(e){}
+  var cats=getCats();
+  return cats.some(function(c){return catKey(c)===catKey(saved);})
+    ? cats.find(function(c){return catKey(c)===catKey(saved);})
+    : (cats[0]||'');
+}
+function setLastMatCat(cat){
+  if(!cat)return;
+  try{localStorage.setItem(lastMatCatStorageKey(),cat);}catch(e){}
+}
+
+function openCargaMasivaMateriales(){
+  var cat=getLastMatCat();
+  var sel=document.getElementById('bulk-mat-cat');
+  sel.innerHTML=renderMatCatOptions(cat);
+  if(cat)sel.value=cat;
+  document.getElementById('bulk-mat-codigos').value='';
+  document.getElementById('bulk-mat-articulos').value='';
+  document.getElementById('bulk-mat-precios').value='';
+  document.getElementById('bulk-mat-preview').textContent='';
+  openModal('modal-carga-masiva-mat');
+  setTimeout(function(){document.getElementById('bulk-mat-codigos').focus();},100);
+}
+
+function parsePrecioMasivo(value){
+  var s=String(value||'').trim().replace(/\s/g,'');
+  if(!s)return 0;
+  s=s.replace(/\$/g,'');
+  if(s.indexOf(',')>=0 && s.indexOf('.')>=0){
+    if(s.lastIndexOf(',')>s.lastIndexOf('.')){
+      s=s.replace(/\./g,'').replace(',','.');
+    }else{
+      s=s.replace(/,/g,'');
+    }
+  }else if(s.indexOf(',')>=0){
+    var parts=s.split(',');
+    if(parts.length===2 && parts[1].length<=2)s=parts[0].replace(/\./g,'')+'.'+parts[1];
+    else s=s.replace(/,/g,'');
+  }
+  return parseFloat(s)||0;
+}
+
+function guardarCargaMasivaMateriales(){
+  var cat=document.getElementById('bulk-mat-cat').value;
+  var codigos=(document.getElementById('bulk-mat-codigos').value||'').split(/\r?\n/);
+  var articulos=(document.getElementById('bulk-mat-articulos').value||'').split(/\r?\n/);
+  var precios=(document.getElementById('bulk-mat-precios').value||'').split(/\r?\n/);
+
+  if(!cat){alert('Elegí una categoría.');return;}
+
+  var maxLen=Math.max(codigos.length,articulos.length,precios.length);
+  var parsed=[];
+  var invalidas=[];
+
+  for(var i=0;i<maxLen;i++){
+    var cod=String(codigos[i]||'').trim();
+    var nom=String(articulos[i]||'').trim();
+    var pu=parsePrecioMasivo(precios[i]||'');
+
+    var emptyRow=!cod && !nom && !String(precios[i]||'').trim();
+    if(emptyRow)continue;
+
+    if(!nom || pu<=0){
+      invalidas.push(i+1);
+      continue;
+    }
+
+    parsed.push({
+      cod:cod,
+      nom:nom,
+      precioUnit:pu,
+      precioAcord:pu/1.21,
+      unidad:'c/u'
+    });
+  }
+
+  if(!parsed.length){
+    alert('No se encontraron filas válidas. Completá artículo y precio unitario en la misma línea.');
+    return;
+  }
+
+  var a=getAcopio();
+  var existingCodes={};
+  (a.mats||[]).forEach(function(m){
+    if(String(m.cod||'').trim())existingCodes[catKey(m.cod)]=true;
+  });
+
+  var agregados=[];
+  var duplicados=[];
+  var maxId=1;
+  (a.mats||[]).forEach(function(m){if(m.id>=maxId)maxId=m.id+1;});
+
+  parsed.forEach(function(m){
+    if(m.cod && existingCodes[catKey(m.cod)]){
+      duplicados.push(m.cod);
+      return;
+    }
+    m.id=maxId++;
+    m.cat=cat;
+    a.mats.push(m);
+    if(m.cod)existingCodes[catKey(m.cod)]=true;
+    agregados.push(m);
+  });
+
+  if(!agregados.length){
+    alert('No se agregó ningún producto. Los códigos ingresados ya existen.');
+    return;
+  }
+
+  pushUndo();
+  cat=ensureCat(cat);
+  agregados.forEach(function(m){m.cat=cat;});
+  setLastMatCat(cat);
+  persist();
+  closeModal('modal-carga-masiva-mat');
+  renderMateriales();
+
+  var msg='✓ '+agregados.length+' materiales agregados en '+cat;
+  if(duplicados.length)msg+=' · '+duplicados.length+' códigos repetidos omitidos';
+  if(invalidas.length)msg+=' · '+invalidas.length+' líneas incompletas';
+  toast(msg);
+}
+
 function openNuevoMaterial(){
   editMatId=null;
   document.getElementById('mat-modal-ttl').textContent='Nuevo material';
@@ -2469,7 +2706,9 @@ function openNuevoMaterial(){
   document.getElementById('mat-cat-nueva').value='';
   document.getElementById('mat-delete-btn').style.display='none';
   var catSel=document.getElementById('mat-cat');
-  catSel.innerHTML=renderMatCatOptions('');
+  var lastCat=getLastMatCat();
+  catSel.innerHTML=renderMatCatOptions(lastCat);
+  if(lastCat)catSel.value=lastCat;
   openModal('modal-mat');
 }
 var editMatId=null;
@@ -2505,6 +2744,7 @@ function guardarMaterial(){
   if(!nom){alert('Ingresá un nombre');return;}
   if(!cat){alert('Elegí o ingresá una categoría');return;}
   cat=ensureCat(cat);
+  setLastMatCat(cat);
   var a=getAcopio();
   if(editMatId){
     a.mats=a.mats.map(function(m){return m.id===editMatId?Object.assign({},m,{nom:nom,cod:cod,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat}):m;});
