@@ -1,1 +1,336 @@
-CQ Operaciones
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>CQ Operaciones</title>
+<meta name="theme-color" content="#153b32">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CQ Operaciones">
+
+<style>
+:root{
+  --fondo:#153b32;--fondo2:#205848;--fondo3:#0d2922;
+  --verde:#62e69f;--texto:#eef4f2;--muted:#c8d9d2;
+  --line:rgba(255,255,255,.14);--danger:#ff8b80;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--texto)}
+.app{
+  width:min(100%,520px);min-height:100vh;margin:auto;display:flex;flex-direction:column;padding:12px;
+  background:
+    radial-gradient(circle at 88% 7%,rgba(98,230,159,.22),transparent 29%),
+    radial-gradient(circle at 7% 0%,rgba(255,255,255,.08),transparent 28%),
+    linear-gradient(160deg,var(--fondo) 0%,var(--fondo2) 48%,var(--fondo3) 100%);
+}
+.header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:900;color:#d8e7e1}
+.status{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid var(--line);font-size:10.5px;font-weight:800}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#9aa5a0}
+.status.online .status-dot{background:var(--verde);box-shadow:0 0 0 4px rgba(98,230,159,.12)}
+.hero{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding-top:10px}
+.logo-wrap{display:flex;justify-content:center;align-items:center;min-height:112px}
+.logo{width:118px;height:102px;object-fit:contain;display:block;filter:drop-shadow(0 14px 24px rgba(0,0,0,.18))}
+.title{text-align:center;margin:0 0 12px}
+.title h1{margin:0;font-size:21px;line-height:1;letter-spacing:.03em;font-weight:900}
+.title p{margin:5px 0 0;font-size:11.5px;color:var(--muted);font-weight:700}
+.panel{
+  background:rgba(255,255,255,.10);border:1px solid var(--line);border-radius:22px;padding:10px;
+  box-shadow:0 18px 46px rgba(0,0,0,.20);backdrop-filter:blur(10px)
+}
+.grid{display:grid;grid-template-columns:1fr;gap:8px}
+.btn{
+  min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:10px;text-decoration:none;
+  color:#17313a;border-radius:18px;padding:10px 12px;font-size:12.5px;font-weight:900;
+  box-shadow:0 8px 18px rgba(13,41,34,.10);transition:transform .13s ease,box-shadow .13s ease
+}
+.btn:active{transform:scale(.985)}
+.btn-left{display:flex;align-items:center;gap:11px;min-width:0}
+.icon{width:35px;height:35px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.27);font-size:17px;flex:0 0 35px}
+.arrow{width:29px;height:29px;border-radius:999px;display:grid;place-items:center;background:rgba(255,255,255,.42);color:#17313a;font-size:21px;line-height:1}
+.caja{background:linear-gradient(135deg,#d9aa91,#c99173)}
+.panol,.acopio,.materiales{background:linear-gradient(135deg,#9ab9cc,#7fa4ba)}
+.avances,.control{background:linear-gradient(135deg,#c0b2d8,#a795c8)}
+.footer{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#c5d6cf;font-size:10.5px;padding-top:10px}
+.footer strong{color:#e4efe9}
+
+.userbar{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;
+  padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid var(--line)
+}
+.userbar strong{font-size:11.5px}
+.userbar small{display:block;color:#bfd3ca;font-size:9.5px;margin-top:2px}
+.logout{
+  border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;
+  border-radius:999px;padding:7px 10px;font-size:10px;font-weight:900
+}
+
+.login-overlay{
+  position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;
+  background:
+    radial-gradient(circle at 82% 7%,rgba(98,230,159,.22),transparent 28%),
+    linear-gradient(160deg,#153b32 0%,#205848 48%,#0d2922 100%);
+}
+.login-card{
+  width:100%;max-width:390px;background:rgba(255,255,255,.10);border:1px solid var(--line);
+  border-radius:24px;padding:18px;box-shadow:0 24px 60px rgba(0,0,0,.28);backdrop-filter:blur(12px)
+}
+.login-logo{display:flex;justify-content:center;margin-bottom:6px}
+.login-logo img{width:105px;height:88px;object-fit:contain}
+.login-card h2{text-align:center;margin:0;font-size:20px}
+.login-card .sub{text-align:center;color:#c7d9d1;font-size:11px;margin:5px 0 16px}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:9.5px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:#bdd0c8;margin:0 0 5px 2px}
+.field select,.field input{
+  width:100%;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.96);color:#17313a;
+  border-radius:12px;padding:11px 12px;font-size:13px;font-weight:700;outline:none
+}
+.login-btn{
+  width:100%;border:0;border-radius:13px;padding:12px 14px;margin-top:4px;
+  background:linear-gradient(135deg,#62e69f,#43bd81);color:#12392f;font-weight:900;font-size:13px
+}
+.login-msg{min-height:18px;text-align:center;color:#ffd7d2;font-size:10.5px;font-weight:800;margin-top:8px}
+.hidden{display:none!important}
+@media(min-height:780px){.hero{padding-top:16px}.logo-wrap{min-height:130px}.logo{width:135px;height:116px}.btn{min-height:60px}}
+</style>
+</head>
+<body>
+
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-card">
+    <div class="login-logo"><img src="logo_cq.png" alt="CQ"></div>
+    <h2>CQ Operaciones</h2>
+    <div class="sub">Ingresá con tu usuario y clave</div>
+
+    <div class="field">
+      <label>Usuario</label>
+      <select id="loginUser">
+        <option value="">Seleccionar usuario</option>
+        <option value="eugenia">Eugenia</option>
+        <option value="hebe">Hebe</option>
+        <option value="maximiliano">Maximiliano</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Clave</label>
+      <input id="loginPass" type="password" inputmode="text" autocomplete="current-password" placeholder="Ingresá tu clave">
+    </div>
+
+    <button id="loginBtn" class="login-btn">🔐 Ingresar</button>
+    <div id="loginMsg" class="login-msg"></div>
+  </div>
+</div>
+
+<div class="app">
+  <header class="header">
+    <div class="kicker">CQ Operaciones</div>
+    <div id="status" class="status"><span class="status-dot"></span> <span id="statusText">Conectando</span></div>
+  </header>
+
+  <main class="hero">
+    <div class="logo-wrap"><img class="logo" src="logo_cq.png" alt="CQ Desarrollos"></div>
+
+    <section class="title">
+      <h1>CQ OPERACIONES</h1>
+      <p>Panel Operativo</p>
+    </section>
+
+    <div id="userBar" class="userbar hidden">
+      <div>
+        <strong id="currentUserName">—</strong>
+        <small id="currentUserModules">—</small>
+      </div>
+      <button id="logoutBtn" class="logout">Salir</button>
+    </div>
+
+    <section class="panel">
+      <div class="grid" id="moduleGrid">
+        <a class="btn caja" data-module="caja" href="../caja.html">
+          <span class="btn-left"><span class="icon">💵</span><span>Caja Chica</span></span><span class="arrow">›</span>
+        </a>
+        <a class="btn panol" data-module="panol" href="../panol.html">
+          <span class="btn-left"><span class="icon">🧰</span><span>Pañol</span></span><span class="arrow">›</span>
+        </a>
+        <a class="btn acopio" data-module="acopio" href="../acopio.html">
+          <span class="btn-left"><span class="icon">🏗️</span><span>Acopio</span></span><span class="arrow">›</span>
+        </a>
+        <a class="btn materiales" data-module="materiales" href="../materiales.html">
+          <span class="btn-left"><span class="icon">📦</span><span>Materiales</span></span><span class="arrow">›</span>
+        </a>
+        <a class="btn avances" data-module="avance" href="../avance.html">
+          <span class="btn-left"><span class="icon">📋</span><span>Avances</span></span><span class="arrow">›</span>
+        </a>
+        <a class="btn control" data-module="control_obras" href="../control_obras.html">
+          <span class="btn-left"><span class="icon">🏠</span><span>Control de Obras</span></span><span class="arrow">›</span>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer"><span><strong>CQ</strong> · Operaciones</span><span>Córdoba</span></footer>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+  setPersistence, browserLocalPersistence
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
+  authDomain: "cq-mano-de-obra.firebaseapp.com",
+  projectId: "cq-mano-de-obra",
+  storageBucket: "cq-mano-de-obra.firebasestorage.app",
+  messagingSenderId: "502127540211",
+  appId: "1:502127540211:web:8daefc75bdaafad412c486"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+await setPersistence(auth, browserLocalPersistence);
+
+const USERS = {
+  eugenia: { email: "eugenia@cqoperaciones.com" },
+  hebe: { email: "hebe@cqoperaciones.com" },
+  maximiliano: { email: "maximiliano@cqoperaciones.com" }
+};
+
+const MODULE_LABELS = {
+  caja:"Caja Chica", panol:"Pañol", acopio:"Acopio",
+  materiales:"Materiales", avance:"Avances", control_obras:"Control de Obras"
+};
+
+const loginOverlay = document.getElementById("loginOverlay");
+const loginUser = document.getElementById("loginUser");
+const loginPass = document.getElementById("loginPass");
+const loginBtn = document.getElementById("loginBtn");
+const loginMsg = document.getElementById("loginMsg");
+const userBar = document.getElementById("userBar");
+const currentUserName = document.getElementById("currentUserName");
+const currentUserModules = document.getElementById("currentUserModules");
+const status = document.getElementById("status");
+const statusText = document.getElementById("statusText");
+
+async function loadProfile(user){
+  const email = String(user?.email || "").toLowerCase();
+  const key = Object.keys(USERS).find(k => USERS[k].email.toLowerCase() === email);
+  if(!key) return null;
+
+  const snap = await getDoc(doc(db, "cq_operaciones_usuarios", key));
+  if(!snap.exists()) return null;
+
+  const data = snap.data() || {};
+  if(String(data.email || "").toLowerCase() !== email) return null;
+
+  return {
+    nombre: data.nombre || key,
+    email,
+    modulos: Array.isArray(data.modulos) ? data.modulos : []
+  };
+}
+
+function normalizeModuleName(m){
+  const aliases = {
+    avances: "avance",
+    avance: "avance"
+  };
+  return aliases[m] || m;
+}
+
+function applyPermissions(profile){
+  const permisos = profile.modulos.map(normalizeModuleName);
+
+  document.querySelectorAll("[data-module]").forEach(el=>{
+    const mod = normalizeModuleName(el.dataset.module);
+    el.classList.toggle("hidden", !permisos.includes(mod));
+  });
+
+  currentUserName.textContent = "👤 " + profile.nombre;
+  currentUserModules.textContent = permisos
+    .map(m=>MODULE_LABELS[m] || m)
+    .filter((v,i,a)=>a.indexOf(v)===i)
+    .join(" · ");
+
+  userBar.classList.remove("hidden");
+}
+
+function showLoggedOut(){
+  loginOverlay.classList.remove("hidden");
+  userBar.classList.add("hidden");
+  document.querySelectorAll("[data-module]").forEach(el=>el.classList.add("hidden"));
+  status.classList.remove("online");
+  statusText.textContent = "Sin sesión";
+}
+
+function showLoggedIn(profile){
+  applyPermissions(profile);
+  loginOverlay.classList.add("hidden");
+  status.classList.add("online");
+  statusText.textContent = "Online";
+}
+
+loginBtn.addEventListener("click", async ()=>{
+  loginMsg.textContent = "";
+  const key = loginUser.value;
+  const pass = loginPass.value;
+  if(!key){ loginMsg.textContent = "Seleccioná un usuario."; return; }
+  if(!pass){ loginMsg.textContent = "Ingresá la clave."; return; }
+
+  const profile = USERS[key];
+  loginBtn.disabled = true;
+  loginBtn.textContent = "Ingresando…";
+  try{
+    await signInWithEmailAndPassword(auth, profile.email, pass);
+    loginPass.value = "";
+  }catch(err){
+    console.warn(err);
+    loginMsg.textContent = "Usuario o clave incorrectos.";
+  }finally{
+    loginBtn.disabled = false;
+    loginBtn.textContent = "🔐 Ingresar";
+  }
+});
+
+loginPass.addEventListener("keydown", e=>{
+  if(e.key === "Enter") loginBtn.click();
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async ()=>{
+  await signOut(auth);
+});
+
+onAuthStateChanged(auth, async user=>{
+  if(!user){ showLoggedOut(); return; }
+
+  status.classList.remove("online");
+  statusText.textContent = "Verificando acceso";
+
+  try{
+    const profile = await loadProfile(user);
+    if(!profile){
+      await signOut(auth);
+      showLoggedOut();
+      loginMsg.textContent = "Tu usuario no tiene permisos configurados.";
+      return;
+    }
+    showLoggedIn(profile);
+  }catch(err){
+    console.warn("No se pudo leer el perfil de Firestore:", err);
+    await signOut(auth);
+    showLoggedOut();
+    loginMsg.textContent = "No se pudieron verificar los permisos.";
+  }
+});
+</script>
+</body>
+</html>
