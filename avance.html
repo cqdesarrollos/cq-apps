@@ -1626,8 +1626,49 @@ button[onclick="createRestorePoint()"]{display:none!important}
   white-space:nowrap;
 }
 </style>
+
+<style id="cq-access-total-style">
+#cq-access-total{position:fixed;inset:0;z-index:2147483647;background:#153b32;color:#fff;display:flex;align-items:center;justify-content:center;padding:22px;font-family:Arial,Helvetica,sans-serif}
+#cq-access-total.ok{display:none}
+#cq-access-total .cq-card{width:100%;max-width:370px;text-align:center;padding:24px 20px;border:1px solid rgba(255,255,255,.15);border-radius:22px;background:rgba(255,255,255,.08);box-shadow:0 22px 60px rgba(0,0,0,.25)}
+#cq-access-total .cq-lock{font-size:32px;margin-bottom:8px}
+#cq-access-total .cq-title{font-size:18px;font-weight:900}
+#cq-access-total .cq-msg{font-size:11px;line-height:1.5;color:#cce0d7;margin-top:7px}
+#cq-access-total .cq-back{display:none;margin:15px auto 0;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;border-radius:12px;padding:9px 14px;font-weight:900;cursor:pointer}
+</style>
+
+
+<script id="cq-fast-1h-bootstrap-avance">
+(function(){
+  try{
+    var raw=localStorage.getItem("cq_auth_profile_1h");
+    if(!raw) return;
+    var c=JSON.parse(raw), age=Date.now()-(Number(c.validadoEn)||0);
+    if(age<0 || age>3600000) return;
+    var mods=Array.isArray(c.modulos)?c.modulos:[];
+    var ger=mods.indexOf("gerencia")>=0;
+    if(!((ger || mods.indexOf("avances")>=0))) return;
+    document.documentElement.classList.add("cq-fast-1h-avance");
+    window.__cqFast1h=c;
+  }catch(e){}
+})();
+</script>
+<style id="cq-fast-1h-style-avance">
+html.cq-fast-1h-avance #cq-access-total{display:none!important}
+</style>
+
 </head>
 <body>
+
+<div id="cq-access-total">
+  <div class="cq-card">
+    <div class="cq-lock">🔐</div>
+    <div class="cq-title">Verificando acceso</div>
+    <div class="cq-msg" id="cq-access-total-msg">Comprobando usuario y permisos…</div>
+    <button class="cq-back" id="cq-access-total-back" onclick="history.back()">← Volver</button>
+  </div>
+</div>
+
 <div id="cert-sticky-real" class="cert-sticky-real">
   <div><small><span class="cert-clock" aria-hidden="true">⏳</span> A certificar <span id="cert-sticky-obra-real"></span></small><b id="cert-sticky-monto-real">$ 0</b></div>
   <button type="button" class="cert-generate-btn" onclick="generarCertificado()" title="Generar certificado">✓ Certificar</button>
@@ -3245,7 +3286,7 @@ function cerrarDetalleCertificacion(){
 function renderCertificadosMini(){
   const certs=getCertificados().slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'') || (parseInt(b.num)||0)-(parseInt(a.num)||0));
   if(!certs.length) return '';
-  return `<div class="kpi cert-list-card" style="grid-column:1/-1"><div class="kpi-label cert-list-title">Certificados</div>${certs.slice(0,5).map(c=>`<div class="cert-row-modern"><div class="cert-row-main"><div class="cert-row-head"><span class="cert-row-number">Certificado #${c.num}</span><span class="cert-row-date">${c.fecha}</span></div><div class="cert-row-note">${escHtml((c.nota||'Sin observaciones').split('\n')[0]).slice(0,100)}</div></div><span class="cert-row-amount">${fmt(c.monto)}</span><div class="cert-row-actions"><button class="cert-detail-btn cert-action detail" onclick="verDetalleCertificacion('${c.id}')" title="Ver detalle"><span>👁</span><em>Detalle</em></button><button class="cert-detail-btn cert-action edit" onclick="editarCertificado('${c.id}')" title="Modificar"><span>✏️</span><em>Modificar</em></button><button class="cert-detail-btn cert-action delete" onclick="eliminarCertificado('${c.id}')" title="Eliminar"><span>🗑</span><em>Eliminar</em></button></div></div>`).join('')}</div>`;
+  return `<div class="kpi cert-list-card" style="grid-column:1/-1"><div class="kpi-label cert-list-title">Certificados</div>${certs.map(c=>`<div class="cert-row-modern"><div class="cert-row-main"><div class="cert-row-head"><span class="cert-row-number">Certificado #${c.num}</span><span class="cert-row-date">${c.fecha}</span></div><div class="cert-row-note">${escHtml((c.nota||'Sin observaciones').split('\n')[0]).slice(0,100)}</div></div><span class="cert-row-amount">${fmt(c.monto)}</span><div class="cert-row-actions"><button class="cert-detail-btn cert-action detail" onclick="verDetalleCertificacion('${c.id}')" title="Ver detalle"><span>👁</span><em>Detalle</em></button><button class="cert-detail-btn cert-action edit" onclick="editarCertificado('${c.id}')" title="Modificar"><span>✏️</span><em>Modificar</em></button><button class="cert-detail-btn cert-action delete" onclick="eliminarCertificado('${c.id}')" title="Eliminar"><span>🗑</span><em>Eliminar</em></button></div></div>`).join('')}</div>`;
 }
 
 function calcPagosFuera(){
@@ -4717,6 +4758,604 @@ setTimeout(() => { if(!appInitialized){ updateFirebaseModeUI(); renderObraSwitch
   }
   window.addEventListener('load',()=>{setTimeout(hideAvanceButtons,300);setTimeout(hideAvanceButtons,1500);});
   document.addEventListener('click',()=>setTimeout(hideAvanceButtons,100),true);
+})();
+</script>
+
+
+<style id="cq-home-button-style">
+.cq-home-btn{
+  position:fixed; right:14px; bottom:14px; z-index:9999;
+  display:inline-flex; align-items:center; gap:7px;
+  padding:10px 13px; border-radius:999px;
+  background:#1C3D35; color:#fff; text-decoration:none;
+  font-family:Arial,Helvetica,sans-serif; font-size:12px; font-weight:800;
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+  -webkit-tap-highlight-color:transparent;
+}
+.cq-home-btn:hover{filter:brightness(1.08)}
+.cq-home-btn:active{transform:scale(.98)}
+@media(max-width:520px){
+  .cq-home-btn{right:10px;bottom:10px;padding:9px 12px;font-size:11px}
+}
+</style>
+
+<a class="cq-home-btn" href="index.html" aria-label="Ir a inicio">🏠 Inicio</a>
+
+<script type="module" id="cq-access-total-script">
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-de-obra.firebaseapp.com",projectId:"cq-mano-de-obra",storageBucket:"cq-mano-de-obra.firebasestorage.app",messagingSenderId:"502127540211",appId:"1:502127540211:web:8daefc75bdaafad412c486"};
+const app=getApps().length?getApp():initializeApp(cfg);
+const auth=getAuth(app),db=getFirestore(app);
+const CACHE_KEY="cq_auth_profile_1h", TTL=3600000;
+const map={"emilio@cqgerencia.com": "emilio", "juan@cqgerencia.com": "juan", "eugenia@cqoperaciones.com": "eugenia", "hebe@cqoperaciones.com": "hebe", "maximiliano@cqoperaciones.com": "maximiliano"};
+const box=document.getElementById("cq-access-total"),msg=document.getElementById("cq-access-total-msg"),back=document.getElementById("cq-access-total-back");
+
+function readCache(){
+ try{
+   const c=JSON.parse(localStorage.getItem(CACHE_KEY)||"null");
+   if(!c) return null;
+   const age=Date.now()-(Number(c.validadoEn)||0);
+   if(age<0 || age>TTL) return null;
+   return c;
+ }catch(e){return null}
+}
+function clearCache(){
+ try{localStorage.removeItem(CACHE_KEY)}catch(e){}
+ document.documentElement.classList.remove("cq-fast-1h-avance");
+}
+function deny(t){
+ clearCache();
+ if(box){box.classList.remove("ok");box.classList.remove("hidden");box.style.display="flex"}
+ if(msg)msg.textContent=t;
+ if(back)back.style.display="inline-block";
+}
+function expose(profile){
+ window._cqAuthProfile=profile;
+ window._cqUsuarioActual=profile.nombre;
+ try{localStorage.setItem("cq_usuario_actual",profile.nombre)}catch(e){}
+ document.documentElement.classList.add("cq-fast-1h-avance");
+ if(box){box.classList.add("ok");box.classList.add("hidden");box.style.display="none"}
+ document.dispatchEvent(new CustomEvent("cq-auth-ready",{detail:profile}));
+}
+function fromCache(c,email){
+ const mods=Array.isArray(c.modulos)?c.modulos:[];
+ const ger=mods.includes("gerencia");
+ if(String(c.email||"").toLowerCase()!==email) return false;
+ if(!((ger || mods.includes("avances")))) return false;
+ expose({id:map[email]||c.id||"",nombre:c.nombre||"",email:email,modulos:mods,rol:ger?"gerencia":"operaciones"});
+ return true;
+}
+function saveAndExpose(d,user,key){
+ const mods=Array.isArray(d.modulos)?d.modulos:[];
+ const ger=mods.includes("gerencia");
+ const profile={id:key,nombre:d.nombre||key,email:user.email,modulos:mods,rol:ger?"gerencia":"operaciones"};
+ try{localStorage.setItem(CACHE_KEY,JSON.stringify({id:key,nombre:profile.nombre,email:String(user.email||"").toLowerCase(),modulos:mods,rol:profile.rol,validadoEn:Date.now()}))}catch(e){}
+ expose(profile);
+}
+
+onAuthStateChanged(auth,async user=>{
+ if(!user){deny("No hay una sesi\u00f3n iniciada. Entr\u00e1 primero desde CQ Gerencia o CQ Operaciones.");return}
+ try{
+   const email=String(user.email||"").toLowerCase(), key=map[email];
+   if(!key){deny("Este usuario no est\u00e1 habilitado para las aplicaciones CQ.");return}
+
+   const cached=readCache();
+   if(cached && fromCache(cached,email)) return;
+
+   const snap=await getDoc(doc(db,"cq_operaciones_usuarios",key));
+   if(!snap.exists()){deny("No se encontr\u00f3 la configuraci\u00f3n de permisos del usuario.");return}
+   const d=snap.data()||{}, mods=Array.isArray(d.modulos)?d.modulos:[];
+   const ger=mods.includes("gerencia");
+   if(String(d.email||"").toLowerCase()!==email){deny("La identidad del usuario no coincide con su configuración.");return}
+   if(!((ger || mods.includes("avances")))){deny("Tu usuario no tiene permiso para ingresar a este m\u00f3dulo.");return}
+   saveAndExpose(d,user,key);
+ }catch(e){
+   console.warn("CQ auth",e);
+   deny("No se pudo verificar el acceso.");
+ }
+});
+</script>
+
+
+<script type="module" id="cq-audit-firebase-writer">
+import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+window.__cqAuditFirebaseWrite = async function(id, data){
+  let tries=0;
+  while(!getApps().length && tries<25){
+    await new Promise(r=>setTimeout(r,200));
+    tries++;
+  }
+  if(!getApps().length) throw new Error("Firebase todavía no está disponible");
+  const db=getFirestore(getApp());
+  await setDoc(doc(db,"actividad_empleados",String(id)),data);
+  return true;
+};
+document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
+</script>
+
+<script id="cq-audit-runtime-avances">
+(function(){
+  "use strict";
+  var MODULO="Avances";
+  var QUEUE_KEY="cq_audit_queue_v1_"+MODULO.replace(/\s+/g,"_").toLowerCase();
+  var WRAPS=[{"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
+  WRAPS=WRAPS.filter(function(x){return x.accion!=="agregar";});
+  var flushing=false;
+
+  function safeClone(v){
+    try{
+      return JSON.parse(JSON.stringify(v,function(k,x){
+        if(typeof x==="function")return undefined;
+        if(typeof x==="string"&&x.length>500)return x.slice(0,500)+"…";
+        return x;
+      }));
+    }catch(e){return null;}
+  }
+  function empleado(){
+    var p=window._cqAuthProfile||window.__cqFast1h||{};
+    var n=p.nombre||window._cqUsuarioActual||"";
+    if(!n){try{n=localStorage.getItem("cq_usuario_actual")||"";}catch(e){}}
+    return String(n||"Usuario no identificado");
+  }
+  function empleadoId(){
+    var p=window._cqAuthProfile||window.__cqFast1h||{};
+    return String(p.id||p.email||"");
+  }
+  function mkId(){
+    return "act_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,10);
+  }
+  function readQueue(){
+    try{var q=JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]");return Array.isArray(q)?q:[];}catch(e){return [];}
+  }
+  function writeQueue(q){
+    try{localStorage.setItem(QUEUE_KEY,JSON.stringify(q.slice(-500)));}catch(e){}
+  }
+  function enqueue(rec){
+    var q=readQueue();q.push(rec);writeQueue(q);flush();
+  }
+  async function flush(){
+    if(flushing||typeof window.__cqAuditFirebaseWrite!=="function")return;
+    flushing=true;
+    try{
+      var q=readQueue(),left=[];
+      for(var i=0;i<q.length;i++){
+        try{await window.__cqAuditFirebaseWrite(q[i].id,q[i].data);}
+        catch(e){left=q.slice(i);break;}
+      }
+      writeQueue(left);
+    }finally{flushing=false;}
+  }
+
+  function valByIds(ids){
+    for(var i=0;i<ids.length;i++){
+      var el=document.getElementById(ids[i]);
+      if(!el)continue;
+      var v=(el.value!==undefined?el.value:el.textContent);
+      if(v!==undefined&&v!==null&&String(v).trim()!=="")return String(v).trim();
+    }
+    return "";
+  }
+  function selectedText(ids){
+    for(var i=0;i<ids.length;i++){
+      var el=document.getElementById(ids[i]);
+      if(!el)continue;
+      if(el.tagName==="SELECT"&&el.selectedIndex>=0){
+        var t=el.options[el.selectedIndex].textContent;
+        if(t&&t.trim())return t.trim();
+      }
+    }
+    return "";
+  }
+  function numVal(ids){
+    var v=valByIds(ids);
+    if(!v)return "";
+    var n=Number(String(v).replace(/\./g,"").replace(",","."));
+    return isFinite(n)?n:v;
+  }
+  function captureContext(fn){
+    var c={};
+    c.obra=firstNonEmpty(
+      selectedText(["obra","obra-select","obraIdx","ret-obra","consumo-obra","edit-obra","pago-obra"]),
+      valByIds(["obra","obra-input","ret-obra","consumo-obra","edit-obra","obra-nombre"])
+    );
+    c.rubro=firstNonEmpty(
+      selectedText(["rubro","categoria","cat","consumo-categoria","gastos-categoria"]),
+      valByIds(["rubro","categoria","cat","consumo-categoria","gastos-categoria"])
+    );
+    c.subrubro=firstNonEmpty(
+      selectedText(["subrubro","consumo-subrubro","cf-subrubro","gastos-subrubro","ret-subrubro"]),
+      valByIds(["subrubro","consumo-subrubro","cf-subrubro","gastos-subrubro","ret-subrubro"])
+    );
+    c.producto=firstNonEmpty(
+      selectedText(["material","producto","mat","ret-material"]),
+      valByIds(["material","producto","cf-producto","consumo-prod-input","ret-material","mat-nombre","nuevo-mat-nombre","edit-mat-nombre"])
+    );
+    c.codigo=valByIds(["codigo","cf-codigo","consumo-codigo-input","mat-codigo","nuevo-mat-codigo"]);
+    c.cantidad=firstNonEmpty(
+      numVal(["cantidad","qty","ret-qty","consumo-cantidad","cf-cantidad","edit-cantidad","pago-cantidad"]),
+      ""
+    );
+    c.importe=firstNonEmpty(
+      numVal(["importe","monto","precio","ret-precio","cf-precio","pago-importe","edit-importe","gasto-importe"]),
+      ""
+    );
+    c.comentario=firstNonEmpty(
+      valByIds(["comentario","nota","observacion","consumo-comentario","ret-comentario","pago-nota","edit-nota"]),
+      ""
+    );
+    try{
+      if(MODULO==="Acopio" && /Retiro/i.test(fn)){
+        var ai=typeof getAcopio==="function"?getAcopio():null;
+        var mid=(typeof curRetirarMat!=="undefined"?curRetirarMat:null);
+        var oi=(typeof curRetirarObra!=="undefined"?curRetirarObra:null);
+        var mat=(mid!=null&&typeof getMat==="function")?getMat(mid):null;
+        var ob=(oi!=null&&typeof obraGastosActualPorIdx==="function")?obraGastosActualPorIdx(oi):null;
+        if(mat){
+          c.producto=c.producto||mat.nom||"";
+          c.codigo=c.codigo||mat.cod||"";
+        }
+        if(ob)c.obra=c.obra||(ob.label||ob.short||ob.id||"");
+        c.cantidad=c.cantidad||numVal(["retirar-qty","retiro-qty"]);
+        c.subrubro=c.subrubro||valByIds(["retirar-subrubro","retiro-subrubro"]);
+        c.comentario=c.comentario||valByIds(["retirar-comentario","retiro-comentario"]);
+      }
+
+      if(MODULO==="Pañol"){
+        if(/cargarProductoUnitario|procesarCargaMasiva/i.test(fn)){
+          c.producto=c.producto||valByIds(["cf-producto"]);
+          c.codigo=c.codigo||valByIds(["cf-codigo"]);
+          c.cantidad=c.cantidad||numVal(["cf-cantidad"]);
+          c.subrubro=c.subrubro||valByIds(["cf-subrubro"]);
+          c.importe=c.importe||numVal(["cf-precio"]);
+        }
+        if(/registrarConsumo/i.test(fn)){
+          var po=(typeof getProductoDesdeConsumoInput==="function")?getProductoDesdeConsumoInput():null;
+          var oo=(typeof curObra!=="undefined"&&typeof obraGastosPanolPorId==="function")?obraGastosPanolPorId(curObra):null;
+          if(po){
+            c.producto=c.producto||po.nombre||"";
+            c.codigo=c.codigo||po.codigo||"";
+          }
+          if(oo)c.obra=c.obra||(oo.label||oo.short||oo.id||"");
+          c.cantidad=c.cantidad||numVal(["consumo-cantidad"]);
+          c.subrubro=c.subrubro||valByIds(["consumo-subrubro"]);
+          c.comentario=c.comentario||valByIds(["consumo-comentario"]);
+        }
+      }
+
+      if(MODULO==="Materiales"){
+        c.producto=c.producto||valByIds(["nuevo-mat-nombre","edit-mat-nombre","mat-nombre"]);
+        c.codigo=c.codigo||valByIds(["nuevo-mat-codigo","edit-mat-codigo","mat-codigo"]);
+        c.cantidad=c.cantidad||numVal(["carga-cantidad","edit-carga-cantidad"]);
+      }
+    }catch(_ctxErr){}
+
+    Object.keys(c).forEach(function(k){if(c[k]===""||c[k]===null||c[k]===undefined)delete c[k];});
+    return c;
+  }
+  function firstNonEmpty(){
+    for(var i=0;i<arguments.length;i++){
+      var v=arguments[i];
+      if(v!==undefined&&v!==null&&String(v).trim()!=="")return v;
+    }
+    return "";
+  }
+
+
+  function auditTrim(v,max){
+    v=String(v==null?"":v).trim().replace(/\s+/g," ");
+    max=max||280;
+    return v.length>max?v.slice(0,max)+"…":v;
+  }
+  function auditLabelFor(el){
+    if(!el)return "";
+    var id=el.id||"";
+    if(id){
+      try{
+        var lab=document.querySelector('label[for="'+CSS.escape(id)+'"]');
+        if(lab&&lab.textContent.trim())return auditTrim(lab.textContent,80);
+      }catch(e){}
+    }
+    var parent=el.closest(".fld,.field,.carga-fld,.form-group,.input-group,.row2,.row3");
+    if(parent){
+      var l=parent.querySelector("label");
+      if(l&&l.textContent.trim())return auditTrim(l.textContent,80);
+    }
+    return auditTrim(el.getAttribute("aria-label")||el.name||id||el.placeholder||"",80);
+  }
+  function auditFormSnapshot(){
+    var data={};
+    var els=Array.prototype.slice.call(document.querySelectorAll("input,select,textarea"));
+    els.forEach(function(el){
+      if(el.type==="password"||el.type==="file")return;
+      var style=window.getComputedStyle(el);
+      var visible=style.display!=="none"&&style.visibility!=="hidden";
+      if(!visible&&!el.closest(".open,.show,.active"))return;
+      var key=auditLabelFor(el);
+      if(!key)return;
+      var val="";
+      if(el.type==="checkbox"||el.type==="radio"){
+        if(!el.checked)return;
+        val=el.value||"Sí";
+      }else if(el.tagName==="SELECT"){
+        var opt=el.options&&el.selectedIndex>=0?el.options[el.selectedIndex]:null;
+        val=opt?auditTrim(opt.textContent||opt.value,180):auditTrim(el.value,180);
+      }else{
+        val=auditTrim(el.value,180);
+      }
+      if(!val)return;
+      if(Object.keys(data).length<70)data[key]=val;
+    });
+    return data;
+  }
+  function auditVisibleContext(){
+    try{
+      var el=document.activeElement;
+      if(!el)return "";
+      var box=el.closest("tr,.prod-card,.card,.work-item,.hist-entry,.mov-row,.item,.row,.obra-card,.task-row,.modal");
+      if(!box)return "";
+      return auditTrim(box.innerText||box.textContent||"",700);
+    }catch(e){return "";}
+  }
+  function auditCompactObject(obj,depth,seen){
+    depth=depth||0;seen=seen||[];
+    if(obj===undefined||obj===null)return obj;
+    if(typeof obj==="string")return auditTrim(obj,300);
+    if(typeof obj==="number"||typeof obj==="boolean")return obj;
+    if(typeof obj==="function")return undefined;
+    if(depth>4)return "[…]";
+    if(seen.indexOf(obj)>=0)return "[circular]";
+    seen.push(obj);
+    if(Array.isArray(obj)){
+      var arr=obj.slice(0,12).map(function(x){return auditCompactObject(x,depth+1,seen);});
+      seen.pop();return arr;
+    }
+    if(typeof obj==="object"){
+      var out={},keys=Object.keys(obj).slice(0,35);
+      keys.forEach(function(k){
+        if(/base64|image|foto|photo|html|blob/i.test(k))return;
+        var v=auditCompactObject(obj[k],depth+1,seen);
+        if(v!==undefined)out[k]=v;
+      });
+      seen.pop();return out;
+    }
+    return auditTrim(obj,300);
+  }
+  function auditFindByArgs(args){
+    var ids=(args||[]).filter(function(x){
+      return ["string","number"].indexOf(typeof x)>=0&&String(x).length<120;
+    }).map(String);
+    if(!ids.length)return null;
+    var roots=[];
+    ["state","db","data","appData","store","obras","movimientos","productos","acopios"].forEach(function(k){
+      try{if(window[k]&&typeof window[k]==="object")roots.push(window[k]);}catch(e){}
+    });
+    function walk(node,depth,seen){
+      if(!node||typeof node!=="object"||depth>5||seen.indexOf(node)>=0)return null;
+      seen.push(node);
+      try{
+        var keys=Object.keys(node);
+        for(var i=0;i<keys.length;i++){
+          var k=keys[i],v=node[k];
+          if(/^(id|uid|key|codigo|code|movId|prodId|obraId|matId)$/i.test(k)&&
+             (typeof v==="string"||typeof v==="number")&&ids.indexOf(String(v))>=0){
+            seen.pop();return node;
+          }
+        }
+        for(var j=0;j<keys.length;j++){
+          var child=node[keys[j]];
+          if(child&&typeof child==="object"){
+            var f=walk(child,depth+1,seen);
+            if(f){seen.pop();return f;}
+          }
+        }
+      }catch(e){}
+      seen.pop();return null;
+    }
+    for(var r=0;r<roots.length;r++){
+      var found=walk(roots[r],0,[]);
+      if(found)return auditCompactObject(found);
+    }
+    return null;
+  }
+
+
+  function auditSpecificObject(fn,args){
+    try{
+      args=args||[];
+      var id=args.length?args[0]:null;
+      var idx=args.length?args[0]:null;
+
+      if(MODULO==="Acopio"){
+        if(fn==="confirmarBorrarAcopio") return auditCompactObject((DB.acopios||[]).find(function(x){return String(x.id)===String(id);})||null);
+        if(fn==="editarNombreAcopio") return auditCompactObject(typeof getAcopio==="function"?getAcopio():null);
+        if(fn==="eliminarCategoriaGlobal") return {categoria:(typeof getCats==="function"?getCats()[Number(idx)]:"")};
+        if(fn==="editarCategoriaGlobal") return {categoria:(typeof getCats==="function"?getCats()[Number(idx)]:"")};
+        if(fn==="borrarMaterialActual"||fn==="guardarMaterial"){
+          var aa=typeof getAcopio==="function"?getAcopio():null;
+          var mid=(typeof editMatId!=="undefined"?editMatId:null);
+          return auditCompactObject(aa&&aa.mats?(aa.mats.find(function(x){return String(x.id)===String(mid);})||null):null);
+        }
+        if(fn==="borrarPago"){
+          var ap=typeof getAcopio==="function"?getAcopio():null;
+          return auditCompactObject(ap&&ap.pagos?(ap.pagos.find(function(x){return String(x.id)===String(id);})||null):null);
+        }
+        if(fn==="borrarRetiro"||fn==="guardarEditRetiro"){
+          var ar=typeof getAcopio==="function"?getAcopio():null;
+          var rid=id;
+          if(fn==="guardarEditRetiro"&&typeof editRetiroId!=="undefined")rid=editRetiroId;
+          var rr=ar&&ar.retiros?(ar.retiros.find(function(x){return String(x.id)===String(rid);})||null):null;
+          if(rr){
+            var mm=typeof getMat==="function"?getMat(rr.matId):null;
+            var oo=null; try{oo=typeof obraGastosActualPorIdx==="function"?obraGastosActualPorIdx(rr.obraIdx):null}catch(_e){}
+            return auditCompactObject(Object.assign({},rr,{producto:mm?mm.nom:"",codigo:mm?mm.cod:"",unidad:mm?mm.unidad:"",obra:rr.obraHistorica||(oo&&(oo.label||oo.short||oo.id))||""}));
+          }
+          return null;
+        }
+        if(fn==="confirmarBorrarObra"||fn==="confirmarBorrarObraDesdeReporte"){
+          var ao=typeof getAcopio==="function"?getAcopio():null;
+          var oi=(fn==="confirmarBorrarObraDesdeReporte"&&typeof curReporteObra!=="undefined")?curReporteObra:(typeof curRetirarObra!=="undefined"?curRetirarObra:null);
+          var obras=typeof getObras==="function"?getObras():[];
+          return auditCompactObject({obra:obras[oi]||"",retiros:ao&&ao.retiros?(ao.retiros.filter(function(r){return Number(r.obraIdx)===Number(oi);})):[]});
+        }
+        if(fn==="eliminarRetirosDesdeReporte"){
+          var arr=typeof getRetirosReporteMaterial==="function"?getRetirosReporteMaterial(args[0],args[1]):[];
+          var mt=typeof getMat==="function"?getMat(args[0]):null;
+          return auditCompactObject({producto:mt?mt.nom:"",codigo:mt?mt.cod:"",retiros:arr});
+        }
+      }
+
+      if(MODULO==="Materiales"){
+        if(fn==="guardarNombreMat"||fn==="eliminarMaterialSeleccionado"){
+          var sid=(typeof selectedCargaMat!=="undefined"?selectedCargaMat:null);
+          return auditCompactObject((typeof ALL_MATS!=="undefined"?ALL_MATS:[]).find(function(x){return String(x.id)===String(sid);})||null);
+        }
+        if(fn==="eliminarCategoria") return {categoria:String(args[0]||"")};
+        if(fn==="borrarCarga"||fn==="guardarEditCarga"){
+          var cid=(fn==="borrarCarga"?args[0]:(typeof editingCargaId!=="undefined"?editingCargaId:null));
+          var cc=(typeof state!=="undefined"&&state.cargas)?state.cargas.find(function(x){return String(x.id)===String(cid);}):null;
+          if(cc){
+            var mat=(typeof ALL_MATS!=="undefined"?ALL_MATS:[]).find(function(m){return String(m.id)===String(cc.matId);});
+            return auditCompactObject(Object.assign({},cc,{producto:mat?mat.mat:"",codigo:mat?mat.codigo||mat.cod||"":""}));
+          }
+          return null;
+        }
+        if(fn==="guardarRenombrarObra"){
+          return auditCompactObject({obra:typeof getCurrentObraName==="function"?getCurrentObraName():"",formulario:auditFormSnapshot()});
+        }
+      }
+
+      if(MODULO==="Pañol"){
+        if(fn==="guardarEdicionProducto"||fn==="eliminarProducto"){
+          var pid=(fn==="eliminarProducto"?args[0]:(typeof editProdId!=="undefined"?editProdId:null));
+          var pp=(typeof state!=="undefined"&&state.productos)?state.productos.find(function(x){return String(x.id)===String(pid);}):null;
+          if(pp){
+            var stock=typeof stockDeProducto==="function"?stockDeProducto(pid):null;
+            return auditCompactObject(Object.assign({},pp,{stock:stock}));
+          }
+          return null;
+        }
+        if(fn==="editarCarga"||fn==="eliminarCarga"||fn==="editarConsumo"||fn==="eliminarConsumo"){
+          var mid2=args[0];
+          var mov=(typeof state!=="undefined"&&state.movimientos)?state.movimientos.find(function(x){return String(x.id)===String(mid2);}):null;
+          if(mov){
+            var pr=(typeof state!=="undefined"&&state.productos)?state.productos.find(function(x){return String(x.id)===String(mov.prodId);}):null;
+            return auditCompactObject(Object.assign({},mov,{producto:mov.materialName||(pr?pr.nombre:""),codigo:mov.materialCode||(pr?pr.codigo:"")}));
+          }
+          return null;
+        }
+        if(fn==="eliminarObra") return {obra:String(args[0]||"")};
+        if(fn==="eliminarRubro") return {subrubro:String(args[0]||"")};
+      }
+
+      if(MODULO==="Avances"){
+        if(fn==="deleteSemana"){
+          var ss=typeof getSemanaByNum==="function"?getSemanaByNum(args[0]):null;
+          return auditCompactObject(ss);
+        }
+        if(fn==="deleteTarea"){
+          var tt=typeof getTask==="function"?getTask(args[0],args[1]):null;
+          return auditCompactObject(tt);
+        }
+        if(fn==="saveEditObra"||fn==="deleteCurrentObra") return auditCompactObject(typeof currentObra==="function"?currentObra():null);
+        if(fn==="editarCertificado"||fn==="eliminarCertificado") return auditCompactObject((typeof getCertificados==="function"?getCertificados():[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deleteItemCQ"||fn==="saveItemCQ") return auditCompactObject((typeof state!=="undefined"&&state.itemsCQ?state.itemsCQ:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deletePagoFuera") return auditCompactObject((typeof state!=="undefined"&&state.pagosFuera?state.pagosFuera:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deleteConstructor") return auditCompactObject((typeof constructoresConfig!=="undefined"?constructoresConfig:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+      }
+
+      if(MODULO==="Control de Obras"){
+        if(fn==="deleteCurrentWorkReport"||fn==="saveWork"){
+          var ei=(typeof editIndex!=="undefined"&&editIndex)?Number(editIndex.value):NaN;
+          return auditCompactObject((typeof records!=="undefined"&&isFinite(ei))?records[ei]:null);
+        }
+        if(fn==="deletePartnerItem"){
+          var wi=Number(args[0]),tipo=args[1],jj=Number(args[2]);
+          return auditCompactObject(typeof db!=="undefined"&&db.works&&db.works[wi]&&db.works[wi][tipo]?db.works[wi][tipo][jj]:null);
+        }
+        if(fn==="deleteGeneralWork"||fn==="saveGeneralWork") return auditCompactObject(typeof db!=="undefined"&&db.works?db.works[Number(args[0])]:null);
+        if(fn==="saveGlobalWages"||fn==="saveCertifyPanel"||fn==="saveWageAllocation") return auditCompactObject({formulario:auditFormSnapshot(),contexto:auditVisibleContext()});
+      }
+    }catch(e){console.warn("audit specific",fn,e)}
+    return null;
+  }
+
+  function registrar(cfg,args,before,contextoAntes,extra){
+    var now=new Date();
+    var rec={
+      id:mkId(),
+      data:{
+        empleado:empleado(),
+        empleadoId:empleadoId(),
+        modulo:MODULO,
+        accion:cfg.accion,
+        detalle:cfg.detalle,
+        fecha:now.toISOString().slice(0,10),
+        fechaHora:now.toISOString(),
+        timestamp:Date.now(),
+        funcion:cfg.fn,
+        referencia:safeClone(args||[]),
+        contexto:contextoAntes||captureContext(cfg.fn),
+        formularioAntes:extra&&extra.formularioAntes?extra.formularioAntes:null,
+        formularioDespues:extra&&extra.formularioDespues?extra.formularioDespues:null,
+        contextoVisible:extra&&extra.contextoVisible?extra.contextoVisible:"",
+        objetoAntes:extra&&extra.objetoAntes?extra.objetoAntes:null,
+        objetoDespues:extra&&extra.objetoDespues?extra.objetoDespues:null,
+        antes:before||null,
+        origen:"auditoria_empleados_completa_v1"
+      }
+    };
+    enqueue(rec);
+  }
+  function wrap(cfg){
+    var original=window[cfg.fn];
+    if(typeof original!=="function"||original.__cqAuditWrapped)return false;
+    function wrapped(){
+      var args=Array.prototype.slice.call(arguments);
+      var contextoAntes={};
+      var extra={formularioAntes:{},formularioDespues:{},contextoVisible:"",objetoAntes:null,objetoDespues:null};
+      try{
+        contextoAntes=captureContext(cfg.fn)||{};
+        extra.formularioAntes=auditFormSnapshot();
+        extra.contextoVisible=auditVisibleContext();
+        extra.objetoAntes=auditSpecificObject(cfg.fn,args)||auditFindByArgs(args);
+      }catch(e){}
+      var result;
+      try{result=original.apply(this,args);}catch(e){throw e;}
+      function finish(v){
+        try{
+          extra.formularioDespues=auditFormSnapshot();
+          extra.objetoDespues=auditSpecificObject(cfg.fn,args)||auditFindByArgs(args);
+        }catch(e){}
+        registrar(cfg,args,extra.objetoAntes,contextoAntes,extra);
+        return v;
+      }
+      if(result&&typeof result.then==="function")return result.then(finish);
+      return finish(result);
+    }
+    wrapped.__cqAuditWrapped=true;
+    wrapped.__cqAuditOriginal=original;
+    window[cfg.fn]=wrapped;
+    return true;
+  }
+  function install(){
+    var pending=0;
+    WRAPS.forEach(function(cfg){if(!wrap(cfg))pending++;});
+    if(pending)setTimeout(install,600);
+  }
+
+  document.addEventListener("cq-audit-writer-ready",flush);
+  document.addEventListener("cq-auth-ready",flush);
+  window.addEventListener("online",flush);
+  window.addEventListener("focus",function(){setTimeout(flush,150);});
+  setInterval(flush,15000);
+  setTimeout(install,0);
+  setTimeout(flush,500);
 })();
 </script>
 

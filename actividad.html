@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#153b32">
+<title>CQ Actividad</title>
+<style>
+:root{
+  --green:#153b32;--green2:#2e7d5e;--green3:#77ad95;
+  --bg:#f5f6f3;--card:#fff;--line:#dde7df;--text:#1c2b22;--muted:#789083;
+  --red:#b9382d;--redbg:#fff0ee;--amber:#a96f12;--amberbg:#fff7e8;--blue:#236bb1;--bluebg:#eef6ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,"Segoe UI",Arial,sans-serif}
+button,input,select{font:inherit}
+.header{
+  position:sticky;top:0;z-index:20;background:linear-gradient(135deg,#102e27,#1d4c3f);
+  color:#fff;padding:11px 14px;box-shadow:0 5px 18px rgba(15,45,37,.18)
+}
+.header-in{max-width:1050px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand small{display:block;color:#a8ccb9;font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+.brand b{display:block;font-size:18px;margin-top:2px}
+.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.09);padding:8px 11px;border-radius:10px;font-size:11px;font-weight:900}
+.main{max-width:1050px;margin:auto;padding:14px 12px 50px}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:13px;padding:11px 12px}
+.kpi small{display:block;color:var(--muted);font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}
+.kpi strong{display:block;margin-top:3px;font-size:19px}
+.filters{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px;margin-bottom:10px}
+.filter-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1.4fr;gap:7px}
+.filter-grid select,.filter-grid input{width:100%;border:1px solid #d4e0d7;background:#fff;border-radius:9px;padding:9px 10px;color:var(--text);outline:none;font-size:11px;font-weight:700}
+.filter-grid select:focus,.filter-grid input:focus{border-color:var(--green2);box-shadow:0 0 0 3px rgba(46,125,94,.08)}
+.filter-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
+.hint{font-size:9.5px;color:var(--muted);font-weight:700}
+.btn{border:0;border-radius:9px;padding:8px 11px;font-size:10px;font-weight:900;cursor:pointer}
+.btn-light{background:#eef3ef;color:#365648}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.card-hd{padding:10px 12px;background:#f9fbf9;border-bottom:1px solid #eef3ef;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card-hd b{font-size:12px}.card-hd span{font-size:9.5px;color:var(--muted);font-weight:700}
+.list{display:grid}
+.row{
+  display:grid;grid-template-columns:110px 110px 120px 90px minmax(0,1fr) 30px;
+  gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid #eef3ef;cursor:pointer
+}
+.row:last-child{border-bottom:0}.row:hover{background:#fbfdfb}
+.when{font-size:9.5px;color:var(--muted);font-weight:800;line-height:1.35}
+.employee{font-size:11.5px;font-weight:900}
+.module{font-size:10px;color:#526a5e;font-weight:800}
+.action{display:inline-flex;justify-content:center;border-radius:999px;padding:4px 7px;font-size:8.5px;font-weight:900;text-transform:uppercase}
+.action.agregar{background:#eaf6ef;color:#167147}
+.action.modificar{background:var(--amberbg);color:var(--amber)}
+.action.eliminar{background:var(--redbg);color:var(--red)}
+.detail{min-width:0}
+.detail b{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.detail small{display:block;margin-top:2px;color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chev{text-align:right;color:#8da297;font-weight:900}
+.empty{padding:34px 15px;text-align:center;color:var(--muted);font-size:11px}
+.loading{padding:28px;text-align:center;color:var(--muted);font-size:11px}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(9,28,23,.62);z-index:50;align-items:flex-end;justify-content:center;padding:12px}
+.modal-bg.open{display:flex}
+.modal{background:#fff;width:min(650px,100%);max-height:90vh;overflow:auto;border-radius:18px 18px 12px 12px;box-shadow:0 25px 70px rgba(0,0,0,.3)}
+.modal-hd{position:sticky;top:0;background:#fff;padding:13px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;z-index:2}
+.modal-hd b{font-size:14px}
+.x{border:0;width:32px;height:32px;border-radius:50%;background:#eef3ef;color:#3f5b4d;font-size:17px;cursor:pointer}
+.modal-body{padding:13px 14px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.box{border:1px solid var(--line);background:#fafcfb;border-radius:10px;padding:9px}
+.box small{display:block;color:var(--muted);font-size:8px;font-weight:900;text-transform:uppercase;margin-bottom:3px}
+.box b{font-size:11px;overflow-wrap:anywhere}
+.json-title{font-size:9px;font-weight:900;color:var(--muted);text-transform:uppercase;margin:11px 0 5px}
+pre{margin:0;background:#152b24;color:#d7e7de;border-radius:10px;padding:11px;font:10px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.guard{position:fixed;inset:0;z-index:9999;background:#153b32;color:#fff;display:flex;align-items:center;justify-content:center;padding:20px}
+.guard.ok{display:none}
+.guard-card{width:min(360px,100%);text-align:center;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);border-radius:18px;padding:22px}
+.guard-card b{display:block;font-size:16px}.guard-card span{display:block;color:#c6ded2;font-size:10px;line-height:1.5;margin-top:6px}
+.guard-card a{display:none;margin-top:12px;color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.2);padding:8px 11px;border-radius:9px;font-size:10px;font-weight:900}
+@media(max-width:760px){
+ .summary{grid-template-columns:1fr 1fr}
+ .filter-grid{grid-template-columns:1fr 1fr}
+ .filter-grid .search{grid-column:1/-1}
+ .row{grid-template-columns:72px 88px 84px minmax(0,1fr) 20px;gap:5px;padding:9px 9px}
+ .module{display:none}
+ .action{font-size:7.5px;padding:4px 5px}
+ .employee{font-size:10.5px}.detail b{font-size:10.5px}
+}
+</style>
+
+<style id="cq-actividad-detalle-claro">
+.detail-hero{
+  border:1px solid var(--line);
+  background:linear-gradient(135deg,#f8fbf9,#eef7f2);
+  border-radius:14px;padding:13px 14px;margin-bottom:11px
+}
+.detail-hero .who{font-size:15px;font-weight:950;color:var(--green)}
+.detail-hero .what{font-size:12px;font-weight:800;margin-top:4px;line-height:1.45;color:#354e43}
+.detail-hero .when2{font-size:10px;color:var(--muted);font-weight:750;margin-top:4px}
+.detail-section-title{
+  margin:12px 2px 6px;font-size:9px;font-weight:950;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--muted)
+}
+.detail-list{display:grid;gap:7px}
+.detail-line{
+  display:grid;grid-template-columns:115px minmax(0,1fr);gap:10px;align-items:start;
+  border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 10px
+}
+.detail-line .lbl{font-size:9px;font-weight:950;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
+.detail-line .val{font-size:12px;font-weight:850;color:var(--text);line-height:1.4;overflow-wrap:anywhere}
+.detail-line.important{background:#f8fbf9}
+.detail-line.money .val{font-size:15px;color:var(--green)}
+.detail-note{
+  margin-top:8px;border:1px solid #eadfbf;background:#fff9eb;border-radius:10px;padding:10px
+}
+.detail-note .lbl{font-size:9px;font-weight:950;color:#9a6b19;text-transform:uppercase}
+.detail-note .val{font-size:11.5px;font-weight:750;line-height:1.45;margin-top:3px}
+@media(max-width:520px){
+  .detail-grid{grid-template-columns:1fr}
+  .detail-line{grid-template-columns:95px minmax(0,1fr)}
+}
+</style>
+
+
+<style id="cq-actividad-borrar-historial">
+.btn-danger-history{
+  background:#fff0ee;
+  color:#b9382d;
+  border:1px solid #f2c9c4;
+}
+.btn-danger-history:active{transform:scale(.98)}
+.filter-actions-right{display:flex;gap:7px;align-items:center}
+@media(max-width:520px){
+  .filter-actions{align-items:flex-end}
+  .filter-actions-right{flex-direction:column-reverse;align-items:stretch}
+  .btn-danger-history{white-space:nowrap}
+}
+</style>
+
+</head>
+<body>
+<div class="guard" id="guard">
+  <div class="guard-card">
+    <b>Verificando Gerencia</b>
+    <span id="guard-msg">Comprobando usuario y permisos…</span>
+    <a id="guard-back" href="index.html">← Volver al panel</a>
+  </div>
+</div>
+
+<header class="header">
+ <div class="header-in">
+   <div class="brand"><small>CQ Gerencia</small><b>Actividad</b></div>
+   <a class="back" href="index.html">← Panel</a>
+ </div>
+</header>
+
+<main class="main">
+  <section class="summary">
+    <div class="kpi"><small>Registros visibles</small><strong id="k-total">0</strong></div>
+    <div class="kpi"><small>Altas</small><strong id="k-add">0</strong></div>
+    <div class="kpi"><small>Modificaciones</small><strong id="k-edit">0</strong></div>
+    <div class="kpi"><small>Eliminaciones</small><strong id="k-del">0</strong></div>
+  </section>
+
+  <section class="filters">
+    <div class="filter-grid">
+      <select id="f-employee"><option value="">Todos los empleados</option></select>
+      <select id="f-module"><option value="">Todos los módulos</option></select>
+      <select id="f-action">
+        <option value="">Todas las acciones</option>
+        <option value="agregar">Agregar</option>
+        <option value="modificar">Modificar</option>
+        <option value="eliminar">Eliminar</option>
+      </select>
+      <input id="f-date" type="date" aria-label="Fecha">
+      <input id="f-search" class="search" placeholder="Buscar detalle, función, obra, material...">
+    </div>
+    <div class="filter-actions">
+      <span class="hint">Los filtros se combinan. “Todos” está disponible dejando el campo sin selección.</span>
+      <div class="filter-actions-right">
+        <button class="btn btn-danger-history" id="delete-history-btn">🗑 Borrar historial</button>
+        <button class="btn btn-light" id="clear-btn">Limpiar</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-hd"><b>Registro de actividad</b><span id="last-update">Conectando…</span></div>
+    <div id="list" class="list"><div class="loading">Cargando actividad…</div></div>
+  </section>
+</main>
+
+<div class="modal-bg" id="detail-modal">
+  <div class="modal">
+    <div class="modal-hd"><b>Detalle del registro</b><button class="x" id="detail-close">×</button></div>
+    <div class="modal-body" id="detail-body"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig={
+  apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
+  authDomain:"cq-mano-de-obra.firebaseapp.com",
+  projectId:"cq-mano-de-obra",
+  storageBucket:"cq-mano-de-obra.firebasestorage.app",
+  messagingSenderId:"502127540211",
+  appId:"1:502127540211:web:8daefc75bdaafad412c486"
+};
+const app=getApps().length?getApp():initializeApp(firebaseConfig);
+const db=getFirestore(app);
+const auth=getAuth(app);
+
+const guard=document.getElementById("guard");
+const guardMsg=document.getElementById("guard-msg");
+const guardBack=document.getElementById("guard-back");
+const userMap={
+  "emilio@cqgerencia.com":"emilio",
+  "juan@cqgerencia.com":"juan",
+  "eugenia@cqoperaciones.com":"eugenia",
+  "hebe@cqoperaciones.com":"hebe",
+  "maximiliano@cqoperaciones.com":"maximiliano"
+};
+
+let allRows=[];
+let unsub=null;
+
+function esc(v){
+  return String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function fmtDateTime(x){
+  const d=x?new Date(x):null;
+  if(!d||isNaN(d))return "—";
+  return d.toLocaleString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+function titleCase(v){return String(v||"").replace(/\b\w/g,c=>c.toUpperCase());}
+function actionClass(v){return ["agregar","modificar","eliminar"].includes(v)?v:"modificar";}
+
+function firstValue(){
+  for(var i=0;i<arguments.length;i++){
+    var v=arguments[i];
+    if(v!==undefined&&v!==null&&String(v).trim()!=="")return v;
+  }
+  return "";
+}
+function findNested(obj,keys){
+  if(obj===undefined||obj===null)return "";
+  if(!Array.isArray(keys))keys=[keys];
+
+  function valid(v){
+    return v!==undefined&&v!==null&&
+      !(typeof v==="string"&&v.trim()==="")&&
+      typeof v!=="function";
+  }
+  function walk(node,depth){
+    if(depth>8||node===undefined||node===null)return "";
+    if(Array.isArray(node)){
+      for(var i=0;i<node.length;i++){
+        var a=walk(node[i],depth+1);
+        if(valid(a))return a;
+      }
+      return "";
+    }
+    if(typeof node!=="object")return "";
+
+    var props=Object.keys(node);
+
+    for(var k=0;k<keys.length;k++){
+      var key=String(keys[k]);
+      for(var p=0;p<props.length;p++){
+        var prop=props[p];
+        if(prop.toLowerCase()===key.toLowerCase()&&valid(node[prop])){
+          var v=node[prop];
+          if(typeof v==="object"){
+            var nested=walk(v,depth+1);
+            if(valid(nested))return nested;
+          }else return v;
+        }
+      }
+    }
+
+    for(var q=0;q<props.length;q++){
+      var child=node[props[q]];
+      if(child&&typeof child==="object"){
+        var f=walk(child,depth+1);
+        if(valid(f))return f;
+      }
+    }
+    return "";
+  }
+  return walk(obj,0);
+}
+function moneyARS(v){
+  var n=Number(v);
+  return isFinite(n)&&n!==0?"$ "+n.toLocaleString("es-AR"):"";
+}
+
+function employeeName(r){
+  var e=firstValue(r.empleado,r.nombreEmpleado,r.usuario,r.userName,r.empleadoId);
+  if(!e)return "—";
+  e=String(e);
+  if(e.indexOf("@")>0)e=e.split("@")[0];
+  return e.charAt(0).toUpperCase()+e.slice(1);
+}
+function auditData(r){
+  var obra=firstValue(
+    r.obra,r.obraName,r.obraHistorica,r.destino,
+    findNested(r,["obra","obraName","obraHistorica","obraLabel","work","destino"])
+  );
+  if(!obra){
+    var oid=firstValue(r.obraId,r.gastosObraId,findNested(r,["obraId","gastosObraId"]));
+    if(String(oid).toLowerCase()==="oficina")obra="Oficina";
+  }
+  if(String(obra).toLowerCase()==="oficina")obra="Oficina";
+
+  var rubro=firstValue(
+    r.rubroLabel,r.rubro,r.categoria,r.gastosCategoria,
+    findNested(r,["rubroLabel","rubro","categoria","category","gastosCategoria"])
+  );
+  var sub=firstValue(
+    r.subrubro,r.gastosSubrubro,r.imputacionSubrubro,
+    findNested(r,["subrubro","gastosSubrubro","imputacionSubrubro","subRubro"])
+  );
+  var prod=firstValue(
+    r.producto,r.material,r.materialName,r.concepto,
+    findNested(r,["producto","productoName","material","materialName","matName","nombreMaterial","concepto"])
+  );
+  var codigo=firstValue(
+    r.codigoProducto,r.codigo,r.materialCode,
+    findNested(r,["codigoProducto","codigo","code","materialCode","cod"])
+  );
+  var cant=firstValue(
+    r.cantidad,r.qty,r.materialesCantidad,
+    findNested(r,["cantidad","qty","materialesCantidad","cantidadOriginal"])
+  );
+  var imp=firstValue(
+    r.importe,r.monto,r.total,r.amount,
+    findNested(r,["importe","monto","total","amount","precio","price"])
+  );
+  var comentario=firstValue(
+    r.comentario,r.nota,r.observacion,r.notes,
+    findNested(r,["comentario","nota","observacion","notes","detalleNota","sourceLabel"])
+  );
+  return {
+    obra:obra,rubro:rubro,subrubro:sub,producto:prod,codigo:codigo,
+    cantidad:cant,importe:imp,comentario:comentario
+  };
+}
+
+function richSummary(r){
+  var d=auditData(r);
+  var parts=[];
+  if(d.obra)parts.push(String(d.obra));
+  if(d.rubro)parts.push(String(d.rubro));
+  if(d.subrubro&&String(d.subrubro)!==String(d.rubro))parts.push(String(d.subrubro));
+  if(d.producto)parts.push(String(d.producto));
+  if(d.cantidad!==""&&!isNaN(Number(d.cantidad))&&Number(d.cantidad)!==0)
+    parts.push(Number(d.cantidad).toLocaleString("es-AR")+" u");
+  var impTxt=moneyARS(d.importe);
+  if(impTxt)parts.push(impTxt);
+  if(d.comentario)parts.push(String(d.comentario));
+  var base=String(r.detalle||"Actividad");
+  return parts.length?base+" · "+parts.join(" · "):base;
+}
+function recordText(r){
+  try{return JSON.stringify(r).toLowerCase();}catch(e){return String(r.detalle||"").toLowerCase();}
+}
+function refreshSelects(){
+  const emp=document.getElementById("f-employee"),mod=document.getElementById("f-module");
+  const ev=emp.value,mv=mod.value;
+  const employees=[...new Set(allRows.map(x=>String(x.empleado||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  const modules=[...new Set(allRows.map(x=>String(x.modulo||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  emp.innerHTML='<option value="">Todos los empleados</option>'+employees.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  mod.innerHTML='<option value="">Todos los módulos</option>'+modules.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  if(employees.includes(ev))emp.value=ev;if(modules.includes(mv))mod.value=mv;
+}
+function filtered(){
+  const e=document.getElementById("f-employee").value;
+  const m=document.getElementById("f-module").value;
+  const a=document.getElementById("f-action").value;
+  const d=document.getElementById("f-date").value;
+  const q=document.getElementById("f-search").value.trim().toLowerCase();
+  return allRows.filter(r=>
+    (!e||String(r.empleado||"")===e)&&
+    (!m||String(r.modulo||"")===m)&&
+    (!a||String(r.accion||"")===a)&&
+    (!d||String(r.fecha||"")===d)&&
+    (!q||recordText(r).includes(q))
+  );
+}
+function render(){
+  const rows=filtered();
+  document.getElementById("k-total").textContent=rows.length;
+  document.getElementById("k-add").textContent=rows.filter(x=>x.accion==="agregar").length;
+  document.getElementById("k-edit").textContent=rows.filter(x=>x.accion==="modificar").length;
+  document.getElementById("k-del").textContent=rows.filter(x=>x.accion==="eliminar").length;
+  const list=document.getElementById("list");
+  if(!rows.length){list.innerHTML='<div class="empty">No hay actividad para esos filtros.</div>';return;}
+  list.innerHTML=rows.map(r=>{
+    const sub=[r.funcion,r.obra,r.material,r.importe!=null?("$ "+Number(r.importe).toLocaleString("es-AR")):""].filter(Boolean).join(" · ");
+    return `<div class="row" data-id="${esc(r.__id)}">
+      <div class="when">${esc(fmtDateTime(r.fechaHora||r.timestamp))}</div>
+      <div class="employee">${esc(employeeName(r))}</div>
+      <div class="module">${esc(r.modulo||"—")}</div>
+      <div><span class="action ${actionClass(r.accion)}">${esc(r.accion||"—")}</span></div>
+      <div class="detail"><b>${esc(richSummary(r))}</b><small>${esc(sub)}</small></div>
+      <div class="chev">›</div>
+    </div>`;
+  }).join("");
+  list.querySelectorAll(".row").forEach(el=>el.addEventListener("click",()=>openDetail(el.dataset.id)));
+}
+
+function humanLabel(k){
+  k=String(k||'').replace(/[*:]+/g,'').trim();
+  const map={'cf-producto':'Producto','cf-codigo':'Código','cf-cantidad':'Cantidad','cf-precio':'Precio','retirar-qty':'Cantidad','retirar-subrubro':'Subrubro','retirar-comentario':'Comentario'};
+  return map[k]||k;
+}
+
+function cqNormalizeFieldName(v){
+  return String(v||"")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[\s_\-./]+/g,"")
+    .replace(/[^a-z0-9]/g,"");
+}
+
+function cqHideActivityField(modulo,label){
+  const m=String(modulo||"").toLowerCase();
+  const k=cqNormalizeFieldName(label);
+
+  const commonExact=new Set([
+    // IDs técnicos demasiado genéricos
+    "id"
+  ]);
+
+  const byModule={
+    "acopio":new Set([
+      "createdat","matid","codigo"
+    ]),
+    "caja chica":new Set([
+      "filterdest","rubrolabel","name","code","id","obraid"
+    ]),
+    "control de obras":new Set([
+      "editindex","jornalpersonalizado","pendiente"
+    ]),
+    "materiales":new Set([
+      "histfiltermat","id","matid","matname","codigo","obraidx"
+    ]),
+    "pañol":new Set([
+      "rubro","stockrubrofilter","codigo","gastosdebecargar",
+      "loteid","code","materialesagregar","prodid"
+    ])
+  };
+
+  if(commonExact.has(k)) return true;
+
+  for(const nombre in byModule){
+    if(m.includes(nombre) && byModule[nombre].has(k)) return true;
+  }
+  return false;
+}
+
+function humanFormRows(r){
+  const srcs=[r.formularioAntes,r.formulario,r.contexto,r.objetoAntes,r.antesCompleto,r.antes];
+  const skip=/buscar|filtro|fecha desde|fecha hasta|tipo de cambio|contraseña|firebase|sync/i;
+  const used={};let rows=[];
+  function add(k,v){
+    if(rows.length>=18||v===undefined||v===null||typeof v==='object')return;
+    k=humanLabel(k);v=String(v).trim();
+    if(!k||!v||skip.test(k)||used[k.toLowerCase()]||cqHideActivityField(r.modulo,k))return;
+    if(v.length>180)v=v.slice(0,180)+'…';
+    used[k.toLowerCase()]=1;rows.push({k:k,v:v});
+  }
+  function walk(o,depth){
+    if(!o||typeof o!=='object'||depth>3)return;
+    Object.keys(o).forEach(k=>{const v=o[k];if(v&&typeof v==='object')walk(v,depth+1);else add(k,v);});
+  }
+  srcs.forEach(x=>walk(x,0));
+  return rows;
+}
+
+function openDetail(id){
+  const r=allRows.find(x=>String(x.__id)===String(id));if(!r)return;
+  function addLine(label,value,cls){
+    if(value===undefined||value===null||String(value).trim()==="")return "";
+    if((label==="Cantidad"||label==="Importe")&&Number(value)===0)return "";
+    return '<div class="detail-line '+(cls||'')+'"><div class="lbl">'+esc(label)+'</div><div class="val">'+esc(value)+'</div></div>';
+  }
+  const d=auditData(r);
+  const importeTxt=(d.importe!==""&&!isNaN(Number(d.importe))&&Number(d.importe)!==0)?"$ "+Number(d.importe).toLocaleString("es-AR"):"";
+  const cantidadTxt=(d.cantidad!==""&&!isNaN(Number(d.cantidad))&&Number(d.cantidad)!==0)?Number(d.cantidad).toLocaleString("es-AR")+" u":"";
+  let lines="";
+  lines+=addLine("Módulo",r.modulo||"—","important");
+  lines+=addLine("Obra / Oficina",d.obra,"important");
+  if(!cqHideActivityField(r.modulo,"Rubro")) lines+=addLine("Rubro",d.rubro);
+  lines+=addLine("Subrubro",d.subrubro);
+  lines+=addLine("Producto / Concepto",d.producto);
+  if(!cqHideActivityField(r.modulo,"Código")) lines+=addLine("Código",d.codigo);
+  lines+=addLine("Cantidad",cantidadTxt);
+  lines+=addLine("Importe",importeTxt,"money");
+  const extras=humanFormRows(r);
+  extras.forEach(x=>{
+    const lk=x.k.toLowerCase();
+    if((d.obra&&/obra|destino/.test(lk))||(d.rubro&&/^rubro$|categor/.test(lk))||(d.subrubro&&/subrubro/.test(lk))||(d.producto&&/producto|material|concepto/.test(lk))||(cantidadTxt&&/cantidad|qty/.test(lk))||(importeTxt&&/importe|monto|precio/.test(lk)))return;
+    lines+=addLine(x.k,x.v);
+  });
+  if(r.contextoVisible)lines+=addLine("Registro relacionado",r.contextoVisible);
+  if(!lines)lines+=addLine("Acción registrada",r.detalle||r.funcion||"Actividad");
+  const body=document.getElementById("detail-body");
+  body.innerHTML=
+    '<div class="detail-hero"><div class="who">'+esc(employeeName(r))+'</div><div class="what">'+esc(richSummary(r))+'</div><div class="when2">'+esc(fmtDateTime(r.fechaHora||r.timestamp))+'</div></div>'+
+    '<div class="detail-section-title">Detalle de la actividad</div><div class="detail-list">'+lines+'</div>'+
+    (d.comentario?'<div class="detail-note"><div class="lbl">Comentario</div><div class="val">'+esc(d.comentario)+'</div></div>':'');
+  document.getElementById("detail-modal").classList.add("open");
+}
+
+function hasActiveFilters(){
+  return !!(
+    document.getElementById("f-employee").value ||
+    document.getElementById("f-module").value ||
+    document.getElementById("f-action").value ||
+    document.getElementById("f-date").value ||
+    document.getElementById("f-search").value.trim()
+  );
+}
+
+async function deleteActivityHistory(){
+  const rows=filtered();
+  if(!rows.length){
+    alert("No hay registros para borrar.");
+    return;
+  }
+
+  const filtrado=hasActiveFilters();
+  const msg=filtrado
+    ?("Vas a borrar "+rows.length+" registro"+(rows.length===1?"":"s")+" que coinciden con los filtros actuales.\n\nEsta acción no se puede deshacer. ¿Continuar?")
+    :("Vas a borrar TODO el historial de actividad ("+rows.length+" registros).\n\nEsta acción no se puede deshacer. ¿Continuar?");
+
+  if(!confirm(msg))return;
+
+  // Doble confirmación únicamente cuando se borra todo el historial.
+  if(!filtrado){
+    if(!confirm("Confirmá nuevamente: ¿querés borrar TODO el historial de actividad?"))return;
+  }
+
+  const btn=document.getElementById("delete-history-btn");
+  const prev=btn.textContent;
+  btn.disabled=true;
+  btn.textContent="Borrando…";
+
+  try{
+    // Firestore admite hasta 500 operaciones por batch.
+    for(let i=0;i<rows.length;i+=450){
+      const batch=writeBatch(db);
+      rows.slice(i,i+450).forEach(r=>{
+        batch.delete(doc(db,"actividad_empleados",String(r.__id)));
+      });
+      await batch.commit();
+    }
+    alert(filtrado
+      ? "Se borraron los registros filtrados."
+      : "Se borró todo el historial de actividad.");
+  }catch(e){
+    console.error(e);
+    alert("No se pudo borrar el historial. Revisá la conexión o los permisos de Firebase.");
+  }finally{
+    btn.disabled=false;
+    btn.textContent=prev;
+  }
+}
+
+function startActivity(){
+  if(unsub)unsub();
+  unsub=onSnapshot(collection(db,"actividad_empleados"),snap=>{
+    allRows=snap.docs.map(d=>({__id:d.id,...(d.data()||{})}));
+    allRows.sort((a,b)=>(Number(b.timestamp)||new Date(b.fechaHora||0).getTime())-(Number(a.timestamp)||new Date(a.fechaHora||0).getTime()));
+    refreshSelects();render();
+    document.getElementById("last-update").textContent="Actualizado "+new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+  },err=>{
+    console.warn(err);
+    document.getElementById("list").innerHTML='<div class="empty">No se pudo leer la actividad. Revisá conexión/permisos de Firebase.</div>';
+    document.getElementById("last-update").textContent="Sin conexión";
+  });
+}
+function allow(profile){
+  window._cqAuthProfile=profile;
+  guard.classList.add("ok");
+  startActivity();
+}
+function deny(msg){
+  guardMsg.textContent=msg;
+  guardBack.style.display="inline-block";
+}
+onAuthStateChanged(auth,async user=>{
+  if(!user){deny("No hay una sesión iniciada.");return;}
+  const email=String(user.email||"").toLowerCase();
+  const key=userMap[email];
+  if(!key){deny("Este usuario no está habilitado.");return;}
+  try{
+    const cache=JSON.parse(localStorage.getItem("cq_auth_profile_1h")||"null");
+    const age=cache?Date.now()-(Number(cache.validadoEn)||0):Infinity;
+    const mods=Array.isArray(cache&&cache.modulos)?cache.modulos:[];
+    if(cache&&age>=0&&age<=3600000&&String(cache.email||"").toLowerCase()===email&&mods.includes("gerencia")){
+      allow({id:key,nombre:cache.nombre||key,email:user.email,modulos:mods,rol:"gerencia"});
+      return;
+    }
+  }catch(e){}
+  try{
+    const snap=await getDoc(doc(db,"cq_operaciones_usuarios",key));
+    if(!snap.exists()){deny("No se encontraron permisos para este usuario.");return;}
+    const p=snap.data()||{},mods=Array.isArray(p.modulos)?p.modulos:[];
+    if(String(p.email||"").toLowerCase()!==email){deny("La identidad no coincide con la configuración.");return;}
+    if(!mods.includes("gerencia")){deny("Este módulo es exclusivo de Gerencia.");return;}
+    const profile={id:key,nombre:p.nombre||key,email:user.email,modulos:mods,rol:"gerencia"};
+    try{localStorage.setItem("cq_auth_profile_1h",JSON.stringify({...profile,validadoEn:Date.now()}));}catch(e){}
+    allow(profile);
+  }catch(e){deny("Error al verificar Gerencia. Revisá la conexión.");}
+});
+
+["f-employee","f-module","f-action","f-date"].forEach(id=>document.getElementById(id).addEventListener("change",render));
+document.getElementById("f-search").addEventListener("input",render);
+document.getElementById("delete-history-btn").addEventListener("click",deleteActivityHistory);
+document.getElementById("clear-btn").addEventListener("click",()=>{
+  ["f-employee","f-module","f-action","f-date","f-search"].forEach(id=>document.getElementById(id).value="");
+  render();
+});
+document.getElementById("detail-close").addEventListener("click",()=>document.getElementById("detail-modal").classList.remove("open"));
+document.getElementById("detail-modal").addEventListener("click",e=>{if(e.target.id==="detail-modal")e.currentTarget.classList.remove("open");});
+</script>
+</body>
+</html>

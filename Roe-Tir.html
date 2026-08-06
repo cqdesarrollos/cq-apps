@@ -1191,8 +1191,72 @@ table td{padding:10px 9px!important;border-bottom:1px solid rgba(13,47,40,.075)!
 }
 </style>
 
+
+<style id="cq-gerencia-only-css">
+#cq-gerencia-only{position:fixed;inset:0;z-index:2147483647;background:#153b32;color:#fff;display:flex;align-items:center;justify-content:center;padding:22px;font-family:Arial,Helvetica,sans-serif}
+#cq-gerencia-only.ok{display:none}
+#cq-gerencia-only .box{width:100%;max-width:370px;text-align:center;padding:24px 20px;border:1px solid rgba(255,255,255,.15);border-radius:22px;background:rgba(255,255,255,.08);box-shadow:0 22px 60px rgba(0,0,0,.25)}
+#cq-gerencia-only .ico{font-size:32px;margin-bottom:8px}
+#cq-gerencia-only .ttl{font-size:18px;font-weight:900}
+#cq-gerencia-only .msg{font-size:11px;line-height:1.5;color:#cce0d7;margin-top:7px}
+#cq-gerencia-only .back{display:none;margin:15px auto 0;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;border-radius:12px;padding:9px 14px;font-weight:900;cursor:pointer}
+</style>
+
+
+<script id="cq-fast-1h-bootstrap-Roe-Tir">
+(function(){
+  try{
+    var raw=localStorage.getItem("cq_auth_profile_1h");
+    if(!raw) return;
+    var c=JSON.parse(raw), age=Date.now()-(Number(c.validadoEn)||0);
+    if(age<0 || age>3600000) return;
+    var mods=Array.isArray(c.modulos)?c.modulos:[];
+    var ger=mods.indexOf("gerencia")>=0;
+    if(!(ger)) return;
+    document.documentElement.classList.add("cq-fast-1h-roe-tir");
+    window.__cqFast1h=c;
+  }catch(e){}
+})();
+</script>
+<style id="cq-fast-1h-style-Roe-Tir">
+html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
+</style>
+
 </head>
 <body>
+
+<div id="cq-gerencia-only">
+ <div class="box">
+  <div class="ico">🔐</div>
+  <div class="ttl">Verificando Gerencia</div>
+  <div class="msg" id="cq-gerencia-only-msg">Comprobando usuario y autorización…</div>
+  <button class="back" id="cq-gerencia-only-back" onclick="history.back()">← Volver</button>
+ </div>
+</div>
+
+<style id="cq-home-visible-style">
+#cqHomeVisible{
+  position:fixed!important;
+  top:max(8px,env(safe-area-inset-top))!important;
+  right:8px!important;
+  left:auto!important;
+  bottom:auto!important;
+  z-index:2147483647!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
+  padding:8px 11px!important;
+  border-radius:999px!important;
+  background:#1C3D35!important;
+  color:#fff!important;
+  text-decoration:none!important;
+  font:800 11px/1 Arial,Helvetica,sans-serif!important;
+  box-shadow:0 4px 14px rgba(0,0,0,.24)!important;
+  border:1px solid rgba(255,255,255,.25)!important;
+}
+</style>
+<a id="cqHomeVisible" href="index.html">🏠 Inicio</a>
+
 <div class="app">
 
   <div class="topbar">
@@ -2214,6 +2278,85 @@ recalc();
   document.addEventListener('DOMContentLoaded',actualizarConexion);
   actualizarConexion();
 })();
+</script>
+
+
+<script type="module" id="cq-gerencia-only-script">
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-de-obra.firebaseapp.com",projectId:"cq-mano-de-obra",storageBucket:"cq-mano-de-obra.firebasestorage.app",messagingSenderId:"502127540211",appId:"1:502127540211:web:8daefc75bdaafad412c486"};
+const app=getApps().length?getApp():initializeApp(cfg);
+const auth=getAuth(app),db=getFirestore(app);
+const CACHE_KEY="cq_auth_profile_1h", TTL=3600000;
+const map={"emilio@cqgerencia.com": "emilio", "juan@cqgerencia.com": "juan"};
+const box=document.getElementById("cq-gerencia-only"),msg=document.getElementById("cq-gerencia-only-msg"),back=document.getElementById("cq-gerencia-only-back");
+
+function readCache(){
+ try{
+   const c=JSON.parse(localStorage.getItem(CACHE_KEY)||"null");
+   if(!c) return null;
+   const age=Date.now()-(Number(c.validadoEn)||0);
+   if(age<0 || age>TTL) return null;
+   return c;
+ }catch(e){return null}
+}
+function clearCache(){
+ try{localStorage.removeItem(CACHE_KEY)}catch(e){}
+ document.documentElement.classList.remove("cq-fast-1h-roe-tir");
+}
+function deny(t){
+ clearCache();
+ if(box){box.classList.remove("ok");box.classList.remove("hidden");box.style.display="flex"}
+ if(msg)msg.textContent=t;
+ if(back)back.style.display="inline-block";
+}
+function expose(profile){
+ window._cqAuthProfile=profile;
+ window._cqUsuarioActual=profile.nombre;
+ try{localStorage.setItem("cq_usuario_actual",profile.nombre)}catch(e){}
+ document.documentElement.classList.add("cq-fast-1h-roe-tir");
+ if(box){box.classList.add("ok");box.classList.add("hidden");box.style.display="none"}
+ document.dispatchEvent(new CustomEvent("cq-auth-ready",{detail:profile}));
+}
+function fromCache(c,email){
+ const mods=Array.isArray(c.modulos)?c.modulos:[];
+ const ger=mods.includes("gerencia");
+ if(String(c.email||"").toLowerCase()!==email) return false;
+ if(!(ger)) return false;
+ expose({id:map[email]||c.id||"",nombre:c.nombre||"",email:email,modulos:mods,rol:ger?"gerencia":"operaciones"});
+ return true;
+}
+function saveAndExpose(d,user,key){
+ const mods=Array.isArray(d.modulos)?d.modulos:[];
+ const ger=mods.includes("gerencia");
+ const profile={id:key,nombre:d.nombre||key,email:user.email,modulos:mods,rol:ger?"gerencia":"operaciones"};
+ try{localStorage.setItem(CACHE_KEY,JSON.stringify({id:key,nombre:profile.nombre,email:String(user.email||"").toLowerCase(),modulos:mods,rol:profile.rol,validadoEn:Date.now()}))}catch(e){}
+ expose(profile);
+}
+
+onAuthStateChanged(auth,async user=>{
+ if(!user){deny("No hay una sesi\u00f3n de Gerencia iniciada.");return}
+ try{
+   const email=String(user.email||"").toLowerCase(), key=map[email];
+   if(!key){deny("Este usuario no tiene acceso a Gerencia.");return}
+
+   const cached=readCache();
+   if(cached && fromCache(cached,email)) return;
+
+   const snap=await getDoc(doc(db,"cq_operaciones_usuarios",key));
+   if(!snap.exists()){deny("No se encontr\u00f3 la autorizaci\u00f3n de Gerencia.");return}
+   const d=snap.data()||{}, mods=Array.isArray(d.modulos)?d.modulos:[];
+   const ger=mods.includes("gerencia");
+   if(String(d.email||"").toLowerCase()!==email){deny("La identidad del usuario no coincide con su configuración.");return}
+   if(!(ger)){deny("Este usuario no est\u00e1 autorizado para Gerencia.");return}
+   saveAndExpose(d,user,key);
+ }catch(e){
+   console.warn("CQ auth",e);
+   deny("No se pudo verificar el acceso.");
+ }
+});
 </script>
 
 </body>

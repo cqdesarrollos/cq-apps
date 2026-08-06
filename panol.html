@@ -1,0 +1,3946 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CQ Pañol — CQ Desarrollos</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --verde:#1C3D35; --verde2:#2E7D5E; --verde3:#3F9B76;
+  --sand:#F7F6F3; --card:#FFFFFF; --borde:#E1E9E2;
+  --texto:#1C2B22; --sub:#7A9E82; --tenue:#A8BFA8;
+  --ok:#0A6E3A; --ok-bg:#E9F5EE;
+  --warn:#B8843A; --warn-bg:#FBF1DD;
+  --bad:#C0392B; --bad-bg:#FCECEA;
+  --r:12px; --rs:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:var(--sand);color:var(--texto);font-family:'Space Grotesk',sans-serif}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--sand)}::-webkit-scrollbar-thumb{background:#C4CEC5;border-radius:3px}
+
+.hdr{background:linear-gradient(135deg,#152F29,#1C3D35 60%,#215247);padding:0 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 3px 16px rgba(28,61,53,.25);height:56px;gap:8px}
+.hdr-l{display:flex;align-items:center;gap:10px;flex-shrink:0;min-width:0}
+.logo{width:33px;height:33px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.hdr-title{font-weight:900;font-size:15px;color:#F5F3EE;line-height:1;white-space:nowrap;letter-spacing:-.01em}
+.hdr-sub{font-size:10px;color:#8FBFA8;margin-top:2px;white-space:nowrap}
+.hdr-r{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.user-pill{display:flex;align-items:center;gap:5px;border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:5px 10px;background:rgba(255,255,255,.07);color:#D4EBE0;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.sync-status{font-size:9.5px;font-weight:800;color:#D4EBE0;border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:5px 8px;white-space:nowrap;background:rgba(255,255,255,.06)}
+.sync-status.err{color:#F0A0A0}
+
+.tabs{display:flex;gap:5px;padding:9px 12px;background:#132720;position:sticky;top:56px;z-index:99}
+.tb{flex:1;padding:9px 3px;border-radius:9px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);color:#8FBFA8;font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:11.5px;cursor:pointer;text-align:center;letter-spacing:-.01em}
+.tb.active{background:var(--verde2);border-color:var(--verde2);color:#fff;box-shadow:0 3px 10px rgba(46,125,94,.35)}
+
+.view{display:none;padding:14px 14px 46px;max-width:760px;margin:0 auto}
+.view.active{display:block}
+.sec-ttl{font-size:10px;font-weight:800;color:var(--tenue);letter-spacing:.08em;text-transform:uppercase;margin:16px 2px 8px;display:flex;align-items:center;gap:6px}
+
+.card{background:var(--card);border:1px solid var(--borde);border-radius:var(--r);overflow:hidden;box-shadow:0 1px 2px rgba(28,61,53,.04);margin-bottom:10px}
+.card-hd{background:#FAFBFA;border-bottom:1px solid #EEF2EE;padding:11px 14px;font-size:12px;font-weight:800;color:var(--texto);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-bd{padding:13px 14px}
+
+.carga-form{background:var(--card);border:1px solid var(--borde);border-radius:var(--r);padding:15px;margin-bottom:12px;box-shadow:0 1px 2px rgba(28,61,53,.04)}
+.carga-row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}
+.carga-row.triple{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:480px){.carga-row.triple{grid-template-columns:1fr 1fr}}
+.carga-fld{min-width:0}
+.carga-fld label{display:block;font-size:9.5px;font-weight:800;color:var(--sub);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}
+.carga-fld input,.carga-fld select{width:100%;background:var(--sand);border:1px solid var(--borde);border-radius:var(--rs);padding:9px 10px;font-size:13px;font-family:'Space Grotesk',sans-serif;font-weight:600;color:var(--texto);outline:none;transition:border-color .12s}
+.carga-fld input:focus,.carga-fld select:focus{border-color:var(--verde2)}
+.btn-cargar{width:100%;padding:12px;border-radius:10px;border:none;background:var(--verde);color:#fff;font-weight:800;font-size:13px;cursor:pointer;letter-spacing:.01em}
+.btn-cargar:active{transform:scale(.98)}
+.btn-secundario{width:100%;padding:9px;border-radius:10px;border:1px solid var(--borde);background:var(--sand);color:#3D5A42;font-weight:800;font-size:12px;cursor:pointer;margin-top:8px}
+
+.filter-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.filter-row select,.filter-row input{background:var(--card);border:1px solid var(--borde);border-radius:var(--rs);padding:9px 11px;font-size:12px;color:var(--texto);font-family:'Space Grotesk',sans-serif;font-weight:600;outline:none}
+.filter-row input{min-width:140px;flex:1}
+
+.prod-card{background:var(--card);border:1px solid var(--borde);border-radius:11px;padding:11px 12px;margin-bottom:7px}
+.prod-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.prod-nombre{font-weight:800;font-size:13.5px;color:var(--texto);line-height:1.25}
+.prod-codigo{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub)}
+.prod-rubro{display:inline-block;font-size:9px;font-weight:800;padding:2px 7px;border-radius:999px;background:#EAF3EC;color:var(--verde2);margin-top:4px}
+.prod-right{text-align:right;flex-shrink:0}
+.prod-stock{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:800;color:var(--verde);white-space:nowrap;line-height:1}
+.prod-stock small{display:block;font-size:8.5px;font-weight:700;color:var(--tenue);text-align:right;margin-top:2px}
+.prod-icons{display:flex;gap:4px;justify-content:flex-end;margin-top:6px}
+.icon-mini{width:23px;height:23px;border-radius:6px;border:1px solid var(--borde);background:var(--sand);display:inline-flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;color:var(--sub);line-height:1}
+.icon-mini:hover{background:#EAF3EC;color:var(--verde2)}
+.lotes-wrap{margin-top:8px;border-top:1px dashed var(--borde);padding-top:7px;display:none}
+.lotes-wrap.open{display:block}
+.lote-row{display:flex;justify-content:space-between;font-size:10.5px;padding:3px 0;color:#3D5A42}
+.lote-row .lp{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--verde)}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip{padding:7px 13px;border-radius:9px;border:1px solid var(--borde);background:var(--card);color:var(--sub);font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap}
+.chip.active{background:var(--verde);border-color:var(--verde);color:#fff}
+
+.hist-entry{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #EEF2EE}
+.hist-entry:last-child{border-bottom:none}
+.hist-fecha{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--tenue);min-width:60px;line-height:1.3}
+.hist-mid{flex:1;min-width:0}
+.hist-mat{font-size:12px;font-weight:700;color:var(--texto);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist-sub{font-size:10px;color:var(--sub)}
+.hist-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;min-width:54px;text-align:right}
+.hist-val.entrada{color:var(--ok)}
+.hist-val.salida{color:var(--bad)}
+.hist-acciones{display:flex;gap:4px;flex-shrink:0}
+.empty-hist{padding:22px;text-align:center;color:var(--tenue);font-size:12px}
+
+.resumen-strip{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.resumen-card{background:var(--verde);color:#fff;border-radius:12px;padding:12px 13px}
+.resumen-card.alt{background:var(--verde2)}
+.resumen-card .rc-lbl{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.7);font-weight:800}
+.resumen-card .rc-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:800;margin-top:3px}
+
+.chart-card{background:var(--card);border:1px solid var(--borde);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.chart-card h3{font-size:12px;font-weight:800;color:var(--texto);margin-bottom:10px}
+.chart-wrap{position:relative;height:220px}
+
+.rep-table-row{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #EEF2EE;cursor:pointer}
+.rep-table-row:last-child{border-bottom:none}
+.rep-table-row:hover{background:#FAFBFA}
+.rep-table-row .rn{flex:1;min-width:0}
+.rep-table-row .rn b{display:block;font-size:12.5px;color:var(--texto);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rep-table-row .rn span{font-size:10px;color:var(--sub)}
+.rep-table-row .rv{text-align:right;font-family:'JetBrains Mono',monospace}
+.rep-table-row .rv b{display:block;font-size:13px;color:var(--verde);font-weight:800}
+.rep-table-row .rv span{font-size:9.5px;color:var(--tenue)}
+.rep-detalle{background:#FAFBFA;padding:8px 14px 10px;border-bottom:1px solid #EEF2EE}
+.rep-detalle-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:#3D5A42}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(21,35,28,.5);z-index:300;align-items:center;justify-content:center;padding:14px}
+.modal-bg.open{display:flex}
+.modal{background:var(--card);border-radius:15px;width:460px;max-width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 10px 44px rgba(21,35,28,.28)}
+.modal-hd{padding:14px 16px 11px;border-bottom:1px solid #EEF2EE;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1}
+.modal-ttl{font-weight:800;font-size:14px;color:var(--texto)}
+.modal-x{background:none;border:none;font-size:19px;cursor:pointer;color:var(--tenue)}
+.mbody{padding:14px 16px}
+.mfooter{padding:0 16px 14px;display:flex;gap:7px;justify-content:flex-end}
+.fld{display:flex;flex-direction:column;gap:4px;margin-bottom:11px}
+.fld label{font-size:9.5px;font-weight:800;color:var(--sub);letter-spacing:.05em;text-transform:uppercase}
+.fld input,.fld select,.fld textarea{background:var(--sand);border:1px solid var(--borde);border-radius:var(--rs);padding:8px 10px;color:var(--texto);font-size:12.5px;font-family:'Space Grotesk',sans-serif;outline:none}
+.fld textarea{font-family:'JetBrains Mono',monospace;font-size:11.5px;min-height:130px;resize:vertical;white-space:pre}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--verde2)}
+.btn{padding:9px 16px;border-radius:9px;border:none;font-weight:800;font-size:12px;cursor:pointer}
+.btn-p{background:var(--verde);color:#fff}
+.btn-s{background:var(--sand);border:1px solid var(--borde);color:#3D5A42}
+.hint{background:#EBF4FF;border:1px solid #A8D0F0;border-radius:var(--rs);padding:9px 11px;font-size:11px;color:#1A3D6B;margin-bottom:11px;line-height:1.5}
+.gestion-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #EEF2EE}
+.gestion-row:last-child{border-bottom:none}
+.gestion-row span{font-size:13px;font-weight:700;color:var(--texto)}
+.gestion-row .gr-actions{display:flex;gap:5px}
+.gestion-row .gr-actions button{background:none;border:1px solid var(--borde);border-radius:6px;font-size:11px;padding:4px 8px;cursor:pointer;font-weight:700}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--verde);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:700;box-shadow:0 4px 20px rgba(28,61,53,.3);z-index:500;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.err{background:var(--bad);box-shadow:0 4px 20px rgba(192,57,43,.35)}
+.empty-state{text-align:center;padding:40px 16px;color:var(--tenue);font-size:12.5px}
+.empty-state .ic{font-size:28px;margin-bottom:8px}
+.toggle-row{display:flex;gap:6px;margin-bottom:12px}
+.toggle-row .chip{flex:1;text-align:center}
+
+
+/* CQ — Buscadores desplegables hacia abajo + estética premium */
+.combo-down{position:relative;width:100%}
+.card:has(.combo-down),.card-bd:has(.combo-down),.carga-form:has(.combo-down){overflow:visible!important}
+.combo-down input{padding-right:36px!important}
+.combo-down::after{content:"⌄";position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:900;color:var(--sub);pointer-events:none;transition:transform .15s ease}
+.combo-down.open::after{transform:translateY(-50%) rotate(180deg);color:var(--verde2)}
+.combo-panel{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);background:#fff;border:1px solid rgba(46,125,94,.22);border-radius:14px;box-shadow:0 18px 38px rgba(28,61,53,.18);z-index:250;max-height:245px;overflow-y:auto;padding:6px}
+.combo-down.open .combo-panel{display:block;animation:cqDrop .12s ease-out}
+@keyframes cqDrop{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.combo-item{width:100%;border:0;background:transparent;border-radius:11px;padding:10px 11px;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;cursor:pointer;font-family:'Space Grotesk',sans-serif;color:var(--texto)}
+.combo-item:hover,.combo-item.active{background:#EDF7F1}
+.combo-item-main{min-width:0;flex:1}
+.combo-item-name{font-size:13px;font-weight:900;line-height:1.18;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.combo-item-meta{font-size:10px;font-weight:700;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.combo-item-stock{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:900;color:var(--verde);background:#EAF3EC;border-radius:999px;padding:5px 8px;white-space:nowrap}
+.combo-empty{padding:12px;color:var(--tenue);font-size:12px;font-weight:700;text-align:center}
+.combo-help{font-size:10.5px;color:var(--tenue);margin-top:5px;font-weight:700}
+
+/* Pulido visual general */
+.card,.carga-form,.prod-card,.chart-card{border-color:rgba(28,61,53,.12)!important;box-shadow:0 8px 22px rgba(28,61,53,.065)!important}
+.carga-form,.card,.chart-card{border-radius:16px!important}
+.prod-card{border-radius:15px!important;transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease!important}
+.prod-card:hover{transform:translateY(-1px);border-color:rgba(46,125,94,.34)!important;box-shadow:0 12px 28px rgba(28,61,53,.10)!important}
+.btn-cargar{background:linear-gradient(135deg,var(--verde),var(--verde2))!important;border:1px solid rgba(255,255,255,.12)!important;border-radius:14px!important;box-shadow:0 10px 22px rgba(28,61,53,.20)!important;min-height:46px!important}
+.btn-secundario,.btn,.chip,.tb,.icon-mini,.user-pill,.sync-status{transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease,background .14s ease!important}
+.btn-secundario:hover,.btn:hover,.chip:hover,.icon-mini:hover{transform:translateY(-1px)!important;box-shadow:0 8px 18px rgba(28,61,53,.09)!important}
+.carga-fld input,.carga-fld select,.fld input,.fld select,.filter-row input,.filter-row select{border-radius:12px!important;background:linear-gradient(180deg,#FFFFFF,#F8FAF7)!important;border-color:rgba(28,61,53,.13)!important;min-height:40px!important}
+.carga-fld input:focus,.carga-fld select:focus,.fld input:focus,.fld select:focus,.filter-row input:focus,.filter-row select:focus{box-shadow:0 0 0 4px rgba(46,125,94,.11)!important;border-color:rgba(46,125,94,.55)!important;background:#fff!important}
+.chip{border-radius:999px!important;background:linear-gradient(180deg,#fff,#F7FAF7)!important}
+.chip.active{background:linear-gradient(135deg,var(--verde),var(--verde2))!important;box-shadow:0 8px 18px rgba(46,125,94,.22)!important}
+.resumen-card{border-radius:16px!important;box-shadow:0 10px 22px rgba(28,61,53,.13)!important;background:linear-gradient(135deg,#183A32,var(--verde2))!important}
+.resumen-card.alt{background:linear-gradient(135deg,#246E51,#3F9B76)!important}
+.hist-entry{transition:background .12s ease!important}.hist-entry:hover{background:#FAFEFB!important}
+@media(max-width:520px){.combo-panel{max-height:230px}.combo-item{padding:10px 9px}.combo-item-stock{font-size:10px;padding:4px 7px}}
+
+
+
+/* CQ — Ajustes rubros largos + secciones diferenciadas */
+/* Rubros largos: más ancho, menos corte y mejor lectura */
+.carga-row.triple{
+  grid-template-columns:minmax(170px,1.05fr) minmax(135px,.85fr) minmax(170px,1.1fr) !important;
+}
+.carga-row.triple .carga-fld[style*="grid-column"]{grid-column:1/-1 !important}
+.carga-fld select,.fld select,.filter-row select{
+  min-width:0 !important;
+  text-overflow:ellipsis !important;
+}
+#cf-rubro,#masiva-rubro,#editar-prod-rubro,#stock-rubro-filter,#obra-rubro-filter{
+  font-size:12px !important;
+  font-weight:800 !important;
+  padding-right:28px !important;
+}
+.filter-row select{
+  min-width:190px !important;
+  flex:1 1 190px !important;
+}
+.prod-rubro{
+  max-width:100% !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+  line-height:1.18 !important;
+  padding:4px 8px !important;
+  border-radius:10px !important;
+}
+.combo-item-meta{
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  line-height:1.18 !important;
+}
+
+/* Diferenciar claramente Pañol / Obras / Reportes */
+.view.active{
+  border-radius:0 0 18px 18px;
+}
+#view-stock.active::before,
+#view-obras.active::before,
+#view-reportes.active::before{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0 0 12px;
+  padding:11px 13px;
+  border-radius:16px;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.02em;
+  box-shadow:0 8px 22px rgba(28,61,53,.08);
+}
+#view-stock.active::before{
+  content:"📦 PAÑOL · Carga y stock general";
+  color:#143B66;
+  background:linear-gradient(135deg,#FFFFFF,#EAF3FF);
+  border:1px solid rgba(43,123,224,.22);
+}
+#view-obras.active::before{
+  content:"🏗️ OBRA · Consumo por obra";
+  color:#6A430C;
+  background:linear-gradient(135deg,#FFFFFF,#FFF1D8);
+  border:1px solid rgba(200,136,42,.28);
+}
+#view-reportes.active::before{
+  content:"📊 REPORTE · Comparativas y totales";
+  color:#4E2768;
+  background:linear-gradient(135deg,#FFFFFF,#F4E9FF);
+  border:1px solid rgba(123,63,160,.22);
+}
+#tb-stock.active{background:linear-gradient(135deg,#1B5F9E,#2B7BE0) !important;border-color:#2B7BE0 !important;box-shadow:0 5px 14px rgba(43,123,224,.28)!important}
+#tb-obras.active{background:linear-gradient(135deg,#9A651B,#C8882A) !important;border-color:#C8882A !important;box-shadow:0 5px 14px rgba(200,136,42,.30)!important}
+#tb-reportes.active{background:linear-gradient(135deg,#5B2A78,#7B3FA0) !important;border-color:#7B3FA0 !important;box-shadow:0 5px 14px rgba(123,63,160,.28)!important}
+#view-stock .card-hd,#view-stock .sec-ttl{color:#1B5F9E !important}
+#view-obras .card-hd,#view-obras .sec-ttl{color:#9A651B !important}
+#view-reportes .card-hd,#view-reportes .sec-ttl{color:#5B2A78 !important}
+#view-stock .carga-form,#view-stock .prod-card{border-left:5px solid #2B7BE0 !important}
+#view-obras .card{border-left:5px solid #C8882A !important}
+#view-reportes .card,#view-reportes .chart-card{border-left:5px solid #7B3FA0 !important}
+#view-obras .btn-cargar{background:linear-gradient(135deg,#9A651B,#C8882A)!important;box-shadow:0 10px 22px rgba(200,136,42,.22)!important}
+#view-reportes .resumen-card{background:linear-gradient(135deg,#4E2768,#7B3FA0)!important}
+
+@media(max-width:620px){
+  .carga-row.triple{grid-template-columns:1fr !important}
+  .filter-row select,.filter-row input{width:100% !important;flex:1 1 100% !important}
+  #cf-rubro,#masiva-rubro,#editar-prod-rubro,#stock-rubro-filter,#obra-rubro-filter{font-size:12.5px !important}
+}
+
+
+
+/* CQ Pañol V2 — navegación e interfaz premium */
+:root{--stock:#1565C0;--stock2:#2B83EA;--obra:#C17A16;--obra2:#E09A31;--reporte:#6B35A4;--reporte2:#8A53C7}
+body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent 30%),var(--sand)}
+.hdr{height:62px;padding:0 14px;background:linear-gradient(135deg,#102820,#173F34 55%,#24634F);border-bottom:1px solid rgba(255,255,255,.10)}
+.logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(145deg,rgba(255,255,255,.19),rgba(255,255,255,.08));font-size:19px;box-shadow:inset 0 1px rgba(255,255,255,.20),0 8px 18px rgba(0,0,0,.15)}
+.hdr-title{font-size:16px}.hdr-sub{font-size:10.5px;color:#A5D3BC}
+.sync-status{position:relative;padding:7px 10px 7px 22px;background:rgba(255,255,255,.09);box-shadow:inset 0 1px rgba(255,255,255,.10)}
+.sync-status::before{content:"";position:absolute;left:9px;top:50%;width:7px;height:7px;border-radius:50%;background:#28D17C;transform:translateY(-50%);box-shadow:0 0 0 4px rgba(40,209,124,.13),0 0 10px rgba(40,209,124,.65)}
+.sync-status.err::before{background:#FF8A72;box-shadow:0 0 0 4px rgba(255,138,114,.14)}
+.user-pill{padding:7px 10px;background:rgba(255,255,255,.09)}
+.tabs{top:62px;padding:9px 10px;gap:8px;background:#10231D;box-shadow:0 8px 22px rgba(17,43,35,.18)}
+.tb{height:54px;padding:6px 8px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:8px;color:#B6C9BF;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.10);box-shadow:inset 0 1px rgba(255,255,255,.05)}
+.tb-ico{font-size:19px;line-height:1;filter:saturate(.8)}
+.tb-copy{display:flex;flex-direction:column;align-items:flex-start;line-height:1.05}.tb-copy b{font-size:12px}.tb-copy small{font-size:8.5px;font-weight:700;opacity:.72;margin-top:3px}
+.tb.active{transform:translateY(-1px);color:#fff}
+#tb-stock.active{background:linear-gradient(135deg,var(--stock),var(--stock2))!important;border-color:rgba(255,255,255,.28)!important;box-shadow:0 9px 20px rgba(43,131,234,.30)!important}
+#tb-obras.active{background:linear-gradient(135deg,var(--obra),var(--obra2))!important;border-color:rgba(255,255,255,.28)!important;box-shadow:0 9px 20px rgba(224,154,49,.30)!important}
+#tb-reportes.active{background:linear-gradient(135deg,var(--reporte),var(--reporte2))!important;border-color:rgba(255,255,255,.28)!important;box-shadow:0 9px 20px rgba(138,83,199,.30)!important}
+.view{padding-top:16px;animation:viewIn .18s ease-out}.view.active{display:block}@keyframes viewIn{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}
+#view-stock.active::before,#view-obras.active::before,#view-reportes.active::before{font-size:13px!important;padding:13px 15px!important;border-radius:18px!important}
+.card-hd{min-height:45px;font-size:13px;background:linear-gradient(180deg,#fff,#F7FAF8)}
+.carga-form,.card,.prod-card,.chart-card{border-radius:18px!important}
+.btn-cargar{font-size:13.5px!important;letter-spacing:.01em;box-shadow:0 11px 24px rgba(28,61,53,.20)!important}
+.icon-mini{width:29px;height:29px;border-radius:9px;font-size:13px;background:#fff;box-shadow:0 3px 10px rgba(28,61,53,.07)}
+.prod-card{padding:14px 14px!important;position:relative}.prod-nombre{font-size:14px}.prod-stock{font-size:20px}
+.stock-state{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 8px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.02em}
+.stock-state.ok{background:#E8F6EE;color:#08723A}.stock-state.low{background:#FFF1D7;color:#9A5D08}.stock-state.zero{background:#FDEAE7;color:#B73327}
+.fav-btn{border:0;background:transparent;font-size:18px;cursor:pointer;line-height:1;padding:3px;filter:grayscale(1);opacity:.45}.fav-btn.active{filter:none;opacity:1;transform:scale(1.08)}
+.quick-access{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}.quick-card{background:#fff;border:1px solid rgba(28,61,53,.11);border-radius:16px;padding:12px;box-shadow:0 7px 20px rgba(28,61,53,.06)}
+.quick-title{font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:900;color:var(--sub);margin-bottom:8px}.quick-list{display:flex;gap:6px;flex-wrap:wrap}.quick-chip{border:1px solid var(--borde);background:#F8FAF8;color:var(--texto);border-radius:999px;padding:6px 9px;font-size:10px;font-weight:800;cursor:pointer}.quick-chip:hover{border-color:var(--verde2);background:#ECF7F0}.quick-empty{font-size:10.5px;color:var(--tenue)}
+.alert-panel{background:linear-gradient(135deg,#FFFDF8,#FFF4DD);border:1px solid rgba(193,122,22,.22);border-radius:16px;padding:12px 14px;margin-bottom:12px}.alert-title{font-size:11px;font-weight:900;color:#8B570D;margin-bottom:7px}.alert-list{display:flex;gap:6px;flex-wrap:wrap}.alert-chip{font-size:10px;font-weight:800;border-radius:999px;padding:5px 8px;background:#fff;border:1px solid rgba(193,122,22,.20);color:#6E4B18}
+.resumen-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.resumen-card{min-height:78px;display:flex;flex-direction:column;justify-content:center}
+#view-stock .btn-cargar{background:linear-gradient(135deg,var(--stock),var(--stock2))!important;box-shadow:0 10px 22px rgba(43,131,234,.24)!important}
+#view-obras .btn-cargar{background:linear-gradient(135deg,var(--obra),var(--obra2))!important;box-shadow:0 10px 22px rgba(224,154,49,.24)!important}
+#view-reportes .chart-card{border-left-color:var(--reporte)!important}
+@media(max-width:560px){.tabs{gap:6px;padding:8px}.tb{height:52px;gap:5px;padding:5px}.tb-ico{font-size:17px}.tb-copy b{font-size:11px}.tb-copy small{font-size:7.8px}.quick-access{grid-template-columns:1fr}.hdr-title{font-size:14px}.hdr-sub{display:none}.sync-status{max-width:104px;overflow:hidden;text-overflow:ellipsis}.prod-top{gap:6px}}
+
+/* Selector de métrica en Reportes */
+.report-metric-switch{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 0 12px;padding:6px;background:#F3EDF9;border:1px solid rgba(107,53,164,.16);border-radius:16px}
+.report-metric-btn{border:1px solid transparent;background:transparent;color:#6B5A78;border-radius:11px;padding:9px 8px;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:900;cursor:pointer;transition:.14s ease}
+.report-metric-btn:hover{background:rgba(255,255,255,.65)}
+.report-metric-btn.active{background:linear-gradient(135deg,var(--reporte),var(--reporte2));color:#fff;box-shadow:0 7px 16px rgba(107,53,164,.22);border-color:rgba(255,255,255,.25)}
+.report-metric-note{font-size:10px;color:#7D6B89;font-weight:700;margin:-4px 2px 11px}
+@media(max-width:420px){.report-metric-btn{font-size:10px;padding:8px 5px}}
+
+
+/* Identidad permanente de cada solapa */
+#tb-stock{
+  color:#DCEEFF;
+  background:linear-gradient(135deg,rgba(21,101,192,.34),rgba(43,131,234,.18));
+  border-color:rgba(74,153,238,.38);
+}
+#tb-obras{
+  color:#FFF0D2;
+  background:linear-gradient(135deg,rgba(193,122,22,.35),rgba(224,154,49,.18));
+  border-color:rgba(224,154,49,.40);
+}
+#tb-reportes{
+  color:#F1E3FF;
+  background:linear-gradient(135deg,rgba(107,53,164,.38),rgba(138,83,199,.20));
+  border-color:rgba(158,105,214,.40);
+}
+#tb-stock:not(.active):hover{background:linear-gradient(135deg,rgba(21,101,192,.52),rgba(43,131,234,.30))}
+#tb-obras:not(.active):hover{background:linear-gradient(135deg,rgba(193,122,22,.52),rgba(224,154,49,.30))}
+#tb-reportes:not(.active):hover{background:linear-gradient(135deg,rgba(107,53,164,.55),rgba(138,83,199,.32))}
+#tb-stock .tb-ico{filter:drop-shadow(0 2px 5px rgba(43,131,234,.45))}
+#tb-obras .tb-ico{filter:drop-shadow(0 2px 5px rgba(224,154,49,.45))}
+#tb-reportes .tb-ico{filter:drop-shadow(0 2px 5px rgba(138,83,199,.45))}
+
+</style>
+
+<style id="cq-materiales-status-dot">
+.mat-sync-dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;box-shadow:0 0 0 3px rgba(0,0,0,.04)}
+.mat-sync-dot.ok{background:#27AE60;box-shadow:0 0 0 3px rgba(39,174,96,.13)}
+.mat-sync-dot.err{background:#D6453D;box-shadow:0 0 0 3px rgba(214,69,61,.13)}
+.mat-sync-dot.wait{background:#B8B8B8;box-shadow:0 0 0 3px rgba(120,120,120,.10)}
+.mat-sync-cell{text-align:center!important;width:42px;white-space:nowrap}
+</style>
+
+<style id="cq-home-header-style">
+.cq-home-header{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  height:32px;
+  padding:0 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.10);
+  color:#fff;
+  text-decoration:none;
+  font-size:10.5px;
+  font-weight:900;
+  white-space:nowrap;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
+}
+.cq-home-header:active{transform:scale(.98)}
+@media(max-width:560px){
+  .cq-home-header{height:30px;padding:0 8px;font-size:10px}
+}
+</style>
+
+
+<style id="cq-total-access-guard-style">
+#cq-access-guard{
+  position:fixed;inset:0;z-index:30000;background:#153b32;color:#fff;
+  display:flex;align-items:center;justify-content:center;padding:22px;
+  font-family:'Space Grotesk',Arial,sans-serif;
+}
+#cq-access-guard.hidden{display:none}
+#cq-access-guard .guard-card{
+  width:100%;max-width:360px;text-align:center;padding:22px;
+  border:1px solid rgba(255,255,255,.14);border-radius:22px;
+  background:rgba(255,255,255,.08);box-shadow:0 22px 55px rgba(0,0,0,.24)
+}
+#cq-access-guard .guard-ico{font-size:31px;margin-bottom:9px}
+#cq-access-guard .guard-title{font-size:17px;font-weight:900}
+#cq-access-guard .guard-msg{font-size:11px;color:#c8d9d2;margin-top:6px;line-height:1.45}
+#cq-access-guard .guard-actions{display:none;margin-top:14px}
+#cq-access-guard .guard-btn{
+  border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.10);
+  color:#fff;border-radius:12px;padding:9px 14px;font-weight:900;cursor:pointer
+}
+</style>
+
+
+<script id="cq-fast-1h-bootstrap-panol">
+(function(){
+  try{
+    var raw=localStorage.getItem("cq_auth_profile_1h");
+    if(!raw) return;
+    var c=JSON.parse(raw), age=Date.now()-(Number(c.validadoEn)||0);
+    if(age<0 || age>3600000) return;
+    var mods=Array.isArray(c.modulos)?c.modulos:[];
+    var ger=mods.indexOf("gerencia")>=0;
+    if(!((ger || mods.indexOf("panol")>=0))) return;
+    document.documentElement.classList.add("cq-fast-1h-panol");
+    window.__cqFast1h=c;
+  }catch(e){}
+})();
+</script>
+<style id="cq-fast-1h-style-panol">
+html.cq-fast-1h-panol #cq-access-guard{display:none!important}
+</style>
+
+
+<style id="cq-panol-gastos-fields">
+.gasto-sync-dot{display:inline-block;width:7px;height:7px;border-radius:50%;vertical-align:middle;background:#D6453D;box-shadow:0 0 0 2px rgba(214,69,61,.10)}
+.gasto-sync-dot.ok{background:#27AE60;box-shadow:0 0 0 2px rgba(39,174,96,.12)}
+.gasto-sync-dot.wait{background:#B8B8B8;box-shadow:0 0 0 2px rgba(120,120,120,.10)}
+.gasto-sync-cell{text-align:center!important;width:42px;white-space:nowrap}
+.consumo-comment{width:100%;background:linear-gradient(180deg,#FFFFFF,#F8FAF7);border:1px solid rgba(28,61,53,.13);border-radius:12px;padding:9px 10px;font:600 12.5px 'Space Grotesk',sans-serif;color:var(--texto);min-height:62px;resize:vertical;outline:none}
+.consumo-comment:focus{box-shadow:0 0 0 4px rgba(46,125,94,.11);border-color:rgba(46,125,94,.55)}
+.gastos-fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+@media(max-width:520px){.gastos-fields-grid{grid-template-columns:1fr}}
+.panol-subrubro-combo{position:relative}
+.panol-subrubro-input{width:100%!important;padding-right:36px!important}
+.panol-subrubro-btn{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:none;background:transparent;color:#6F8D78;font-size:14px;cursor:pointer;border-radius:8px}
+.panol-subrubro-panel{display:none;position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:400;background:#fff;border:1px solid rgba(46,125,94,.22);border-radius:12px;max-height:230px;overflow:auto;padding:5px;box-shadow:0 14px 32px rgba(28,61,53,.18)}
+.panol-subrubro-panel.open{display:block}
+.panol-subrubro-option{padding:9px 10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer}
+.panol-subrubro-option:hover{background:#EDF7F1}
+.hist-extra{font-size:9.5px;color:var(--sub);margin-top:2px;line-height:1.35}
+</style>
+
+<style id="cq-panol-bulk-columns">
+.bulk-grid-panol{display:grid;grid-template-columns:1fr 1.5fr .8fr .9fr;gap:8px;align-items:start}
+.bulk-grid-head{font-size:9.5px;font-weight:900;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;padding:0 3px}
+.bulk-grid-panol textarea{width:100%;min-height:210px;background:#F7F6F3;border:1px solid var(--borde);border-radius:10px;padding:9px 10px;font:600 12px 'JetBrains Mono',monospace;color:var(--texto);outline:none;resize:vertical;white-space:pre}
+.bulk-grid-panol textarea:focus{border-color:var(--verde2);box-shadow:0 0 0 4px rgba(46,125,94,.09)}
+.bulk-next-price{margin-top:7px;width:100%;border:1px solid rgba(46,125,94,.25);border-radius:9px;background:#EEF7F1;color:#1C3D35;padding:8px;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:900;cursor:pointer}
+@media(max-width:680px){.bulk-grid-panol{grid-template-columns:1fr 1fr}.bulk-grid-head{display:none}}
+</style>
+
+<style id="cq-panol-bulk-column-titles">
+.bulk-col{min-width:0}
+.bulk-col-title{font-size:9.5px;font-weight:900;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin:0 0 5px 3px}
+</style>
+
+<style id="cq-panol-materiales-picker">
+.cq-mat-check{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  border:1px solid rgba(43,123,224,.22);background:#F2F7FF;border-radius:12px;
+  padding:10px 11px;margin-bottom:10px
+}
+.cq-mat-check label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:#1F5FAF;cursor:pointer}
+.cq-mat-check input{width:17px;height:17px;accent-color:#2B7BE0}
+.cq-mat-check small{display:block;font-size:9px;color:#6E8197;margin-top:2px}
+.cq-mat-picker{display:none;margin-bottom:10px;padding:10px;border:1px solid #D7E4F4;background:#FBFDFF;border-radius:12px}
+.cq-mat-picker.show{display:block}
+.cq-mat-search{width:100%;background:#fff;border:1px solid #D7E4F4;border-radius:10px;padding:10px 11px;font:700 12px 'Space Grotesk',sans-serif;color:var(--texto);outline:none}
+.cq-mat-search:focus{border-color:#2B7BE0;box-shadow:0 0 0 4px rgba(43,123,224,.10)}
+.cq-mat-results{margin-top:6px;max-height:230px;overflow:auto;background:#fff;border:1px solid #E1E8F0;border-radius:10px}
+.cq-mat-result{padding:9px 10px;border-bottom:1px solid #EEF2F6;cursor:pointer}
+.cq-mat-result:last-child{border-bottom:0}.cq-mat-result:hover{background:#EEF5FF}
+.cq-mat-result b{display:block;font-size:12px;color:#173F6D}
+.cq-mat-result small{display:block;font-size:9.5px;color:#70839A;margin-top:2px}
+.cq-mat-selected{margin-top:7px;padding:8px 10px;background:#EAF6EF;border:1px solid #CBE4D4;border-radius:9px;color:#176D4D;font-size:10.5px;font-weight:900}
+</style>
+
+<style id="cq-sync-labels-mini-panol">
+.sync-labeled-panol{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;vertical-align:middle;min-width:31px}
+.sync-mini-label-panol{font-size:6.5px;line-height:1;font-weight:900;text-transform:uppercase;color:var(--sub);white-space:nowrap}
+.sync-labeled-panol .gasto-sync-dot,.sync-labeled-panol .mat-sync-dot{margin-top:1px!important}
+</style>
+
+<style id="cq-panol-catalogo-productos-materiales">
+.cf-catalog-source{font-size:8.5px;font-weight:900;color:#2B7BE0;background:#EAF3FF;border-radius:999px;padding:2px 6px;white-space:nowrap}
+.cf-new-product{
+  width:100%;border:0;border-top:1px solid #E8EEF0;background:#F7FBFF;color:#1F5FAF;
+  padding:11px 12px;text-align:left;font:900 11.5px 'Space Grotesk',sans-serif;cursor:pointer
+}
+.cf-new-product:hover{background:#ECF5FF}
+.cf-auto-materiales{
+  margin-top:6px;padding:7px 9px;border-radius:9px;background:#EAF6EF;border:1px solid #CBE4D4;
+  color:#176D4D;font-size:10px;font-weight:900
+}
+.prod-materiales-badge{
+  display:inline-flex;margin-left:5px;padding:2px 6px;border-radius:999px;background:#EAF3FF;color:#1F5FAF;
+  font-size:8px;font-weight:900;vertical-align:1px
+}
+</style>
+
+
+<style id="cq-panol-ajustes-reporte-historial-autovinculo">
+#obra-detalle .hist-entry{align-items:flex-start}
+#obra-detalle .hist-mid{min-width:0;overflow:visible}
+#obra-detalle .hist-mat{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  line-height:1.28;
+  overflow-wrap:anywhere;
+}
+#obra-detalle .hist-sub,#obra-detalle .hist-extra{
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.cq-mat-check.hidden-manual{display:none!important}
+.chart-product-note{font-size:10px;color:var(--sub);font-weight:800;margin-top:3px;line-height:1.35}
+</style>
+
+
+<style id="cq-historial-obra-alineado-v2">
+#obra-detalle .hist-entry{
+  display:grid!important;
+  grid-template-columns:62px minmax(0,1fr) 58px 42px 42px 58px;
+  gap:8px!important;
+  align-items:center!important;
+  padding:10px 12px!important;
+}
+#obra-detalle .hist-fecha{min-width:0!important;align-self:center}
+#obra-detalle .hist-mid{min-width:0!important;overflow:visible!important}
+#obra-detalle .hist-mat{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  overflow-wrap:anywhere!important;
+  word-break:break-word!important;
+  line-height:1.25!important;
+  padding-right:2px;
+}
+#obra-detalle .hist-sub,#obra-detalle .hist-extra{
+  white-space:normal!important;
+  overflow-wrap:anywhere!important;
+  line-height:1.3!important;
+}
+#obra-detalle .hist-val{min-width:0!important;text-align:right!important;align-self:center}
+#obra-detalle .mat-sync-cell,#obra-detalle .gasto-sync-cell{
+  width:auto!important;min-width:0!important;text-align:center!important;align-self:center
+}
+#obra-detalle .hist-acciones{justify-content:flex-end;align-self:center}
+@media(max-width:620px){
+  #obra-detalle .hist-entry{
+    grid-template-columns:52px minmax(0,1fr) 46px 34px 34px;
+    gap:5px!important;
+  }
+  #obra-detalle .hist-acciones{
+    grid-column:2 / -1;
+    justify-content:flex-end;
+    margin-top:-2px;
+  }
+  #obra-detalle .sync-mini-label-panol{font-size:5.8px!important}
+}
+</style>
+
+</head>
+<body>
+
+<div id="cq-access-guard">
+  <div class="guard-card">
+    <div class="guard-ico">🔐</div>
+    <div class="guard-title">Verificando acceso</div>
+    <div class="guard-msg" id="cq-access-msg">Comprobando usuario y permisos de Pañol…</div>
+    <div class="guard-actions" id="cq-access-actions">
+      <button class="guard-btn" onclick="history.back()">← Volver</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="logo">📦</div>
+    <div>
+      <div class="hdr-title">CQ Pañol</div>
+      <div class="hdr-sub">Stock &amp; consumo por obra</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <a class="cq-home-header" href="index.html">🏠 Inicio</a>
+    <span class="sync-status" id="sync-status">Conectando...</span>
+    <div class="user-pill" id="user-pill" onclick="window.cambiarUsuario()">👤 <span id="user-nombre">...</span></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tb active tb-stock" id="tb-stock" onclick="window.showTab('stock')"><span class="tb-ico">📦</span><span class="tb-copy"><b>Pañol</b><small>Stock general</small></span></button>
+  <button class="tb tb-obras" id="tb-obras" onclick="window.showTab('obras')"><span class="tb-ico">🏗️</span><span class="tb-copy"><b>Obras</b><small>Consumos</small></span></button>
+  <button class="tb tb-reportes" id="tb-reportes" onclick="window.showTab('reportes')"><span class="tb-ico">📊</span><span class="tb-copy"><b>Reportes</b><small>Análisis</small></span></button>
+</div>
+
+<!-- ============ STOCK (PAÑOL) ============ -->
+<div class="view active" id="view-stock">
+
+  <div class="carga-form">
+    <div class="card-hd" style="margin:-15px -15px 12px;">Cargar producto al stock</div>
+    <div class="carga-row triple">
+      <div class="carga-fld">
+        <label>Subrubro · Materiales</label>
+        <div class="panol-subrubro-combo">
+          <input class="panol-subrubro-input" type="text" id="cf-subrubro" placeholder="Seleccionar o escribir..." autocomplete="off"
+            onfocus="window.abrirSubrubrosEntradaPanol('cf')" oninput="window.renderSubrubrosEntradaPanol('cf',this.value)">
+          <button type="button" class="panol-subrubro-btn" onclick="window.abrirSubrubrosEntradaPanol('cf')">▾</button>
+          <div class="panol-subrubro-panel" id="cf-subrubro-panel"></div>
+        </div>
+      </div>
+      <div class="carga-fld">
+        <label>Código (opcional)</label>
+        <input type="text" id="cf-codigo" list="dl-productos-codigo" placeholder="Ej: EL-014" oninput="window.onCfCodigoInput()">
+      </div>
+      <div class="carga-fld" style="grid-column:1/-1">
+        <label>Producto</label>
+        <div class="combo-down" id="cf-producto-combo">
+          <input type="text" id="cf-producto" placeholder="Escribí producto o código" autocomplete="off" oninput="window.onCfProductoInput()" onfocus="window.showCfProductoDropdown()">
+          <div class="combo-panel" id="cf-producto-panel"></div>
+        </div>
+      </div>
+    </div>
+    <datalist id="dl-productos-codigo"></datalist>
+    <datalist id="dl-productos-nombre"></datalist>
+    <div class="carga-row triple">
+      <div class="carga-fld">
+        <label>Cantidad</label>
+        <input type="number" id="cf-cantidad" placeholder="0" step="any">
+      </div>
+      <div class="carga-fld">
+        <label>Precio unitario</label>
+        <input type="number" id="cf-precio" placeholder="0" step="any">
+      </div>
+      <div class="carga-fld">
+        <label>Tipo de cambio</label>
+        <input type="number" id="cf-tc" placeholder="1500" step="any" oninput="window.onCfTcInput()">
+      </div>
+    </div>
+    <button class="btn-cargar" onclick="window.cargarProductoUnitario()">＋ Cargar al stock</button>
+    <button class="btn-secundario" onclick="window.abrirCargaMasiva()">📋 Carga masiva (pegar desde Excel)</button>
+  </div>
+
+  <div id="stock-quick-access" class="quick-access"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div class="sec-ttl" style="margin:0">Stock actual</div>
+    <button class="btn-secundario" style="width:auto;padding:6px 12px;margin:0;font-size:11px" onclick="window.abrirGestionRubros()">⚙ Gestionar rubros</button>
+  </div>
+  <div class="filter-row">
+    <select id="stock-rubro-filter" onchange="window.renderStockList()"><option value="all">Todos los rubros</option></select>
+    <input type="text" id="stock-search" placeholder="🔎 Buscar código o producto..." oninput="window.renderStockList()">
+  </div>
+  <div id="stock-list"></div>
+</div>
+
+<!-- ============ OBRAS ============ -->
+<div class="view" id="view-obras">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div class="sec-ttl" style="margin:0">Obras</div>
+
+  </div>
+  <div class="chips" id="obras-chips"></div>
+  <div id="obra-detalle"></div>
+</div>
+
+<!-- ============ REPORTES ============ -->
+<div class="view" id="view-reportes">
+  <div class="report-metric-switch" id="report-metric-switch">
+    <button type="button" class="report-metric-btn active" data-mode="cantidad" onclick="window.setRepMetrica('cantidad')">Cantidades</button>
+    <button type="button" class="report-metric-btn" data-mode="pesos" onclick="window.setRepMetrica('pesos')">$ Pesos</button>
+    <button type="button" class="report-metric-btn" data-mode="usd" onclick="window.setRepMetrica('usd')">u$s Dólares</button>
+  </div>
+  <div class="report-metric-note">Cambia el gráfico, el orden y los valores del reporte.</div>
+  <div id="reportes-resumen"></div>
+  <div class="sec-ttl" style="margin:2px 2px 6px">Filtrar por subrubro · Materiales</div>
+  <div class="filter-row">
+    <select id="reportes-subrubro-filtro" onchange="window.onRepSubrubroFiltroChange()" style="flex:1"><option value="">Todos los subrubros</option></select>
+  </div>
+  <div class="sec-ttl" style="margin:10px 2px 6px">Filtrar por producto</div>
+  <div class="filter-row">
+    <select id="reportes-producto-filtro" onchange="window.onRepProductoFiltroChange()" style="flex:1"><option value="">Todos los productos</option></select>
+  </div>
+  <div class="sec-ttl" style="margin:10px 2px 6px">Filtrar por obra · Gastos</div>
+  <div class="chips" id="reportes-obra-filtro"></div>
+  <div id="reportes-body"></div>
+</div>
+
+<!-- ============ MODAL: CARGA MASIVA ============ -->
+<div class="modal-bg" id="modal-masiva">
+  <div class="modal" style="width:760px">
+    <div class="modal-hd"><span class="modal-ttl">Carga masiva de productos</span><button class="modal-x" onclick="window.cerrarModal('modal-masiva')">✕</button></div>
+    <div class="mbody">
+      <div class="fld">
+        <label>Subrubro · Materiales para este lote</label>
+        <div class="panol-subrubro-combo">
+          <input class="panol-subrubro-input" type="text" id="masiva-subrubro" placeholder="Seleccionar o escribir..." autocomplete="off"
+            onfocus="window.abrirSubrubrosEntradaPanol('masiva')" oninput="window.renderSubrubrosEntradaPanol('masiva',this.value)">
+          <button type="button" class="panol-subrubro-btn" onclick="window.abrirSubrubrosEntradaPanol('masiva')">▾</button>
+          <div class="panol-subrubro-panel" id="masiva-subrubro-panel"></div>
+        </div>
+      </div>
+      <div class="fld"><label>Tipo de cambio para todo este lote</label><input type="number" id="masiva-tc" placeholder="1500" step="any" oninput="window.onCfTcInput('masiva-tc')"></div>
+      <div class="hint">Podés escribir manualmente o pegar desde Excel. Cada columna corresponde a un dato.</div>
+      <div class="bulk-grid-panol">
+        <div class="bulk-col">
+          <div class="bulk-col-title">Código</div>
+          <textarea id="masiva-codigos" rows="10" placeholder="EL-014&#10;EL-015"></textarea>
+        </div>
+        <div class="bulk-col">
+          <div class="bulk-col-title">Producto</div>
+          <textarea id="masiva-productos" rows="10" placeholder="Cable 2.5mm&#10;Térmica 20A"></textarea>
+        </div>
+        <div class="bulk-col">
+          <div class="bulk-col-title">Cantidad</div>
+          <textarea id="masiva-cantidades" rows="10" inputmode="decimal" placeholder="120&#10;8"></textarea>
+        </div>
+        <div class="bulk-col">
+          <div class="bulk-col-title">Precio</div>
+          <textarea id="masiva-precios" rows="10" inputmode="decimal" enterkeyhint="next" placeholder="450&#10;3200"></textarea>
+          <button type="button" class="bulk-next-price" onclick="window.bulkSiguientePrecioPanol()">↓ Siguiente renglón</button>
+        </div>
+      </div>
+    </div>
+    <div class="mfooter">
+      <button class="btn btn-s" onclick="window.cerrarModal('modal-masiva')">Cancelar</button>
+      <button class="btn btn-p" onclick="window.procesarCargaMasiva()">Procesar carga</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: HISTORIAL DE PRODUCTO ============ -->
+<div class="modal-bg" id="modal-hist-prod">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl" id="hist-prod-titulo">Historial</span><button class="modal-x" onclick="window.cerrarModal('modal-hist-prod')">✕</button></div>
+    <div class="mbody" id="hist-prod-body" style="padding:0"></div>
+  </div>
+</div>
+
+<!-- ============ MODAL: EDITAR PRODUCTO ============ -->
+<div class="modal-bg" id="modal-editar-producto">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl">Modificar producto</span><button class="modal-x" onclick="window.cerrarModal('modal-editar-producto')">✕</button></div>
+    <div class="mbody">
+      <div class="fld"><label>Rubro</label><select id="editar-prod-rubro" onchange="window.onRubroSelect('editar-prod-rubro')"></select></div>
+      <div class="fld"><label>Código (opcional)</label><input type="text" id="editar-prod-codigo"></div>
+      <div class="fld"><label>Producto</label><input type="text" id="editar-prod-nombre"></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn btn-s" onclick="window.cerrarModal('modal-editar-producto')">Cancelar</button>
+      <button class="btn btn-p" onclick="window.guardarEdicionProducto()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: GESTIONAR OBRAS ============ -->
+<div class="modal-bg" id="modal-gestion-obras">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl">Gestionar obras</span><button class="modal-x" onclick="window.cerrarModal('modal-gestion-obras')">✕</button></div>
+    <div class="mbody">
+      <div class="fld" style="flex-direction:row;gap:7px">
+        <input type="text" id="nueva-obra-input" placeholder="Nombre de la nueva obra" style="flex:1">
+        <button class="btn btn-p" onclick="window.agregarObra()">＋</button>
+      </div>
+      <div id="gestion-obras-lista" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: GESTIONAR RUBROS ============ -->
+<div class="modal-bg" id="modal-gestion-rubros">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl">Gestionar rubros</span><button class="modal-x" onclick="window.cerrarModal('modal-gestion-rubros')">✕</button></div>
+    <div class="mbody">
+      <div class="fld" style="flex-direction:row;gap:7px">
+        <input type="text" id="nuevo-rubro-input" placeholder="Nombre del nuevo rubro" style="flex:1">
+        <button class="btn btn-p" onclick="window.agregarRubro()">＋</button>
+      </div>
+      <div id="gestion-rubros-lista" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const app = initializeApp({
+  apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
+  authDomain:"cq-mano-de-obra.firebaseapp.com",
+  projectId:"cq-mano-de-obra",
+  storageBucket:"cq-mano-de-obra.firebasestorage.app",
+  messagingSenderId:"502127540211",
+  appId:"1:502127540211:web:8daefc75bdaafad412c486"
+});
+
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+window._db=db;
+window._doc=doc;
+window._setDoc=setDoc;
+window._getDoc=getDoc;
+window._onSnapshot=onSnapshot;
+window._runTransaction=runTransaction;
+window._dbReady=false;
+window._cqAccessReady=false;
+window._cqAuthProfile=null;
+
+function cqAccessMessage(txt){
+  const el=document.getElementById("cq-access-msg");
+  if(el) el.textContent=txt;
+}
+function cqDenyAccess(txt){
+  cqAccessMessage(txt);
+  const actions=document.getElementById("cq-access-actions");
+  if(actions) actions.style.display="block";
+}
+function cqProfileKey(email){
+  const map={
+    "emilio@cqgerencia.com":"emilio",
+    "juan@cqgerencia.com":"juan",
+    "eugenia@cqoperaciones.com":"eugenia",
+    "hebe@cqoperaciones.com":"hebe",
+    "maximiliano@cqoperaciones.com":"maximiliano"
+  };
+  return map[String(email||"").toLowerCase()] || null;
+}
+
+onAuthStateChanged(auth, async user=>{
+  if(!user){
+    cqDenyAccess("No hay una sesión iniciada. Entrá primero desde CQ Gerencia o CQ Operaciones.");
+    return;
+  }
+
+  try{
+    const email=String(user.email||"").toLowerCase();
+    const key=cqProfileKey(email);
+    if(!key){
+      cqDenyAccess("Este usuario no está habilitado para las aplicaciones CQ.");
+      return;
+    }
+
+    try{
+      const c=JSON.parse(localStorage.getItem("cq_auth_profile_1h")||"null");
+      const age=c?Date.now()-(Number(c.validadoEn)||0):Infinity;
+      const cm=Array.isArray(c&&c.modulos)?c.modulos:[];
+      const cg=cm.includes("gerencia");
+      if(c && age>=0 && age<=3600000 && String(c.email||"").toLowerCase()===email && (cg || cm.includes("panol"))){
+        window._cqAuthProfile={id:key,nombre:c.nombre||key,email:user.email,modulos:cm,rol:cg?"gerencia":"operaciones"};
+        window._cqAccessReady=true;
+        window._dbReady=true;
+        localStorage.setItem("cq_panol_usuario",window._cqAuthProfile.nombre);
+        const nombreEl=document.getElementById("user-nombre");
+        if(nombreEl) nombreEl.textContent=window._cqAuthProfile.nombre;
+        const guard=document.getElementById("cq-access-guard");
+        if(guard){guard.classList.add("hidden");guard.style.display="none";}
+        document.dispatchEvent(new Event("cq-access-ready"));
+        document.dispatchEvent(new Event("firebase-ready"));
+        return;
+      }
+    }catch(e){}
+
+    const snap=await getDoc(doc(db,"cq_operaciones_usuarios",key));
+    if(!snap.exists()){
+      cqDenyAccess("No se encontró la configuración de permisos de este usuario.");
+      return;
+    }
+
+    const data=snap.data()||{};
+    const storedEmail=String(data.email||"").toLowerCase();
+    const modulos=Array.isArray(data.modulos)?data.modulos:[];
+
+    if(storedEmail!==email){
+      cqDenyAccess("La identidad del usuario no coincide con su configuración.");
+      return;
+    }
+
+    const esGerencia=modulos.includes("gerencia");
+    const tienePanol=modulos.includes("panol");
+
+    if(!esGerencia && !tienePanol){
+      cqDenyAccess("Tu usuario no tiene permiso para ingresar a Pañol.");
+      return;
+    }
+
+    window._cqAuthProfile={
+      id:key,
+      nombre:data.nombre||key,
+      email:user.email,
+      modulos:modulos,
+      rol:esGerencia ? "gerencia" : "operaciones"
+    };
+
+    window._cqAccessReady=true;
+    window._dbReady=true;
+
+    localStorage.setItem("cq_panol_usuario",window._cqAuthProfile.nombre);
+    try{localStorage.setItem("cq_auth_profile_1h",JSON.stringify({id:key,nombre:window._cqAuthProfile.nombre,email:String(user.email||"").toLowerCase(),modulos:modulos,rol:window._cqAuthProfile.rol,validadoEn:Date.now()}));}catch(e){}
+
+    const nombreEl=document.getElementById("user-nombre");
+    if(nombreEl) nombreEl.textContent=window._cqAuthProfile.nombre;
+
+    const guard=document.getElementById("cq-access-guard");
+    if(guard) guard.classList.add("hidden");
+
+    document.dispatchEvent(new Event("cq-access-ready"));
+    document.dispatchEvent(new Event("firebase-ready"));
+  }catch(e){
+    console.warn("CQ access error",e);
+    cqDenyAccess("No se pudieron verificar los permisos. Revisá la conexión e intentá nuevamente.");
+  }
+});
+</script>
+
+<script>
+var DB_KEY='cq_panol_v1';
+var PANOL_RESET_VERSION='panol_reset_subrubros_2026_08_05_v1';
+var PANOL_RESET_KEY='cq_panol_reset_aplicado_'+PANOL_RESET_VERSION;
+var DOC_COL='panol';
+var DOC_ID='stock_v1';
+var OBRAS_SEED=["14/66","26/59","10/15","17/55","8/54","20/89","19/83","3/85","11/93","8/86","4/86","25/100","19/99","4/100","25/85","5/94","25/82","12/93","13/93","7/100","6/92","18/78","5/98","27/99","2/99"];
+var RUBROS_SEED=["Electricidad","Plomería","Sanitarios","Pintura","Herrería","Albañilería","Varios"];
+
+var state={productos:[],lotes:[],movimientos:[],obras:OBRAS_SEED.slice(),rubros:RUBROS_SEED.slice()};
+var suppressRemoteUntil=0;
+var unsub=null;
+var charts={};
+
+// Plugin: muestra el valor formateado arriba de cada barra
+var valueLabelsPlugin={
+  id:'valueLabels',
+  afterDatasetsDraw:function(chart){
+    var ctx=chart.ctx;
+    chart.data.datasets.forEach(function(dataset,i){
+      var meta=chart.getDatasetMeta(i);
+      if(meta.hidden) return;
+      meta.data.forEach(function(bar,index){
+        var value=dataset.data[index];
+        if(value==null) return;
+        var label=dataset.valueFormatter?dataset.valueFormatter(value):value;
+        var pos=bar.tooltipPosition?bar.tooltipPosition():{x:bar.x,y:bar.y};
+        ctx.save();
+        ctx.fillStyle=dataset.labelColor||'#1C3D35';
+        ctx.font="800 11px 'Space Grotesk',sans-serif";
+        ctx.textAlign='center';
+        ctx.textBaseline='bottom';
+        ctx.fillText(label,pos.x,pos.y-6);
+        ctx.restore();
+      });
+    });
+  }
+};
+if(window.Chart) Chart.register(valueLabelsPlugin);
+function chartSuggestedMax(vals){
+  var max=vals.reduce(function(a,v){return Math.max(a,v||0);},0);
+  return max>0?max*1.25:10;
+}
+
+function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+
+var gastosConfigPanol=null;
+var gastosConfigLoadingPanol=null;
+
+function claveLoteMzPanol(v){
+  var raw=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  var m=raw.match(/(?:lote|l)?\s*(\d+)\s*(?:\/|[- ]*mz|[- ]*manzana)\s*(\d+)/i);
+  if(m)return Number(m[1])+'/'+Number(m[2]);
+  m=raw.match(/\b(\d+)\s*\/\s*(\d+)\b/);
+  return m?(Number(m[1])+'/'+Number(m[2])):'';
+}
+async function cargarConfigGastosPanol(){
+  if(gastosConfigPanol)return gastosConfigPanol;
+  if(gastosConfigLoadingPanol)return gastosConfigLoadingPanol;
+  gastosConfigLoadingPanol=(async function(){
+    try{
+      if(!window._dbReady||!window._getDoc)throw new Error('Firebase no disponible');
+      var snap=await window._getDoc(window._doc(window._db,'config','app'));
+      if(!snap.exists())throw new Error('No existe config/app de Gastos');
+      var d=snap.data()||{};
+      if(!Array.isArray(d.obras)||!d.subrubros)throw new Error('Configuración de Gastos incompleta');
+      gastosConfigPanol={obras:d.obras,subrubros:d.subrubros,defaultTC:Number(d.defaultTC)||0};
+      return gastosConfigPanol;
+    }finally{gastosConfigLoadingPanol=null;}
+  })();
+  return gastosConfigLoadingPanol;
+}
+function obrasGastosPanol(){
+  return gastosConfigPanol&&Array.isArray(gastosConfigPanol.obras)
+    ? gastosConfigPanol.obras.filter(function(o){return o&&o.id;}).map(function(o){
+        var x=Object.assign({},o);
+        if(String(x.id)==='oficina'){
+          x.label='Oficina';
+          x.short='Oficina';
+        }
+        return x;
+      })
+    : [];
+}
+function obraGastosPanolPorId(id){return obrasGastosPanol().find(function(o){return o.id===id;})||null;}
+function nombreObraMovPanol(m){
+  if(m&&m.gastosObraId){
+    var o=obraGastosPanolPorId(m.gastosObraId);
+    if(o)return o.label||o.short||o.id;
+  }
+  return m&&m.obra?m.obra:'';
+}
+function categoriasGastosPanol(){
+  return [
+    {id:'lote',label:'Lote + Servicios + Impuestos'},
+    {id:'arq',label:'Arquitectura'},
+    {id:'mat',label:'Materiales'},
+    {id:'mo',label:'Mano de obra'},
+    {id:'ext',label:'Mano de obra extras'}
+  ];
+}
+function subrubrosGastosPanol(cat){
+  return gastosConfigPanol&&gastosConfigPanol.subrubros&&Array.isArray(gastosConfigPanol.subrubros[cat])
+    ? gastosConfigPanol.subrubros[cat].slice() : [];
+}
+function subrubrosMaterialesEntradaPanol(){return subrubrosGastosPanol('mat');}
+function entradaSubInputId(tipo){return tipo==='masiva'?'masiva-subrubro':'cf-subrubro';}
+function entradaSubPanelId(tipo){return tipo==='masiva'?'masiva-subrubro-panel':'cf-subrubro-panel';}
+function renderSubrubrosEntradaPanol(tipo,filtro){
+  var inp=document.getElementById(entradaSubInputId(tipo));
+  var panel=document.getElementById(entradaSubPanelId(tipo));
+  if(!inp||!panel)return;
+  var q=String(filtro||'').toLowerCase().trim();
+  var arr=subrubrosMaterialesEntradaPanol().filter(function(x){return !q||String(x).toLowerCase().includes(q);});
+  panel.innerHTML=arr.length?arr.map(function(x){
+    return '<div class="panol-subrubro-option" data-value="'+escHTML(x)+'">'+escHTML(x)+'</div>';
+  }).join(''):'<div class="combo-empty">Sin resultados</div>';
+  Array.prototype.forEach.call(panel.querySelectorAll('.panol-subrubro-option'),function(opt){
+    opt.addEventListener('click',function(){
+      inp.value=opt.getAttribute('data-value');
+      panel.classList.remove('open');
+      onEntradaSubrubroSeleccionadoPanol(tipo);
+    });
+  });
+}
+function abrirSubrubrosEntradaPanol(tipo){
+  var inp=document.getElementById(entradaSubInputId(tipo));
+  var panel=document.getElementById(entradaSubPanelId(tipo));
+  if(!inp||!panel)return;
+  if(panel.classList.contains('open')){panel.classList.remove('open');return;}
+  document.querySelectorAll('.panol-subrubro-panel.open').forEach(function(p){p.classList.remove('open');});
+  renderSubrubrosEntradaPanol(tipo,inp.value);
+  panel.classList.add('open');
+}
+function validarSubrubroEntradaPanol(valor){
+  return subrubrosMaterialesEntradaPanol().find(function(x){
+    return String(x).toLowerCase()===String(valor||'').trim().toLowerCase();
+  })||'';
+}
+function bulkSiguientePrecioPanol(){
+  var el=document.getElementById('masiva-precios');if(!el)return;
+  var start=el.selectionStart==null?el.value.length:el.selectionStart;
+  var end=el.selectionEnd==null?start:el.selectionEnd;
+  var before=el.value.slice(0,start),after=el.value.slice(end);
+  if(before&&!before.endsWith('\n'))before+='\n';
+  el.value=before+after;
+  var pos=before.length;el.focus();
+  try{el.setSelectionRange(pos,pos);}catch(e){}
+}
+document.addEventListener('keydown',function(e){
+  if(e.target&&e.target.id==='masiva-precios'&&e.key==='Enter'){
+    e.preventDefault();bulkSiguientePrecioPanol();
+  }
+});
+
+function llenarCategoriasConsumoPanol(selected){
+  var el=document.getElementById('consumo-categoria');
+  if(!el)return;
+  el.innerHTML=categoriasGastosPanol().map(function(c){
+    return '<option value="'+c.id+'"'+(c.id===selected?' selected':'')+'>'+c.label+'</option>';
+  }).join('');
+  el.value=selected||'mat';
+  renderSubrubrosPanol('');
+}
+function renderSubrubrosPanol(filtro){
+  var inp=document.getElementById('consumo-subrubro');
+  var panel=document.getElementById('consumo-subrubro-panel');
+  if(!inp||!panel)return;
+  var cat='mat';
+  var q=String(filtro||'').toLowerCase().trim();
+  var arr=subrubrosGastosPanol(cat).filter(function(x){return !q||String(x).toLowerCase().includes(q);});
+  panel.innerHTML=arr.length?arr.map(function(x){
+    return '<div class="panol-subrubro-option" data-value="'+escHTML(x)+'">'+escHTML(x)+'</div>';
+  }).join(''):'<div class="combo-empty">Sin resultados</div>';
+  Array.prototype.forEach.call(panel.querySelectorAll('.panol-subrubro-option'),function(opt){
+    opt.addEventListener('click',function(){
+      inp.value=opt.getAttribute('data-value');
+      panel.classList.remove('open');
+      onConsumoSubrubroSeleccionado();
+    });
+  });
+}
+function abrirSubrubrosPanol(){
+  var inp=document.getElementById('consumo-subrubro');
+  var panel=document.getElementById('consumo-subrubro-panel');
+  if(!inp||!panel)return;
+  if(panel.classList.contains('open')){panel.classList.remove('open');return;}
+  document.querySelectorAll('.panol-subrubro-panel.open').forEach(function(p){p.classList.remove('open');});
+  renderSubrubrosPanol(inp.value);
+  panel.classList.add('open');
+}
+function onConsumoCategoriaGastosChange(){
+  var inp=document.getElementById('consumo-subrubro');
+  if(inp)inp.value='';
+  renderSubrubrosPanol('');
+}
+function showConsumoCodigoDropdownFiltrado(){ showConsumoCodigoDropdown(); }
+function showConsumoProductoDropdownFiltrado(){ showConsumoProductoDropdown(); }
+function onConsumoSubrubroInput(){
+  var c=document.getElementById('consumo-codigo-input');
+  var p=document.getElementById('consumo-prod-input');
+  if(c)c.value='';
+  if(p)p.value='';
+}
+function onConsumoSubrubroSeleccionado(){
+  var c=document.getElementById('consumo-codigo-input');
+  var p=document.getElementById('consumo-prod-input');
+  if(c)c.value='';
+  if(p)p.value='';
+  var help=document.getElementById('consumo-prod-help');
+  var sub=document.getElementById('consumo-subrubro');
+  if(help&&sub)help.textContent=sub.value
+    ? 'Mostrando solo productos de '+sub.value+'.'
+    : 'Elegí primero un subrubro.';
+  try{renderConsumoCodigoDropdown(false);}catch(e){}
+  try{renderConsumoProductoDropdown(false);}catch(e){}
+}
+function validarSubrubroPanol(cat,valor){
+  return subrubrosGastosPanol(cat).find(function(x){
+    return String(x).toLowerCase()===String(valor||'').trim().toLowerCase();
+  })||'';
+}
+document.addEventListener('click',function(e){
+  if(!(e.target.closest&&e.target.closest('.panol-subrubro-combo'))){
+    document.querySelectorAll('.panol-subrubro-panel.open').forEach(function(p){p.classList.remove('open');});
+  }
+});
+
+function gastoPanolId(movId){return 'panol_'+String(movId);}
+function gastoPayloadPanol(mov){
+  return {
+    id:gastoPanolId(mov.id),
+    createdAt:mov.createdAt||new Date(mov.ts||Date.now()).toISOString(),
+    createdBy:mov.usuario||getUsuario()||'Pañol',
+    fecha:new Date(mov.ts||Date.now()).toISOString().slice(0,10),
+    cat:mov.gastosCategoria||'mat',
+    subrubro:mov.gastosSubrubro||'',
+    moneda:'ars',
+    monto:importeDetallePanol(mov.detalle||[]),
+    tc:Number(mov.tipoCambioProm)||Number(gastosConfigPanol&&gastosConfigPanol.defaultTC)||getLastTC(),
+    nota:mov.comentario||'',
+    updatedAt:new Date().toISOString(),
+    updatedBy:getUsuario()||mov.usuario||'Pañol',
+    origen:'cq_panol',
+    panolMovimientoId:String(mov.id),
+    obraId:mov.gastosObraId
+  };
+}
+async function upsertGastoPanol(obraId,payload,removeOnly){
+  if(!window._runTransaction)throw new Error('Firebase no permite transacción');
+  var ref=window._doc(window._db,'gastos',obraId);
+  await window._runTransaction(window._db,async function(tx){
+    var snap=await tx.get(ref);
+    var data=snap.exists()?snap.data():{gastos:[],financiero:{venta:0,comision:0,acuerdosMO:{mo:{monto:0,moneda:'usd',tc:1400},ext:{}}}};
+    var gastos=Array.isArray(data.gastos)?data.gastos.slice():[];
+    gastos=gastos.filter(function(g){return String(g.id)!==String(payload.id);});
+    if(!removeOnly)gastos.push(payload);
+    data.gastos=gastos;
+    data.updatedAt=new Date().toISOString();
+    tx.set(ref,data);
+  });
+}
+async function sincronizarConsumoConGastos(mov,activo){
+  if(!mov)throw new Error('Consumo no encontrado');
+  await cargarConfigGastosPanol();
+  if(!mov.gastosObraId)throw new Error('La salida no tiene obra vinculada con Gastos');
+  await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),activo===false);
+  mov.gastosSyncEstado=activo===false?'error':'ok';
+  mov.gastosSyncError=activo===false?'Eliminado de Gastos':'';
+  mov.gastosSyncAt=new Date().toISOString();
+  await persist();
+}
+function puntoGastosPanol(mov){
+  if(!mov||!mov.gastosObraId)return '';
+  var st=mov.gastosSyncEstado||'error';
+  var cls=st==='ok'?'ok':(st==='pendiente'?'wait':'');
+  var txt=st==='ok'
+    ?'Cargado OK en Gastos'
+    :(st==='pendiente'
+      ?'Sincronizando con Gastos…'
+      :(st==='no'
+        ?(mov.gastosSyncError||'No se cargó en Gastos')
+        :(mov.gastosSyncError||'NO está cargado en Gastos. Verificar.')));
+  return '<span class="gasto-sync-dot '+cls+'" title="'+escHTML(txt)+'"></span>';
+}
+var verificandoGastosPanol=false;
+async function verificarGastosPanol(){
+  if(verificandoGastosPanol||!window._dbReady||!gastosConfigPanol)return;
+  verificandoGastosPanol=true;
+  try{
+    var movs=state.movimientos.filter(function(m){
+      return m.tipo==='salida'&&m.gastosObraId&&m.gastosDebeCargar!==false;
+    });
+    var ids=[...new Set(movs.map(function(m){return m.gastosObraId;}))],docs={};
+    for(var i=0;i<ids.length;i++){
+      try{
+        var snap=await window._getDoc(window._doc(window._db,'gastos',ids[i]));
+        docs[ids[i]]=snap.exists()&&Array.isArray((snap.data()||{}).gastos)?snap.data().gastos:[];
+      }catch(e){docs[ids[i]]=null;}
+    }
+    var cambio=false;
+    movs.forEach(function(m){
+      var arr=docs[m.gastosObraId],next='error',err='';
+      if(arr===null)err='No se pudo verificar Firebase';
+      else{
+        var g=arr.find(function(x){return String(x.id)===String(gastoPanolId(m.id));});
+        var esperado=importeDetallePanol(m.detalle||[]);
+        if(!g)err='El gasto ya no existe en Gastos';
+        else if(Math.abs((Number(g.monto)||0)-esperado)>.01)err='El importe no coincide';
+        else next='ok';
+      }
+      if(m.gastosSyncEstado!==next||m.gastosSyncError!==err){
+        m.gastosSyncEstado=next;m.gastosSyncError=err;m.gastosSyncAt=new Date().toISOString();cambio=true;
+      }
+    });
+    if(cambio){await persist();if(curTab==='obras')renderObrasTab();}
+  }finally{verificandoGastosPanol=false;}
+}
+window.addEventListener('focus',function(){setTimeout(verificarGastosPanol,350);});
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')setTimeout(verificarGastosPanol,350);});
+setInterval(verificarGastosPanol,12000);
+
+
+document.addEventListener('firebase-ready',function(){
+  cargarConfigGastosPanol().then(function(){
+    renderSubrubrosEntradaPanol('cf','');
+    renderSubrubrosEntradaPanol('masiva','');
+    if(curTab==='obras')renderObrasTab();
+    if(curTab==='reportes')renderReportes();
+    setTimeout(verificarGastosPanol,800);
+  }).catch(function(e){console.warn(e);});
+});
+async function aplicarResetPanolUnaVez(){
+  try{
+    if(localStorage.getItem(PANOL_RESET_KEY)==='1')return false;
+    state={
+      productos:[],
+      lotes:[],
+      movimientos:[],
+      obras:OBRAS_SEED.slice(),
+      rubros:[]
+    };
+    localStorage.setItem(DB_KEY,JSON.stringify(state));
+    if(window._dbReady){
+      suppressRemoteUntil=Date.now()+2500;
+      await window._setDoc(
+        window._doc(window._db,DOC_COL,DOC_ID),
+        JSON.parse(JSON.stringify(Object.assign({},state,{
+          updatedAt:new Date().toISOString(),
+          resetVersion:PANOL_RESET_VERSION
+        })))
+      );
+    }
+    localStorage.setItem(PANOL_RESET_KEY,'1');
+    return true;
+  }catch(e){
+    console.warn('No se pudo aplicar reset de Pañol',e);
+    throw e;
+  }
+}
+
+function normalizeState(){
+  if(!state.productos) state.productos=[];
+  if(!state.lotes) state.lotes=[];
+  if(!state.movimientos) state.movimientos=[];
+  if(!state.obras || !state.obras.length) state.obras=OBRAS_SEED.slice();
+  if(!state.rubros) state.rubros=[];
+  state.movimientos.forEach(function(m){
+    if(m&&m.tipo==='salida'&&typeof m.materialesAgregar==='undefined'){
+      m.materialesAgregar=true;
+      m.materialesSyncEstado=m.materialesSyncEstado||'pendiente';
+      m.materialesSyncError=m.materialesSyncError||'';
+    }
+    if(m&&m.tipo==='salida'&&typeof m.gastosDebeCargar==='undefined'){
+      m.gastosDebeCargar=detalleConPrecioParaGastos(m.detalle||[]);
+      if(!m.gastosDebeCargar && m.gastosSyncEstado!=='ok'){
+        m.gastosSyncEstado='no';
+        m.gastosSyncError='No se envía a Gastos porque el stock consumido fue ingresado sin precio.';
+      }
+    }
+  });
+  // asegurar que cualquier rubro usado por un producto exista en la lista
+  state.productos.forEach(function(p){
+    if(p.rubro && !state.rubros.some(function(r){return r.toLowerCase()===p.rubro.toLowerCase();})){
+      state.rubros.push(p.rubro);
+    }
+  });
+}
+
+function setSyncStatus(txt,cls){
+  var el=document.getElementById('sync-status');
+  if(!el) return;
+  el.textContent=txt;
+  el.className='sync-status'+(cls?' '+cls:'');
+}
+
+async function persist(){
+  normalizeState();
+  localStorage.setItem(DB_KEY,JSON.stringify(state));
+  if(window._dbReady){
+    try{
+      setSyncStatus('Guardando...');
+      suppressRemoteUntil=Date.now()+1200;
+      await window._setDoc(window._doc(window._db,DOC_COL,DOC_ID),JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()}))));
+      setSyncStatus('🟢 Sincronizado','ok');
+    }catch(e){
+      console.warn('Firebase error',e);
+      setSyncStatus('🟠 Error al guardar','err');
+    }
+  }
+}
+
+async function loadFromFirebase(){
+  if(!window._dbReady) return;
+  try{
+    setSyncStatus('Leyendo...');
+    await cargarConfigGastosPanol();
+    var reseteado=await aplicarResetPanolUnaVez();
+    if(reseteado){
+      setSyncStatus('🟢 Pañol reiniciado','ok');
+      renderActive();
+      return;
+    }
+    var snap=await window._getDoc(window._doc(window._db,DOC_COL,DOC_ID));
+    if(snap.exists()){
+      var d=snap.data();
+      delete d.updatedAt;
+      state=d;
+      normalizeState();
+      localStorage.setItem(DB_KEY,JSON.stringify(state));
+    }
+    try{await cqLimpiarTechiCau29_77Panol();}catch(e){console.warn(e);}
+    setSyncStatus('🟢 Sincronizado','ok');
+    renderActive();
+  }catch(e){
+    console.warn('Firebase read error',e);
+    setSyncStatus('🟠 Sin conexión','err');
+  }
+}
+
+function startFirebase(){
+  loadFromFirebase();
+  if(window._onSnapshot){
+    if(unsub) unsub();
+    unsub=window._onSnapshot(window._doc(window._db,DOC_COL,DOC_ID),function(snap){
+      if(Date.now()<suppressRemoteUntil) return;
+      if(!snap.exists()) return;
+      var d=snap.data();
+      delete d.updatedAt;
+      state=d;
+      normalizeState();
+      localStorage.setItem(DB_KEY,JSON.stringify(state));
+      cqLimpiarTechiCau29_77Panol().catch(function(e){console.warn(e);});
+      setSyncStatus('🟢 Actualizado','ok');
+      renderActive();
+    },function(e){
+      console.warn(e);
+      setSyncStatus('🟠 Error de sync','err');
+    });
+  }
+}
+
+// ---------- USUARIO (local por dispositivo) ----------
+var USER_KEY='cq_panol_usuario';
+function getUsuario(){
+  if(window._cqAuthProfile && window._cqAuthProfile.nombre) return window._cqAuthProfile.nombre;
+  return localStorage.getItem(USER_KEY)||'';
+}
+function promptUsuario(){
+  var nombre=getUsuario();
+  var el=document.getElementById('user-nombre');
+  if(el) el.textContent=nombre||'—';
+  return nombre;
+}
+function cambiarUsuario(){
+  var p=window._cqAuthProfile;
+  if(!p){ alert('No hay una sesión identificada.'); return; }
+  alert('Usuario activo: '+p.nombre+' ('+(p.rol==='gerencia'?'Gerencia':'Operaciones')+'). Para cambiar de usuario, hacelo desde la pantalla de Inicio.');
+}
+
+// ---------- UI helpers ----------
+function showToast(msg,kind){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.toggle('err',kind==='err');
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');t.classList.remove('err');},3200);
+}
+function fmtN(n){ if(n==null||isNaN(n)) return '-'; return parseFloat(n).toLocaleString('es-AR',{maximumFractionDigits:2}); }
+function fmtMoney(n){ if(n==null||isNaN(n)) return '-'; return '$ '+parseFloat(n).toLocaleString('es-AR',{maximumFractionDigits:0}); }
+function fmtUSD(n){ if(n==null||isNaN(n)) return 'US$ —'; return 'US$ '+parseFloat(n).toLocaleString('es-AR',{maximumFractionDigits:2}); }
+var TC_KEY='cq_panol_ultimo_tc';
+function getLastTC(){ var v=parseFloat(localStorage.getItem(TC_KEY)); if(isNaN(v)||v<=0){v=1500; localStorage.setItem(TC_KEY,String(v));} return v; }
+function setLastTC(v){ if(v && !isNaN(v)) localStorage.setItem(TC_KEY, v); }
+function onCfTcInput(fieldId){
+  var el=document.getElementById(fieldId||'cf-tc');
+  if(!el) return;
+  var v=parseFloat(el.value);
+  if(v>0) setLastTC(v);
+}
+function fmtFecha(ts){
+  var d=new Date(ts);
+  return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+}
+
+function escHTML(v){
+  return String(v==null?'':v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
+}
+function comboProductItemHTML(p, extra){
+  var stock=stockDeProducto(p.id);
+  return '<button type="button" class="combo-item" data-id="'+escHTML(p.id)+'">'
+    +'<span class="combo-item-main"><span class="combo-item-name">'+escHTML(p.nombre)+'</span>'
+    +'<span class="combo-item-meta">'+escHTML(p.rubro)+' · '+(p.codigo?escHTML(p.codigo):'sin código')+(extra?(' · '+escHTML(extra)):'')+'</span></span>'
+    +'<span class="combo-item-stock">'+fmtN(stock)+' u</span>'
+    +'</button>';
+}
+function filterProductosCombo(query, rubro){
+  query=(query||'').trim().toLowerCase();
+  if(rubro==='__none__')return [];
+  return state.productos.filter(function(p){
+    if(rubro && rubro!=='all' && p.rubro!==rubro) return false;
+    var texto=((p.nombre||'')+' '+(p.codigo||'')+' '+(p.rubro||'')).toLowerCase();
+    return !query || texto.indexOf(query)>=0;
+  }).sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');}).slice(0,30);
+}
+function closeProductCombos(){
+  ['cf-producto-combo','consumo-codigo-combo','consumo-prod-combo'].forEach(function(id){var el=document.getElementById(id); if(el) el.classList.remove('open');});
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest || (!e.target.closest('#cf-producto-combo') && !e.target.closest('#consumo-codigo-combo') && !e.target.closest('#consumo-prod-combo'))) closeProductCombos();
+});
+
+function cerrarModal(id){ document.getElementById(id).classList.remove('open'); }
+function abrirModal(id){ document.getElementById(id).classList.add('open'); }
+
+var curTab='stock';
+var curObra=null;
+var curObraRubroFiltro='all';
+
+function showTab(t){
+  curTab=t;
+  document.getElementById('tb-stock').classList.toggle('active',t==='stock');
+  document.getElementById('tb-obras').classList.toggle('active',t==='obras');
+  document.getElementById('tb-reportes').classList.toggle('active',t==='reportes');
+  document.getElementById('view-stock').classList.toggle('active',t==='stock');
+  document.getElementById('view-obras').classList.toggle('active',t==='obras');
+  document.getElementById('view-reportes').classList.toggle('active',t==='reportes');
+  renderActive();
+}
+function renderActive(){
+  if(curTab==='stock') renderStock();
+  else if(curTab==='obras') renderObrasTab();
+  else renderReportes();
+}
+
+// ---------- RUBROS ----------
+function getRubros(){
+  return state.rubros.slice().sort(function(a,b){return a.localeCompare(b,'es');});
+}
+function rubroOptionsHTML(selected){
+  return getRubros().map(function(r){return '<option value="'+r+'"'+(r===selected?' selected':'')+'>'+r+'</option>';}).join('')
+    +'<option value="__new__">＋ Nuevo rubro...</option>';
+}
+function refreshRubroSelects(selected){
+  ['cf-rubro','masiva-rubro','editar-prod-rubro'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    el.innerHTML=rubroOptionsHTML(selected);
+    el.dataset.prev=selected;
+  });
+}
+function onRubroSelect(selectId){
+  var sel=document.getElementById(selectId);
+  if(sel.value==='__new__'){
+    var nombre=prompt('Nombre del nuevo rubro:');
+    if(nombre && nombre.trim()){
+      nombre=nombre.trim();
+      if(!state.rubros.some(function(r){return r.toLowerCase()===nombre.toLowerCase();})){
+        state.rubros.push(nombre);
+        persist();
+      }
+      refreshRubroSelects(nombre);
+    }else{
+      refreshRubroSelects(sel.dataset.prev||getRubros()[0]||'');
+    }
+  }else{
+    sel.dataset.prev=sel.value;
+  }
+}
+
+function onCfRubroChange(){onEntradaSubrubroSeleccionadoPanol('cf');}
+
+
+var cfMaterialSeleccionadoPanol=null;
+var cfNuevoProductoManual=false;
+
+function normCatalogoPanol(v){
+  return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+}
+function productoPanolPorMaterialCatalogo(item){
+  if(!item)return null;
+  return state.productos.find(function(p){
+    if(p.materialesProducto&&String(p.materialesProducto.id)===String(item.id))return true;
+    var pc=String((p.materialesProducto&&p.materialesProducto.code)||p.codigo||'').trim().toLowerCase();
+    var ic=String(item.code||'').trim().toLowerCase();
+    if(pc&&ic&&pc===ic)return true;
+    return normCatalogoPanol((p.materialesProducto&&p.materialesProducto.name)||p.nombre)===normCatalogoPanol(item.name);
+  })||null;
+}
+function catalogoMaterialesFiltradoPorSubrubroPanol(subrubro){
+  var arr=(cqCatalogoMaterialesPanol||[]).slice();
+  var sub=normCatalogoPanol(subrubro);
+  if(!sub)return arr;
+
+  var vinculados=arr.filter(function(item){
+    var p=productoPanolPorMaterialCatalogo(item);
+    return p&&normCatalogoPanol(p.rubro)===sub;
+  });
+
+  var categoria=arr.filter(function(item){
+    var c=normCatalogoPanol(item.category);
+    return c && (c===sub || c.includes(sub) || sub.includes(c));
+  });
+
+  var ids={};
+  var matches=vinculados.concat(categoria).filter(function(x){
+    var k=String(x.id);
+    if(ids[k])return false;
+    ids[k]=1;return true;
+  });
+
+  // Si todavía no existe una relación conocida, no dejamos la lista vacía:
+  // se muestra el catálogo completo para que la primera selección cree esa relación.
+  return matches.length?matches:arr;
+}
+function seleccionarMaterialCatalogoEntradaPanol(item){
+  if(!item)return;
+  cfMaterialSeleccionadoPanol={
+    id:item.id,name:item.name,code:item.code||'',category:item.category||''
+  };
+  cfNuevoProductoManual=false;
+
+  var nom=document.getElementById('cf-producto');
+  var cod=document.getElementById('cf-codigo');
+  if(nom)nom.value=item.name||'';
+  if(cod)cod.value=item.code||'';
+
+  var combo=document.getElementById('cf-producto-combo');
+  if(combo)combo.classList.remove('open');
+}
+function nuevoProductoEntradaPanol(){
+  cfMaterialSeleccionadoPanol=null;
+  cfNuevoProductoManual=true;
+  var inp=document.getElementById('cf-producto');
+  var combo=document.getElementById('cf-producto-combo');
+  if(combo)combo.classList.remove('open');
+  if(inp&&!inp.value.trim()){
+    var nombre=prompt('Nombre del nuevo producto:');
+    if(nombre&&nombre.trim())inp.value=nombre.trim();
+  }
+  if(inp)inp.focus();
+}
+function onEntradaSubrubroSeleccionadoPanol(tipo){
+  if(tipo!=='cf')return;
+  cfMaterialSeleccionadoPanol=null;
+  cfNuevoProductoManual=false;
+  var nom=document.getElementById('cf-producto');
+  var cod=document.getElementById('cf-codigo');
+  if(nom)nom.value='';
+  if(cod)cod.value='';
+  renderCfProductoDropdown(false);
+}
+
+// ---------- STOCK (PAÑOL) ----------
+function stockDeProducto(prodId){
+  return state.lotes.filter(function(l){return l.prodId===prodId;}).reduce(function(a,l){return a+l.cantidad;},0);
+}
+function lotesDeProducto(prodId){
+  return state.lotes.filter(function(l){return l.prodId===prodId && l.cantidad>0;}).sort(function(a,b){return a.fechaTs-b.fechaTs;});
+}
+function findProductoPorCodigo(codigo){
+  codigo=(codigo||'').trim().toLowerCase();
+  if(!codigo) return null;
+  return state.productos.find(function(p){return (p.codigo||'').trim().toLowerCase()===codigo;});
+}
+function codigoTag(p){ return p.codigo?(' ('+p.codigo+')'):''; }
+function findProductoPorNombre(nombre){
+  nombre=(nombre||'').trim().toLowerCase();
+  if(!nombre) return null;
+  return state.productos.find(function(p){return p.nombre.trim().toLowerCase()===nombre;});
+}
+function buscarProductoParaCarga(codigo,nombre){
+  codigo=(codigo||'').trim();
+  if(codigo){
+    var porCodigo=findProductoPorCodigo(codigo);
+    if(porCodigo) return porCodigo;
+  }else{
+    var porNombre=findProductoPorNombre(nombre);
+    if(porNombre) return porNombre;
+  }
+  return null;
+}
+
+function refreshDatalistProductos(){
+  renderCfProductoDropdown(false);
+}
+async function renderCfProductoDropdown(open){
+  var inp=document.getElementById('cf-producto');
+  var panel=document.getElementById('cf-producto-panel');
+  var combo=document.getElementById('cf-producto-combo');
+  if(!inp||!panel||!combo)return;
+
+  try{
+    await cargarCatalogoMaterialesPanol();
+  }catch(e){
+    console.warn('Catálogo Materiales para Pañol',e);
+  }
+
+  var q=normCatalogoPanol(inp.value||'');
+  var subSel=document.getElementById('cf-subrubro');
+  var subrubro=subSel?String(subSel.value||'').trim():'';
+  var arr=catalogoMaterialesFiltradoPorSubrubroPanol(subrubro);
+
+  if(q){
+    arr=arr.filter(function(x){
+      return [x.name,x.code,x.category].some(function(v){
+        return normCatalogoPanol(v).includes(q);
+      });
+    });
+  }
+
+  var rows=arr.slice(0,150).map(function(x){
+    var p=productoPanolPorMaterialCatalogo(x);
+    var stock=p?stockDeProducto(p.id):0;
+    return '<button type="button" class="combo-item" data-cat-id="'+escHTML(x.id)+'">'
+      +'<span class="combo-item-main"><span class="combo-item-name">'+escHTML(x.name)+'</span>'
+      +'<span class="combo-item-meta">'+(x.code?('Código '+escHTML(x.code)+' · '):'')+escHTML(x.category||'')+'</span></span>'
+      +'<span style="display:flex;align-items:center;gap:6px"><span class="cf-catalog-source">Materiales</span>'
+      +(p?'<span class="combo-item-stock">'+fmtN(stock)+' u</span>':'')+'</span></button>';
+  }).join('');
+
+  panel.innerHTML=(rows||'<div class="combo-empty">No hay coincidencias exactas para este subrubro.</div>')
+    +'<button type="button" class="cf-new-product" id="cf-nuevo-producto-btn">＋ Nuevo producto en Pañol</button>';
+
+  Array.prototype.forEach.call(panel.querySelectorAll('.combo-item[data-cat-id]'),function(btn){
+    btn.addEventListener('click',function(){
+      var item=cqCatalogoMaterialesPanol.find(function(x){
+        return String(x.id)===String(btn.getAttribute('data-cat-id'));
+      });
+      if(item)seleccionarMaterialCatalogoEntradaPanol(item);
+    });
+  });
+
+  var nuevo=document.getElementById('cf-nuevo-producto-btn');
+  if(nuevo)nuevo.addEventListener('click',nuevoProductoEntradaPanol);
+
+  if(open)combo.classList.add('open');
+}
+function showCfProductoDropdown(){ renderCfProductoDropdown(true); }
+async function onCfCodigoInput(){
+  var codigo=String(document.getElementById('cf-codigo').value||'').trim();
+  if(!codigo){
+    cfMaterialSeleccionadoPanol=null;
+    return;
+  }
+  try{await cargarCatalogoMaterialesPanol();}catch(e){}
+  var item=(cqCatalogoMaterialesPanol||[]).find(function(x){
+    return String(x.code||'').trim().toLowerCase()===codigo.toLowerCase();
+  });
+  if(item){
+    seleccionarMaterialCatalogoEntradaPanol(item);
+    return;
+  }
+  cfMaterialSeleccionadoPanol=null;
+  cfNuevoProductoManual=true;
+}
+function onCfProductoInput(){
+  var inp=document.getElementById('cf-producto');
+  var nombre=String(inp?inp.value:'').trim();
+
+  if(cfMaterialSeleccionadoPanol &&
+     normCatalogoPanol(nombre)!==normCatalogoPanol(cfMaterialSeleccionadoPanol.name)){
+    cfMaterialSeleccionadoPanol=null;
+    cfNuevoProductoManual=true;
+  }
+
+  renderCfProductoDropdown(true);
+}
+
+// ---------- EDITAR / BORRAR PRODUCTO ----------
+var prodEditandoId=null;
+function abrirEditarProducto(prodId){
+  var prod=state.productos.find(function(p){return p.id===prodId;});
+  if(!prod) return;
+  prodEditandoId=prodId;
+  document.getElementById('editar-prod-rubro').innerHTML=rubroOptionsHTML(prod.rubro);
+  document.getElementById('editar-prod-rubro').dataset.prev=prod.rubro;
+  document.getElementById('editar-prod-codigo').value=prod.codigo;
+  document.getElementById('editar-prod-nombre').value=prod.nombre;
+  abrirModal('modal-editar-producto');
+}
+function guardarEdicionProducto(){
+  var prod=state.productos.find(function(p){return p.id===prodEditandoId;});
+  if(!prod) return;
+  var rubroSel=document.getElementById('editar-prod-rubro');
+  var rubro=rubroSel.value;
+  if(!rubro||rubro==='__new__'){ alert('Elegí o creá un rubro.'); return; }
+  var codigo=document.getElementById('editar-prod-codigo').value.trim();
+  var nombre=document.getElementById('editar-prod-nombre').value.trim();
+  if(!nombre){ alert('Completá el nombre del producto.'); return; }
+  if(codigo){
+    var dup=state.productos.find(function(p){return p.id!==prod.id && (p.codigo||'').trim().toLowerCase()===codigo.toLowerCase();});
+    if(dup){ alert('Ya existe otro producto con ese código ('+dup.nombre+'). Elegí un código distinto.'); return; }
+  }
+  prod.rubro=rubro; prod.codigo=codigo; prod.nombre=nombre;
+  state.movimientos.forEach(function(m){
+    if(m.prodId===prod.id && m.tipo==='salida'){
+      m.materialCode=codigo;
+      m.materialName=nombre;
+    }
+  });
+  persist();
+  cerrarModal('modal-editar-producto');
+  renderStock();
+  showToast('✓ Producto modificado');
+}
+async function eliminarProducto(prodId){
+  var prod=state.productos.find(function(p){return p.id===prodId;});
+  if(!prod) return;
+
+  var stockActual=stockDeProducto(prodId);
+  var salidas=state.movimientos.filter(function(m){return m.prodId===prodId && m.tipo==='salida';});
+  var tieneMovs=state.movimientos.some(function(m){return m.prodId===prodId;});
+
+  var msg='¿Eliminar el producto "'+prod.nombre+'"'+codigoTag(prod)+'?';
+  if(stockActual>0) msg+='\n\nTiene stock actual de '+fmtN(stockActual)+' unidad(es) que se van a eliminar del pañol.';
+  if(salidas.length) msg+='\n\nTambién se van a quitar de Materiales y Gastos las '+salidas.length+' salida'+(salidas.length===1?'':'s')+' vinculada'+(salidas.length===1?'':'s')+'.';
+  if(tieneMovs) msg+='\n\nEl historial de Pañol se conserva como registro.';
+  if(!confirm(msg)) return;
+
+  var errores=[];
+
+  // Primero quitar los vínculos externos mientras todavía tenemos nombre/código del producto.
+  for(var i=0;i<salidas.length;i++){
+    var mov=salidas[i];
+    try{
+      await sincronizarConsumoConMateriales(mov,false,prod);
+    }catch(e){
+      console.warn('No se pudo quitar de Materiales',e);
+      errores.push('Materiales');
+    }
+    try{
+      if(mov.gastosObraId){
+        await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),true);
+      }
+    }catch(e){
+      console.warn('No se pudo quitar de Gastos',e);
+      errores.push('Gastos');
+    }
+
+    // El historial local queda, pero ya no figura como sincronizado.
+    mov.gastosSyncEstado='error';
+    mov.gastosSyncError='Producto eliminado de Pañol';
+  }
+
+  state.lotes=state.lotes.filter(function(l){return l.prodId!==prodId;});
+  state.productos=state.productos.filter(function(p){return p.id!==prodId;});
+  await persist();
+  renderStock();
+
+  if(errores.length){
+    showToast('⚠️ Producto eliminado, pero alguna sincronización falló. Verificar.','err');
+  }else{
+    showToast('✓ Producto eliminado también de Materiales y Gastos');
+  }
+}
+
+function renderStock(){
+  var cfPrev=document.getElementById('cf-subrubro').dataset.prev || getRubros()[0] || '';
+  document.getElementById('cf-subrubro').innerHTML=rubroOptionsHTML(cfPrev);
+  document.getElementById('cf-subrubro').dataset.prev=cfPrev;
+  var tcEl=document.getElementById('cf-tc');
+  if(tcEl && !tcEl.value) tcEl.value=getLastTC();
+  refreshDatalistProductos();
+
+  var rubroSel=document.getElementById('stock-rubro-filter');
+  var prevVal=rubroSel.value;
+  var rubros=getRubros();
+  rubroSel.innerHTML='<option value="all">Todos los rubros</option>'+rubros.map(function(r){return '<option value="'+r+'">'+r+'</option>';}).join('');
+  rubroSel.value=(prevVal==='all'||rubros.indexOf(prevVal)>=0)?prevVal:'all';
+  renderStockList();
+  renderQuickAccess();
+}
+
+function renderStockList(){
+  var q=(document.getElementById('stock-search').value||'').trim().toLowerCase();
+  var rubroF=document.getElementById('stock-rubro-filter').value;
+  var lista=document.getElementById('stock-list');
+  var productos=state.productos.filter(function(p){
+    if(rubroF!=='all' && p.rubro!==rubroF) return false;
+    if(q && (p.codigo||'').toLowerCase().indexOf(q)<0 && p.nombre.toLowerCase().indexOf(q)<0) return false;
+    return true;
+  }).sort(function(a,b){ return (a.rubro+a.nombre).localeCompare(b.rubro+b.nombre,'es'); });
+
+  if(!productos.length){
+    lista.innerHTML='<div class="empty-state"><div class="ic">📭</div>Todavía no hay productos cargados en el pañol.</div>';
+    return;
+  }
+
+  lista.innerHTML=productos.map(function(p){
+    var lotes=lotesDeProducto(p.id);
+    var total=lotes.reduce(function(a,l){return a+l.cantidad;},0);
+    var precioTxt;
+    if(lotes.length===0) precioTxt='sin stock';
+    else if(lotes.length===1) precioTxt='$ '+fmtN(lotes[0].precio)+' / u';
+    else precioTxt=lotes.length+' lotes';
+    var lotesHtml=lotes.map(function(l){
+      var usdU=(l.tipoCambio && l.tipoCambio>0)?(l.precio/l.tipoCambio):null;
+      return '<div class="lote-row"><span>'+fmtFecha(l.fechaTs).split(' ')[0]+' · '+fmtN(l.cantidad)+' u</span><span class="lp">$ '+fmtN(l.precio)+' · '+fmtUSD(usdU)+'</span></div>';
+    }).join('')||'<div class="lote-row"><span>Sin lotes con stock</span></div>';
+    return '<div class="prod-card">'
+      +'<div class="prod-top">'
+      +'<div><div style="display:flex;align-items:flex-start;gap:7px"><button type="button" class="fav-btn '+(getFavs().indexOf(p.id)>=0?'active':'')+'" onclick="event.stopPropagation();window.toggleFavorito(\''+p.id+'\')" title="Favorito">⭐</button><div><div class="prod-nombre">'+p.nombre+(p.materialesProducto?'<span class="prod-materiales-badge">Materiales</span>':'')+'</div><div class="prod-codigo">'+(p.codigo||'sin código')+'</div><span class="prod-rubro">'+p.rubro+'</span>'+stockStateHTML(total)+'</div></div></div>'
+      +'<div class="prod-right"><div class="prod-stock">'+fmtN(total)+'<small>'+precioTxt+'</small></div>'
+      +'<div class="prod-icons">'
+      +'<span class="icon-mini" title="Ver lotes" onclick="window.toggleLotes(\''+p.id+'\')">📦</span>'
+      +'<span class="icon-mini" title="Historial" onclick="window.abrirHistorialProducto(\''+p.id+'\')">🕘</span>'
+      +'<span class="icon-mini" title="Modificar producto" onclick="window.abrirEditarProducto(\''+p.id+'\')">✎</span>'
+      +'<span class="icon-mini" title="Borrar producto" onclick="window.eliminarProducto(\''+p.id+'\')">🗑</span>'
+      +'</div></div>'
+      +'</div>'
+      +'<div class="lotes-wrap" id="lotes-'+p.id+'">'+lotesHtml+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function toggleLotes(prodId){
+  document.getElementById('lotes-'+prodId).classList.toggle('open');
+}
+
+function cargarProductoUnitario(){
+  var subRaw=(document.getElementById('cf-subrubro').value||'').trim();
+  var subrubro=validarSubrubroEntradaPanol(subRaw);
+  if(!subrubro){alert('Elegí un subrubro existente de Materiales.');return;}
+
+  var codigo=document.getElementById('cf-codigo').value.trim();
+  var nombre=document.getElementById('cf-producto').value.trim();
+
+  // Si se eligió del catálogo, usar exactamente sus datos.
+  if(cfMaterialSeleccionadoPanol){
+    nombre=cfMaterialSeleccionadoPanol.name||nombre;
+    codigo=cfMaterialSeleccionadoPanol.code||codigo;
+  }
+
+  var cantidad=parseFloat(document.getElementById('cf-cantidad').value);
+  var precioRaw=document.getElementById('cf-precio').value.trim();
+  var precio=precioRaw===''?0:parseFloat(precioRaw);
+  var tipoCambio=parseFloat(document.getElementById('cf-tc').value);
+
+  if(!nombre){alert('Elegí un producto del catálogo o agregá uno nuevo.');return;}
+  if(!cantidad||cantidad<=0){alert('La cantidad tiene que ser mayor a 0.');return;}
+  if(isNaN(precio)||precio<0){alert('Ingresá un precio válido o dejalo vacío para cargar solo cantidades.');return;}
+  if(precio>0&&(!tipoCambio||tipoCambio<=0)){alert('Ingresá un tipo de cambio válido cuando cargás un precio.');return;}
+  if(precio===0)tipoCambio=null;
+
+  var usuario=promptUsuario(false);
+  var productoCargado=agregarStock(
+    subrubro,codigo,nombre,cantidad,precio,tipoCambio,usuario,
+    cfMaterialSeleccionadoPanol
+  );
+
+  markRecent(productoCargado.id);
+  if(tipoCambio)setLastTC(tipoCambio);
+
+  document.getElementById('cf-codigo').value='';
+  document.getElementById('cf-producto').value='';
+  document.getElementById('cf-cantidad').value='';
+  document.getElementById('cf-precio').value='';
+  cfMaterialSeleccionadoPanol=null;
+  cfNuevoProductoManual=false;
+
+  persist();renderStock();
+  showToast(precio===0?'✓ Cantidad cargada sin precio':'✓ Cargado al stock');
+}
+
+function agregarStock(rubro,codigo,nombre,cantidad,precio,tipoCambio,usuario,materialesProducto){
+  // Entrada a Pañol = solo stock interno. Nunca crea Gastos ni Materiales.
+  // Si vino del catálogo de Materiales, solo guardamos su identidad para futuras salidas.
+
+  codigo=(codigo||'').trim();
+  var prod=buscarProductoParaCarga(codigo,nombre);
+
+  if(!prod && materialesProducto){
+    prod=state.productos.find(function(p){
+      return p.materialesProducto &&
+        String(p.materialesProducto.id)===String(materialesProducto.id);
+    })||null;
+  }
+
+  if(!prod){
+    prod={id:newId(),rubro:rubro,codigo:codigo,nombre:nombre};
+    if(materialesProducto){
+      prod.materialesProducto={
+        id:materialesProducto.id,
+        name:materialesProducto.name,
+        code:materialesProducto.code||'',
+        category:materialesProducto.category||''
+      };
+    }
+    state.productos.push(prod);
+  }else{
+    prod.rubro=rubro;
+    if(codigo)prod.codigo=codigo;
+    if(nombre)prod.nombre=nombre;
+    if(materialesProducto){
+      prod.materialesProducto={
+        id:materialesProducto.id,
+        name:materialesProducto.name,
+        code:materialesProducto.code||'',
+        category:materialesProducto.category||''
+      };
+    }
+  }
+
+  var lote={
+    id:newId(),prodId:prod.id,cantidad:cantidad,cantidadOriginal:cantidad,
+    precio:precio,tipoCambio:tipoCambio||null,fechaTs:Date.now()
+  };
+  state.lotes.push(lote);
+
+  var usd=(tipoCambio && tipoCambio>0)?(cantidad*precio/tipoCambio):null;
+  state.movimientos.push({
+    id:newId(),ts:Date.now(),tipo:'entrada',prodId:prod.id,cantidad:cantidad,
+    precio:precio,tipoCambio:tipoCambio||null,usd:usd,usuario:usuario||'—',
+    detalle:[{loteId:lote.id,cantidad:cantidad,precio:precio,tipoCambio:tipoCambio||null}]
+  });
+  return prod;
+}
+
+function abrirCargaMasiva(){
+  ['masiva-codigos','masiva-productos','masiva-cantidades','masiva-precios'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value='';
+  });
+  var sub=document.getElementById('masiva-subrubro');if(sub)sub.value='';
+  document.getElementById('masiva-tc').value=getLastTC();
+  abrirModal('modal-masiva');
+  renderSubrubrosEntradaPanol('masiva','');
+}
+function parsearLineaMasiva(linea){
+  var partes=linea.split('\t');
+  if(partes.length<4) partes=linea.split(';');
+  if(partes.length<4) partes=linea.split(/\s{2,}/);
+  return partes.map(function(p){return p.trim();});
+}
+function procesarCargaMasiva(){
+  var subRaw=(document.getElementById('masiva-subrubro').value||'').trim();
+  var subrubro=validarSubrubroEntradaPanol(subRaw);
+  if(!subrubro){alert('Elegí un subrubro existente de Materiales para este lote.');return;}
+
+  function lines(id){return String(document.getElementById(id).value||'').split(/\r?\n/);}
+  var codigos=lines('masiva-codigos'),productos=lines('masiva-productos'),
+      cantidades=lines('masiva-cantidades'),precios=lines('masiva-precios');
+  var max=Math.max(codigos.length,productos.length,cantidades.length,precios.length);
+  var tipoCambio=parseFloat(document.getElementById('masiva-tc').value);
+  var hayPrecio=false;
+
+  for(var z=0;z<precios.length;z++){
+    var pr=String(precios[z]||'').trim();
+    if(!pr)continue;
+    var pv=parseFloat(pr.replace(/\./g,'').replace(',','.'))||parseFloat(pr);
+    if(pv>0){hayPrecio=true;break;}
+  }
+  if(hayPrecio&&(!tipoCambio||tipoCambio<=0)){
+    alert('Ingresá un tipo de cambio válido porque hay productos con precio.');
+    return;
+  }
+
+  var usuario=promptUsuario(false),ok=0,errores=[];
+  for(var i=0;i<max;i++){
+    var codigo=String(codigos[i]||'').trim();
+    var nombre=String(productos[i]||'').trim();
+    var cantRaw=String(cantidades[i]||'').trim();
+    var precioRaw=String(precios[i]||'').trim();
+    if(!codigo&&!nombre&&!cantRaw&&!precioRaw)continue;
+
+    var cantidad=parseFloat(cantRaw.replace(/\./g,'').replace(',','.'))||parseFloat(cantRaw);
+    var precio=precioRaw===''?0:(parseFloat(precioRaw.replace(/\./g,'').replace(',','.'))||parseFloat(precioRaw));
+    if(!nombre||!cantidad||cantidad<=0||isNaN(precio)||precio<0){
+      errores.push('Fila '+(i+1)+': datos inválidos');
+      continue;
+    }
+
+    agregarStock(
+      subrubro,codigo,nombre,cantidad,precio,
+      precio>0?tipoCambio:null,
+      usuario
+    );
+    ok++;
+  }
+  if(!ok&&!errores.length){alert('Cargá al menos una fila.');return;}
+  if(hayPrecio&&tipoCambio)setLastTC(tipoCambio);
+  persist();cerrarModal('modal-masiva');renderStock();
+
+  if(errores.length)alert('Se cargaron '+ok+' productos.\n\nProblemas:\n'+errores.join('\n'));
+  else showToast('✓ '+ok+' productos cargados al Pañol');
+}
+
+function abrirHistorialProducto(prodId){
+  var prod=state.productos.find(function(p){return p.id===prodId;});
+  if(!prod) return;
+  document.getElementById('hist-prod-titulo').textContent=prod.nombre+codigoTag(prod);
+  var movs=state.movimientos.filter(function(m){return m.prodId===prodId;}).sort(function(a,b){return b.ts-a.ts;});
+  var body=document.getElementById('hist-prod-body');
+  if(!movs.length){ body.innerHTML='<div class="empty-hist">Sin movimientos todavía.</div>'; abrirModal('modal-hist-prod'); return; }
+  body.innerHTML=movs.map(function(m){
+    var sub=m.tipo==='entrada'?('Ingreso · '+m.usuario):('Consumo · '+m.obra+' · '+m.usuario);
+    var total=m.cantidad*m.precio;
+    var accEditar=m.tipo==='entrada'?'window.editarCarga(\''+m.id+'\')':'window.editarConsumo(\''+m.id+'\')';
+    var accBorrar=m.tipo==='entrada'?'window.eliminarCarga(\''+m.id+'\')':'window.eliminarConsumo(\''+m.id+'\')';
+    return '<div class="hist-entry">'
+      +'<div class="hist-fecha">'+fmtFecha(m.ts).replace(' ','<br>')+'</div>'
+      +'<div class="hist-mid"><div class="hist-mat">'+(m.tipo==='entrada'?'Entrada al pañol':'Salida a obra')+'</div><div class="hist-sub">'+sub+' · $ '+fmtN(m.precio)+'/u · '+fmtMoney(total)+' · '+fmtUSD(m.usd)+'</div></div>'
+      +'<div class="hist-val '+m.tipo+'">'+(m.tipo==='entrada'?'+':'-')+fmtN(m.cantidad)+'</div>'
+      +(m.tipo==='salida'?'<div class="mat-sync-cell"><span class="sync-labeled-panol"><span class="sync-mini-label-panol">Materiales</span>'+puntoMaterialesConsumo(m)+'</span></div>':'')
+      +'<div class="hist-acciones"><span class="icon-mini" title="Modificar" onclick="'+accEditar+'">✎</span><span class="icon-mini" title="Borrar" onclick="'+accBorrar+'">🗑</span></div>'
+      +'</div>';
+  }).join('');
+  abrirModal('modal-hist-prod');
+}
+
+// ---------- OBRAS ----------
+function renderObrasTab(){
+  var chipsEl=document.getElementById('obras-chips');
+  var obras=obrasGastosPanol();
+  chipsEl.innerHTML=obras.map(function(o){
+    var nombre=o.label||o.short||o.id;
+    return '<button class="chip '+(curObra===o.id?'active':'')+'" onclick="window.seleccionarObra(\''+String(o.id).replace(/'/g,"\\'")+'\')">'+nombre+'</button>';
+  }).join('');
+  if(curObra && !obras.some(function(o){return o.id===curObra;})) curObra=null;
+  if(!curObra){
+    document.getElementById('obra-detalle').innerHTML='<div class="empty-state"><div class="ic">🏗️</div>Elegí una obra para registrar consumo o ver su historial.</div>';
+    return;
+  }
+  renderObraDetalle();
+}
+function seleccionarObra(o){ curObra=o; renderObrasTab(); }
+
+
+function productoConsumoLabel(p){
+  return p.nombre+codigoTag(p);
+}
+function getProductoDesdeConsumoInput(){
+  var prodInp=document.getElementById('consumo-prod-input');
+  var codInp=document.getElementById('consumo-codigo-input');
+  var prodVal=prodInp?(prodInp.value||'').trim().toLowerCase():'';
+  var codVal=codInp?(codInp.value||'').trim().toLowerCase():'';
+  if(codVal){
+    var porCodigo=state.productos.find(function(p){return (p.codigo||'').trim().toLowerCase()===codVal;});
+    if(porCodigo) return porCodigo;
+  }
+  if(!prodVal) return null;
+  return state.productos.find(function(p){
+    var nombre=(p.nombre||'').trim().toLowerCase();
+    var codigo=(p.codigo||'').trim().toLowerCase();
+    var label=productoConsumoLabel(p).trim().toLowerCase();
+    return prodVal===nombre || prodVal===label || (codigo && prodVal===codigo) || (codigo && prodVal===nombre+' ('+codigo+')');
+  }) || null;
+}
+function completarConsumoProducto(prod){
+  var prodInp=document.getElementById('consumo-prod-input');
+  var codInp=document.getElementById('consumo-codigo-input');
+  var subInp=document.getElementById('consumo-subrubro');
+
+  if(prodInp)prodInp.value=productoConsumoLabel(prod);
+  if(codInp)codInp.value=prod.codigo||'';
+
+  if(subInp&&prod.rubro){
+    var subValido=validarSubrubroPanol('mat',prod.rubro);
+    subInp.value=subValido||prod.rubro;
+  }
+
+  var row=document.getElementById('consumo-materiales-check');
+  var chk=document.getElementById('consumo-cargar-materiales');
+  var picker=document.getElementById('consumo-materiales-picker');
+  var auto=document.getElementById('consumo-materiales-auto');
+
+  if(prod.materialesProducto){
+    cqMaterialSeleccionadoPanol={
+      id:prod.materialesProducto.id,
+      name:prod.materialesProducto.name,
+      code:prod.materialesProducto.code||'',
+      category:prod.materialesProducto.category||''
+    };
+    if(row)row.classList.remove('hidden-manual');
+    if(chk){chk.checked=true;chk.disabled=true;}
+    if(picker)picker.classList.remove('show');
+    if(auto){
+      auto.style.display='block';
+      auto.textContent='✓ Materiales automático: '+cqMaterialSeleccionadoPanol.name;
+    }
+  }else{
+    // Producto propio de Pañol todavía no existente en Materiales:
+    // no ofrecer una carga manual. Se vinculará solo cuando aparezca en el catálogo.
+    cqMaterialSeleccionadoPanol=null;
+    if(row)row.classList.add('hidden-manual');
+    if(chk){chk.checked=false;chk.disabled=true;}
+    if(picker)picker.classList.remove('show');
+    if(auto){auto.style.display='none';auto.textContent='';}
+  }
+
+  var pc=document.getElementById('consumo-prod-combo');
+  var cc=document.getElementById('consumo-codigo-combo');
+  var sp=document.getElementById('consumo-subrubro-panel');
+  if(pc)pc.classList.remove('open');
+  if(cc)cc.classList.remove('open');
+  if(sp)sp.classList.remove('open');
+
+  updateConsumoHelp(prod);
+}
+function onConsumoRubroChange(){ renderObraDetalle(); }
+function renderConsumoCodigoDropdown(open){
+  var inp=document.getElementById('consumo-codigo-input');
+  var panel=document.getElementById('consumo-codigo-panel');
+  var combo=document.getElementById('consumo-codigo-combo');
+  if(!inp||!panel||!combo)return;
+
+  var sub=document.getElementById('consumo-subrubro');
+  var filtroSub=sub&&sub.value.trim()?sub.value.trim():'all';
+  var productos=filterProductosCombo(inp.value||'',filtroSub).filter(function(p){return p.codigo;});
+
+  if(!productos.length){
+    panel.innerHTML='<div class="combo-empty">Sin códigos disponibles.</div>';
+  }else{
+    panel.innerHTML=productos.map(function(p){return comboProductItemHTML(p,'elegir código');}).join('');
+    Array.prototype.forEach.call(panel.querySelectorAll('.combo-item'),function(btn){
+      btn.addEventListener('click',function(){
+        var prod=state.productos.find(function(p){return p.id===btn.getAttribute('data-id');});
+        if(!prod)return;
+        completarConsumoProducto(prod);
+      });
+    });
+  }
+  if(open)combo.classList.add('open');
+}
+function showConsumoCodigoDropdown(){ renderConsumoCodigoDropdown(true); }
+function onConsumoCodigoInput(){
+  var prod=getProductoDesdeConsumoInput();
+  if(prod){
+    completarConsumoProducto(prod);
+    return;
+  }
+  renderConsumoCodigoDropdown(true);
+  updateConsumoHelp(null);
+}
+
+function renderConsumoProductoDropdown(open){
+  var inp=document.getElementById('consumo-prod-input');
+  var panel=document.getElementById('consumo-prod-panel');
+  var combo=document.getElementById('consumo-prod-combo');
+  if(!inp||!panel||!combo)return;
+
+  var sub=document.getElementById('consumo-subrubro');
+  var filtroSub=sub&&sub.value.trim()?sub.value.trim():'all';
+  var productos=filterProductosCombo(inp.value||'',filtroSub);
+
+  if(!productos.length){
+    panel.innerHTML='<div class="combo-empty">Sin productos disponibles.</div>';
+  }else{
+    panel.innerHTML=productos.map(function(p){return comboProductItemHTML(p,'elegir para obra');}).join('');
+    Array.prototype.forEach.call(panel.querySelectorAll('.combo-item'),function(btn){
+      btn.addEventListener('click',function(){
+        var prod=state.productos.find(function(p){return p.id===btn.getAttribute('data-id');});
+        if(!prod)return;
+        completarConsumoProducto(prod);
+      });
+    });
+  }
+  if(open)combo.classList.add('open');
+}
+function showConsumoProductoDropdown(){ renderConsumoProductoDropdown(true); }
+function updateConsumoHelp(prod){
+  var help=document.getElementById('consumo-prod-help');
+  if(!help) return;
+  if(prod){
+    help.textContent='Stock disponible: '+fmtN(stockDeProducto(prod.id))+' u · Subrubro: '+prod.rubro;
+    help.style.color='var(--verde2)';
+  }else{
+    help.textContent='Escribí y elegí un producto cargado en pañol.';
+    help.style.color='var(--tenue)';
+  }
+}
+function onConsumoProductoInput(){
+  var prod=getProductoDesdeConsumoInput();
+  if(prod){
+    completarConsumoProducto(prod);
+    return;
+  }
+  renderConsumoProductoDropdown(true);
+  updateConsumoHelp(null);
+}
+
+function renderObraDetalle(){
+  var det=document.getElementById('obra-detalle');
+  var obraObj=obraGastosPanolPorId(curObra);
+  var obraNombre=obraObj?(obraObj.label||obraObj.short||obraObj.id):curObra;
+  var obraClave=claveLoteMzPanol(obraNombre);
+  var movs=state.movimientos.filter(function(m){
+    if(m.tipo!=='salida')return false;
+    if(m.gastosObraId)return m.gastosObraId===curObra;
+    return claveLoteMzPanol(m.obra)===obraClave;
+  }).sort(function(a,b){return b.ts-a.ts;});
+  var totalGastado=movs.reduce(function(a,m){return a+m.cantidad*m.precio;},0);
+  var todosConUSD=movs.length>0 && movs.every(function(m){return m.usd!=null;});
+  var totalGastadoUSD=todosConUSD?movs.reduce(function(a,m){return a+m.usd;},0):null;
+  var cantidadTotal=movs.reduce(function(a,m){return a+m.cantidad;},0);
+
+  var productosConsumo=state.productos.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
+  var productosOpts=productosConsumo.map(function(p){
+    var stk=stockDeProducto(p.id);
+    return '<option value="'+productoConsumoLabel(p)+'">stock: '+fmtN(stk)+' · '+p.rubro+'</option>';
+  }).join('');
+
+  var html='';
+
+
+  html+='<div class="card"><div class="card-hd">Registrar consumo — '+obraNombre+'</div><div class="card-bd">';
+  html+='<div class="fld"><label>Subrubro · Materiales</label><div class="panol-subrubro-combo"><input class="panol-subrubro-input" type="text" id="consumo-subrubro" placeholder="Seleccionar o escribir..." autocomplete="off" onfocus="window.abrirSubrubrosPanol()" oninput="window.renderSubrubrosPanol(this.value);window.onConsumoSubrubroInput()"><button type="button" class="panol-subrubro-btn" onclick="window.abrirSubrubrosPanol()">▾</button><div class="panol-subrubro-panel" id="consumo-subrubro-panel"></div></div></div>';
+  html+='<div class="carga-row" style="margin-bottom:0"><div class="fld"><label>Código</label><div class="combo-down" id="consumo-codigo-combo"><input type="text" id="consumo-codigo-input" placeholder="Código" autocomplete="off" oninput="window.onConsumoCodigoInput()" onfocus="window.showConsumoCodigoDropdownFiltrado()"><div class="combo-panel" id="consumo-codigo-panel"></div></div></div><div class="fld"><label>Producto</label><div class="combo-down" id="consumo-prod-combo"><input type="text" id="consumo-prod-input" placeholder="Escribí producto" autocomplete="off" oninput="window.onConsumoProductoInput()" onfocus="window.showConsumoProductoDropdownFiltrado()"><div class="combo-panel" id="consumo-prod-panel"></div></div><div id="consumo-prod-help" class="combo-help">Podés escribir código o producto y elegir de la lista.</div></div></div>';
+  html+='<div class="fld"><label>Cantidad a descontar</label><input type="number" id="consumo-cantidad" step="any" placeholder="0"></div>';
+  html+='<div class="cq-mat-check" id="consumo-materiales-check"><div><label><input type="checkbox" id="consumo-cargar-materiales" onchange="window.toggleMaterialesConsumoPanol()"> Cargar en Materiales</label><small>Los productos tomados del catálogo se vinculan automáticamente.</small><div class="cf-auto-materiales" id="consumo-materiales-auto" style="display:none"></div></div></div>';
+  html+='<div class="cq-mat-picker" id="consumo-materiales-picker"><input class="cq-mat-search" id="consumo-materiales-search" placeholder="Buscar producto, código o categoría..." autocomplete="off" oninput="window.renderCatalogoMaterialesConsumoPanol()"><div class="cq-mat-results" id="consumo-materiales-results"></div><div class="cq-mat-selected" id="consumo-materiales-selected">Ningún producto seleccionado</div></div>';
+  html+='<div class="fld"><label>Comentario (opcional)</label><textarea class="consumo-comment" id="consumo-comentario" placeholder="Comentario para Gastos y Materiales"></textarea></div>';
+  html+='<button class="btn-cargar" onclick="window.registrarConsumo()">➖ Descontar de stock</button>';
+  html+='</div></div>';
+
+  html+='<div class="card"><div class="card-hd">Historial de esta obra</div><div>';
+  if(!movs.length){
+    html+='<div class="empty-hist">Todavía no cargaste consumo para esta obra.</div>';
+  }else{
+    html+=movs.map(function(m){
+      var prod=state.productos.find(function(p){return p.id===m.prodId;});
+      var total=m.cantidad*m.precio;
+      return '<div class="hist-entry">'
+        +'<div class="hist-fecha">'+fmtFecha(m.ts).replace(' ','<br>')+'</div>'
+        +'<div class="hist-mid"><div class="hist-mat">'+(prod?prod.nombre:'(producto eliminado)')+'</div><div class="hist-sub">'+m.usuario+' · '+(m.gastosDebeCargar===false
+          ?('Sin precio · '+(m.materialesAgregar===false?'solo Pañol':'Materiales'))
+          :('$ '+fmtN(m.precio)+'/u · '+fmtMoney(total)+' · '+fmtUSD(m.usd)+(m.materialesAgregar===false?' · sin Materiales':'')))+'</div>'
+        +(m.gastosSubrubro?'<div class="hist-extra">📁 '+escHTML(m.gastosSubrubro)+'</div>':'')
+        +(m.comentario?'<div class="hist-extra">💬 '+escHTML(m.comentario)+'</div>':'')+'</div>'
+        +'<div class="hist-val salida">'+fmtN(m.cantidad)+'</div>'
+        +'<div class="mat-sync-cell"><span class="sync-labeled-panol"><span class="sync-mini-label-panol">Materiales</span>'+puntoMaterialesConsumo(m)+'</span></div>'
+        +'<div class="gasto-sync-cell"><span class="sync-labeled-panol"><span class="sync-mini-label-panol">Gastos</span>'+puntoGastosPanol(m)+'</span></div>'
+        +'<div class="hist-acciones"><span class="icon-mini" title="Modificar" onclick="window.editarConsumo(\''+m.id+'\')">✎</span><span class="icon-mini" title="Borrar" onclick="window.eliminarConsumo(\''+m.id+'\')">🗑</span></div>'
+        +'</div>';
+    }).join('');
+  }
+  html+='</div></div>';
+
+  det.innerHTML=html;
+  renderSubrubrosPanol('');
+}
+
+const CQ_BASE_CATALOGO_MATERIALES_PANOL=[{"id":1,"name":"Hierro 6","code":"","category":"HIERROS"},{"id":2,"name":"Hierro 8","code":"","category":"HIERROS"},{"id":3,"name":"Hierro 10","code":"","category":"HIERROS"},{"id":4,"name":"Mallas Q188","code":"","category":"HIERROS"},{"id":5,"name":"Mallas Q100 (4mm)","code":"","category":"HIERROS"},{"id":6,"name":"Mallas Q131","code":"","category":"HIERROS"},{"id":7,"name":"Cemento","code":"","category":"CEMENTO Y HERCAL"},{"id":8,"name":"Hercal","code":"","category":"CEMENTO Y HERCAL"},{"id":9,"name":"Pallets Cemento","code":"","category":"CEMENTO Y HERCAL"},{"id":10,"name":"Pallets Hercal","code":"","category":"CEMENTO Y HERCAL"},{"id":11,"name":"Portante 12 (126u)","code":"","category":"LADRILLOS"},{"id":12,"name":"Portante 18 (90u)","code":"","category":"LADRILLOS"},{"id":13,"name":"Techo 16,5 (60u)","code":"","category":"LADRILLOS"},{"id":14,"name":"Techo 11 (80u)","code":"","category":"LADRILLOS"},{"id":15,"name":"Tabique 12 Palmar (144u)","code":"","category":"LADRILLOS"},{"id":16,"name":"Tabique 8 Palmar (198u)","code":"","category":"LADRILLOS"},{"id":17,"name":"Portante bloque 12","code":"","category":"LADRILLOS"},{"id":18,"name":"Portante bloque 18","code":"","category":"LADRILLOS"},{"id":19,"name":"Bovedillas","code":"","category":"LADRILLOS"},{"id":20,"name":"Ladrillon 18","code":"","category":"LADRILLOS"},{"id":21,"name":"Ladrillos comunes","code":"","category":"LADRILLOS"},{"id":22,"name":"Techi Cau emuls. Asf.","code":"","category":"IMPERMEABILIZANTES"},{"id":23,"name":"Hidrofugo 20 kgs","code":"","category":"IMPERMEABILIZANTES"},{"id":24,"name":"Agrotileno","code":"","category":"IMPERMEABILIZANTES"},{"id":25,"name":"Sika Latex 5 Lts","code":"","category":"IMPERMEABILIZANTES"},{"id":26,"name":"Alambre kgs","code":"","category":"ALAMBRES Y CLAVOS"},{"id":27,"name":"Clavos kgs","code":"","category":"ALAMBRES Y CLAVOS"},{"id":28,"name":"Fino interior","code":"","category":"REVOQUES Y YESO"},{"id":29,"name":"Fino exterior","code":"","category":"REVOQUES Y YESO"},{"id":30,"name":"Yeso (40 kgs)","code":"","category":"REVOQUES Y YESO"},{"id":31,"name":"Guardacanto yesero x 2m","code":"","category":"REVOQUES Y YESO"},{"id":32,"name":"Viguetas 6,5 mts","code":"","category":"VIGUETAS"},{"id":33,"name":"Viguetas 4,20 mts","code":"","category":"VIGUETAS"},{"id":34,"name":"Viguetas 4 mts","code":"","category":"VIGUETAS"},{"id":35,"name":"Viguetas 3,20 mts","code":"","category":"VIGUETAS"},{"id":36,"name":"Viguetas 3 mts","code":"","category":"VIGUETAS"},{"id":37,"name":"Viguetas 2,80 mts","code":"","category":"VIGUETAS"},{"id":38,"name":"Viguetas 2 mts","code":"","category":"VIGUETAS"},{"id":39,"name":"Viguetas 1,80 mts","code":"","category":"VIGUETAS"},{"id":40,"name":"Viguetas 1,60 mts","code":"","category":"VIGUETAS"},{"id":41,"name":"Viguetas 1,40 mts","code":"","category":"VIGUETAS"},{"id":42,"name":"Viguetas 1 mts","code":"","category":"VIGUETAS"},{"id":43,"name":"Peg. Porcelanato x25kg","code":"","category":"PEGAMENTOS Y PISOS"},{"id":44,"name":"Peg. Ceramica x25kg","code":"","category":"PEGAMENTOS Y PISOS"},{"id":45,"name":"Pastina kgs","code":"","category":"PEGAMENTOS Y PISOS"},{"id":46,"name":"Revestimiento cocina","code":"","category":"PEGAMENTOS Y PISOS"},{"id":47,"name":"Revestimiento bano 2 par.","code":"","category":"PEGAMENTOS Y PISOS"},{"id":48,"name":"Piso interior","code":"","category":"PEGAMENTOS Y PISOS"},{"id":49,"name":"Piso exterior","code":"","category":"PEGAMENTOS Y PISOS"},{"id":50,"name":"Interior blanca","code":"","category":"PINTURAS"},{"id":51,"name":"General exterior 1","code":"","category":"PINTURAS"},{"id":52,"name":"Color fuerte ext.","code":"","category":"PINTURAS"},{"id":53,"name":"Fijadores","code":"","category":"PINTURAS"},{"id":54,"name":"Fijador fondo madera","code":"","category":"PINTURAS"},{"id":55,"name":"Techos (pintura)","code":"","category":"PINTURAS"},{"id":56,"name":"Masilla Durlock","code":"","category":"PINTURAS"},{"id":57,"name":"Bolsas Telgopor","code":"","category":"VARIOS"}];
+var cqCatalogoMaterialesPanol=[];
+var cqMaterialSeleccionadoPanol=null;
+
+var conciliandoCatalogoPanol=false;
+
+function encontrarMaterialCatalogoParaProductoPanol(prod){
+  if(!prod||prod.materialesProducto)return null;
+  var codigo=String(prod.codigo||'').trim().toLowerCase();
+
+  if(codigo){
+    var porCodigo=(cqCatalogoMaterialesPanol||[]).find(function(x){
+      return String(x.code||'').trim().toLowerCase()===codigo;
+    });
+    if(porCodigo)return porCodigo;
+  }
+
+  var nombre=normCatalogoPanol(prod.nombre);
+  if(!nombre)return null;
+  return (cqCatalogoMaterialesPanol||[]).find(function(x){
+    return normCatalogoPanol(x.name)===nombre;
+  })||null;
+}
+
+async function conciliarProductosNuevosConMaterialesPanol(){
+  if(conciliandoCatalogoPanol||!window._dbReady||!cqCatalogoMaterialesPanol.length)return;
+  conciliandoCatalogoPanol=true;
+  var cambio=false;
+
+  try{
+    for(var i=0;i<state.productos.length;i++){
+      var prod=state.productos[i];
+      if(prod.materialesProducto)continue;
+
+      var item=encontrarMaterialCatalogoParaProductoPanol(prod);
+      if(!item)continue;
+
+      prod.materialesProducto={
+        id:item.id,
+        name:item.name,
+        code:item.code||'',
+        category:item.category||''
+      };
+      cambio=true;
+
+      var salidas=state.movimientos.filter(function(m){
+        return m.tipo==='salida' &&
+          String(m.prodId)===String(prod.id) &&
+          !m.materialesProducto &&
+          m.materialesSyncEstado!=='ok';
+      });
+
+      for(var j=0;j<salidas.length;j++){
+        var mov=salidas[j];
+        mov.materialesAgregar=true;
+        mov.materialesProducto={
+          id:item.id,
+          name:item.name,
+          code:item.code||'',
+          category:item.category||''
+        };
+        mov.materialesSyncEstado='pendiente';
+        mov.materialesSyncError='';
+
+        try{
+          await sincronizarConsumoConMateriales(mov,true,prod);
+          mov.materialesSyncEstado='ok';
+          mov.materialesSyncError='';
+        }catch(e){
+          mov.materialesSyncEstado='error';
+          mov.materialesSyncError=String(e&&e.message||e);
+          console.warn('Conciliación histórica Pañol → Materiales',e);
+        }
+        cambio=true;
+      }
+    }
+
+    if(cambio){
+      await persist();
+      renderActive();
+    }
+  }finally{
+    conciliandoCatalogoPanol=false;
+  }
+}
+
+async function cargarCatalogoMaterialesPanol(){
+  var list=CQ_BASE_CATALOGO_MATERIALES_PANOL.map(function(x){return Object.assign({},x);});
+  try{
+    if(window._dbReady&&window._getDoc){
+      var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+      if(snap.exists()){
+        var d=snap.data()||{};
+        var ren=d.matNombres||{},cod=d.matCodigos||{},cats=d.matCategorias||{},catRen=d.catRenames||{};
+        var deleted=(d.deletedMatIds||[]).map(Number);
+
+        list=list.filter(function(x){return deleted.indexOf(Number(x.id))<0;}).map(function(x){
+          if(ren[x.id]!=null)x.name=String(ren[x.id]);
+          if(cod[x.id]!=null)x.code=String(cod[x.id]);
+          if(cats[x.id]!=null)x.category=String(cats[x.id]);
+          if(catRen[x.category]!=null)x.category=String(catRen[x.category]);
+          return x;
+        });
+
+        (d.extraMats||[]).forEach(function(x){
+          if(deleted.indexOf(Number(x.id))>=0)return;
+          var item={
+            id:x.id,
+            name:String(ren[x.id]||x.mat||''),
+            code:String(cod[x.id]||x.codigo||''),
+            category:String(cats[x.id]||x.catName||'VARIOS')
+          };
+          var idx=list.findIndex(function(y){return Number(y.id)===Number(item.id);});
+          if(idx>=0)list[idx]=item; else list.push(item);
+        });
+      }
+    }
+  }catch(e){console.warn('No se pudo leer catálogo de Materiales',e);}
+
+  // eliminar duplicados por id y ordenar
+  var seen={};
+  cqCatalogoMaterialesPanol=list.filter(function(x){
+    if(!x||!x.name)return false;
+    var k=String(x.id);
+    if(seen[k])return false;
+    seen[k]=1;return true;
+  }).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'es');});
+  setTimeout(function(){
+    conciliarProductosNuevosConMaterialesPanol().catch(function(e){console.warn(e);});
+  },0);
+  return cqCatalogoMaterialesPanol;
+}
+
+async function toggleMaterialesConsumoPanol(){
+  var chk=document.getElementById('consumo-cargar-materiales');
+  var box=document.getElementById('consumo-materiales-picker');
+  if(!chk||!box)return;
+  if(!chk.checked){
+    box.classList.remove('show');
+    cqMaterialSeleccionadoPanol=null;
+    renderMaterialSeleccionadoPanol();
+    return;
+  }
+  box.classList.add('show');
+  var search=document.getElementById('consumo-materiales-search');
+  if(search)search.value='';
+  await cargarCatalogoMaterialesPanol();
+  renderCatalogoMaterialesConsumoPanol();
+  renderMaterialSeleccionadoPanol();
+  setTimeout(function(){if(search)search.focus();},30);
+}
+
+function renderCatalogoMaterialesConsumoPanol(){
+  var box=document.getElementById('consumo-materiales-results');
+  var search=document.getElementById('consumo-materiales-search');
+  if(!box)return;
+  box.style.display='block';
+  var q=String(search?search.value:'').trim().toLowerCase();
+  var arr=cqCatalogoMaterialesPanol.filter(function(x){
+    return !q||[x.name,x.code,x.category].some(function(v){
+      return String(v||'').toLowerCase().includes(q);
+    });
+  }).slice(0,150);
+
+  box.innerHTML=arr.length?arr.map(function(x){
+    return '<div class="cq-mat-result" data-id="'+escHTML(x.id)+'"><b>'+escHTML(x.name)+'</b><small>'+(x.code?('Código '+escHTML(x.code)+' · '):'')+escHTML(x.category||'')+'</small></div>';
+  }).join(''):'<div class="combo-empty">Sin resultados</div>';
+
+  Array.prototype.forEach.call(box.querySelectorAll('.cq-mat-result'),function(el){
+    el.addEventListener('click',function(){
+      cqMaterialSeleccionadoPanol=cqCatalogoMaterialesPanol.find(function(x){return String(x.id)===String(el.getAttribute('data-id'));})||null;
+      renderMaterialSeleccionadoPanol();
+      var results=document.getElementById('consumo-materiales-results');
+      if(results)results.style.display='none';
+      var search=document.getElementById('consumo-materiales-search');
+      if(search)search.value=cqMaterialSeleccionadoPanol?cqMaterialSeleccionadoPanol.name:'';
+    });
+  });
+}
+
+function renderMaterialSeleccionadoPanol(){
+  var el=document.getElementById('consumo-materiales-selected');
+  if(!el)return;
+  el.textContent=cqMaterialSeleccionadoPanol
+    ?('✓ '+cqMaterialSeleccionadoPanol.name+(cqMaterialSeleccionadoPanol.code?' · '+cqMaterialSeleccionadoPanol.code:''))
+    :'Ningún producto seleccionado';
+}
+
+// ═══════════════════════════════════════════
+// VERIFICACIÓN PERSISTENTE: ¿LA SALIDA EXISTE REALMENTE EN MATERIALES?
+// Se observa directamente materiales/data_planilla_exacta_v4.
+// ═══════════════════════════════════════════
+var materialesIntegradosPanol=null;
+var materialesVerificacionErrorPanol=false;
+var unsubVerificacionMaterialesPanol=null;
+function estadoMaterialesConsumo(mov){
+  if(!mov)return {cls:'err',txt:'No se pudo verificar Materiales'};
+  if(mov.materialesAgregar===false||mov.materialesSyncEstado==='no'){
+    return {cls:'err',txt:mov.materialesSyncError||'Producto aún no existe en el catálogo de Materiales'};
+  }
+
+  // Después de que setDoc confirma la escritura, mostrar verde inmediatamente.
+  // El listener posterior sigue siendo la autoridad para detectar borrados/cambios.
+  if(mov.materialesSyncEstado==='ok'){
+    return {cls:'ok',txt:'Cargado OK en Materiales'};
+  }
+  if(mov.materialesSyncEstado==='pendiente'){
+    return {cls:'wait',txt:'Sincronizando con Materiales…'};
+  }
+  if(mov.materialesSyncEstado==='error'){
+    return {cls:'err',txt:mov.materialesSyncError||'NO está cargado en Materiales. Verificar.'};
+  }
+
+  var iid=integracionConsumoId(mov.id);
+  if(materialesVerificacionErrorPanol)return {cls:'err',txt:'Error al verificar Materiales'};
+  if(materialesIntegradosPanol===null)return {cls:'wait',txt:'Verificando Materiales…'};
+  return materialesIntegradosPanol.has(iid)
+    ?{cls:'ok',txt:'Cargado OK en Materiales'}
+    :{cls:'err',txt:'NO está cargado en Materiales. Verificar.'};
+}
+function puntoMaterialesConsumo(mov){
+  var e=estadoMaterialesConsumo(mov);
+  return '<span class="mat-sync-dot '+e.cls+'" title="'+e.txt.replace(/"/g,'&quot;')+'" aria-label="'+e.txt.replace(/"/g,'&quot;')+'"></span>';
+}
+function iniciarVerificacionMaterialesPanol(){
+  if(!window._dbReady||!window._onSnapshot||!window._doc||!window._db){setTimeout(iniciarVerificacionMaterialesPanol,700);
+setInterval(function(){
+  cargarCatalogoMaterialesPanol().catch(function(e){console.warn(e);});
+},30000);
+window.addEventListener('focus',function(){
+  setTimeout(function(){cargarCatalogoMaterialesPanol().catch(function(e){console.warn(e);});},350);
+});
+return;}
+  try{ if(unsubVerificacionMaterialesPanol) unsubVerificacionMaterialesPanol(); }catch(_e){}
+  unsubVerificacionMaterialesPanol=window._onSnapshot(window._doc(window._db,'materiales','data_planilla_exacta_v4'),function(snap){
+    materialesVerificacionErrorPanol=false;
+    var ids=new Set();
+    if(snap.exists()){
+      var d=snap.data()||{};
+      (d.cargas||[]).forEach(function(c){ if(c&&c.integracionId) ids.add(String(c.integracionId)); });
+    }
+    materialesIntegradosPanol=ids;
+
+    // Reconciliar también el estado guardado de cada salida.
+    var cambioEstado=false;
+    state.movimientos.forEach(function(m){
+      if(!m||m.tipo!=='salida'||m.materialesAgregar===false)return;
+      var iid=integracionConsumoId(m.id);
+      var existe=ids.has(String(iid));
+      var next=existe?'ok':'error';
+      var err=existe?'':'La carga vinculada ya no existe en Materiales';
+      if(m.materialesSyncEstado!==next||m.materialesSyncError!==err){
+        m.materialesSyncEstado=next;
+        m.materialesSyncError=err;
+        cambioEstado=true;
+      }
+    });
+    if(cambioEstado){
+      try{persist();}catch(_e){}
+    }
+
+    try{ if(curTab==='obras') renderObrasTab(); }catch(_e){}
+    try{
+      var modal=document.getElementById('modal-hist-prod');
+      if(modal&&modal.classList.contains('open')){
+        var title=document.getElementById('hist-prod-titulo');
+        // No forzamos reapertura si no conocemos el producto; la vista de obra sí se actualiza sola.
+      }
+    }catch(_e){}
+  },function(err){
+    console.warn('No se pudo verificar Materiales desde Pañol',err);
+    materialesVerificacionErrorPanol=true;
+    materialesIntegradosPanol=new Set();
+    try{ if(curTab==='obras') renderObrasTab(); }catch(_e){}
+  });
+}
+document.addEventListener('cq-db-ready',iniciarVerificacionMaterialesPanol);
+setTimeout(iniciarVerificacionMaterialesPanol,700);
+
+// ═══════════════════════════════════════════
+// INTEGRACIÓN PAÑOL → MATERIALES
+// Una salida a obra genera/actualiza un único movimiento automático.
+// ═══════════════════════════════════════════
+
+function cqNormTechi(v){
+  return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+}
+function cqEsTechiCau29_77(mov,prod){
+  var nombre=String((prod&&prod.nombre)||mov.materialName||'');
+  var obra=String(nombreObraMovPanol(mov)||mov.obra||'');
+  return cqNormTechi(nombre).includes('techicau') && claveLoteMzPanol(obra)==='29/77';
+}
+async function cqLimpiarTechiCau29_77Panol(){
+  if(!window._dbReady)return false;
+  var afectados=state.movimientos.filter(function(m){
+    if(m.tipo!=='salida')return false;
+    var prod=state.productos.find(function(p){return p.id===m.prodId;})||null;
+    return cqEsTechiCau29_77(m,prod);
+  });
+  if(!afectados.length)return false;
+
+  var cambio=false;
+  for(var i=0;i<afectados.length;i++){
+    var mov=afectados[i];
+    var prod=state.productos.find(function(p){return p.id===mov.prodId;})||{
+      codigo:mov.materialCode||'',nombre:mov.materialName||'Techi Cau'
+    };
+    try{await sincronizarConsumoConMateriales(mov,false,prod);cambio=true;}catch(e){console.warn(e);}
+    try{
+      if(mov.gastosObraId){await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),true);cambio=true;}
+    }catch(e){console.warn(e);}
+    mov.gastosSyncEstado='error';
+    mov.gastosSyncError='Limpieza forzada Techi Cau 29/77';
+  }
+  if(cambio)await persist();
+  return cambio;
+}
+
+function integracionConsumoId(movId){ return 'panol_'+String(movId); }
+async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
+  if(!window._dbReady) throw new Error('Firebase no disponible');
+  if(!mov) throw new Error('Consumo no encontrado');
+
+  var destino=mov.materialesProducto||null;
+  var prod=prodFallback || state.productos.find(function(p){return p.id===mov.prodId;}) || null;
+
+  if(activo!==false && !destino)throw new Error('No se eligió producto del catálogo de Materiales');
+
+  var materialCode=destino?String(destino.code||''):(prod?String(prod.codigo||''):String(mov.materialCode||''));
+  var materialName=destino?String(destino.name||''):(prod?String(prod.nombre||''):String(mov.materialName||''));
+
+  var iid=integracionConsumoId(mov.id);
+  var payload={
+    integrationId:iid,
+    source:'panol',
+    sourceLabel:mov.comentario?('Pañol · '+String(mov.comentario)):'Pañol',
+    comentario:String(mov.comentario||''),
+    sourceMovementId:String(mov.id),
+    obraName:String(nombreObraMovPanol(mov)||mov.obra||''),
+    materialCode:materialCode,
+    materialName:materialName,
+    qty:Number(mov.cantidad)||0,
+    unidad:'u',
+    fecha:new Date(mov.ts||Date.now()).toISOString().slice(0,10),
+    active:activo!==false,
+    updatedAt:new Date().toISOString()
+  };
+
+  if(payload.active && !payload.obraName) throw new Error('Obra no encontrada');
+  await window._setDoc(window._doc(window._db,'materiales_integraciones',iid),payload);
+
+  // setDoc ya fue confirmado por Firebase: reflejarlo en pantalla sin esperar otro listener.
+  if(!(materialesIntegradosPanol instanceof Set))materialesIntegradosPanol=new Set();
+  if(payload.active){
+    materialesIntegradosPanol.add(String(iid));
+    mov.materialesSyncEstado='ok';
+    mov.materialesSyncError='';
+  }else{
+    materialesIntegradosPanol.delete(String(iid));
+    mov.materialesSyncEstado='no';
+  }
+  return true;
+}
+
+async function registrarConsumo(){
+  var prod=getProductoDesdeConsumoInput();
+  var prodId=prod?prod.id:'';
+  var cantidad=parseFloat(document.getElementById('consumo-cantidad').value);
+  var categoria='mat';
+  var subrubro=(document.getElementById('consumo-subrubro')?document.getElementById('consumo-subrubro').value:'').trim();
+  var comentario=(document.getElementById('consumo-comentario')?document.getElementById('consumo-comentario').value:'').trim();
+  var obraObj=obraGastosPanolPorId(curObra);
+  var cargarMateriales=false;
+
+  // Solo un producto ya reconocido en el catálogo de Materiales se sincroniza.
+  // Los productos nuevos propios de Pañol quedan pendientes de conciliación automática.
+  if(prod&&prod.materialesProducto){
+    cargarMateriales=true;
+    cqMaterialSeleccionadoPanol={
+      id:prod.materialesProducto.id,
+      name:prod.materialesProducto.name,
+      code:prod.materialesProducto.code||'',
+      category:prod.materialesProducto.category||''
+    };
+  }
+
+  if(!prodId){alert('Elegí un producto válido de la lista.');return;}
+  if(!cantidad||cantidad<=0){alert('Ingresá una cantidad válida.');return;}
+  if(!obraObj){alert('No se pudo identificar la obra de Gastos.');return;}
+
+  var subValido=validarSubrubroPanol(categoria,subrubro);
+  if(!subValido){alert('Elegí un subrubro existente de la lista de Gastos.');return;}
+  subrubro=subValido;
+
+  if(cargarMateriales&&!cqMaterialSeleccionadoPanol){
+    alert('Elegí el producto del catálogo de Materiales.');
+    return;
+  }
+
+  var disponible=stockDeProducto(prodId);
+  if(cantidad>disponible){
+    alert('No hay stock suficiente.\n\nDisponible: '+fmtN(disponible)+'\nPedido: '+fmtN(cantidad));
+    return;
+  }
+
+  var res=consumirStockFIFO(prodId,cantidad);
+  var usuario=promptUsuario(false);
+  var sumaPonderada=importeDetallePanol(res.detalle);
+  var precioProm=cantidad>0?sumaPonderada/cantidad:0;
+  var todosConTC=res.detalle.length>0&&res.detalle.every(function(d){
+    return Number(d.precio)<=0 || (Number(d.tipoCambio)>0);
+  });
+  var usd=todosConTC?res.detalle.reduce(function(a,d){
+    var tc=Number(d.tipoCambio)||0,precio=Number(d.precio)||0;
+    return a+(precio>0&&tc>0?(Number(d.cantidad)||0)*precio/tc:0);
+  },0):null;
+  if(usd===0)usd=null;
+
+  var gastosDebeCargar=detalleConPrecioParaGastos(res.detalle);
+  var tcProm=tcPromDetallePanol(res.detalle)||getLastTC();
+
+  markRecent(prodId);
+  var mov={
+    id:newId(),ts:Date.now(),createdAt:new Date().toISOString(),tipo:'salida',
+    prodId:prodId,cantidad:cantidad,precio:precioProm,usd:usd,tipoCambioProm:tcProm,
+    obra:obraObj.label||obraObj.short||obraObj.id,gastosObraId:obraObj.id,
+    materialCode:String(prod.codigo||''),materialName:String(prod.nombre||''),
+    materialesAgregar:cargarMateriales,
+    materialesProducto:cargarMateriales?{
+      id:cqMaterialSeleccionadoPanol.id,
+      name:cqMaterialSeleccionadoPanol.name,
+      code:cqMaterialSeleccionadoPanol.code||'',
+      category:cqMaterialSeleccionadoPanol.category||''
+    }:null,
+    materialesSyncEstado:cargarMateriales?'pendiente':'no',
+    materialesSyncError:cargarMateriales?'':'Producto todavía no vinculado al catálogo de Materiales.',
+    gastosCategoria:categoria,gastosSubrubro:subrubro,comentario:comentario,
+    gastosDebeCargar:gastosDebeCargar,
+    gastosSyncEstado:gastosDebeCargar?'pendiente':'no',
+    gastosSyncError:gastosDebeCargar?'':'No se envía a Gastos porque el stock consumido fue ingresado sin precio.',
+    usuario:usuario||'—',detalle:res.detalle
+  };
+  state.movimientos.push(mov);
+  await persist();
+
+  document.getElementById('consumo-cantidad').value='';
+  document.getElementById('consumo-subrubro').value='';
+  document.getElementById('consumo-comentario').value='';
+  var ci=document.getElementById('consumo-codigo-input');if(ci)ci.value='';
+  var pi=document.getElementById('consumo-prod-input');if(pi)pi.value='';
+  cqMaterialSeleccionadoPanol=null;
+  renderObraDetalle();
+
+  var okMat=!cargarMateriales,okGas=!gastosDebeCargar;
+
+  if(cargarMateriales){
+    try{
+      await sincronizarConsumoConMateriales(mov,true);
+      mov.materialesSyncEstado='ok';
+      mov.materialesSyncError='';
+      okMat=true;
+      await persist();
+    }catch(e){
+      mov.materialesSyncEstado='error';
+      mov.materialesSyncError=String(e&&e.message||e);
+      await persist();
+      console.warn('Materiales',e);
+    }
+  }
+
+  if(gastosDebeCargar){
+    try{
+      await sincronizarConsumoConGastos(mov,true);
+      okGas=true;
+    }catch(e){
+      console.warn('Gastos',e);
+      mov.gastosSyncEstado='error';
+      mov.gastosSyncError=String(e&&e.message||e);
+      await persist();
+    }
+  }
+
+  renderObraDetalle();
+
+  if(cargarMateriales&&okMat&&gastosDebeCargar&&okGas)showToast('✓ Consumo cargado en Materiales y Gastos');
+  else if(cargarMateriales&&okMat&&!gastosDebeCargar)showToast('✓ Consumo cargado en Materiales · sin Gastos por falta de precio');
+  else if(!cargarMateriales&&gastosDebeCargar&&okGas)showToast('✓ Consumo cargado en Gastos · no se eligió Materiales');
+  else if(!cargarMateriales&&!gastosDebeCargar)showToast('✓ Consumo descontado solo de Pañol');
+  else showToast('⚠️ Consumo guardado, pero alguna sincronización falló. Verificar.','err');
+}
+
+function consumirStockFIFO(prodId,cantidad){
+  var lotes=lotesDeProducto(prodId);
+  var restante=cantidad;
+  var detalle=[];
+  for(var i=0;i<lotes.length && restante>0;i++){
+    var lote=lotes[i];
+    var tomar=Math.min(lote.cantidad,restante);
+    lote.cantidad=parseFloat((lote.cantidad-tomar).toFixed(6));
+    restante=parseFloat((restante-tomar).toFixed(6));
+    detalle.push({loteId:lote.id,cantidad:tomar,precio:lote.precio,tipoCambio:lote.tipoCambio||null});
+  }
+  return {detalle:detalle};
+}
+
+function detalleConPrecioParaGastos(detalle){
+  return Array.isArray(detalle)&&detalle.length>0&&detalle.every(function(d){
+    return Number(d.precio)>0;
+  });
+}
+function importeDetallePanol(detalle){
+  return (detalle||[]).reduce(function(a,d){
+    return a+(Number(d.cantidad)||0)*(Number(d.precio)||0);
+  },0);
+}
+function tcPromDetallePanol(detalle){
+  var conPrecio=(detalle||[]).filter(function(d){return Number(d.precio)>0;});
+  if(!conPrecio.length)return null;
+  var ars=importeDetallePanol(conPrecio);
+  var usd=conPrecio.reduce(function(a,d){
+    var tc=Number(d.tipoCambio)||0;
+    return a+(tc>0?(Number(d.cantidad)||0)*(Number(d.precio)||0)/tc:0);
+  },0);
+  return usd>0?ars/usd:null;
+}
+
+function restaurarStockDesdeDetalle(detalle){
+  detalle.forEach(function(d){
+    var lote=state.lotes.find(function(l){return l.id===d.loteId;});
+    if(lote) lote.cantidad=parseFloat((lote.cantidad+d.cantidad).toFixed(6));
+  });
+}
+function descontarStockDesdeDetalle(detalle){
+  detalle.forEach(function(d){
+    var lote=state.lotes.find(function(l){return l.id===d.loteId;});
+    if(lote) lote.cantidad=parseFloat((lote.cantidad-d.cantidad).toFixed(6));
+  });
+}
+
+function refrescarVistaActual(prodId){
+  if(document.getElementById('modal-hist-prod').classList.contains('open')) abrirHistorialProducto(prodId);
+  if(curTab==='obras') renderObrasTab();
+  if(curTab==='stock') renderStock();
+  if(curTab==='reportes') renderReportes();
+}
+
+// ---------- EDITAR / BORRAR CARGAS (ENTRADA) ----------
+function editarCarga(movId){
+  var mov=state.movimientos.find(function(m){return m.id===movId && m.tipo==='entrada';});
+  if(!mov) return;
+  var lote=state.lotes.find(function(l){return l.id===mov.detalle[0].loteId;});
+  if(!lote){ alert('No se encontró el lote asociado a esta carga.'); return; }
+
+  var nuevaCantidadStr=prompt('Nueva cantidad cargada:', mov.cantidad);
+  if(nuevaCantidadStr===null) return;
+  var nuevaCantidad=parseFloat(nuevaCantidadStr);
+  if(!nuevaCantidad||nuevaCantidad<=0){ alert('Cantidad inválida.'); return; }
+
+  var nuevoPrecioStr=prompt('Nuevo precio unitario (vacío o 0 = sin precio):', mov.precio||'');
+  if(nuevoPrecioStr===null) return;
+  var nuevoPrecio=String(nuevoPrecioStr).trim()===''?0:parseFloat(nuevoPrecioStr);
+  if(isNaN(nuevoPrecio)||nuevoPrecio<0){ alert('Precio inválido.'); return; }
+
+  var nuevoTC=null;
+  if(nuevoPrecio>0){
+    var nuevoTCStr=prompt('Nuevo tipo de cambio:', mov.tipoCambio||getLastTC()||'');
+    if(nuevoTCStr===null) return;
+    nuevoTC=parseFloat(nuevoTCStr);
+    if(!nuevoTC||nuevoTC<=0){ alert('Tipo de cambio inválido.'); return; }
+  }
+
+  var consumidoDeEsteLote=parseFloat((lote.cantidadOriginal-lote.cantidad).toFixed(6));
+  var nuevoRemanente=parseFloat((nuevaCantidad-consumidoDeEsteLote).toFixed(6));
+  if(nuevoRemanente<0){
+    alert('Ya se consumieron '+fmtN(consumidoDeEsteLote)+' unidades de esta carga. La nueva cantidad no puede ser menor a eso.');
+    return;
+  }
+
+  lote.cantidadOriginal=nuevaCantidad;
+  lote.cantidad=nuevoRemanente;
+  lote.precio=nuevoPrecio;
+  lote.tipoCambio=nuevoTC;
+
+  mov.cantidad=nuevaCantidad;
+  mov.precio=nuevoPrecio;
+  mov.tipoCambio=nuevoTC;
+  mov.usd=nuevoPrecio>0&&nuevoTC?nuevaCantidad*nuevoPrecio/nuevoTC:null;
+  mov.detalle=[{loteId:lote.id,cantidad:nuevaCantidad,precio:nuevoPrecio,tipoCambio:nuevoTC}];
+
+  persist();
+  refrescarVistaActual(mov.prodId);
+  showToast('✓ Carga modificada');
+}
+
+function eliminarCarga(movId){
+  var mov=state.movimientos.find(function(m){return m.id===movId && m.tipo==='entrada';});
+  if(!mov) return;
+  var lote=state.lotes.find(function(l){return l.id===mov.detalle[0].loteId;});
+  var consumido=lote?parseFloat((lote.cantidadOriginal-lote.cantidad).toFixed(6)):0;
+  var msg='¿Eliminar esta carga?';
+  if(consumido>0) msg+='\n\nOjo: ya se consumieron '+fmtN(consumido)+' unidad(es) de este lote. Los consumos ya registrados no se van a modificar, pero este lote va a dejar de existir en el stock.';
+  if(!confirm(msg)) return;
+  if(lote) state.lotes=state.lotes.filter(function(l){return l.id!==lote.id;});
+  state.movimientos=state.movimientos.filter(function(m){return m.id!==movId;});
+  persist();
+  refrescarVistaActual(mov.prodId);
+  showToast('✓ Carga eliminada');
+}
+
+// ---------- EDITAR / BORRAR CONSUMOS (SALIDA) ----------
+async function editarConsumo(movId){
+  var mov=state.movimientos.find(function(m){return m.id===movId && m.tipo==='salida';});
+  if(!mov) return;
+
+  var antesDebia=mov.gastosDebeCargar!==false && Number(mov.precio)>0;
+  var nuevaCantidadStr=prompt('Nueva cantidad consumida:', mov.cantidad);
+  if(nuevaCantidadStr===null) return;
+  var nuevaCantidad=parseFloat(nuevaCantidadStr);
+  if(!nuevaCantidad||nuevaCantidad<=0){ alert('Cantidad inválida.'); return; }
+
+  restaurarStockDesdeDetalle(mov.detalle);
+  var disponible=stockDeProducto(mov.prodId);
+  if(nuevaCantidad>disponible){
+    descontarStockDesdeDetalle(mov.detalle);
+    alert('No hay stock suficiente para esa cantidad.\n\nDisponible (incluyendo lo que libera este movimiento): '+fmtN(disponible));
+    return;
+  }
+
+  var res=consumirStockFIFO(mov.prodId,nuevaCantidad);
+  var sumaPonderada=importeDetallePanol(res.detalle);
+  var precioProm=nuevaCantidad>0?sumaPonderada/nuevaCantidad:0;
+  var todosConTC=res.detalle.length>0&&res.detalle.every(function(d){
+    return Number(d.precio)<=0 || Number(d.tipoCambio)>0;
+  });
+  var usd=todosConTC?res.detalle.reduce(function(a,d){
+    var tc=Number(d.tipoCambio)||0,precio=Number(d.precio)||0;
+    return a+(precio>0&&tc>0?(Number(d.cantidad)||0)*precio/tc:0);
+  },0):null;
+  if(usd===0)usd=null;
+
+  var ahoraDebe=detalleConPrecioParaGastos(res.detalle);
+
+  mov.cantidad=nuevaCantidad;
+  mov.precio=precioProm;
+  mov.usd=usd;
+  mov.tipoCambioProm=tcPromDetallePanol(res.detalle)||getLastTC();
+  mov.detalle=res.detalle;
+  mov.gastosDebeCargar=ahoraDebe;
+  mov.gastosSyncEstado=ahoraDebe?'pendiente':'no';
+  mov.gastosSyncError=ahoraDebe?'':'No se envía a Gastos porque el stock consumido fue ingresado sin precio.';
+
+  await persist();
+  refrescarVistaActual(mov.prodId);
+
+  var okMat=mov.materialesAgregar===false,okGas=!ahoraDebe;
+  if(mov.materialesAgregar!==false){
+    try{
+      var prodFallback=state.productos.find(function(p){return p.id===mov.prodId;}) || {
+        codigo:mov.materialCode||'',nombre:mov.materialName||''
+      };
+      await sincronizarConsumoConMateriales(mov,true,prodFallback);
+      mov.materialesSyncEstado='ok';mov.materialesSyncError='';
+      okMat=true;
+    }catch(e){
+      mov.materialesSyncEstado='error';mov.materialesSyncError=String(e&&e.message||e);
+      console.warn(e);
+    }
+  }
+
+  try{
+    if(ahoraDebe){
+      await sincronizarConsumoConGastos(mov,true);
+      okGas=true;
+    }else if(antesDebia && mov.gastosObraId){
+      await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),true);
+      okGas=true;
+    }
+  }catch(e){
+    console.warn(e);
+    if(ahoraDebe){
+      mov.gastosSyncEstado='error';
+      mov.gastosSyncError=String(e&&e.message||e);
+      await persist();
+    }
+  }
+
+  refrescarVistaActual(mov.prodId);
+  if(okMat&&ahoraDebe&&okGas)showToast('✓ Consumo modificado en Materiales y Gastos');
+  else if(okMat&&!ahoraDebe)showToast('✓ Consumo modificado solo en Materiales · stock sin precio');
+  else showToast('⚠️ Consumo modificado, pero alguna sincronización falló. Verificar.','err');
+}
+
+async function eliminarConsumo(movId){
+  var mov=state.movimientos.find(function(m){return m.id===movId&&m.tipo==='salida';});
+  if(!mov)return;
+  if(!confirm('¿Eliminar este consumo? El stock se repone.'))return;
+
+  restaurarStockDesdeDetalle(mov.detalle);
+  state.movimientos=state.movimientos.filter(function(m){return m.id!==movId;});
+  await persist();
+  refrescarVistaActual(mov.prodId);
+
+  var okMat=mov.materialesAgregar===false,okGas=true;
+  if(mov.materialesAgregar!==false){
+    try{
+      var prodFallback=state.productos.find(function(p){return p.id===mov.prodId;}) || {
+        codigo:mov.materialCode||'',nombre:mov.materialName||''
+      };
+      await sincronizarConsumoConMateriales(mov,false,prodFallback);
+      okMat=true;
+    }catch(e){console.warn(e);}
+  }
+
+  if(mov.gastosDebeCargar!==false || mov.gastosSyncEstado==='ok'){
+    okGas=false;
+    try{
+      if(mov.gastosObraId)await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),true);
+      okGas=true;
+    }catch(e){console.warn(e);}
+  }
+
+  if(okMat&&okGas)showToast('✓ Consumo eliminado y vínculos actualizados');
+  else showToast('⚠️ Consumo eliminado de Pañol, pero una sincronización falló. Verificar.','err');
+}
+
+// ---------- GESTIONAR OBRAS ----------
+function abrirGestionObras(){
+  document.getElementById('nueva-obra-input').value='';
+  renderGestionObrasLista();
+  abrirModal('modal-gestion-obras');
+}
+function renderGestionObrasLista(){
+  var el=document.getElementById('gestion-obras-lista');
+  if(!state.obras.length){ el.innerHTML='<div class="empty-hist">No hay obras cargadas.</div>'; return; }
+  el.innerHTML=state.obras.map(function(o){
+    return '<div class="gestion-row"><span>'+o+'</span><div class="gr-actions">'
+      +'<button onclick="window.renombrarObra(\''+o.replace(/'/g,"\\'")+'\')">✎</button>'
+      +'<button onclick="window.eliminarObra(\''+o.replace(/'/g,"\\'")+'\')">🗑</button>'
+      +'</div></div>';
+  }).join('');
+}
+function agregarObra(){
+  var nombre=document.getElementById('nueva-obra-input').value.trim();
+  if(!nombre) return;
+  if(state.obras.some(function(o){return o.toLowerCase()===nombre.toLowerCase();})){ alert('Ya existe una obra con ese nombre.'); return; }
+  state.obras.push(nombre);
+  persist();
+  document.getElementById('nueva-obra-input').value='';
+  renderGestionObrasLista();
+  renderObrasTab();
+  showToast('✓ Obra agregada');
+}
+function renombrarObra(nombreViejo){
+  var nuevo=prompt('Nuevo nombre para la obra:',nombreViejo);
+  if(!nuevo||!nuevo.trim()||nuevo.trim()===nombreViejo) return;
+  nuevo=nuevo.trim();
+  var idx=state.obras.indexOf(nombreViejo);
+  if(idx<0) return;
+  state.obras[idx]=nuevo;
+  state.movimientos.forEach(function(m){ if(m.obra===nombreViejo) m.obra=nuevo; });
+  if(curObra===nombreViejo) curObra=nuevo;
+  persist();
+  renderGestionObrasLista();
+  renderObrasTab();
+  showToast('✓ Obra renombrada');
+}
+function eliminarObra(nombre){
+  if(!confirm('¿Eliminar la obra "'+nombre+'"? El historial de consumo ya cargado se conserva.')) return;
+  state.obras=state.obras.filter(function(o){return o!==nombre;});
+  if(curObra===nombre) curObra=null;
+  persist();
+  renderGestionObrasLista();
+  renderObrasTab();
+  showToast('✓ Obra eliminada');
+}
+
+// ---------- GESTIONAR RUBROS ----------
+function abrirGestionRubros(){
+  document.getElementById('nuevo-rubro-input').value='';
+  renderGestionRubrosLista();
+  abrirModal('modal-gestion-rubros');
+}
+function renderGestionRubrosLista(){
+  var el=document.getElementById('gestion-rubros-lista');
+  var rubros=getRubros();
+  if(!rubros.length){ el.innerHTML='<div class="empty-hist">No hay rubros cargados.</div>'; return; }
+  el.innerHTML=rubros.map(function(r){
+    var n=state.productos.filter(function(p){return p.rubro===r;}).length;
+    return '<div class="gestion-row"><span>'+r+' <small style="color:var(--tenue);font-weight:600">('+n+' producto'+(n===1?'':'s')+')</small></span><div class="gr-actions">'
+      +'<button onclick="window.renombrarRubro(\''+r.replace(/'/g,"\\'")+'\')">✎</button>'
+      +'<button onclick="window.eliminarRubro(\''+r.replace(/'/g,"\\'")+'\')">🗑</button>'
+      +'</div></div>';
+  }).join('');
+}
+function agregarRubro(){
+  var nombre=document.getElementById('nuevo-rubro-input').value.trim();
+  if(!nombre) return;
+  if(state.rubros.some(function(r){return r.toLowerCase()===nombre.toLowerCase();})){ alert('Ya existe un rubro con ese nombre.'); return; }
+  state.rubros.push(nombre);
+  persist();
+  document.getElementById('nuevo-rubro-input').value='';
+  renderGestionRubrosLista();
+  refreshRubroSelects(nombre);
+  if(curTab==='stock') renderStock();
+  showToast('✓ Rubro agregado');
+}
+function renombrarRubro(nombreViejo){
+  var nuevo=prompt('Nuevo nombre para el rubro:',nombreViejo);
+  if(!nuevo||!nuevo.trim()||nuevo.trim()===nombreViejo) return;
+  nuevo=nuevo.trim();
+  if(state.rubros.some(function(r){return r.toLowerCase()===nuevo.toLowerCase() && r!==nombreViejo;})){
+    alert('Ya existe un rubro con ese nombre.'); return;
+  }
+  var idx=state.rubros.indexOf(nombreViejo);
+  if(idx<0) return;
+  state.rubros[idx]=nuevo;
+  state.productos.forEach(function(p){ if(p.rubro===nombreViejo) p.rubro=nuevo; });
+  persist();
+  renderGestionRubrosLista();
+  refreshRubroSelects(nuevo);
+  if(curTab==='stock') renderStock();
+  showToast('✓ Rubro renombrado');
+}
+function eliminarRubro(nombre){
+  var enUso=state.productos.filter(function(p){return p.rubro===nombre;});
+  if(enUso.length){
+    var otros=getRubros().filter(function(r){return r!==nombre;});
+    if(!otros.length){ alert('No podés borrar el único rubro existente mientras haya productos cargados.'); return; }
+    var destino=prompt('El rubro "'+nombre+'" tiene '+enUso.length+' producto(s) asignado(s).\n\nEscribí a qué rubro pasarlos (o cancelá para no borrar):\n\nOpciones: '+otros.join(', '));
+    if(destino===null) return;
+    destino=(destino||'').trim();
+    var match=otros.find(function(r){return r.toLowerCase()===destino.toLowerCase();});
+    if(!match){ alert('Ese rubro no existe. No se borró nada.'); return; }
+    enUso.forEach(function(p){ p.rubro=match; });
+  }else{
+    if(!confirm('¿Eliminar el rubro "'+nombre+'"?')) return;
+  }
+  state.rubros=state.rubros.filter(function(r){return r!==nombre;});
+  persist();
+  renderGestionRubrosLista();
+  refreshRubroSelects(getRubros()[0]||'');
+  if(curTab==='stock') renderStock();
+  showToast('✓ Rubro eliminado');
+}
+
+// ---------- REPORTES ----------
+var repObrasFiltro=[]; // IDs reales de obras de Gastos
+var repSubrubroFiltro='';
+var repProductoFiltro='';
+var repMetrica='cantidad';
+
+function destroyChart(key){
+  if(charts[key]){ charts[key].destroy(); delete charts[key]; }
+}
+
+function toggleRepObraFiltro(obra){
+  var i=repObrasFiltro.indexOf(obra);
+  if(i>=0) repObrasFiltro.splice(i,1);
+  else repObrasFiltro.push(obra);
+  renderReportes();
+}
+function limpiarRepObrasFiltro(){
+  repObrasFiltro=[];
+  renderReportes();
+}
+
+function renderFiltroObrasReportes(){
+  var el=document.getElementById('reportes-obra-filtro');
+  if(!el)return;
+  var obras=obrasGastosPanol();
+  repObrasFiltro=repObrasFiltro.filter(function(id){return obras.some(function(o){return o.id===id;});});
+  var html='<button class="chip'+(repObrasFiltro.length===0?' active':'')+'" onclick="window.limpiarRepObrasFiltro()">Todas</button>';
+  html+=obras.map(function(o){
+    var activo=repObrasFiltro.indexOf(o.id)>=0;
+    var nombre=o.label||o.short||o.id;
+    return '<button class="chip'+(activo?' active':'')+'" onclick="window.toggleRepObraFiltro(\''+String(o.id).replace(/'/g,"\\'")+'\')">'+escHTML(nombre)+'</button>';
+  }).join('');
+  el.innerHTML=html;
+}
+
+function refreshSubrubroFiltroReportes(){
+  var sel=document.getElementById('reportes-subrubro-filtro');
+  if(!sel)return;
+  var arr=subrubrosGastosPanol('mat').slice().sort(function(a,b){return String(a).localeCompare(String(b),'es');});
+  var prev=repSubrubroFiltro;
+  sel.innerHTML='<option value="">Todos los subrubros</option>'+arr.map(function(x){
+    return '<option value="'+escHTML(x)+'"'+(x===prev?' selected':'')+'>'+escHTML(x)+'</option>';
+  }).join('');
+  if(prev&&arr.indexOf(prev)<0){repSubrubroFiltro='';sel.value='';}
+}
+function onRepSubrubroFiltroChange(){
+  repSubrubroFiltro=document.getElementById('reportes-subrubro-filtro').value||'';
+  repProductoFiltro='';
+  renderReportes();
+}
+
+function refreshProductoFiltroReportes(){
+  var sel=document.getElementById('reportes-producto-filtro');
+  if(!sel)return;
+  var prev=repProductoFiltro;
+  var opts=state.productos.slice().filter(function(p){
+    return !repSubrubroFiltro||p.rubro===repSubrubroFiltro;
+  }).sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
+  sel.innerHTML='<option value="">Todos los productos</option>'+opts.map(function(p){
+    return '<option value="'+p.id+'"'+(p.id===prev?' selected':'')+'>'+escHTML(p.nombre+codigoTag(p))+'</option>';
+  }).join('');
+  if(prev&&!opts.some(function(p){return p.id===prev;})){repProductoFiltro='';sel.value='';}
+}
+function onRepProductoFiltroChange(){
+  repProductoFiltro=document.getElementById('reportes-producto-filtro').value;
+  renderReportes();
+}
+
+function setRepMetrica(modo){
+  if(['cantidad','pesos','usd'].indexOf(modo)<0) return;
+  repMetrica=modo;
+  renderReportes();
+}
+
+function syncRepMetricaUI(){
+  var wrap=document.getElementById('report-metric-switch');
+  if(!wrap) return;
+  Array.prototype.forEach.call(wrap.querySelectorAll('.report-metric-btn'),function(btn){
+    btn.classList.toggle('active',btn.getAttribute('data-mode')===repMetrica);
+  });
+}
+
+function renderReportes(){
+  syncRepMetricaUI();
+  refreshSubrubroFiltroReportes();
+  renderFiltroObrasReportes();
+  refreshProductoFiltroReportes();
+  var salidas=state.movimientos.filter(function(m){
+    if(m.tipo!=='salida')return false;
+    if(repObrasFiltro.length&&repObrasFiltro.indexOf(m.gastosObraId)<0)return false;
+    if(repSubrubroFiltro&&m.gastosSubrubro!==repSubrubroFiltro)return false;
+    if(repProductoFiltro&&m.prodId!==repProductoFiltro)return false;
+    return true;
+  });
+  var hayFiltro=repObrasFiltro.length>0 || !!repSubrubroFiltro || !!repProductoFiltro;
+  var lotesConsiderados=state.lotes; // el stock actual no depende de la obra, siempre es global
+  var valorStock=lotesConsiderados.reduce(function(a,l){return a+l.cantidad*l.precio;},0);
+  var valorStockUSD=lotesConsiderados.reduce(function(a,l){return a+(l.tipoCambio?l.cantidad*l.precio/l.tipoCambio:0);},0);
+  var totalCantidad=salidas.reduce(function(a,m){return a+m.cantidad;},0);
+  var totalConsumido=salidas.reduce(function(a,m){return a+m.cantidad*m.precio;},0);
+  var totalConsumidoUSD=salidas.reduce(function(a,m){return a+(m.usd!=null?m.usd:0);},0);
+
+  document.getElementById('reportes-resumen').innerHTML=
+    '<div class="resumen-strip">'
+    +'<div class="resumen-card"><div class="rc-lbl">Cantidad consumida'+(hayFiltro?' (filtrada)':'')+'</div><div class="rc-val">'+fmtN(totalCantidad)+' u</div></div>'
+    +'<div class="resumen-card alt"><div class="rc-lbl">Consumido en pesos</div><div class="rc-val">'+fmtMoney(totalConsumido)+'</div></div>'
+    +'<div class="resumen-card"><div class="rc-lbl">Consumido en dólares</div><div class="rc-val">'+fmtUSD(totalConsumidoUSD)+'</div></div>'
+    +'<div class="resumen-card alt"><div class="rc-lbl">Valor stock actual</div><div class="rc-val">'+fmtMoney(valorStock)+'</div><div class="rc-lbl" style="margin-top:5px">'+fmtUSD(valorStockUSD)+'</div></div>'
+    +'</div>';
+
+  renderReportePorObra(salidas);
+}
+
+function renderReportePorObra(salidas){
+  var grupos={};
+
+  salidas.forEach(function(m){
+    var oid=m.gastosObraId||'sin_obra';
+    var obj=obraGastosPanolPorId(oid);
+    var obraNombre=obj?(obj.label||obj.short||obj.id):(m.obra||'Sin obra');
+    var prod=state.productos.find(function(p){return p.id===m.prodId;});
+    var productoNombre=prod?prod.nombre:(m.materialName||'Producto eliminado');
+    var key=String(oid)+'__'+String(m.prodId||productoNombre);
+
+    if(!grupos[key]){
+      grupos[key]={
+        obraId:oid,
+        obra:obraNombre,
+        prodId:m.prodId||'',
+        producto:productoNombre,
+        total:0,totalUSD:0,cant:0,n:0
+      };
+    }
+    grupos[key].total+=Number(m.cantidad||0)*Number(m.precio||0);
+    grupos[key].cant+=Number(m.cantidad||0);
+    grupos[key].totalUSD+=(m.usd!=null?Number(m.usd)||0:0);
+    grupos[key].n++;
+  });
+
+  var campo=repMetrica==='pesos'?'total':(repMetrica==='usd'?'totalUSD':'cant');
+  var arr=Object.values(grupos).sort(function(a,b){return b[campo]-a[campo];});
+  var body=document.getElementById('reportes-body');
+
+  if(!arr.length){
+    body.innerHTML='<div class="empty-state"><div class="ic">📊</div>Todavía no hay consumo cargado para graficar.</div>';
+    destroyChart('obra');
+    destroyChart('obraCant');
+    return;
+  }
+
+  var top=arr.slice(0,14);
+  var prodFiltrado=repProductoFiltro?state.productos.find(function(p){return p.id===repProductoFiltro;}):null;
+  var titulo=repMetrica==='pesos'
+    ?'Consumo en pesos por producto y obra'
+    :(repMetrica==='usd'?'Consumo en dólares por producto y obra':'Cantidades por producto y obra');
+
+  if(prodFiltrado){
+    titulo=(repMetrica==='cantidad'?'Cantidad de ':'Consumo de ')+prodFiltrado.nombre+' por obra';
+  }
+
+  body.innerHTML='<div class="chart-card"><h3>'+escHTML(titulo)+'</h3>'
+    +'<div class="chart-product-note">Cada barra identifica el producto y la obra donde fue consumido.</div>'
+    +'<div class="chart-wrap" style="height:'+Math.max(260,top.length*34)+'px"><canvas id="chart-obra"></canvas></div></div>';
+
+  var values=top.map(function(x){return x[campo];});
+  function formatValue(v){
+    if(repMetrica==='pesos') return fmtMoney(v);
+    if(repMetrica==='usd') return fmtUSD(v);
+    return fmtN(v)+' u';
+  }
+
+  destroyChart('obra');
+  destroyChart('obraCant');
+
+  charts.obra=new Chart(document.getElementById('chart-obra'),{
+    type:'bar',
+    data:{
+      labels:top.map(function(x){return x.producto+' · '+x.obra;}),
+      datasets:[{
+        data:values,
+        backgroundColor:repMetrica==='pesos'?'#6B35A4':(repMetrica==='usd'?'#8A53C7':'#C17A16'),
+        hoverBackgroundColor:repMetrica==='pesos'?'#582B89':(repMetrica==='usd'?'#7443AD':'#A96712'),
+        borderRadius:7,
+        maxBarThickness:24
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            title:function(items){
+              var x=top[items[0].dataIndex];
+              return x.producto;
+            },
+            label:function(ctx){
+              var x=top[ctx.dataIndex];
+              return x.obra+' · '+formatValue(ctx.parsed.x);
+            }
+          }
+        }
+      },
+      scales:{
+        y:{
+          grid:{display:false},
+          ticks:{font:{size:9.5,weight:'700'},color:'#6D7E74',autoSkip:false}
+        },
+        x:{
+          grid:{color:'rgba(28,61,53,.06)'},
+          ticks:{font:{size:9},color:'#8A9A90'}
+        }
+      }
+    }
+  });
+}
+
+
+
+
+// ---------- FAVORITOS, RECIENTES Y ALERTAS ----------
+var FAV_KEY='cq_panol_favoritos_v2';
+var REC_KEY='cq_panol_recientes_v2';
+function getFavs(){try{return JSON.parse(localStorage.getItem(FAV_KEY)||'[]')}catch(e){return []}}
+function saveFavs(v){localStorage.setItem(FAV_KEY,JSON.stringify(v.slice(0,30)))}
+function toggleFavorito(prodId){
+  var f=getFavs(); var i=f.indexOf(prodId);
+  if(i>=0) f.splice(i,1); else f.unshift(prodId);
+  saveFavs(f); renderStock(); showToast(i>=0?'Favorito quitado':'⭐ Agregado a favoritos');
+}
+function markRecent(prodId){
+  var r; try{r=JSON.parse(localStorage.getItem(REC_KEY)||'[]')}catch(e){r=[]}
+  r=r.filter(function(x){return x!==prodId}); r.unshift(prodId);
+  localStorage.setItem(REC_KEY,JSON.stringify(r.slice(0,10)));
+}
+function getRecents(){try{return JSON.parse(localStorage.getItem(REC_KEY)||'[]')}catch(e){return []}}
+function quickChooseProduct(prodId){
+  var p=state.productos.find(function(x){return x.id===prodId}); if(!p) return;
+  var inp=document.getElementById('cf-producto'); var cod=document.getElementById('cf-codigo'); var rub=document.getElementById('cf-subrubro');
+  if(inp) inp.value=p.nombre; if(cod) cod.value=p.codigo||''; if(rub){rub.value=p.rubro;rub.dataset.prev=p.rubro}
+  var form=document.querySelector('#view-stock .carga-form'); if(form) form.scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(function(){var q=document.getElementById('cf-cantidad');if(q) q.focus()},250);
+}
+function renderQuickAccess(){
+  var el=document.getElementById('stock-quick-access'); if(!el) return;
+  function chips(ids){return ids.map(function(id){var p=state.productos.find(function(x){return x.id===id});return p?'<button type="button" class="quick-chip" onclick="window.quickChooseProduct(\''+p.id+'\')">'+escHTML(p.nombre)+'</button>':''}).join('')}
+  var fav=chips(getFavs()); var rec=chips(getRecents());
+  el.innerHTML='<div class="quick-card"><div class="quick-title">⭐ Favoritos</div><div class="quick-list">'+(fav||'<span class="quick-empty">Marcá productos con la estrella.</span>')+'</div></div>'
+    +'<div class="quick-card"><div class="quick-title">🕘 Últimos usados</div><div class="quick-list">'+(rec||'<span class="quick-empty">Todavía no hay movimientos recientes.</span>')+'</div></div>';
+}
+function stockStateHTML(total){
+  if(total<=0) return '<span class="stock-state zero">● Sin stock</span>';
+  if(total<=5) return '<span class="stock-state low">● Stock bajo</span>';
+  return '<span class="stock-state ok">● Disponible</span>';
+}
+
+// ---------- INIT ----------
+document.addEventListener('firebase-ready',function(){ startFirebase(); });
+window.addEventListener('DOMContentLoaded',function(){
+  var saved=localStorage.getItem(DB_KEY);
+  if(saved){ try{ state=JSON.parse(saved); }catch(e){} }
+  normalizeState();
+  promptUsuario(false);
+  refreshRubroSelects(getRubros()[0]||'');
+  renderActive();
+  setTimeout(function(){ if(!window._dbReady) setSyncStatus('🟠 Modo local (sin conexión)','err'); },3000);
+});
+
+window.toggleFavorito=toggleFavorito;
+window.quickChooseProduct=quickChooseProduct;
+window.showTab=showTab;
+window.toggleLotes=toggleLotes;
+window.cargarProductoUnitario=cargarProductoUnitario;
+window.abrirCargaMasiva=abrirCargaMasiva;
+window.procesarCargaMasiva=procesarCargaMasiva;
+window.abrirHistorialProducto=abrirHistorialProducto;
+window.cerrarModal=cerrarModal;
+window.seleccionarObra=seleccionarObra;
+window.registrarConsumo=registrarConsumo;
+window.abrirGestionObras=abrirGestionObras;
+window.agregarObra=agregarObra;
+window.renombrarObra=renombrarObra;
+window.eliminarObra=eliminarObra;
+window.cambiarUsuario=cambiarUsuario;
+window.renderStockList=renderStockList;
+window.onRubroSelect=onRubroSelect;
+window.onCfRubroChange=onCfRubroChange;
+window.abrirGestionRubros=abrirGestionRubros;
+window.agregarRubro=agregarRubro;
+window.renombrarRubro=renombrarRubro;
+window.eliminarRubro=eliminarRubro;
+window.toggleRepObraFiltro=toggleRepObraFiltro;
+window.limpiarRepObrasFiltro=limpiarRepObrasFiltro;
+window.editarCarga=editarCarga;
+window.eliminarCarga=eliminarCarga;
+window.editarConsumo=editarConsumo;
+window.eliminarConsumo=eliminarConsumo;
+window.onCfCodigoInput=onCfCodigoInput;
+window.onCfProductoInput=onCfProductoInput;
+window.showCfProductoDropdown=showCfProductoDropdown;
+window.onCfTcInput=onCfTcInput;
+window.abrirEditarProducto=abrirEditarProducto;
+window.guardarEdicionProducto=guardarEdicionProducto;
+window.eliminarProducto=eliminarProducto;
+window.onRepProductoFiltroChange=onRepProductoFiltroChange;
+window.onConsumoRubroChange=onConsumoRubroChange;
+window.onConsumoProductoInput=onConsumoProductoInput;
+window.showConsumoProductoDropdown=showConsumoProductoDropdown;
+window.onConsumoCodigoInput=onConsumoCodigoInput;
+window.showConsumoCodigoDropdown=showConsumoCodigoDropdown;
+</script>
+
+
+
+<script>
+document.addEventListener('cq-access-ready',function(){
+  var p=window._cqAuthProfile;
+  var el=document.getElementById('user-nombre');
+  if(el && p) el.textContent=p.nombre;
+});
+</script>
+
+
+<script type="module" id="cq-audit-firebase-writer">
+import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+window.__cqAuditFirebaseWrite = async function(id, data){
+  let tries=0;
+  while(!getApps().length && tries<25){
+    await new Promise(r=>setTimeout(r,200));
+    tries++;
+  }
+  if(!getApps().length) throw new Error("Firebase todavía no está disponible");
+  const db=getFirestore(getApp());
+  await setDoc(doc(db,"actividad_empleados",String(id)),data);
+  return true;
+};
+document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
+</script>
+
+<script id="cq-audit-runtime-pa-ol">
+(function(){
+  "use strict";
+  var MODULO="Pañol";
+  var QUEUE_KEY="cq_audit_queue_v1_"+MODULO.replace(/\s+/g,"_").toLowerCase();
+  var WRAPS=[{"fn": "guardarEdicionProducto", "accion": "modificar", "detalle": "Modificó un producto de Pañol"}, {"fn": "eliminarProducto", "accion": "eliminar", "detalle": "Eliminó un producto de Pañol"}, {"fn": "cargarProductoUnitario", "accion": "agregar", "detalle": "Ingresó stock al Pañol"}, {"fn": "procesarCargaMasiva", "accion": "agregar", "detalle": "Realizó una carga masiva al Pañol"}, {"fn": "registrarConsumo", "accion": "agregar", "detalle": "Registró una salida de Pañol"}, {"fn": "editarCarga", "accion": "modificar", "detalle": "Modificó una entrada de Pañol"}, {"fn": "eliminarCarga", "accion": "eliminar", "detalle": "Eliminó una entrada de Pañol"}, {"fn": "editarConsumo", "accion": "modificar", "detalle": "Modificó una salida de Pañol"}, {"fn": "eliminarConsumo", "accion": "eliminar", "detalle": "Eliminó una salida de Pañol"}, {"fn": "agregarObra", "accion": "agregar", "detalle": "Agregó una obra"}, {"fn": "eliminarObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "agregarRubro", "accion": "agregar", "detalle": "Agregó un subrubro"}, {"fn": "eliminarRubro", "accion": "eliminar", "detalle": "Eliminó un subrubro"}];
+  WRAPS=WRAPS.filter(function(x){return x.accion!=="agregar";});
+  var flushing=false;
+
+  function safeClone(v){
+    try{
+      return JSON.parse(JSON.stringify(v,function(k,x){
+        if(typeof x==="function")return undefined;
+        if(typeof x==="string"&&x.length>500)return x.slice(0,500)+"…";
+        return x;
+      }));
+    }catch(e){return null;}
+  }
+  function empleado(){
+    var p=window._cqAuthProfile||window.__cqFast1h||{};
+    var n=p.nombre||window._cqUsuarioActual||"";
+    if(!n){try{n=localStorage.getItem("cq_usuario_actual")||"";}catch(e){}}
+    return String(n||"Usuario no identificado");
+  }
+  function empleadoId(){
+    var p=window._cqAuthProfile||window.__cqFast1h||{};
+    return String(p.id||p.email||"");
+  }
+  function mkId(){
+    return "act_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,10);
+  }
+  function readQueue(){
+    try{var q=JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]");return Array.isArray(q)?q:[];}catch(e){return [];}
+  }
+  function writeQueue(q){
+    try{localStorage.setItem(QUEUE_KEY,JSON.stringify(q.slice(-500)));}catch(e){}
+  }
+  function enqueue(rec){
+    var q=readQueue();q.push(rec);writeQueue(q);flush();
+  }
+  async function flush(){
+    if(flushing||typeof window.__cqAuditFirebaseWrite!=="function")return;
+    flushing=true;
+    try{
+      var q=readQueue(),left=[];
+      for(var i=0;i<q.length;i++){
+        try{await window.__cqAuditFirebaseWrite(q[i].id,q[i].data);}
+        catch(e){left=q.slice(i);break;}
+      }
+      writeQueue(left);
+    }finally{flushing=false;}
+  }
+
+  function valByIds(ids){
+    for(var i=0;i<ids.length;i++){
+      var el=document.getElementById(ids[i]);
+      if(!el)continue;
+      var v=(el.value!==undefined?el.value:el.textContent);
+      if(v!==undefined&&v!==null&&String(v).trim()!=="")return String(v).trim();
+    }
+    return "";
+  }
+  function selectedText(ids){
+    for(var i=0;i<ids.length;i++){
+      var el=document.getElementById(ids[i]);
+      if(!el)continue;
+      if(el.tagName==="SELECT"&&el.selectedIndex>=0){
+        var t=el.options[el.selectedIndex].textContent;
+        if(t&&t.trim())return t.trim();
+      }
+    }
+    return "";
+  }
+  function numVal(ids){
+    var v=valByIds(ids);
+    if(!v)return "";
+    var n=Number(String(v).replace(/\./g,"").replace(",","."));
+    return isFinite(n)?n:v;
+  }
+  function captureContext(fn){
+    var c={};
+    c.obra=firstNonEmpty(
+      selectedText(["obra","obra-select","obraIdx","ret-obra","consumo-obra","edit-obra","pago-obra"]),
+      valByIds(["obra","obra-input","ret-obra","consumo-obra","edit-obra","obra-nombre"])
+    );
+    c.rubro=firstNonEmpty(
+      selectedText(["rubro","categoria","cat","consumo-categoria","gastos-categoria"]),
+      valByIds(["rubro","categoria","cat","consumo-categoria","gastos-categoria"])
+    );
+    c.subrubro=firstNonEmpty(
+      selectedText(["subrubro","consumo-subrubro","cf-subrubro","gastos-subrubro","ret-subrubro"]),
+      valByIds(["subrubro","consumo-subrubro","cf-subrubro","gastos-subrubro","ret-subrubro"])
+    );
+    c.producto=firstNonEmpty(
+      selectedText(["material","producto","mat","ret-material"]),
+      valByIds(["material","producto","cf-producto","consumo-prod-input","ret-material","mat-nombre","nuevo-mat-nombre","edit-mat-nombre"])
+    );
+    c.codigo=valByIds(["codigo","cf-codigo","consumo-codigo-input","mat-codigo","nuevo-mat-codigo"]);
+    c.cantidad=firstNonEmpty(
+      numVal(["cantidad","qty","ret-qty","consumo-cantidad","cf-cantidad","edit-cantidad","pago-cantidad"]),
+      ""
+    );
+    c.importe=firstNonEmpty(
+      numVal(["importe","monto","precio","ret-precio","cf-precio","pago-importe","edit-importe","gasto-importe"]),
+      ""
+    );
+    c.comentario=firstNonEmpty(
+      valByIds(["comentario","nota","observacion","consumo-comentario","ret-comentario","pago-nota","edit-nota"]),
+      ""
+    );
+    try{
+      if(MODULO==="Acopio" && /Retiro/i.test(fn)){
+        var ai=typeof getAcopio==="function"?getAcopio():null;
+        var mid=(typeof curRetirarMat!=="undefined"?curRetirarMat:null);
+        var oi=(typeof curRetirarObra!=="undefined"?curRetirarObra:null);
+        var mat=(mid!=null&&typeof getMat==="function")?getMat(mid):null;
+        var ob=(oi!=null&&typeof obraGastosActualPorIdx==="function")?obraGastosActualPorIdx(oi):null;
+        if(mat){
+          c.producto=c.producto||mat.nom||"";
+          c.codigo=c.codigo||mat.cod||"";
+        }
+        if(ob)c.obra=c.obra||(ob.label||ob.short||ob.id||"");
+        c.cantidad=c.cantidad||numVal(["retirar-qty","retiro-qty"]);
+        c.subrubro=c.subrubro||valByIds(["retirar-subrubro","retiro-subrubro"]);
+        c.comentario=c.comentario||valByIds(["retirar-comentario","retiro-comentario"]);
+      }
+
+      if(MODULO==="Pañol"){
+        if(/cargarProductoUnitario|procesarCargaMasiva/i.test(fn)){
+          c.producto=c.producto||valByIds(["cf-producto"]);
+          c.codigo=c.codigo||valByIds(["cf-codigo"]);
+          c.cantidad=c.cantidad||numVal(["cf-cantidad"]);
+          c.subrubro=c.subrubro||valByIds(["cf-subrubro"]);
+          c.importe=c.importe||numVal(["cf-precio"]);
+        }
+        if(/registrarConsumo/i.test(fn)){
+          var po=(typeof getProductoDesdeConsumoInput==="function")?getProductoDesdeConsumoInput():null;
+          var oo=(typeof curObra!=="undefined"&&typeof obraGastosPanolPorId==="function")?obraGastosPanolPorId(curObra):null;
+          if(po){
+            c.producto=c.producto||po.nombre||"";
+            c.codigo=c.codigo||po.codigo||"";
+          }
+          if(oo)c.obra=c.obra||(oo.label||oo.short||oo.id||"");
+          c.cantidad=c.cantidad||numVal(["consumo-cantidad"]);
+          c.subrubro=c.subrubro||valByIds(["consumo-subrubro"]);
+          c.comentario=c.comentario||valByIds(["consumo-comentario"]);
+        }
+      }
+
+      if(MODULO==="Materiales"){
+        c.producto=c.producto||valByIds(["nuevo-mat-nombre","edit-mat-nombre","mat-nombre"]);
+        c.codigo=c.codigo||valByIds(["nuevo-mat-codigo","edit-mat-codigo","mat-codigo"]);
+        c.cantidad=c.cantidad||numVal(["carga-cantidad","edit-carga-cantidad"]);
+      }
+    }catch(_ctxErr){}
+
+    Object.keys(c).forEach(function(k){if(c[k]===""||c[k]===null||c[k]===undefined)delete c[k];});
+    return c;
+  }
+  function firstNonEmpty(){
+    for(var i=0;i<arguments.length;i++){
+      var v=arguments[i];
+      if(v!==undefined&&v!==null&&String(v).trim()!=="")return v;
+    }
+    return "";
+  }
+
+
+  function auditTrim(v,max){
+    v=String(v==null?"":v).trim().replace(/\s+/g," ");
+    max=max||280;
+    return v.length>max?v.slice(0,max)+"…":v;
+  }
+  function auditLabelFor(el){
+    if(!el)return "";
+    var id=el.id||"";
+    if(id){
+      try{
+        var lab=document.querySelector('label[for="'+CSS.escape(id)+'"]');
+        if(lab&&lab.textContent.trim())return auditTrim(lab.textContent,80);
+      }catch(e){}
+    }
+    var parent=el.closest(".fld,.field,.carga-fld,.form-group,.input-group,.row2,.row3");
+    if(parent){
+      var l=parent.querySelector("label");
+      if(l&&l.textContent.trim())return auditTrim(l.textContent,80);
+    }
+    return auditTrim(el.getAttribute("aria-label")||el.name||id||el.placeholder||"",80);
+  }
+  function auditFormSnapshot(){
+    var data={};
+    var els=Array.prototype.slice.call(document.querySelectorAll("input,select,textarea"));
+    els.forEach(function(el){
+      if(el.type==="password"||el.type==="file")return;
+      var style=window.getComputedStyle(el);
+      var visible=style.display!=="none"&&style.visibility!=="hidden";
+      if(!visible&&!el.closest(".open,.show,.active"))return;
+      var key=auditLabelFor(el);
+      if(!key)return;
+      var val="";
+      if(el.type==="checkbox"||el.type==="radio"){
+        if(!el.checked)return;
+        val=el.value||"Sí";
+      }else if(el.tagName==="SELECT"){
+        var opt=el.options&&el.selectedIndex>=0?el.options[el.selectedIndex]:null;
+        val=opt?auditTrim(opt.textContent||opt.value,180):auditTrim(el.value,180);
+      }else{
+        val=auditTrim(el.value,180);
+      }
+      if(!val)return;
+      if(Object.keys(data).length<70)data[key]=val;
+    });
+    return data;
+  }
+  function auditVisibleContext(){
+    try{
+      var el=document.activeElement;
+      if(!el)return "";
+      var box=el.closest("tr,.prod-card,.card,.work-item,.hist-entry,.mov-row,.item,.row,.obra-card,.task-row,.modal");
+      if(!box)return "";
+      return auditTrim(box.innerText||box.textContent||"",700);
+    }catch(e){return "";}
+  }
+  function auditCompactObject(obj,depth,seen){
+    depth=depth||0;seen=seen||[];
+    if(obj===undefined||obj===null)return obj;
+    if(typeof obj==="string")return auditTrim(obj,300);
+    if(typeof obj==="number"||typeof obj==="boolean")return obj;
+    if(typeof obj==="function")return undefined;
+    if(depth>4)return "[…]";
+    if(seen.indexOf(obj)>=0)return "[circular]";
+    seen.push(obj);
+    if(Array.isArray(obj)){
+      var arr=obj.slice(0,12).map(function(x){return auditCompactObject(x,depth+1,seen);});
+      seen.pop();return arr;
+    }
+    if(typeof obj==="object"){
+      var out={},keys=Object.keys(obj).slice(0,35);
+      keys.forEach(function(k){
+        if(/base64|image|foto|photo|html|blob/i.test(k))return;
+        var v=auditCompactObject(obj[k],depth+1,seen);
+        if(v!==undefined)out[k]=v;
+      });
+      seen.pop();return out;
+    }
+    return auditTrim(obj,300);
+  }
+  function auditFindByArgs(args){
+    var ids=(args||[]).filter(function(x){
+      return ["string","number"].indexOf(typeof x)>=0&&String(x).length<120;
+    }).map(String);
+    if(!ids.length)return null;
+    var roots=[];
+    ["state","db","data","appData","store","obras","movimientos","productos","acopios"].forEach(function(k){
+      try{if(window[k]&&typeof window[k]==="object")roots.push(window[k]);}catch(e){}
+    });
+    function walk(node,depth,seen){
+      if(!node||typeof node!=="object"||depth>5||seen.indexOf(node)>=0)return null;
+      seen.push(node);
+      try{
+        var keys=Object.keys(node);
+        for(var i=0;i<keys.length;i++){
+          var k=keys[i],v=node[k];
+          if(/^(id|uid|key|codigo|code|movId|prodId|obraId|matId)$/i.test(k)&&
+             (typeof v==="string"||typeof v==="number")&&ids.indexOf(String(v))>=0){
+            seen.pop();return node;
+          }
+        }
+        for(var j=0;j<keys.length;j++){
+          var child=node[keys[j]];
+          if(child&&typeof child==="object"){
+            var f=walk(child,depth+1,seen);
+            if(f){seen.pop();return f;}
+          }
+        }
+      }catch(e){}
+      seen.pop();return null;
+    }
+    for(var r=0;r<roots.length;r++){
+      var found=walk(roots[r],0,[]);
+      if(found)return auditCompactObject(found);
+    }
+    return null;
+  }
+
+
+  function auditSpecificObject(fn,args){
+    try{
+      args=args||[];
+      var id=args.length?args[0]:null;
+      var idx=args.length?args[0]:null;
+
+      if(MODULO==="Acopio"){
+        if(fn==="confirmarBorrarAcopio") return auditCompactObject((DB.acopios||[]).find(function(x){return String(x.id)===String(id);})||null);
+        if(fn==="editarNombreAcopio") return auditCompactObject(typeof getAcopio==="function"?getAcopio():null);
+        if(fn==="eliminarCategoriaGlobal") return {categoria:(typeof getCats==="function"?getCats()[Number(idx)]:"")};
+        if(fn==="editarCategoriaGlobal") return {categoria:(typeof getCats==="function"?getCats()[Number(idx)]:"")};
+        if(fn==="borrarMaterialActual"||fn==="guardarMaterial"){
+          var aa=typeof getAcopio==="function"?getAcopio():null;
+          var mid=(typeof editMatId!=="undefined"?editMatId:null);
+          return auditCompactObject(aa&&aa.mats?(aa.mats.find(function(x){return String(x.id)===String(mid);})||null):null);
+        }
+        if(fn==="borrarPago"){
+          var ap=typeof getAcopio==="function"?getAcopio():null;
+          return auditCompactObject(ap&&ap.pagos?(ap.pagos.find(function(x){return String(x.id)===String(id);})||null):null);
+        }
+        if(fn==="borrarRetiro"||fn==="guardarEditRetiro"){
+          var ar=typeof getAcopio==="function"?getAcopio():null;
+          var rid=id;
+          if(fn==="guardarEditRetiro"&&typeof editRetiroId!=="undefined")rid=editRetiroId;
+          var rr=ar&&ar.retiros?(ar.retiros.find(function(x){return String(x.id)===String(rid);})||null):null;
+          if(rr){
+            var mm=typeof getMat==="function"?getMat(rr.matId):null;
+            var oo=null; try{oo=typeof obraGastosActualPorIdx==="function"?obraGastosActualPorIdx(rr.obraIdx):null}catch(_e){}
+            return auditCompactObject(Object.assign({},rr,{producto:mm?mm.nom:"",codigo:mm?mm.cod:"",unidad:mm?mm.unidad:"",obra:rr.obraHistorica||(oo&&(oo.label||oo.short||oo.id))||""}));
+          }
+          return null;
+        }
+        if(fn==="confirmarBorrarObra"||fn==="confirmarBorrarObraDesdeReporte"){
+          var ao=typeof getAcopio==="function"?getAcopio():null;
+          var oi=(fn==="confirmarBorrarObraDesdeReporte"&&typeof curReporteObra!=="undefined")?curReporteObra:(typeof curRetirarObra!=="undefined"?curRetirarObra:null);
+          var obras=typeof getObras==="function"?getObras():[];
+          return auditCompactObject({obra:obras[oi]||"",retiros:ao&&ao.retiros?(ao.retiros.filter(function(r){return Number(r.obraIdx)===Number(oi);})):[]});
+        }
+        if(fn==="eliminarRetirosDesdeReporte"){
+          var arr=typeof getRetirosReporteMaterial==="function"?getRetirosReporteMaterial(args[0],args[1]):[];
+          var mt=typeof getMat==="function"?getMat(args[0]):null;
+          return auditCompactObject({producto:mt?mt.nom:"",codigo:mt?mt.cod:"",retiros:arr});
+        }
+      }
+
+      if(MODULO==="Materiales"){
+        if(fn==="guardarNombreMat"||fn==="eliminarMaterialSeleccionado"){
+          var sid=(typeof selectedCargaMat!=="undefined"?selectedCargaMat:null);
+          return auditCompactObject((typeof ALL_MATS!=="undefined"?ALL_MATS:[]).find(function(x){return String(x.id)===String(sid);})||null);
+        }
+        if(fn==="eliminarCategoria") return {categoria:String(args[0]||"")};
+        if(fn==="borrarCarga"||fn==="guardarEditCarga"){
+          var cid=(fn==="borrarCarga"?args[0]:(typeof editingCargaId!=="undefined"?editingCargaId:null));
+          var cc=(typeof state!=="undefined"&&state.cargas)?state.cargas.find(function(x){return String(x.id)===String(cid);}):null;
+          if(cc){
+            var mat=(typeof ALL_MATS!=="undefined"?ALL_MATS:[]).find(function(m){return String(m.id)===String(cc.matId);});
+            return auditCompactObject(Object.assign({},cc,{producto:mat?mat.mat:"",codigo:mat?mat.codigo||mat.cod||"":""}));
+          }
+          return null;
+        }
+        if(fn==="guardarRenombrarObra"){
+          return auditCompactObject({obra:typeof getCurrentObraName==="function"?getCurrentObraName():"",formulario:auditFormSnapshot()});
+        }
+      }
+
+      if(MODULO==="Pañol"){
+        if(fn==="guardarEdicionProducto"||fn==="eliminarProducto"){
+          var pid=(fn==="eliminarProducto"?args[0]:(typeof editProdId!=="undefined"?editProdId:null));
+          var pp=(typeof state!=="undefined"&&state.productos)?state.productos.find(function(x){return String(x.id)===String(pid);}):null;
+          if(pp){
+            var stock=typeof stockDeProducto==="function"?stockDeProducto(pid):null;
+            return auditCompactObject(Object.assign({},pp,{stock:stock}));
+          }
+          return null;
+        }
+        if(fn==="editarCarga"||fn==="eliminarCarga"||fn==="editarConsumo"||fn==="eliminarConsumo"){
+          var mid2=args[0];
+          var mov=(typeof state!=="undefined"&&state.movimientos)?state.movimientos.find(function(x){return String(x.id)===String(mid2);}):null;
+          if(mov){
+            var pr=(typeof state!=="undefined"&&state.productos)?state.productos.find(function(x){return String(x.id)===String(mov.prodId);}):null;
+            return auditCompactObject(Object.assign({},mov,{producto:mov.materialName||(pr?pr.nombre:""),codigo:mov.materialCode||(pr?pr.codigo:"")}));
+          }
+          return null;
+        }
+        if(fn==="eliminarObra") return {obra:String(args[0]||"")};
+        if(fn==="eliminarRubro") return {subrubro:String(args[0]||"")};
+      }
+
+      if(MODULO==="Avances"){
+        if(fn==="deleteSemana"){
+          var ss=typeof getSemanaByNum==="function"?getSemanaByNum(args[0]):null;
+          return auditCompactObject(ss);
+        }
+        if(fn==="deleteTarea"){
+          var tt=typeof getTask==="function"?getTask(args[0],args[1]):null;
+          return auditCompactObject(tt);
+        }
+        if(fn==="saveEditObra"||fn==="deleteCurrentObra") return auditCompactObject(typeof currentObra==="function"?currentObra():null);
+        if(fn==="editarCertificado"||fn==="eliminarCertificado") return auditCompactObject((typeof getCertificados==="function"?getCertificados():[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deleteItemCQ"||fn==="saveItemCQ") return auditCompactObject((typeof state!=="undefined"&&state.itemsCQ?state.itemsCQ:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deletePagoFuera") return auditCompactObject((typeof state!=="undefined"&&state.pagosFuera?state.pagosFuera:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deleteConstructor") return auditCompactObject((typeof constructoresConfig!=="undefined"?constructoresConfig:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+      }
+
+      if(MODULO==="Control de Obras"){
+        if(fn==="deleteCurrentWorkReport"||fn==="saveWork"){
+          var ei=(typeof editIndex!=="undefined"&&editIndex)?Number(editIndex.value):NaN;
+          return auditCompactObject((typeof records!=="undefined"&&isFinite(ei))?records[ei]:null);
+        }
+        if(fn==="deletePartnerItem"){
+          var wi=Number(args[0]),tipo=args[1],jj=Number(args[2]);
+          return auditCompactObject(typeof db!=="undefined"&&db.works&&db.works[wi]&&db.works[wi][tipo]?db.works[wi][tipo][jj]:null);
+        }
+        if(fn==="deleteGeneralWork"||fn==="saveGeneralWork") return auditCompactObject(typeof db!=="undefined"&&db.works?db.works[Number(args[0])]:null);
+        if(fn==="saveGlobalWages"||fn==="saveCertifyPanel"||fn==="saveWageAllocation") return auditCompactObject({formulario:auditFormSnapshot(),contexto:auditVisibleContext()});
+      }
+    }catch(e){console.warn("audit specific",fn,e)}
+    return null;
+  }
+
+  function registrar(cfg,args,before,contextoAntes,extra){
+    var now=new Date();
+    var rec={
+      id:mkId(),
+      data:{
+        empleado:empleado(),
+        empleadoId:empleadoId(),
+        modulo:MODULO,
+        accion:cfg.accion,
+        detalle:cfg.detalle,
+        fecha:now.toISOString().slice(0,10),
+        fechaHora:now.toISOString(),
+        timestamp:Date.now(),
+        funcion:cfg.fn,
+        referencia:safeClone(args||[]),
+        contexto:contextoAntes||captureContext(cfg.fn),
+        formularioAntes:extra&&extra.formularioAntes?extra.formularioAntes:null,
+        formularioDespues:extra&&extra.formularioDespues?extra.formularioDespues:null,
+        contextoVisible:extra&&extra.contextoVisible?extra.contextoVisible:"",
+        objetoAntes:extra&&extra.objetoAntes?extra.objetoAntes:null,
+        objetoDespues:extra&&extra.objetoDespues?extra.objetoDespues:null,
+        antes:before||null,
+        origen:"auditoria_empleados_completa_v1"
+      }
+    };
+    enqueue(rec);
+  }
+  function wrap(cfg){
+    var original=window[cfg.fn];
+    if(typeof original!=="function"||original.__cqAuditWrapped)return false;
+    function wrapped(){
+      var args=Array.prototype.slice.call(arguments);
+      var contextoAntes={};
+      var extra={formularioAntes:{},formularioDespues:{},contextoVisible:"",objetoAntes:null,objetoDespues:null};
+      try{
+        contextoAntes=captureContext(cfg.fn)||{};
+        extra.formularioAntes=auditFormSnapshot();
+        extra.contextoVisible=auditVisibleContext();
+        extra.objetoAntes=auditSpecificObject(cfg.fn,args)||auditFindByArgs(args);
+      }catch(e){}
+      var result;
+      try{result=original.apply(this,args);}catch(e){throw e;}
+      function finish(v){
+        try{
+          extra.formularioDespues=auditFormSnapshot();
+          extra.objetoDespues=auditSpecificObject(cfg.fn,args)||auditFindByArgs(args);
+        }catch(e){}
+        registrar(cfg,args,extra.objetoAntes,contextoAntes,extra);
+        return v;
+      }
+      if(result&&typeof result.then==="function")return result.then(finish);
+      return finish(result);
+    }
+    wrapped.__cqAuditWrapped=true;
+    wrapped.__cqAuditOriginal=original;
+    window[cfg.fn]=wrapped;
+    return true;
+  }
+  function install(){
+    var pending=0;
+    WRAPS.forEach(function(cfg){if(!wrap(cfg))pending++;});
+    if(pending)setTimeout(install,600);
+  }
+
+  document.addEventListener("cq-audit-writer-ready",flush);
+  document.addEventListener("cq-auth-ready",flush);
+  window.addEventListener("online",flush);
+  window.addEventListener("focus",function(){setTimeout(flush,150);});
+  setInterval(flush,15000);
+  setTimeout(install,0);
+  setTimeout(flush,500);
+})();
+</script>
+
+</body>
+</html>

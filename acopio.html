@@ -106,6 +106,7 @@ tr.subtotal td{background:#F7F6F3;font-weight:800;border-top:1px solid var(--san
 
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;box-shadow:0 4px 20px rgba(28,61,53,.35);z-index:600;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.show{opacity:1}
+.toast.err{background:var(--red);box-shadow:0 4px 20px rgba(192,57,43,.35)}
 
 .search-wrap{position:relative;margin-bottom:10px;flex:1}
 .search-wrap input{background:#fff;border:1px solid var(--sand3);border-radius:8px;padding:9px 11px 9px 32px;font-size:12px;font-family:'Space Grotesk',sans-serif;color:var(--green);outline:none;width:100%}
@@ -258,8 +259,9 @@ tr.subtotal td{background:#F7F6F3;font-weight:800;border-top:1px solid var(--san
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
@@ -270,12 +272,76 @@ tr.subtotal td{background:#F7F6F3;font-weight:800;border-top:1px solid var(--san
     appId: "1:502127540211:web:8daefc75bdaafad412c486"
   };
 
-  const app = initializeApp(firebaseConfig);
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const auth = getAuth(app);
 
-  window._cqFirebase = { db, doc, setDoc, getDoc, onSnapshot };
-  window._cqFirebaseReady = true;
-  document.dispatchEvent(new Event("cq-firebase-ready"));
+  window._cqFirebase = { db, doc, setDoc, getDoc, onSnapshot, runTransaction };
+  window._cqFirebaseReady = false;
+
+  const guard=document.getElementById("cq-auth-guard");
+  const msg=document.getElementById("cq-auth-msg");
+  const back=document.getElementById("cq-auth-back");
+  const userMap={
+    "emilio@cqgerencia.com":"emilio",
+    "juan@cqgerencia.com":"juan",
+    "eugenia@cqoperaciones.com":"eugenia",
+    "hebe@cqoperaciones.com":"hebe",
+    "maximiliano@cqoperaciones.com":"maximiliano"
+  };
+
+  function deny(t){ msg.textContent=t; back.style.display="inline-block"; }
+
+  onAuthStateChanged(auth, async user=>{
+    if(!user){ deny("No hay una sesión iniciada. Entrá desde Gerencia o CQ Operaciones."); return; }
+    try{
+      const email=String(user.email||"").toLowerCase();
+      const key=userMap[email];
+      if(!key){ deny("Este usuario no está habilitado."); return; }
+
+      try{
+        const c=JSON.parse(localStorage.getItem("cq_auth_profile_1h")||"null");
+        const age=c?Date.now()-(Number(c.validadoEn)||0):Infinity;
+        const cm=Array.isArray(c&&c.modulos)?c.modulos:[];
+        const cg=cm.includes("gerencia");
+        if(c && age>=0 && age<=3600000 && String(c.email||"").toLowerCase()===email && (cg || cm.includes("acopio"))){
+          window._cqAuthProfile={id:key,nombre:c.nombre||key,email:user.email,modulos:cm,rol:cg?"gerencia":"operaciones"};
+          window._cqUsuarioActual=window._cqAuthProfile.nombre;
+          window._cqFirebaseReady=true;
+          guard.classList.add("ok");
+          guard.style.display="none";
+          document.dispatchEvent(new CustomEvent("cq-auth-ready",{detail:window._cqAuthProfile}));
+          document.dispatchEvent(new Event("cq-firebase-ready"));
+          return;
+        }
+      }catch(e){}
+
+      const snap=await getDoc(doc(db,"cq_operaciones_usuarios",key));
+      if(!snap.exists()){ deny("No se encontraron permisos para este usuario."); return; }
+      const p=snap.data()||{};
+      const mods=Array.isArray(p.modulos)?p.modulos:[];
+      const esGerencia=mods.includes("gerencia");
+      if(String(p.email||"").toLowerCase()!==String(user.email||"").toLowerCase()){
+        deny("La identidad del usuario no coincide con su configuración."); return;
+      }
+      if(!esGerencia && !mods.includes("acopio")){
+        deny("Tu usuario no tiene permiso para ingresar a Acopio."); return;
+      }
+      window._cqAuthProfile={id:key,nombre:p.nombre||key,email:user.email,modulos:mods,rol:esGerencia?"gerencia":"operaciones"};
+      window._cqUsuarioActual=window._cqAuthProfile.nombre;
+      try{
+        localStorage.setItem("cq_usuario_actual",window._cqAuthProfile.nombre);
+        localStorage.setItem("cq_auth_profile_1h",JSON.stringify({id:key,nombre:window._cqAuthProfile.nombre,email:String(user.email||"").toLowerCase(),modulos:mods,rol:window._cqAuthProfile.rol,validadoEn:Date.now()}));
+      }catch(e){}
+      window._cqFirebaseReady = true;
+      guard.classList.add("ok");
+      document.dispatchEvent(new CustomEvent("cq-auth-ready",{detail:window._cqAuthProfile}));
+      document.dispatchEvent(new Event("cq-firebase-ready"));
+    }catch(e){
+      console.warn("CQ Acopio auth error",e);
+      deny("Error al verificar el acceso. Revisá la conexión.");
+    }
+  });
 </script>
 
 
@@ -1433,8 +1499,138 @@ button[onclick*="crearBackupManual"]{
 }
 </style>
 
+
+<style id="cq-dropdown-materiales-visible-completo">
+/* La lista de materiales se muestra por encima de modales y nunca queda cortada */
+#retirar-mat-dropdown{
+  position:fixed !important;
+  top:auto;
+  right:auto;
+  bottom:auto;
+  left:auto;
+  width:auto;
+  max-height:none;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  z-index:1200 !important;
+  margin:4px 0 0 !important;
+  box-shadow:0 12px 34px rgba(28,61,53,.24) !important;
+  -webkit-overflow-scrolling:touch;
+}
+#retirar-mat-dropdown .combo-item{
+  min-height:40px;
+  white-space:normal;
+  line-height:1.25;
+}
+</style>
+
+
+<style id="cq-materiales-status-dot">
+.mat-sync-dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;box-shadow:0 0 0 3px rgba(0,0,0,.04)}
+.mat-sync-dot.ok{background:#27AE60;box-shadow:0 0 0 3px rgba(39,174,96,.13)}
+.mat-sync-dot.err{background:#D6453D;box-shadow:0 0 0 3px rgba(214,69,61,.13)}
+.mat-sync-dot.wait{background:#B8B8B8;box-shadow:0 0 0 3px rgba(120,120,120,.10)}
+.mat-sync-cell{text-align:center!important;width:42px;white-space:nowrap}
+</style>
+
+<style id="cq-acopio-auth-css">
+#cq-auth-guard{position:fixed;inset:0;z-index:2147483647;background:#1C3D35;color:#fff;display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Space Grotesk',Arial,sans-serif}
+#cq-auth-guard.ok{display:none}
+#cq-auth-guard .box{width:100%;max-width:360px;text-align:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:22px}
+#cq-auth-guard .ico{font-size:30px;margin-bottom:8px}
+#cq-auth-guard .ttl{font-size:17px;font-weight:900}
+#cq-auth-guard .msg{font-size:11px;line-height:1.5;color:#cfe0d8;margin-top:7px}
+#cq-auth-back{display:none;margin:14px auto 0;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:white;border-radius:10px;padding:8px 13px;font-weight:900}
+</style>
+
+
+<script id="cq-fast-1h-bootstrap-acopio">
+(function(){
+  try{
+    var raw=localStorage.getItem("cq_auth_profile_1h");
+    if(!raw) return;
+    var c=JSON.parse(raw), age=Date.now()-(Number(c.validadoEn)||0);
+    if(age<0 || age>3600000) return;
+    var mods=Array.isArray(c.modulos)?c.modulos:[];
+    var ger=mods.indexOf("gerencia")>=0;
+    if(!((ger || mods.indexOf("acopio")>=0))) return;
+    document.documentElement.classList.add("cq-fast-1h-acopio");
+    window.__cqFast1h=c;
+  }catch(e){}
+})();
+</script>
+<style id="cq-fast-1h-style-acopio">
+html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
+</style>
+
+
+<style id="cq-acopio-gastos-link-css">
+.gasto-sync-dot{
+  display:inline-block;width:7px;height:7px;border-radius:50%;
+  vertical-align:middle;background:#D6453D;
+  box-shadow:0 0 0 2px rgba(214,69,61,.10)
+}
+.gasto-sync-dot.ok{background:#27AE60;box-shadow:0 0 0 2px rgba(39,174,96,.12)}
+.gasto-sync-dot.wait{background:#B8B8B8;box-shadow:0 0 0 2px rgba(120,120,120,.09)}
+.gasto-sync-cell{text-align:center!important;width:42px;white-space:nowrap}
+.fld textarea{
+  width:100%;background:#F7F6F3;border:1px solid var(--sand3);border-radius:11px;
+  padding:9px 11px;font-size:13px;font-family:'Space Grotesk',sans-serif;font-weight:600;
+  color:var(--green);outline:none;resize:vertical;min-height:64px
+}
+.fld textarea:focus{border-color:rgba(46,125,94,.55);box-shadow:0 0 0 4px rgba(46,125,94,.10)}
+.bulk-next-price{
+  margin-top:7px;width:100%;border:1px solid rgba(46,125,94,.25);
+  border-radius:9px;background:#EEF7F1;color:#1C3D35;padding:8px;
+  font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:900;cursor:pointer
+}
+.bulk-next-price:active{transform:scale(.985)}
+</style>
+
+
+<style id="cq-subrubro-combo-buscable">
+.subrubro-combo{position:relative}
+.subrubro-combo input{
+  width:100%;background:#F7F6F3;border:1px solid var(--sand3);border-radius:11px;
+  padding:9px 36px 9px 11px;font-size:13px;font-family:'Space Grotesk',sans-serif;
+  font-weight:600;color:var(--green);outline:none
+}
+.subrubro-combo input:focus{
+  border-color:rgba(46,125,94,.55);
+  box-shadow:0 0 0 4px rgba(46,125,94,.10)
+}
+.subrubro-combo-btn{
+  position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  width:30px;height:30px;border:none;background:transparent;color:#6F8D78;
+  font-size:14px;cursor:pointer;border-radius:8px
+}
+.subrubro-combo-btn:hover{background:#EEF5F0}
+.subrubro-dropdown{
+  display:none;position:absolute;left:0;right:0;top:100%;z-index:1300;
+  background:#fff;border:1px solid var(--sand3);border-radius:10px;
+  margin-top:4px;max-height:230px;overflow-y:auto;
+  box-shadow:0 10px 26px rgba(28,61,53,.18);padding:4px
+}
+.subrubro-dropdown.open{display:block}
+.subrubro-option{
+  padding:9px 10px;border-radius:7px;font-size:12.5px;font-weight:700;
+  color:var(--green);cursor:pointer
+}
+.subrubro-option:hover{background:#F0F6F2}
+.subrubro-empty{padding:10px;color:#8A8F87;font-size:11px}
+</style>
 </head>
 <body>
+
+<div id="cq-auth-guard">
+  <div class="box">
+    <div class="ico">🔐</div>
+    <div class="ttl">Verificando acceso</div>
+    <div class="msg" id="cq-auth-msg">Comprobando usuario y permisos de Acopio…</div>
+    <button id="cq-auth-back" onclick="history.back()">← Volver</button>
+  </div>
+</div>
+
 
 <div class="toast" id="toast"></div>
 <div class="pdf-report" id="pdf-report"></div>
@@ -1531,7 +1727,8 @@ button[onclick*="crearBackupManual"]{
         </div>
         <div class="bulk-mat-col">
           <label>Precio unitario</label>
-          <textarea id="bulk-mat-precios" rows="10" inputmode="decimal" placeholder="1250&#10;980&#10;8500"></textarea>
+          <textarea id="bulk-mat-precios" rows="10" inputmode="decimal" enterkeyhint="next" placeholder="1250&#10;980&#10;8500"></textarea>
+          <button type="button" class="bulk-next-price" onclick="bulkSiguientePrecio()">↓ Siguiente renglón</button>
         </div>
       </div>
 
@@ -1611,6 +1808,15 @@ button[onclick*="crearBackupManual"]{
         <div class="fld"><label>Cantidad</label><input type="number" id="retiro-qty" min="0.01" step="0.01"></div>
         <div class="fld"><label>Fecha</label><input type="date" id="retiro-fecha"></div>
       </div>
+      <div class="fld"><label>Subrubro · Materiales</label>
+  <div class="subrubro-combo">
+    <input type="text" id="retiro-subrubro" placeholder="Seleccionar o escribir subrubro..." autocomplete="off"
+      onfocus="abrirSubrubroCombo('retiro')" oninput="filtrarSubrubroCombo('retiro')">
+    <button type="button" class="subrubro-combo-btn" onclick="toggleSubrubroCombo('retiro')">▾</button>
+    <div id="retiro-subrubro-dropdown" class="subrubro-dropdown"></div>
+  </div>
+</div>
+      <div class="fld"><label>Comentario (opcional)</label><textarea id="retiro-comentario" placeholder="Comentario para Gastos y Materiales"></textarea></div>
     </div>
     <div class="mfooter" style="justify-content:flex-end"><button class="btn btn-s btn-sm" onclick="closeModal('modal-retiro')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarEditRetiro()">Guardar</button></div>
   </div>
@@ -1705,7 +1911,8 @@ button[onclick*="crearBackupManual"]{
   <div id="view-retirar" style="display:none">
     <div class="sec-ttl">Obra</div>
     <div class="chips" id="retirar-obra-chips"></div>
-    <div id="retirar-del-obra-wrap" style="margin-bottom:12px"></div>
+
+    <div id="retirar-del-obra-wrap" style="display:none"></div>
 
     <div class="card" style="padding:14px 16px">
       <div class="fld"><label>Material</label><div class="combo-wrap"><input type="text" id="retirar-mat-search" placeholder="🔎 Buscar material..." autocomplete="off" oninput="filterRetirarMatCombo()" onfocus="filterRetirarMatCombo()" onclick="clearRetirarMatSearch()" title="Tocar para borrar y buscar otro material"><div id="retirar-mat-dropdown" class="combo-dropdown" style="display:none"></div></div><select id="retirar-mat-sel" style="display:none"></select></div>
@@ -1713,6 +1920,15 @@ button[onclick*="crearBackupManual"]{
         <div class="fld"><label>Cantidad</label><input type="number" id="retirar-qty" min="0.01" step="0.01" placeholder="0"></div>
         <div class="fld"><label>Fecha</label><input type="date" id="retirar-fecha"></div>
       </div>
+      <div class="fld"><label>Subrubro · Materiales</label>
+  <div class="subrubro-combo">
+    <input type="text" id="retirar-subrubro" placeholder="Seleccionar o escribir subrubro..." autocomplete="off"
+      onfocus="abrirSubrubroCombo('retirar')" oninput="filtrarSubrubroCombo('retirar')">
+    <button type="button" class="subrubro-combo-btn" onclick="toggleSubrubroCombo('retirar')">▾</button>
+    <div id="retirar-subrubro-dropdown" class="subrubro-dropdown"></div>
+  </div>
+</div>
+      <div class="fld"><label>Comentario (opcional)</label><textarea id="retirar-comentario" placeholder="Comentario para Gastos y Materiales"></textarea></div>
       <button class="btn btn-p btn-full" onclick="guardarRetiro()">Registrar retiro</button>
     </div>
 
@@ -2115,7 +2331,28 @@ function makeMatsFromTemplate(){
 var curAcopioId=null;
 function getAcopio(){return DB.acopios.find(function(a){return a.id===curAcopioId;});}
 function getAllMats(){var a=getAcopio();return a?a.mats:[];}
-function getObras(){var a=getAcopio();return a?a.obras:[];}
+function getObras(){
+  return gastosConfigAcopio&&Array.isArray(gastosConfigAcopio.obras)
+    ? gastosConfigAcopio.obras.filter(function(o){return o&&o.id&&o.id!=='oficina';}).map(function(o){return o.label||o.short||o.id;})
+    : [];
+}
+function getObrasGastosObjects(){
+  return gastosConfigAcopio&&Array.isArray(gastosConfigAcopio.obras)
+    ? gastosConfigAcopio.obras.filter(function(o){return o&&o.id&&o.id!=='oficina';})
+    : [];
+}
+function obraGastosActualPorIdx(idx){return getObrasGastosObjects()[idx]||null;}
+function retiroObraLabel(r){
+  if(!r)return 'Obra';
+  if(r.obraHistorica)return r.obraHistorica;
+  if(r.gastosObraId){
+    var o=getObrasGastosObjects().find(function(x){return x.id===r.gastosObraId;});
+    if(o)return o.label||o.short||o.id;
+  }
+  var a=getAcopio();
+  var legacy=a&&Array.isArray(a.obras)?a.obras:[];
+  return legacy[Number.isInteger(r.obraIdx)?r.obraIdx:0]||'Obra';
+}
 function getMat(id){return getAllMats().find(function(m){return m.id===id;});}
 function catKey(v){return String(v||'').trim().toLowerCase();}
 function getCats(){
@@ -2270,8 +2507,260 @@ function fmtP(n){return '$'+fmtN(n,0);}
 function fmtU(n){return 'u$s '+fmtN(n,2);}
 function toUSD(p){var a=getAcopio();return p/((a&&a.tc)||TC_DEFAULT);}
 function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+var gastosConfigAcopio=null;
+var gastosConfigLoadingAcopio=null;
+var gastosVerificacionErrorAcopio=false;
+
+function normObraAcopio(v){
+  return String(v||'').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/lote/g,'').replace(/manzana|mz/g,'')
+    .replace(/[^a-z0-9]/g,'');
+}
+async function cargarConfigGastosAcopio(){
+  if(gastosConfigAcopio)return gastosConfigAcopio;
+  if(gastosConfigLoadingAcopio)return gastosConfigLoadingAcopio;
+  gastosConfigLoadingAcopio=(async function(){
+    try{
+      if(!window._cqFirebase)throw new Error('Firebase no disponible');
+      var f=window._cqFirebase;
+      var snap=await f.getDoc(f.doc(f.db,'config','app'));
+      if(!snap.exists())throw new Error('No existe config/app de Gastos');
+      var d=snap.data()||{};
+      if(!Array.isArray(d.obras)||!d.subrubros)throw new Error('Configuración de Gastos incompleta');
+      gastosConfigAcopio={obras:d.obras,subrubros:d.subrubros,defaultTC:Number(d.defaultTC)||0};
+      setTimeout(function(){
+        try{}catch(e){}
+      },0);
+      return gastosConfigAcopio;
+    }finally{
+      gastosConfigLoadingAcopio=null;
+    }
+  })();
+  return gastosConfigLoadingAcopio;
+}
+
+
+
+
+
+
+
+function obraGastosDesdeNombre(nombre){
+  var n=normObraAcopio(nombre);
+  return getObrasGastosObjects().find(function(o){
+    return [o.id,o.label,o.short].some(function(v){return normObraAcopio(v)===n;});
+  })||null;
+}
+function subrubrosMaterialesAcopio(){
+  return (gastosConfigAcopio&&gastosConfigAcopio.subrubros&&Array.isArray(gastosConfigAcopio.subrubros.mat))
+    ? gastosConfigAcopio.subrubros.mat.slice() : [];
+}
+function llenarSubrubrosAcopio(id,selected){
+  var input=document.getElementById(id);
+  if(!input)return;
+  if(selected!==undefined&&selected!==null)input.value=selected;
+  var tipo=id==='retirar-subrubro'?'retirar':'retiro';
+  renderSubrubroCombo(tipo,'');
+}
+function subrubroInputId(tipo){return tipo==='retirar'?'retirar-subrubro':'retiro-subrubro';}
+function subrubroDropdownId(tipo){return tipo==='retirar'?'retirar-subrubro-dropdown':'retiro-subrubro-dropdown';}
+function renderSubrubroCombo(tipo,filtro){
+  var dd=document.getElementById(subrubroDropdownId(tipo));
+  if(!dd)return;
+  var q=String(filtro||'').trim().toLowerCase();
+  var arr=subrubrosMaterialesAcopio().filter(function(x){
+    return !q || String(x).toLowerCase().includes(q);
+  });
+  dd.innerHTML=arr.length?arr.map(function(x){
+    var safe=String(x).replace(/'/g,"\\'").replace(/</g,'&lt;');
+    return '<div class="subrubro-option" onclick="seleccionarSubrubroCombo(\''+tipo+'\',\''+safe+'\')">'+safe+'</div>';
+  }).join(''):'<div class="subrubro-empty">Sin resultados</div>';
+}
+function abrirSubrubroCombo(tipo){
+  var input=document.getElementById(subrubroInputId(tipo));
+  var dd=document.getElementById(subrubroDropdownId(tipo));
+  if(!input||!dd)return;
+  renderSubrubroCombo(tipo,input.value);
+  dd.classList.add('open');
+}
+function filtrarSubrubroCombo(tipo){
+  var input=document.getElementById(subrubroInputId(tipo));
+  var dd=document.getElementById(subrubroDropdownId(tipo));
+  if(!input||!dd)return;
+  renderSubrubroCombo(tipo,input.value);
+  dd.classList.add('open');
+}
+function toggleSubrubroCombo(tipo){
+  var input=document.getElementById(subrubroInputId(tipo));
+  var dd=document.getElementById(subrubroDropdownId(tipo));
+  if(!input||!dd)return;
+  if(dd.classList.contains('open'))dd.classList.remove('open');
+  else{renderSubrubroCombo(tipo,input.value);dd.classList.add('open');input.focus();}
+}
+function seleccionarSubrubroCombo(tipo,valor){
+  var input=document.getElementById(subrubroInputId(tipo));
+  var dd=document.getElementById(subrubroDropdownId(tipo));
+  if(input)input.value=valor;
+  if(dd)dd.classList.remove('open');
+}
+document.addEventListener('click',function(e){
+  ['retirar','retiro'].forEach(function(tipo){
+    var input=document.getElementById(subrubroInputId(tipo));
+    var dd=document.getElementById(subrubroDropdownId(tipo));
+    if(!input||!dd)return;
+    var wrap=input.closest('.subrubro-combo');
+    if(wrap&&!wrap.contains(e.target))dd.classList.remove('open');
+  });
+});
+function gastoAcopioId(acopioId,retiroId){return 'acopio_'+String(acopioId)+'_'+String(retiroId);}
+function gastoSyncEstadoAcopio(r){
+  var st=(r&&r.gastosSyncEstado)||'error';
+  return {cls:st==='ok'?'ok':(st==='pendiente'?'wait':'err'),
+          txt:st==='ok'?'Cargado OK en Gastos':(st==='pendiente'?'Sincronizando con Gastos…':(r&&r.gastosSyncError)||'NO está cargado en Gastos. Verificar.')};
+}
+function puntoGastosRetiro(r){
+  var e=gastoSyncEstadoAcopio(r);
+  var t=String(e.txt||'').replace(/"/g,'&quot;');
+  return '<span class="gasto-sync-dot '+e.cls+'" title="'+t+'" aria-label="'+t+'"></span>';
+}
+function valorRetiroAcopio(r){
+  var m=getMat(r.matId);
+  return Number(r.qty||0)*Number(m&&m.precioAcord||0);
+}
+function payloadGastoAcopio(r,obraId){
+  var a=getAcopio();
+  return {
+    id:gastoAcopioId(a.id,r.id),
+    createdAt:r.createdAt||new Date().toISOString(),
+    createdBy:window._cqUsuarioActual||'Acopio',
+    fecha:r.fecha,
+    cat:'mat',
+    subrubro:r.subrubro||'',
+    moneda:'ars',
+    monto:valorRetiroAcopio(r),
+    tc:Number(a.tc)||TC_DEFAULT,
+    nota:r.comentario||'',
+    updatedAt:new Date().toISOString(),
+    updatedBy:window._cqUsuarioActual||'Acopio',
+    origen:'cq_acopio',
+    acopioId:String(a.id),
+    acopioRetiroId:String(r.id),
+    obraId:obraId
+  };
+}
+async function upsertGastoAcopio(obraId,payload,removeOnly){
+  var f=window._cqFirebase;
+  if(!f||!f.runTransaction)throw new Error('Firebase no disponible');
+  var ref=f.doc(f.db,'gastos',obraId);
+  await f.runTransaction(f.db,async function(tx){
+    var snap=await tx.get(ref);
+    var data=snap.exists()?snap.data():{gastos:[],financiero:{venta:0,comision:0,acuerdosMO:{mo:{monto:0,moneda:'usd',tc:1400},ext:{}}}};
+    var gastos=Array.isArray(data.gastos)?data.gastos.slice():[];
+    gastos=gastos.filter(function(g){return String(g.id)!==String(payload.id);});
+    if(!removeOnly)gastos.push(payload);
+    data.gastos=gastos;
+    data.updatedAt=new Date().toISOString();
+    tx.set(ref,data);
+  });
+}
+async function sincronizarRetiroConGastos(retiro,activo,obraIdAnterior){
+  if(!retiro)throw new Error('Retiro no encontrado');
+  await cargarConfigGastosAcopio();
+  var obra=obraGastosActualPorIdx(retiro.obraIdx);
+  var obraNombre=obra?(obra.label||obra.short||obra.id):'';
+  if(!obra)throw new Error('No se pudo identificar la obra seleccionada de Gastos.');
+  if(obraIdAnterior&&obraIdAnterior!==obra.id){
+    await upsertGastoAcopio(obraIdAnterior,payloadGastoAcopio(retiro,obraIdAnterior),true);
+  }
+  var payload=payloadGastoAcopio(retiro,obra.id);
+  await upsertGastoAcopio(obra.id,payload,activo===false);
+  retiro.gastosObraId=obra.id;
+  retiro.gastosSyncEstado=activo===false?'error':'ok';
+  retiro.gastosSyncError=activo===false?'Eliminado de Gastos':'';
+  retiro.gastosSyncAt=new Date().toISOString();
+  persist();
+  renderRetirarHistorial();
+  return true;
+}
+function lanzarSyncGastosRetiro(retiro,activo,obraIdAnterior){
+  if(!retiro)return;
+  retiro.gastosSyncEstado='pendiente';
+  retiro.gastosSyncError='';
+  persist();renderRetirarHistorial();
+  sincronizarRetiroConGastos(retiro,activo,obraIdAnterior).catch(function(e){
+    console.warn('Acopio → Gastos',e);
+    retiro.gastosSyncEstado='error';
+    retiro.gastosSyncError=String(e&&e.message||e);
+    retiro.gastosSyncAt=new Date().toISOString();
+    persist();renderRetirarHistorial();
+    toast('⚠️ No se pudo sincronizar con Gastos. Verificar.','err');
+  });
+}
+var verificandoGastosAcopio=false;
+async function verificarGastosAcopio(){
+  if(verificandoGastosAcopio||!window._cqFirebaseReady||!window._cqFirebase)return;
+  verificandoGastosAcopio=true;
+  try{
+    await cargarConfigGastosAcopio();
+    var a=getAcopio();
+    if(!a)return;
+    var retiros=(a.retiros||[]).filter(function(r){return r.gastosObraId;});
+    var ids=[...new Set(retiros.map(function(r){return r.gastosObraId;}))];
+    var docs={},f=window._cqFirebase;
+    for(var i=0;i<ids.length;i++){
+      try{
+        var snap=await f.getDoc(f.doc(f.db,'gastos',ids[i]));
+        docs[ids[i]]=snap.exists()&&Array.isArray((snap.data()||{}).gastos)?snap.data().gastos:[];
+      }catch(e){docs[ids[i]]=null;}
+    }
+    var cambio=false;
+    retiros.forEach(function(r){
+      var arr=docs[r.gastosObraId],nuevo='error',err='';
+      if(arr===null)err='No se pudo verificar Firebase';
+      else{
+        var gid=gastoAcopioId(a.id,r.id);
+        var g=arr.find(function(x){return String(x.id)===String(gid);});
+        if(!g)err='El gasto ya no existe en Gastos';
+        else if(Math.abs((Number(g.monto)||0)-valorRetiroAcopio(r))>.01)err='El importe en Gastos no coincide';
+        else if(String(g.subrubro||'')!==String(r.subrubro||''))err='El subrubro no coincide';
+        else nuevo='ok';
+      }
+      if(r.gastosSyncEstado!==nuevo||r.gastosSyncError!==err){
+        r.gastosSyncEstado=nuevo;r.gastosSyncError=err;r.gastosSyncAt=new Date().toISOString();cambio=true;
+      }
+    });
+    if(cambio){persist();renderRetirarHistorial();}
+  }catch(e){
+    console.warn('Verificación Gastos Acopio',e);
+  }finally{verificandoGastosAcopio=false;}
+}
+function bulkSiguientePrecio(){
+  var el=document.getElementById('bulk-mat-precios');
+  if(!el)return;
+  var start=el.selectionStart==null?el.value.length:el.selectionStart;
+  var end=el.selectionEnd==null?start:el.selectionEnd;
+  var before=el.value.slice(0,start),after=el.value.slice(end);
+  if(before && !before.endsWith('\n'))before+='\n';
+  el.value=before+after;
+  var pos=before.length;
+  el.focus();
+  try{el.setSelectionRange(pos,pos);}catch(e){}
+}
+document.addEventListener('cq-firebase-ready',function(){
+  cargarConfigGastosAcopio().then(function(){
+    llenarSubrubrosAcopio('retirar-subrubro','');
+    llenarSubrubrosAcopio('retiro-subrubro','');
+    setTimeout(verificarGastosAcopio,1000);
+  }).catch(function(e){console.warn('Config Gastos Acopio',e);});
+});
+window.addEventListener('focus',function(){setTimeout(verificarGastosAcopio,350);});
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')setTimeout(verificarGastosAcopio,350);});
+setInterval(verificarGastosAcopio,12000);
+
 function fmtFecha(iso){if(!iso)return '';var p=iso.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
-function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
+function toast(msg,kind){var t=document.getElementById('toast');t.textContent=msg;t.classList.toggle('err',kind==='err');t.classList.add('show');setTimeout(function(){t.classList.remove('show');t.classList.remove('err');},3200);}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
@@ -2538,15 +3027,34 @@ function kpi(label,val,sub,warn){
   return '<div class="kpi'+(warn?' warn':'')+'"><div class="kpi-label">'+label+'</div><div class="kpi-val">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';
 }
 
+function normalizarBusquedaMaterial(v){
+  return String(v||'')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .trim();
+}
+function ordenarMaterialesAlfabeticamente(lista){
+  return lista.slice().sort(function(a,b){
+    return String(a.nom||'').localeCompare(String(b.nom||''),'es',{sensitivity:'base',numeric:true});
+  });
+}
 function renderMateriales(){
   renderKPIs();
-  var q=(document.getElementById('mat-search').value||'').toLowerCase();
-  var mats=getAllMats().filter(function(m){return !q||m.nom.toLowerCase().indexOf(q)>=0||(m.cod||'').toLowerCase().indexOf(q)>=0;});
+  var q=normalizarBusquedaMaterial(document.getElementById('mat-search').value||'');
+  var mats=ordenarMaterialesAlfabeticamente(getAllMats()).filter(function(m){
+    return !q
+      || normalizarBusquedaMaterial(m.nom).indexOf(q)>=0
+      || normalizarBusquedaMaterial(m.cod||'').indexOf(q)>=0
+      || normalizarBusquedaMaterial(m.cat||'').indexOf(q)>=0;
+  });
   var cats={};
   mats.forEach(function(m){if(!cats[m.cat])cats[m.cat]=[];cats[m.cat].push(m);});
 
   var html='';
-  Object.keys(cats).forEach(function(cat){
+  Object.keys(cats).sort(function(a,b){
+    return a.localeCompare(b,'es',{sensitivity:'base',numeric:true});
+  }).forEach(function(cat){
     var col=getCatColor(cat);
     html+='<div class="card" style="border-top:3px solid '+col+'">';
     html+='<div class="card-hd"><span class="card-ttl" style="color:'+col+'">'+cat+'</span></div>';
@@ -2613,6 +3121,14 @@ function parsePrecioMasivo(value){
   }
   return parseFloat(s)||0;
 }
+
+
+document.addEventListener('keydown',function(e){
+  if(e.target&&e.target.id==='bulk-mat-precios'&&e.key==='Enter'){
+    e.preventDefault();
+    bulkSiguientePrecio();
+  }
+});
 
 function guardarCargaMasivaMateriales(){
   var cat=document.getElementById('bulk-mat-cat').value;
@@ -2848,21 +3364,29 @@ function renderPagosList(){
 // RETIRAR
 // ═══════════════════════════════════════════
 function renderRetirar(){
+  cargarConfigGastosAcopio().then(function(){
+    
+    var sel=document.getElementById('retirar-subrubro');
+    var cur=sel?sel.value:'';
+    llenarSubrubrosAcopio('retirar-subrubro',cur);
+    
+  }).catch(function(e){console.warn(e);});
+
   var obras=getObras();
+  if(curRetirarObra>=obras.length)curRetirarObra=0;
   document.getElementById('retirar-obra-chips').innerHTML=obras.map(function(o,i){
     return '<button class="chip'+(i===curRetirarObra?' active':'')+'" onclick="selectRetirarObra('+i+')">'+o+'</button>';
-  }).join('')+'<button class="chip" onclick="openNuevaObra()" style="border-style:dashed;color:var(--green3)">+ Obra</button>'
-    +(obras.length>1?'<button class="chip" onclick="openAcomodarObras()" style="color:var(--green3)">⚙ Acomodar obras</button>':'');
-  document.getElementById('retirar-del-obra-wrap').innerHTML=obras.length
-    ?'<button onclick="confirmarBorrarObra()" style="background:none;border:none;color:#B8C4B8;font-size:10px;font-weight:600;cursor:pointer;font-family:\'Space Grotesk\',sans-serif;padding:2px 0">Eliminar obra "'+(obras[curRetirarObra]||'')+'"</button>'
-    :'';
+  }).join('');
+  document.getElementById('retirar-del-obra-wrap').innerHTML='';
 
   var matSel=document.getElementById('retirar-mat-sel');
-  var mats=getAllMats();
+  var mats=ordenarMaterialesAlfabeticamente(getAllMats());
   var cats={};
   mats.forEach(function(m){if(!cats[m.cat])cats[m.cat]=[];cats[m.cat].push(m);});
   var opts='';
-  Object.keys(cats).forEach(function(cat){
+  Object.keys(cats).sort(function(a,b){
+    return a.localeCompare(b,'es',{sensitivity:'base',numeric:true});
+  }).forEach(function(cat){
     opts+='<optgroup label="'+cat+'">';
     cats[cat].forEach(function(m){opts+='<option value="'+m.id+'">'+m.nom+'</option>';});
     opts+='</optgroup>';
@@ -2878,6 +3402,7 @@ function renderRetirar(){
 
   document.getElementById('retirar-fecha').value=todayISO();
   document.getElementById('retirar-obra-label').textContent=obras[curRetirarObra]||'';
+  
   renderRetirarHistorial();
 }
 function selectRetirarObra(i){curRetirarObra=i;renderRetirar();}
@@ -2897,22 +3422,59 @@ function clearRetirarMatSearch(){
   inp.focus();
 }
 function filterRetirarMatCombo(){
-  var sel=document.getElementById('retirar-mat-sel');
   var dd=document.getElementById('retirar-mat-dropdown');
-  if(!sel||!dd)return;
-  var q=(document.getElementById('retirar-mat-search').value||'').trim().toLowerCase();
-  var opts=[];
-  Array.prototype.forEach.call(sel.options,function(o){ if(o.value) opts.push(o); });
-  var matches=q?opts.filter(function(o){return o.textContent.toLowerCase().indexOf(q)>=0;}):opts;
+  var inp=document.getElementById('retirar-mat-search');
+  if(!dd||!inp)return;
+
+  var q=normalizarBusquedaMaterial(inp.value||'');
+  var matches=ordenarMaterialesAlfabeticamente(getAllMats()).filter(function(m){
+    return !q
+      || normalizarBusquedaMaterial(m.nom).indexOf(q)>=0
+      || normalizarBusquedaMaterial(m.cod||'').indexOf(q)>=0
+      || normalizarBusquedaMaterial(m.cat||'').indexOf(q)>=0;
+  });
+
   if(!matches.length){
-    dd.innerHTML='<div class="combo-empty">Sin resultados'+(q?' para "'+q.replace(/</g,'&lt;')+'"':'')+'.</div>';
+    dd.innerHTML='<div class="combo-empty">Sin resultados'+(q?' para "'+String(inp.value||'').replace(/</g,'&lt;')+'"':'')+'.</div>';
   } else {
-    dd.innerHTML=matches.map(function(o){
-      return '<div class="combo-item" onmousedown="event.preventDefault();selectRetirarMatCombo(\''+String(o.value).replace(/'/g,"\\'")+'\')">'+o.textContent+'</div>';
+    dd.innerHTML=matches.map(function(m){
+      var codigo=m.cod?'<div style="font-size:9px;color:#A8BFA8;margin-top:2px">'+m.cod+'</div>':'';
+      return '<div class="combo-item" onmousedown="event.preventDefault();selectRetirarMatCombo(\''+String(m.id).replace(/'/g,"\\'")+'\')">'
+        +'<div>'+m.nom+'</div>'+codigo+'</div>';
     }).join('');
   }
   dd.style.display='block';
+  posicionarRetirarMatDropdown();
 }
+function posicionarRetirarMatDropdown(){
+  var dd=document.getElementById('retirar-mat-dropdown');
+  var inp=document.getElementById('retirar-mat-search');
+  if(!dd||!inp||dd.style.display==='none')return;
+
+  var r=inp.getBoundingClientRect();
+  var margen=10;
+  var espacioAbajo=window.innerHeight-r.bottom-margen;
+  var espacioArriba=r.top-margen;
+  var abrirArriba=espacioAbajo<190 && espacioArriba>espacioAbajo;
+  var altoDisponible=Math.max(120,Math.min(360,(abrirArriba?espacioArriba:espacioAbajo)-6));
+
+  dd.style.left=Math.max(margen,r.left)+'px';
+  dd.style.width=Math.min(r.width,window.innerWidth-margen*2)+'px';
+  dd.style.maxHeight=altoDisponible+'px';
+
+  if(abrirArriba){
+    dd.style.top='auto';
+    dd.style.bottom=(window.innerHeight-r.top+4)+'px';
+    dd.style.marginTop='0';
+    dd.style.marginBottom='4px';
+  }else{
+    dd.style.bottom='auto';
+    dd.style.top=(r.bottom+4)+'px';
+    dd.style.marginBottom='0';
+  }
+}
+window.addEventListener('resize',posicionarRetirarMatDropdown);
+document.addEventListener('scroll',posicionarRetirarMatDropdown,true);
 function selectRetirarMatCombo(val){
   var sel=document.getElementById('retirar-mat-sel');
   sel.value=val;
@@ -2926,22 +3488,175 @@ document.addEventListener('click',function(e){
   if(!inp||!dd)return;
   if(e.target!==inp && !dd.contains(e.target)) dd.style.display='none';
 });
-function guardarRetiro(){
+// ═══════════════════════════════════════════
+// VERIFICACIÓN PERSISTENTE: ¿EL RETIRO EXISTE REALMENTE EN MATERIALES?
+// Se mira directamente materiales/data_planilla_exacta_v4. Si alguien borra
+// la carga automática en Materiales, el punto cambia a rojo sin tocar Acopio.
+// ═══════════════════════════════════════════
+var materialesIntegradosAcopio=null;
+var materialesVerificacionErrorAcopio=false;
+var unsubVerificacionMaterialesAcopio=null;
+var materialesConfirmadosRecientesAcopio=new Map();
+function confirmarMaterialesAcopio(iid,activo){
+  iid=String(iid||'');
+  if(!iid)return;
+  if(activo===false){
+    materialesConfirmadosRecientesAcopio.delete(iid);
+    if(materialesIntegradosAcopio instanceof Set)materialesIntegradosAcopio.delete(iid);
+  }else{
+    materialesConfirmadosRecientesAcopio.set(iid,Date.now());
+    if(!(materialesIntegradosAcopio instanceof Set))materialesIntegradosAcopio=new Set();
+    materialesIntegradosAcopio.add(iid);
+  }
+}
+function materialAcopioConfirmadoReciente(iid){
+  iid=String(iid||'');
+  var ts=materialesConfirmadosRecientesAcopio.get(iid);
+  if(!ts)return false;
+  if(Date.now()-ts>10000){
+    materialesConfirmadosRecientesAcopio.delete(iid);
+    return false;
+  }
+  return true;
+}
+
+function estadoMaterialesRetiro(retiro){
+  var a=getAcopio();
+  if(!a||!retiro) return {cls:'err',txt:'No se pudo verificar Materiales'};
+  var iid=integracionRetiroId(a.id,retiro.id);
+
+  if(materialAcopioConfirmadoReciente(iid)){
+    return {cls:'ok',txt:'Cargado OK en Materiales'};
+  }
+  if(materialesVerificacionErrorAcopio) return {cls:'err',txt:'Error al verificar Materiales'};
+  if(materialesIntegradosAcopio===null) return {cls:'wait',txt:'Verificando Materiales…'};
+  return materialesIntegradosAcopio.has(iid)
+    ? {cls:'ok',txt:'Cargado OK en Materiales'}
+    : {cls:'err',txt:'NO está cargado en Materiales. Verificar.'};
+}
+function puntoMaterialesRetiro(retiro){
+  var e=estadoMaterialesRetiro(retiro);
+  return '<span class="mat-sync-dot '+e.cls+'" title="'+e.txt.replace(/"/g,'&quot;')+'" aria-label="'+e.txt.replace(/"/g,'&quot;')+'"></span>';
+}
+function iniciarVerificacionMaterialesAcopio(){
+  if(!window._cqFirebaseReady||!window._cqFirebase){setTimeout(iniciarVerificacionMaterialesAcopio,700);return;}
+  var f=window._cqFirebase;
+  try{ if(unsubVerificacionMaterialesAcopio) unsubVerificacionMaterialesAcopio(); }catch(_e){}
+  unsubVerificacionMaterialesAcopio=f.onSnapshot(f.doc(f.db,'materiales','data_planilla_exacta_v4'),function(snap){
+    materialesVerificacionErrorAcopio=false;
+    var ids=new Set();
+    if(snap.exists()){
+      var d=snap.data()||{};
+      (d.cargas||[]).forEach(function(c){ if(c&&c.integracionId) ids.add(String(c.integracionId)); });
+    }
+    materialesConfirmadosRecientesAcopio.forEach(function(ts,iid){
+      if(Date.now()-ts<10000)ids.add(String(iid));
+      else materialesConfirmadosRecientesAcopio.delete(iid);
+    });
+    materialesIntegradosAcopio=ids;
+    try{ renderRetirarHistorial(); }catch(_e){}
+  },function(err){
+    console.warn('No se pudo verificar Materiales desde Acopio',err);
+    materialesVerificacionErrorAcopio=true;
+    materialesIntegradosAcopio=new Set();
+    try{ renderRetirarHistorial(); }catch(_e){}
+  });
+}
+document.addEventListener('cq-firebase-ready',iniciarVerificacionMaterialesAcopio);
+setTimeout(iniciarVerificacionMaterialesAcopio,700);
+
+// ═══════════════════════════════════════════
+// INTEGRACIÓN ACOPIO → MATERIALES
+// Cada retiro tiene un documento propio en Firestore. Esto evita duplicados
+// y permite que editar/eliminar el retiro actualice el mismo movimiento.
+// ═══════════════════════════════════════════
+function integracionRetiroId(acopioId,retiroId){
+  return 'acopio_'+String(acopioId)+'_'+String(retiroId);
+}
+async function sincronizarRetiroConMateriales(retiro,activo){
+  if(!window._cqFirebaseReady||!window._cqFirebase) throw new Error('Firebase no disponible');
+  var a=getAcopio();
+  if(!a||!retiro) throw new Error('Retiro no encontrado');
+  var m=getMat(retiro.matId);
+  var obra=(getObras()[retiro.obraIdx]||'').trim();
+  if(!obra) throw new Error('Obra no encontrada');
+  if(!m) throw new Error('Material no encontrado');
+  var f=window._cqFirebase;
+  var iid=integracionRetiroId(a.id,retiro.id);
+  var payload={
+    integrationId:iid,
+    source:'acopio',
+    sourceLabel:retiro.comentario?('Acopio · '+String(retiro.comentario)):'Acopio',
+    comentario:String(retiro.comentario||''),
+    sourceContainerId:String(a.id),
+    sourceMovementId:String(retiro.id),
+    obraName:obra,
+    materialCode:String(m.cod||''),
+    materialName:String(m.nom||''),
+    qty:Number(retiro.qty)||0,
+    unidad:String(m.unidad||''),
+    fecha:String(retiro.fecha||''),
+    active:activo!==false,
+    updatedAt:new Date().toISOString()
+  };
+  await f.setDoc(f.doc(f.db,'materiales_integraciones',iid),payload);
+
+  // Firebase ya confirmó la escritura: reflejar verde sin esperar la segunda lectura.
+  confirmarMaterialesAcopio(iid,payload.active);
+  try{renderRetirarHistorial();}catch(_e){}
+  return true;
+}
+
+async function guardarRetiro(){
   pushUndo();
   var matId=parseInt(document.getElementById('retirar-mat-sel').value);
   var qty=parseFloat(document.getElementById('retirar-qty').value);
   var fecha=document.getElementById('retirar-fecha').value;
+  var subrubro=document.getElementById('retirar-subrubro').value;
+  var comentario=document.getElementById('retirar-comentario').value.trim();
   if(!matId){alert('Seleccioná un material');return;}
   if(!qty||qty<=0){alert('Ingresá una cantidad válida');return;}
   if(!fecha){alert('Seleccioná una fecha');return;}
+  if(!subrubro){alert('Seleccioná un subrubro de Materiales');return;}
+  var subsValidos=subrubrosMaterialesAcopio();
+  var subMatch=subsValidos.find(function(x){return String(x).toLowerCase()===String(subrubro).toLowerCase();});
+  if(!subMatch){alert('Elegí un subrubro existente de la lista de Gastos.');return;}
+  subrubro=subMatch;
+  var obraSel=obraGastosActualPorIdx(curRetirarObra);
+  if(!obraSel){alert('No se pudo identificar la obra seleccionada de Gastos.');return;}
   var a=getAcopio();
   if(!a.retiros)a.retiros=[];
-  a.retiros.push({id:Date.now(),matId:matId,qty:qty,obraIdx:curRetirarObra,fecha:fecha});
+  var retiro={
+    id:Date.now(),matId:matId,qty:qty,obraIdx:curRetirarObra,gastosObraId:obraSel.id,obraHistorica:(obraSel.label||obraSel.short||obraSel.id),fecha:fecha,
+    subrubro:subrubro,comentario:comentario,createdAt:new Date().toISOString(),
+    gastosSyncEstado:'pendiente'
+  };
+  a.retiros.push(retiro);
   persist();
-  var m=getMat(matId);
-  toast('✓ Retirado: '+fmtN(qty,2)+' '+m.unidad+' de '+m.nom.split(' ').slice(0,3).join(' '));
   document.getElementById('retirar-qty').value='';
+  document.getElementById('retirar-comentario').value='';
   renderRetirarHistorial();
+
+  var okMat=false,okGas=false;
+  try{
+    await sincronizarRetiroConMateriales(retiro,true);
+    okMat=true;
+  }catch(e){
+    console.warn('No se pudo cargar el retiro en Materiales',e);
+  }
+  try{
+    await sincronizarRetiroConGastos(retiro,true);
+    okGas=true;
+  }catch(e){
+    console.warn('No se pudo cargar el retiro en Gastos',e);
+    retiro.gastosSyncEstado='error';
+    retiro.gastosSyncError=String(e&&e.message||e);
+    persist();renderRetirarHistorial();
+  }
+  if(okMat&&okGas)toast('✓ Retiro cargado OK en Materiales y Gastos');
+  else if(okMat)toast('⚠️ Cargado en Materiales, pero NO en Gastos. Verificar.','err');
+  else if(okGas)toast('⚠️ Cargado en Gastos, pero NO en Materiales. Verificar.','err');
+  else toast('⚠️ Retiro guardado en Acopio, pero falló la sincronización.','err');
 }
 function dateInRange(fecha,desde,hasta){
   if(desde && fecha<desde) return false;
@@ -2954,8 +3669,15 @@ function renderRetirarHistorial(){
   var desde=document.getElementById('retirar-fdesde')?document.getElementById('retirar-fdesde').value:'';
   var hasta=document.getElementById('retirar-fhasta')?document.getElementById('retirar-fhasta').value:'';
 
+  var obraActual=obraGastosActualPorIdx(curRetirarObra);
   var retiros=(a.retiros||[]).filter(function(r){
-    return (todas || r.obraIdx===curRetirarObra) && dateInRange(r.fecha,desde,hasta);
+    var coincide;
+    if(r.gastosObraId){
+      coincide=obraActual ? r.gastosObraId===obraActual.id : false;
+    }else{
+      coincide=r.obraIdx===curRetirarObra;
+    }
+    return (todas || coincide) && dateInRange(r.fecha,desde,hasta);
   }).slice().sort(function(x,y){return y.fecha.localeCompare(x.fecha)||y.id-x.id;});
 
   document.getElementById('retirar-obra-label').textContent=todas?'Todas las obras':(getObras()[curRetirarObra]||'');
@@ -2971,17 +3693,21 @@ function renderRetirarHistorial(){
     total+=val;
     return '<tr>'
       +'<td class="mono" style="color:#A8BFA8">'+fmtFecha(r.fecha)+'</td>'
-      +(todas?'<td><span class="badge" style="background:#EBF7F0;color:#0A6E3A">'+(getObras()[r.obraIdx]||'Obra')+'</span></td>':'')
-      +'<td style="font-size:12px;font-weight:600">'+(m?m.nom:'(material eliminado)')+'</td>'
+      +'<td><span class="badge" style="background:#EBF7F0;color:#0A6E3A">'+retiroObraLabel(r)+'</span></td>'
+      +'<td style="font-size:12px;font-weight:600">'+(m?m.nom:'(material eliminado)')
+        +(r.subrubro?'<div style="font-size:9px;color:#7A9E82;margin-top:2px;font-weight:800">'+r.subrubro+'</div>':'')
+        +(r.comentario?'<div style="font-size:9px;color:#7A9E82;margin-top:2px">💬 '+String(r.comentario).replace(/</g,'&lt;')+'</div>':'')+'</td>'
       +'<td class="mono r" style="font-weight:700">'+fmtN(r.qty,2)+' '+(m?m.unidad:'')+'</td>'
       +'<td class="mono r">'+fmtP(val)+'</td>'
       +'<td class="mono r" style="color:#7A9E82">'+fmtU(toUSD(val))+'</td>'
+      +'<td class="mat-sync-cell">'+puntoMaterialesRetiro(r)+'</td>'
+      +'<td class="gasto-sync-cell">'+puntoGastosRetiro(r)+'</td>'
       +'<td class="r" style="white-space:nowrap"><button class="btn btn-s btn-sm" onclick="openEditRetiro('+r.id+')" style="padding:3px 9px;font-size:10px;margin-right:4px">✎</button><button class="desc-del" onclick="borrarRetiro('+r.id+')">✕</button></td>'
       +'</tr>';
   }).join('');
   document.getElementById('retirar-historial').innerHTML=
     '<div class="kpi-row" style="grid-template-columns:1fr 1fr"><div class="kpi"><div class="kpi-label">Retiros filtrados</div><div class="kpi-val">'+retiros.length+'</div><div class="kpi-sub">'+(todas?'Todas las obras':(getObras()[curRetirarObra]||''))+'</div></div><div class="kpi"><div class="kpi-label">Total retirado</div><div class="kpi-val">'+fmtP(total)+'</div><div class="kpi-sub">'+fmtU(toUSD(total))+'</div></div></div>'
-    +'<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Fecha</th>'+(todas?'<th>Obra</th>':'')+'<th>Material</th><th class="r">Cantidad</th><th class="r">$</th><th class="r">u$s</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    +'<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Obra</th><th>Material</th><th class="r">Cantidad</th><th class="r">$</th><th class="r">u$s</th><th class="mat-sync-cell">Mat.</th><th class="gasto-sync-cell">Gastos</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 
 var editRetiroId=null;
@@ -2991,18 +3717,40 @@ function openEditRetiro(id){
   var r=(a.retiros||[]).find(function(r){return r.id===id;});
   document.getElementById('retiro-qty').value=r.qty;
   document.getElementById('retiro-fecha').value=r.fecha;
+  llenarSubrubrosAcopio('retiro-subrubro',r.subrubro||'');
+  document.getElementById('retiro-comentario').value=r.comentario||'';
   openModal('modal-retiro');
 }
-function guardarEditRetiro(){
+async function guardarEditRetiro(){
   pushUndo();
   var qty=parseFloat(document.getElementById('retiro-qty').value);
   var fecha=document.getElementById('retiro-fecha').value;
+  var subrubro=document.getElementById('retiro-subrubro').value;
+  var comentario=document.getElementById('retiro-comentario').value.trim();
   if(!qty||qty<=0){alert('Cantidad inválida');return;}
+  if(!subrubro){alert('Seleccioná un subrubro de Materiales');return;}
+  var subsValidos=subrubrosMaterialesAcopio();
+  var subMatch=subsValidos.find(function(x){return String(x).toLowerCase()===String(subrubro).toLowerCase();});
+  if(!subMatch){alert('Elegí un subrubro existente de la lista de Gastos.');return;}
+  subrubro=subMatch;
   var a=getAcopio();
-  a.retiros=(a.retiros||[]).map(function(r){return r.id===editRetiroId?Object.assign({},r,{qty:qty,fecha:fecha}):r;});
-  persist();closeModal('modal-retiro');toast('✓ Retiro actualizado');renderRetirarHistorial();
+  var anterior=(a.retiros||[]).find(function(r){return r.id===editRetiroId;});
+  var obraAnterior=anterior&&anterior.gastosObraId;
+  a.retiros=(a.retiros||[]).map(function(r){
+    return r.id===editRetiroId?Object.assign({},r,{qty:qty,fecha:fecha,subrubro:subrubro,comentario:comentario,gastosSyncEstado:'pendiente'}):r;
+  });
+  var actualizado=(a.retiros||[]).find(function(r){return r.id===editRetiroId;});
+  persist();closeModal('modal-retiro');renderRetirarHistorial();
+
+  var okMat=false,okGas=false;
+  try{await sincronizarRetiroConMateriales(actualizado,true);okMat=true;}catch(e){console.warn(e);}
+  try{await sincronizarRetiroConGastos(actualizado,true,obraAnterior);okGas=true;}catch(e){
+    console.warn(e);actualizado.gastosSyncEstado='error';actualizado.gastosSyncError=String(e&&e.message||e);persist();renderRetirarHistorial();
+  }
+  if(okMat&&okGas)toast('✓ Retiro actualizado en Materiales y Gastos');
+  else toast('⚠️ Retiro actualizado, pero una sincronización falló. Verificar.','err');
 }
-function borrarRetiro(id){
+async function borrarRetiro(id){
   var a=getAcopio();
   var r=(a.retiros||[]).find(function(x){return x.id===id;});
   var m=r?getMat(r.matId):null;
@@ -3010,7 +3758,12 @@ function borrarRetiro(id){
   if(!confirm(msg))return;
   pushUndo();
   a.retiros=(a.retiros||[]).filter(function(x){return x.id!==id;});
-  persist();toast('Retiro eliminado');renderRetirarHistorial();
+  persist();renderRetirarHistorial();
+  var okMat=false,okGas=false;
+  try{if(r)await sincronizarRetiroConMateriales(r,false);okMat=true;}catch(e){console.warn(e);}
+  try{if(r&&r.gastosObraId)await upsertGastoAcopio(r.gastosObraId,payloadGastoAcopio(r,r.gastosObraId),true);okGas=true;}catch(e){console.warn(e);}
+  if(okMat&&okGas)toast('✓ Retiro eliminado también de Materiales y Gastos');
+  else toast('⚠️ Retiro eliminado de Acopio, pero una sincronización falló. Verificar.','err');
 }
 
 // ═══════════════════════════════════════════
@@ -3025,6 +3778,7 @@ function guardarObra(){
   if(!a.obras)a.obras=[];
   a.obras.push(nom);
   persist();closeModal('modal-obra');toast('✓ Obra "'+nom+'" agregada');
+  try{}catch(e){}
   curRetirarObra=getObras().length-1;
   curReporteObra=getObras().length-1;
   var activeTab=document.querySelector('.tab.active').id.replace('tab-','');
@@ -3592,5 +4346,524 @@ document.querySelectorAll('.modal-bg').forEach(function(m){
 // ═══════════════════════════════════════════
 goHome();
 </script>
+
+<style id="cq-home-button-style">
+.cq-home-btn{
+  position:fixed; right:14px; bottom:14px; z-index:9999;
+  display:inline-flex; align-items:center; gap:7px;
+  padding:10px 13px; border-radius:999px;
+  background:#1C3D35; color:#fff; text-decoration:none;
+  font-family:Arial,Helvetica,sans-serif; font-size:12px; font-weight:800;
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+  -webkit-tap-highlight-color:transparent;
+}
+.cq-home-btn:hover{filter:brightness(1.08)}
+.cq-home-btn:active{transform:scale(.98)}
+@media(max-width:520px){
+  .cq-home-btn{right:10px;bottom:10px;padding:9px 12px;font-size:11px}
+}
+</style>
+
+<a class="cq-home-btn" href="index.html" aria-label="Ir a inicio">🏠 Inicio</a>
+
+<script type="module" id="cq-audit-firebase-writer">
+import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+window.__cqAuditFirebaseWrite = async function(id, data){
+  let tries=0;
+  while(!getApps().length && tries<25){
+    await new Promise(r=>setTimeout(r,200));
+    tries++;
+  }
+  if(!getApps().length) throw new Error("Firebase todavía no está disponible");
+  const db=getFirestore(getApp());
+  await setDoc(doc(db,"actividad_empleados",String(id)),data);
+  return true;
+};
+document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
+</script>
+
+<script id="cq-audit-runtime-acopio">
+(function(){
+  "use strict";
+  var MODULO="Acopio";
+  var QUEUE_KEY="cq_audit_queue_v1_"+MODULO.replace(/\s+/g,"_").toLowerCase();
+  var WRAPS=[{"fn": "guardarNuevoAcopio", "accion": "agregar", "detalle": "Creó un acopio"}, {"fn": "confirmarBorrarAcopio", "accion": "eliminar", "detalle": "Eliminó un acopio"}, {"fn": "editarNombreAcopio", "accion": "modificar", "detalle": "Modificó el nombre de un acopio"}, {"fn": "agregarCategoriaMaterialDesdeInput", "accion": "agregar", "detalle": "Agregó una categoría de material"}, {"fn": "agregarCategoriaGlobal", "accion": "agregar", "detalle": "Agregó una categoría"}, {"fn": "editarCategoriaGlobal", "accion": "modificar", "detalle": "Modificó una categoría"}, {"fn": "eliminarCategoriaGlobal", "accion": "eliminar", "detalle": "Eliminó una categoría"}, {"fn": "guardarMaterial", "accion": "agregar", "detalle": "Guardó un material"}, {"fn": "borrarMaterialActual", "accion": "eliminar", "detalle": "Eliminó un material"}, {"fn": "guardarCargaMasivaMateriales", "accion": "agregar", "detalle": "Realizó una carga masiva de materiales"}, {"fn": "guardarPago", "accion": "agregar", "detalle": "Agregó un pago"}, {"fn": "borrarPago", "accion": "eliminar", "detalle": "Eliminó un pago"}, {"fn": "guardarRetiro", "accion": "agregar", "detalle": "Registró un retiro"}, {"fn": "guardarEditRetiro", "accion": "modificar", "detalle": "Modificó un retiro"}, {"fn": "borrarRetiro", "accion": "eliminar", "detalle": "Eliminó un retiro"}, {"fn": "guardarObra", "accion": "agregar", "detalle": "Agregó una obra"}, {"fn": "confirmarBorrarObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "confirmarBorrarObraDesdeReporte", "accion": "eliminar", "detalle": "Eliminó una obra desde Reporte"}, {"fn": "eliminarRetirosDesdeReporte", "accion": "eliminar", "detalle": "Eliminó retiros desde Reporte"}, {"fn": "guardarTC", "accion": "modificar", "detalle": "Modificó el tipo de cambio"}];
+  WRAPS=WRAPS.filter(function(x){return x.accion!=="agregar";});
+  var flushing=false;
+
+  function safeClone(v){
+    try{
+      return JSON.parse(JSON.stringify(v,function(k,x){
+        if(typeof x==="function")return undefined;
+        if(typeof x==="string"&&x.length>500)return x.slice(0,500)+"…";
+        return x;
+      }));
+    }catch(e){return null;}
+  }
+  function empleado(){
+    var p=window._cqAuthProfile||window.__cqFast1h||{};
+    var n=p.nombre||window._cqUsuarioActual||"";
+    if(!n){try{n=localStorage.getItem("cq_usuario_actual")||"";}catch(e){}}
+    return String(n||"Usuario no identificado");
+  }
+  function empleadoId(){
+    var p=window._cqAuthProfile||window.__cqFast1h||{};
+    return String(p.id||p.email||"");
+  }
+  function mkId(){
+    return "act_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,10);
+  }
+  function readQueue(){
+    try{var q=JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]");return Array.isArray(q)?q:[];}catch(e){return [];}
+  }
+  function writeQueue(q){
+    try{localStorage.setItem(QUEUE_KEY,JSON.stringify(q.slice(-500)));}catch(e){}
+  }
+  function enqueue(rec){
+    var q=readQueue();q.push(rec);writeQueue(q);flush();
+  }
+  async function flush(){
+    if(flushing||typeof window.__cqAuditFirebaseWrite!=="function")return;
+    flushing=true;
+    try{
+      var q=readQueue(),left=[];
+      for(var i=0;i<q.length;i++){
+        try{await window.__cqAuditFirebaseWrite(q[i].id,q[i].data);}
+        catch(e){left=q.slice(i);break;}
+      }
+      writeQueue(left);
+    }finally{flushing=false;}
+  }
+
+  function valByIds(ids){
+    for(var i=0;i<ids.length;i++){
+      var el=document.getElementById(ids[i]);
+      if(!el)continue;
+      var v=(el.value!==undefined?el.value:el.textContent);
+      if(v!==undefined&&v!==null&&String(v).trim()!=="")return String(v).trim();
+    }
+    return "";
+  }
+  function selectedText(ids){
+    for(var i=0;i<ids.length;i++){
+      var el=document.getElementById(ids[i]);
+      if(!el)continue;
+      if(el.tagName==="SELECT"&&el.selectedIndex>=0){
+        var t=el.options[el.selectedIndex].textContent;
+        if(t&&t.trim())return t.trim();
+      }
+    }
+    return "";
+  }
+  function numVal(ids){
+    var v=valByIds(ids);
+    if(!v)return "";
+    var n=Number(String(v).replace(/\./g,"").replace(",","."));
+    return isFinite(n)?n:v;
+  }
+  function captureContext(fn){
+    var c={};
+    c.obra=firstNonEmpty(
+      selectedText(["obra","obra-select","obraIdx","ret-obra","consumo-obra","edit-obra","pago-obra"]),
+      valByIds(["obra","obra-input","ret-obra","consumo-obra","edit-obra","obra-nombre"])
+    );
+    c.rubro=firstNonEmpty(
+      selectedText(["rubro","categoria","cat","consumo-categoria","gastos-categoria"]),
+      valByIds(["rubro","categoria","cat","consumo-categoria","gastos-categoria"])
+    );
+    c.subrubro=firstNonEmpty(
+      selectedText(["subrubro","consumo-subrubro","cf-subrubro","gastos-subrubro","ret-subrubro"]),
+      valByIds(["subrubro","consumo-subrubro","cf-subrubro","gastos-subrubro","ret-subrubro"])
+    );
+    c.producto=firstNonEmpty(
+      selectedText(["material","producto","mat","ret-material"]),
+      valByIds(["material","producto","cf-producto","consumo-prod-input","ret-material","mat-nombre","nuevo-mat-nombre","edit-mat-nombre"])
+    );
+    c.codigo=valByIds(["codigo","cf-codigo","consumo-codigo-input","mat-codigo","nuevo-mat-codigo"]);
+    c.cantidad=firstNonEmpty(
+      numVal(["cantidad","qty","ret-qty","consumo-cantidad","cf-cantidad","edit-cantidad","pago-cantidad"]),
+      ""
+    );
+    c.importe=firstNonEmpty(
+      numVal(["importe","monto","precio","ret-precio","cf-precio","pago-importe","edit-importe","gasto-importe"]),
+      ""
+    );
+    c.comentario=firstNonEmpty(
+      valByIds(["comentario","nota","observacion","consumo-comentario","ret-comentario","pago-nota","edit-nota"]),
+      ""
+    );
+    try{
+      if(MODULO==="Acopio" && /Retiro/i.test(fn)){
+        var ai=typeof getAcopio==="function"?getAcopio():null;
+        var mid=(typeof curRetirarMat!=="undefined"?curRetirarMat:null);
+        var oi=(typeof curRetirarObra!=="undefined"?curRetirarObra:null);
+        var mat=(mid!=null&&typeof getMat==="function")?getMat(mid):null;
+        var ob=(oi!=null&&typeof obraGastosActualPorIdx==="function")?obraGastosActualPorIdx(oi):null;
+        if(mat){
+          c.producto=c.producto||mat.nom||"";
+          c.codigo=c.codigo||mat.cod||"";
+        }
+        if(ob)c.obra=c.obra||(ob.label||ob.short||ob.id||"");
+        c.cantidad=c.cantidad||numVal(["retirar-qty","retiro-qty"]);
+        c.subrubro=c.subrubro||valByIds(["retirar-subrubro","retiro-subrubro"]);
+        c.comentario=c.comentario||valByIds(["retirar-comentario","retiro-comentario"]);
+      }
+
+      if(MODULO==="Pañol"){
+        if(/cargarProductoUnitario|procesarCargaMasiva/i.test(fn)){
+          c.producto=c.producto||valByIds(["cf-producto"]);
+          c.codigo=c.codigo||valByIds(["cf-codigo"]);
+          c.cantidad=c.cantidad||numVal(["cf-cantidad"]);
+          c.subrubro=c.subrubro||valByIds(["cf-subrubro"]);
+          c.importe=c.importe||numVal(["cf-precio"]);
+        }
+        if(/registrarConsumo/i.test(fn)){
+          var po=(typeof getProductoDesdeConsumoInput==="function")?getProductoDesdeConsumoInput():null;
+          var oo=(typeof curObra!=="undefined"&&typeof obraGastosPanolPorId==="function")?obraGastosPanolPorId(curObra):null;
+          if(po){
+            c.producto=c.producto||po.nombre||"";
+            c.codigo=c.codigo||po.codigo||"";
+          }
+          if(oo)c.obra=c.obra||(oo.label||oo.short||oo.id||"");
+          c.cantidad=c.cantidad||numVal(["consumo-cantidad"]);
+          c.subrubro=c.subrubro||valByIds(["consumo-subrubro"]);
+          c.comentario=c.comentario||valByIds(["consumo-comentario"]);
+        }
+      }
+
+      if(MODULO==="Materiales"){
+        c.producto=c.producto||valByIds(["nuevo-mat-nombre","edit-mat-nombre","mat-nombre"]);
+        c.codigo=c.codigo||valByIds(["nuevo-mat-codigo","edit-mat-codigo","mat-codigo"]);
+        c.cantidad=c.cantidad||numVal(["carga-cantidad","edit-carga-cantidad"]);
+      }
+    }catch(_ctxErr){}
+
+    Object.keys(c).forEach(function(k){if(c[k]===""||c[k]===null||c[k]===undefined)delete c[k];});
+    return c;
+  }
+  function firstNonEmpty(){
+    for(var i=0;i<arguments.length;i++){
+      var v=arguments[i];
+      if(v!==undefined&&v!==null&&String(v).trim()!=="")return v;
+    }
+    return "";
+  }
+
+
+  function auditTrim(v,max){
+    v=String(v==null?"":v).trim().replace(/\s+/g," ");
+    max=max||280;
+    return v.length>max?v.slice(0,max)+"…":v;
+  }
+  function auditLabelFor(el){
+    if(!el)return "";
+    var id=el.id||"";
+    if(id){
+      try{
+        var lab=document.querySelector('label[for="'+CSS.escape(id)+'"]');
+        if(lab&&lab.textContent.trim())return auditTrim(lab.textContent,80);
+      }catch(e){}
+    }
+    var parent=el.closest(".fld,.field,.carga-fld,.form-group,.input-group,.row2,.row3");
+    if(parent){
+      var l=parent.querySelector("label");
+      if(l&&l.textContent.trim())return auditTrim(l.textContent,80);
+    }
+    return auditTrim(el.getAttribute("aria-label")||el.name||id||el.placeholder||"",80);
+  }
+  function auditFormSnapshot(){
+    var data={};
+    var els=Array.prototype.slice.call(document.querySelectorAll("input,select,textarea"));
+    els.forEach(function(el){
+      if(el.type==="password"||el.type==="file")return;
+      var style=window.getComputedStyle(el);
+      var visible=style.display!=="none"&&style.visibility!=="hidden";
+      if(!visible&&!el.closest(".open,.show,.active"))return;
+      var key=auditLabelFor(el);
+      if(!key)return;
+      var val="";
+      if(el.type==="checkbox"||el.type==="radio"){
+        if(!el.checked)return;
+        val=el.value||"Sí";
+      }else if(el.tagName==="SELECT"){
+        var opt=el.options&&el.selectedIndex>=0?el.options[el.selectedIndex]:null;
+        val=opt?auditTrim(opt.textContent||opt.value,180):auditTrim(el.value,180);
+      }else{
+        val=auditTrim(el.value,180);
+      }
+      if(!val)return;
+      if(Object.keys(data).length<70)data[key]=val;
+    });
+    return data;
+  }
+  function auditVisibleContext(){
+    try{
+      var el=document.activeElement;
+      if(!el)return "";
+      var box=el.closest("tr,.prod-card,.card,.work-item,.hist-entry,.mov-row,.item,.row,.obra-card,.task-row,.modal");
+      if(!box)return "";
+      return auditTrim(box.innerText||box.textContent||"",700);
+    }catch(e){return "";}
+  }
+  function auditCompactObject(obj,depth,seen){
+    depth=depth||0;seen=seen||[];
+    if(obj===undefined||obj===null)return obj;
+    if(typeof obj==="string")return auditTrim(obj,300);
+    if(typeof obj==="number"||typeof obj==="boolean")return obj;
+    if(typeof obj==="function")return undefined;
+    if(depth>4)return "[…]";
+    if(seen.indexOf(obj)>=0)return "[circular]";
+    seen.push(obj);
+    if(Array.isArray(obj)){
+      var arr=obj.slice(0,12).map(function(x){return auditCompactObject(x,depth+1,seen);});
+      seen.pop();return arr;
+    }
+    if(typeof obj==="object"){
+      var out={},keys=Object.keys(obj).slice(0,35);
+      keys.forEach(function(k){
+        if(/base64|image|foto|photo|html|blob/i.test(k))return;
+        var v=auditCompactObject(obj[k],depth+1,seen);
+        if(v!==undefined)out[k]=v;
+      });
+      seen.pop();return out;
+    }
+    return auditTrim(obj,300);
+  }
+  function auditFindByArgs(args){
+    var ids=(args||[]).filter(function(x){
+      return ["string","number"].indexOf(typeof x)>=0&&String(x).length<120;
+    }).map(String);
+    if(!ids.length)return null;
+    var roots=[];
+    ["state","db","data","appData","store","obras","movimientos","productos","acopios"].forEach(function(k){
+      try{if(window[k]&&typeof window[k]==="object")roots.push(window[k]);}catch(e){}
+    });
+    function walk(node,depth,seen){
+      if(!node||typeof node!=="object"||depth>5||seen.indexOf(node)>=0)return null;
+      seen.push(node);
+      try{
+        var keys=Object.keys(node);
+        for(var i=0;i<keys.length;i++){
+          var k=keys[i],v=node[k];
+          if(/^(id|uid|key|codigo|code|movId|prodId|obraId|matId)$/i.test(k)&&
+             (typeof v==="string"||typeof v==="number")&&ids.indexOf(String(v))>=0){
+            seen.pop();return node;
+          }
+        }
+        for(var j=0;j<keys.length;j++){
+          var child=node[keys[j]];
+          if(child&&typeof child==="object"){
+            var f=walk(child,depth+1,seen);
+            if(f){seen.pop();return f;}
+          }
+        }
+      }catch(e){}
+      seen.pop();return null;
+    }
+    for(var r=0;r<roots.length;r++){
+      var found=walk(roots[r],0,[]);
+      if(found)return auditCompactObject(found);
+    }
+    return null;
+  }
+
+
+  function auditSpecificObject(fn,args){
+    try{
+      args=args||[];
+      var id=args.length?args[0]:null;
+      var idx=args.length?args[0]:null;
+
+      if(MODULO==="Acopio"){
+        if(fn==="confirmarBorrarAcopio") return auditCompactObject((DB.acopios||[]).find(function(x){return String(x.id)===String(id);})||null);
+        if(fn==="editarNombreAcopio") return auditCompactObject(typeof getAcopio==="function"?getAcopio():null);
+        if(fn==="eliminarCategoriaGlobal") return {categoria:(typeof getCats==="function"?getCats()[Number(idx)]:"")};
+        if(fn==="editarCategoriaGlobal") return {categoria:(typeof getCats==="function"?getCats()[Number(idx)]:"")};
+        if(fn==="borrarMaterialActual"||fn==="guardarMaterial"){
+          var aa=typeof getAcopio==="function"?getAcopio():null;
+          var mid=(typeof editMatId!=="undefined"?editMatId:null);
+          return auditCompactObject(aa&&aa.mats?(aa.mats.find(function(x){return String(x.id)===String(mid);})||null):null);
+        }
+        if(fn==="borrarPago"){
+          var ap=typeof getAcopio==="function"?getAcopio():null;
+          return auditCompactObject(ap&&ap.pagos?(ap.pagos.find(function(x){return String(x.id)===String(id);})||null):null);
+        }
+        if(fn==="borrarRetiro"||fn==="guardarEditRetiro"){
+          var ar=typeof getAcopio==="function"?getAcopio():null;
+          var rid=id;
+          if(fn==="guardarEditRetiro"&&typeof editRetiroId!=="undefined")rid=editRetiroId;
+          var rr=ar&&ar.retiros?(ar.retiros.find(function(x){return String(x.id)===String(rid);})||null):null;
+          if(rr){
+            var mm=typeof getMat==="function"?getMat(rr.matId):null;
+            var oo=null; try{oo=typeof obraGastosActualPorIdx==="function"?obraGastosActualPorIdx(rr.obraIdx):null}catch(_e){}
+            return auditCompactObject(Object.assign({},rr,{producto:mm?mm.nom:"",codigo:mm?mm.cod:"",unidad:mm?mm.unidad:"",obra:rr.obraHistorica||(oo&&(oo.label||oo.short||oo.id))||""}));
+          }
+          return null;
+        }
+        if(fn==="confirmarBorrarObra"||fn==="confirmarBorrarObraDesdeReporte"){
+          var ao=typeof getAcopio==="function"?getAcopio():null;
+          var oi=(fn==="confirmarBorrarObraDesdeReporte"&&typeof curReporteObra!=="undefined")?curReporteObra:(typeof curRetirarObra!=="undefined"?curRetirarObra:null);
+          var obras=typeof getObras==="function"?getObras():[];
+          return auditCompactObject({obra:obras[oi]||"",retiros:ao&&ao.retiros?(ao.retiros.filter(function(r){return Number(r.obraIdx)===Number(oi);})):[]});
+        }
+        if(fn==="eliminarRetirosDesdeReporte"){
+          var arr=typeof getRetirosReporteMaterial==="function"?getRetirosReporteMaterial(args[0],args[1]):[];
+          var mt=typeof getMat==="function"?getMat(args[0]):null;
+          return auditCompactObject({producto:mt?mt.nom:"",codigo:mt?mt.cod:"",retiros:arr});
+        }
+      }
+
+      if(MODULO==="Materiales"){
+        if(fn==="guardarNombreMat"||fn==="eliminarMaterialSeleccionado"){
+          var sid=(typeof selectedCargaMat!=="undefined"?selectedCargaMat:null);
+          return auditCompactObject((typeof ALL_MATS!=="undefined"?ALL_MATS:[]).find(function(x){return String(x.id)===String(sid);})||null);
+        }
+        if(fn==="eliminarCategoria") return {categoria:String(args[0]||"")};
+        if(fn==="borrarCarga"||fn==="guardarEditCarga"){
+          var cid=(fn==="borrarCarga"?args[0]:(typeof editingCargaId!=="undefined"?editingCargaId:null));
+          var cc=(typeof state!=="undefined"&&state.cargas)?state.cargas.find(function(x){return String(x.id)===String(cid);}):null;
+          if(cc){
+            var mat=(typeof ALL_MATS!=="undefined"?ALL_MATS:[]).find(function(m){return String(m.id)===String(cc.matId);});
+            return auditCompactObject(Object.assign({},cc,{producto:mat?mat.mat:"",codigo:mat?mat.codigo||mat.cod||"":""}));
+          }
+          return null;
+        }
+        if(fn==="guardarRenombrarObra"){
+          return auditCompactObject({obra:typeof getCurrentObraName==="function"?getCurrentObraName():"",formulario:auditFormSnapshot()});
+        }
+      }
+
+      if(MODULO==="Pañol"){
+        if(fn==="guardarEdicionProducto"||fn==="eliminarProducto"){
+          var pid=(fn==="eliminarProducto"?args[0]:(typeof editProdId!=="undefined"?editProdId:null));
+          var pp=(typeof state!=="undefined"&&state.productos)?state.productos.find(function(x){return String(x.id)===String(pid);}):null;
+          if(pp){
+            var stock=typeof stockDeProducto==="function"?stockDeProducto(pid):null;
+            return auditCompactObject(Object.assign({},pp,{stock:stock}));
+          }
+          return null;
+        }
+        if(fn==="editarCarga"||fn==="eliminarCarga"||fn==="editarConsumo"||fn==="eliminarConsumo"){
+          var mid2=args[0];
+          var mov=(typeof state!=="undefined"&&state.movimientos)?state.movimientos.find(function(x){return String(x.id)===String(mid2);}):null;
+          if(mov){
+            var pr=(typeof state!=="undefined"&&state.productos)?state.productos.find(function(x){return String(x.id)===String(mov.prodId);}):null;
+            return auditCompactObject(Object.assign({},mov,{producto:mov.materialName||(pr?pr.nombre:""),codigo:mov.materialCode||(pr?pr.codigo:"")}));
+          }
+          return null;
+        }
+        if(fn==="eliminarObra") return {obra:String(args[0]||"")};
+        if(fn==="eliminarRubro") return {subrubro:String(args[0]||"")};
+      }
+
+      if(MODULO==="Avances"){
+        if(fn==="deleteSemana"){
+          var ss=typeof getSemanaByNum==="function"?getSemanaByNum(args[0]):null;
+          return auditCompactObject(ss);
+        }
+        if(fn==="deleteTarea"){
+          var tt=typeof getTask==="function"?getTask(args[0],args[1]):null;
+          return auditCompactObject(tt);
+        }
+        if(fn==="saveEditObra"||fn==="deleteCurrentObra") return auditCompactObject(typeof currentObra==="function"?currentObra():null);
+        if(fn==="editarCertificado"||fn==="eliminarCertificado") return auditCompactObject((typeof getCertificados==="function"?getCertificados():[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deleteItemCQ"||fn==="saveItemCQ") return auditCompactObject((typeof state!=="undefined"&&state.itemsCQ?state.itemsCQ:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deletePagoFuera") return auditCompactObject((typeof state!=="undefined"&&state.pagosFuera?state.pagosFuera:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+        if(fn==="deleteConstructor") return auditCompactObject((typeof constructoresConfig!=="undefined"?constructoresConfig:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
+      }
+
+      if(MODULO==="Control de Obras"){
+        if(fn==="deleteCurrentWorkReport"||fn==="saveWork"){
+          var ei=(typeof editIndex!=="undefined"&&editIndex)?Number(editIndex.value):NaN;
+          return auditCompactObject((typeof records!=="undefined"&&isFinite(ei))?records[ei]:null);
+        }
+        if(fn==="deletePartnerItem"){
+          var wi=Number(args[0]),tipo=args[1],jj=Number(args[2]);
+          return auditCompactObject(typeof db!=="undefined"&&db.works&&db.works[wi]&&db.works[wi][tipo]?db.works[wi][tipo][jj]:null);
+        }
+        if(fn==="deleteGeneralWork"||fn==="saveGeneralWork") return auditCompactObject(typeof db!=="undefined"&&db.works?db.works[Number(args[0])]:null);
+        if(fn==="saveGlobalWages"||fn==="saveCertifyPanel"||fn==="saveWageAllocation") return auditCompactObject({formulario:auditFormSnapshot(),contexto:auditVisibleContext()});
+      }
+    }catch(e){console.warn("audit specific",fn,e)}
+    return null;
+  }
+
+  function registrar(cfg,args,before,contextoAntes,extra){
+    var now=new Date();
+    var rec={
+      id:mkId(),
+      data:{
+        empleado:empleado(),
+        empleadoId:empleadoId(),
+        modulo:MODULO,
+        accion:cfg.accion,
+        detalle:cfg.detalle,
+        fecha:now.toISOString().slice(0,10),
+        fechaHora:now.toISOString(),
+        timestamp:Date.now(),
+        funcion:cfg.fn,
+        referencia:safeClone(args||[]),
+        contexto:contextoAntes||captureContext(cfg.fn),
+        formularioAntes:extra&&extra.formularioAntes?extra.formularioAntes:null,
+        formularioDespues:extra&&extra.formularioDespues?extra.formularioDespues:null,
+        contextoVisible:extra&&extra.contextoVisible?extra.contextoVisible:"",
+        objetoAntes:extra&&extra.objetoAntes?extra.objetoAntes:null,
+        objetoDespues:extra&&extra.objetoDespues?extra.objetoDespues:null,
+        antes:before||null,
+        origen:"auditoria_empleados_completa_v1"
+      }
+    };
+    enqueue(rec);
+  }
+  function wrap(cfg){
+    var original=window[cfg.fn];
+    if(typeof original!=="function"||original.__cqAuditWrapped)return false;
+    function wrapped(){
+      var args=Array.prototype.slice.call(arguments);
+      var contextoAntes={};
+      var extra={formularioAntes:{},formularioDespues:{},contextoVisible:"",objetoAntes:null,objetoDespues:null};
+      try{
+        contextoAntes=captureContext(cfg.fn)||{};
+        extra.formularioAntes=auditFormSnapshot();
+        extra.contextoVisible=auditVisibleContext();
+        extra.objetoAntes=auditSpecificObject(cfg.fn,args)||auditFindByArgs(args);
+      }catch(e){}
+      var result;
+      try{result=original.apply(this,args);}catch(e){throw e;}
+      function finish(v){
+        try{
+          extra.formularioDespues=auditFormSnapshot();
+          extra.objetoDespues=auditSpecificObject(cfg.fn,args)||auditFindByArgs(args);
+        }catch(e){}
+        registrar(cfg,args,extra.objetoAntes,contextoAntes,extra);
+        return v;
+      }
+      if(result&&typeof result.then==="function")return result.then(finish);
+      return finish(result);
+    }
+    wrapped.__cqAuditWrapped=true;
+    wrapped.__cqAuditOriginal=original;
+    window[cfg.fn]=wrapped;
+    return true;
+  }
+  function install(){
+    var pending=0;
+    WRAPS.forEach(function(cfg){if(!wrap(cfg))pending++;});
+    if(pending)setTimeout(install,600);
+  }
+
+  document.addEventListener("cq-audit-writer-ready",flush);
+  document.addEventListener("cq-auth-ready",flush);
+  window.addEventListener("online",flush);
+  window.addEventListener("focus",function(){setTimeout(flush,150);});
+  setInterval(flush,15000);
+  setTimeout(install,0);
+  setTimeout(flush,500);
+})();
+</script>
+
 </body>
 </html>
