@@ -152,22 +152,22 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
 
     <section class="panel">
       <div class="grid" id="moduleGrid">
-        <a class="btn caja" data-module="caja" href="../caja.html">
+        <a class="btn caja" data-module="caja" href="../caja.html?origen=empleados">
           <span class="btn-left"><span class="icon">💵</span><span>Caja Chica</span></span><span class="arrow">›</span>
         </a>
-        <a class="btn panol" data-module="panol" href="../panol.html">
+        <a class="btn panol" data-module="panol" href="../panol.html?origen=empleados">
           <span class="btn-left"><span class="icon">🧰</span><span>Pañol</span></span><span class="arrow">›</span>
         </a>
-        <a class="btn acopio" data-module="acopio" href="../acopio.html">
+        <a class="btn acopio" data-module="acopio" href="../acopio.html?origen=empleados">
           <span class="btn-left"><span class="icon">🏗️</span><span>Acopio</span></span><span class="arrow">›</span>
         </a>
-        <a class="btn materiales" data-module="materiales" href="../materiales.html">
+        <a class="btn materiales" data-module="materiales" href="../materiales.html?origen=empleados">
           <span class="btn-left"><span class="icon">📦</span><span>Materiales</span></span><span class="arrow">›</span>
         </a>
-        <a class="btn avances" data-module="avance" href="../avance.html">
+        <a class="btn avances" data-module="avance" href="../avance.html?origen=empleados">
           <span class="btn-left"><span class="icon">📋</span><span>Avances</span></span><span class="arrow">›</span>
         </a>
-        <a class="btn control" data-module="control_obras" href="../control_obras.html">
+        <a class="btn control" data-module="control_obras" href="../control_obras.html?origen=empleados">
           <span class="btn-left"><span class="icon">🏠</span><span>Control de Obras</span></span><span class="arrow">›</span>
         </a>
       </div>
@@ -176,6 +176,44 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
 
   <footer class="footer"><span><strong>CQ</strong> · Operaciones</span><span>Córdoba</span></footer>
 </div>
+
+
+<script id="cq-empleados-cache-instantaneo">
+(function(){
+  const KEY="cq_empleados_profile_cache_v1";
+  const TTL=60*60*1000;
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(!raw) return;
+    const c=JSON.parse(raw);
+    if(!c || !c.ts || (Date.now()-c.ts)>TTL || !c.profile) return;
+
+    const p=c.profile;
+    const aliases={avances:"avance",avance:"avance"};
+    const permisos=(Array.isArray(p.modulos)?p.modulos:[]).map(m=>aliases[m]||m);
+
+    document.querySelectorAll("[data-module]").forEach(el=>{
+      const mod=aliases[el.dataset.module]||el.dataset.module;
+      el.classList.toggle("hidden",!permisos.includes(mod));
+    });
+
+    const ov=document.getElementById("loginOverlay");
+    const ub=document.getElementById("userBar");
+    const nm=document.getElementById("currentUserName");
+    const ml=document.getElementById("currentUserModules");
+    const st=document.getElementById("status");
+    const stt=document.getElementById("statusText");
+    const labels={caja:"Caja Chica",panol:"Pañol",acopio:"Acopio",materiales:"Materiales",avance:"Avances",control_obras:"Control de Obras"};
+
+    if(nm) nm.textContent="👤 "+(p.nombre||"");
+    if(ml) ml.textContent=permisos.map(m=>labels[m]||m).filter((v,i,a)=>a.indexOf(v)===i).join(" · ");
+    if(ub) ub.classList.remove("hidden");
+    if(ov) ov.classList.add("hidden");
+    if(st) st.classList.add("online");
+    if(stt) stt.textContent="Online";
+  }catch(e){}
+})();
+</script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -277,6 +315,12 @@ function showLoggedIn(profile){
   loginOverlay.classList.add("hidden");
   status.classList.add("online");
   statusText.textContent = "Online";
+  try{
+    localStorage.setItem("cq_empleados_profile_cache_v1",JSON.stringify({
+      ts:Date.now(),
+      profile:profile
+    }));
+  }catch(e){}
 }
 
 loginBtn.addEventListener("click", async ()=>{
@@ -306,11 +350,29 @@ loginPass.addEventListener("keydown", e=>{
 });
 
 document.getElementById("logoutBtn").addEventListener("click", async ()=>{
-  await signOut(auth);
+  try{
+    localStorage.removeItem("cq_empleados_profile_cache_v1");
+    sessionStorage.clear();
+  }catch(e){}
+  try{
+    await signOut(auth);
+  }catch(e){
+    console.error("Error al cerrar sesión:", e);
+  }finally{
+    showLoggedOut();
+    try{
+      document.getElementById("loginUser").value = "";
+      document.getElementById("loginPass").value = "";
+    }catch(e){}
+  }
 });
 
 onAuthStateChanged(auth, async user=>{
-  if(!user){ showLoggedOut(); return; }
+  if(!user){
+    try{ localStorage.removeItem("cq_empleados_profile_cache_v1"); }catch(e){}
+    showLoggedOut();
+    return;
+  }
 
   status.classList.remove("online");
   statusText.textContent = "Verificando acceso";
