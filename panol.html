@@ -3468,7 +3468,6 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
   var MODULO="Pañol";
   var QUEUE_KEY="cq_audit_queue_v1_"+MODULO.replace(/\s+/g,"_").toLowerCase();
   var WRAPS=[{"fn": "guardarEdicionProducto", "accion": "modificar", "detalle": "Modificó un producto de Pañol"}, {"fn": "eliminarProducto", "accion": "eliminar", "detalle": "Eliminó un producto de Pañol"}, {"fn": "cargarProductoUnitario", "accion": "agregar", "detalle": "Ingresó stock al Pañol"}, {"fn": "procesarCargaMasiva", "accion": "agregar", "detalle": "Realizó una carga masiva al Pañol"}, {"fn": "registrarConsumo", "accion": "agregar", "detalle": "Registró una salida de Pañol"}, {"fn": "editarCarga", "accion": "modificar", "detalle": "Modificó una entrada de Pañol"}, {"fn": "eliminarCarga", "accion": "eliminar", "detalle": "Eliminó una entrada de Pañol"}, {"fn": "editarConsumo", "accion": "modificar", "detalle": "Modificó una salida de Pañol"}, {"fn": "eliminarConsumo", "accion": "eliminar", "detalle": "Eliminó una salida de Pañol"}, {"fn": "agregarObra", "accion": "agregar", "detalle": "Agregó una obra"}, {"fn": "eliminarObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "agregarRubro", "accion": "agregar", "detalle": "Agregó un subrubro"}, {"fn": "eliminarRubro", "accion": "eliminar", "detalle": "Eliminó un subrubro"}];
-  WRAPS=WRAPS.filter(function(x){return x.accion!=="agregar";});
   var flushing=false;
 
   function safeClone(v){
@@ -3747,127 +3746,6 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
     return null;
   }
 
-
-  function auditSpecificObject(fn,args){
-    try{
-      args=args||[];
-      var id=args.length?args[0]:null;
-      var idx=args.length?args[0]:null;
-
-      if(MODULO==="Acopio"){
-        if(fn==="confirmarBorrarAcopio") return auditCompactObject((DB.acopios||[]).find(function(x){return String(x.id)===String(id);})||null);
-        if(fn==="editarNombreAcopio") return auditCompactObject(typeof getAcopio==="function"?getAcopio():null);
-        if(fn==="eliminarCategoriaGlobal") return {categoria:(typeof getCats==="function"?getCats()[Number(idx)]:"")};
-        if(fn==="editarCategoriaGlobal") return {categoria:(typeof getCats==="function"?getCats()[Number(idx)]:"")};
-        if(fn==="borrarMaterialActual"||fn==="guardarMaterial"){
-          var aa=typeof getAcopio==="function"?getAcopio():null;
-          var mid=(typeof editMatId!=="undefined"?editMatId:null);
-          return auditCompactObject(aa&&aa.mats?(aa.mats.find(function(x){return String(x.id)===String(mid);})||null):null);
-        }
-        if(fn==="borrarPago"){
-          var ap=typeof getAcopio==="function"?getAcopio():null;
-          return auditCompactObject(ap&&ap.pagos?(ap.pagos.find(function(x){return String(x.id)===String(id);})||null):null);
-        }
-        if(fn==="borrarRetiro"||fn==="guardarEditRetiro"){
-          var ar=typeof getAcopio==="function"?getAcopio():null;
-          var rid=id;
-          if(fn==="guardarEditRetiro"&&typeof editRetiroId!=="undefined")rid=editRetiroId;
-          var rr=ar&&ar.retiros?(ar.retiros.find(function(x){return String(x.id)===String(rid);})||null):null;
-          if(rr){
-            var mm=typeof getMat==="function"?getMat(rr.matId):null;
-            var oo=null; try{oo=typeof obraGastosActualPorIdx==="function"?obraGastosActualPorIdx(rr.obraIdx):null}catch(_e){}
-            return auditCompactObject(Object.assign({},rr,{producto:mm?mm.nom:"",codigo:mm?mm.cod:"",unidad:mm?mm.unidad:"",obra:rr.obraHistorica||(oo&&(oo.label||oo.short||oo.id))||""}));
-          }
-          return null;
-        }
-        if(fn==="confirmarBorrarObra"||fn==="confirmarBorrarObraDesdeReporte"){
-          var ao=typeof getAcopio==="function"?getAcopio():null;
-          var oi=(fn==="confirmarBorrarObraDesdeReporte"&&typeof curReporteObra!=="undefined")?curReporteObra:(typeof curRetirarObra!=="undefined"?curRetirarObra:null);
-          var obras=typeof getObras==="function"?getObras():[];
-          return auditCompactObject({obra:obras[oi]||"",retiros:ao&&ao.retiros?(ao.retiros.filter(function(r){return Number(r.obraIdx)===Number(oi);})):[]});
-        }
-        if(fn==="eliminarRetirosDesdeReporte"){
-          var arr=typeof getRetirosReporteMaterial==="function"?getRetirosReporteMaterial(args[0],args[1]):[];
-          var mt=typeof getMat==="function"?getMat(args[0]):null;
-          return auditCompactObject({producto:mt?mt.nom:"",codigo:mt?mt.cod:"",retiros:arr});
-        }
-      }
-
-      if(MODULO==="Materiales"){
-        if(fn==="guardarNombreMat"||fn==="eliminarMaterialSeleccionado"){
-          var sid=(typeof selectedCargaMat!=="undefined"?selectedCargaMat:null);
-          return auditCompactObject((typeof ALL_MATS!=="undefined"?ALL_MATS:[]).find(function(x){return String(x.id)===String(sid);})||null);
-        }
-        if(fn==="eliminarCategoria") return {categoria:String(args[0]||"")};
-        if(fn==="borrarCarga"||fn==="guardarEditCarga"){
-          var cid=(fn==="borrarCarga"?args[0]:(typeof editingCargaId!=="undefined"?editingCargaId:null));
-          var cc=(typeof state!=="undefined"&&state.cargas)?state.cargas.find(function(x){return String(x.id)===String(cid);}):null;
-          if(cc){
-            var mat=(typeof ALL_MATS!=="undefined"?ALL_MATS:[]).find(function(m){return String(m.id)===String(cc.matId);});
-            return auditCompactObject(Object.assign({},cc,{producto:mat?mat.mat:"",codigo:mat?mat.codigo||mat.cod||"":""}));
-          }
-          return null;
-        }
-        if(fn==="guardarRenombrarObra"){
-          return auditCompactObject({obra:typeof getCurrentObraName==="function"?getCurrentObraName():"",formulario:auditFormSnapshot()});
-        }
-      }
-
-      if(MODULO==="Pañol"){
-        if(fn==="guardarEdicionProducto"||fn==="eliminarProducto"){
-          var pid=(fn==="eliminarProducto"?args[0]:(typeof editProdId!=="undefined"?editProdId:null));
-          var pp=(typeof state!=="undefined"&&state.productos)?state.productos.find(function(x){return String(x.id)===String(pid);}):null;
-          if(pp){
-            var stock=typeof stockDeProducto==="function"?stockDeProducto(pid):null;
-            return auditCompactObject(Object.assign({},pp,{stock:stock}));
-          }
-          return null;
-        }
-        if(fn==="editarCarga"||fn==="eliminarCarga"||fn==="editarConsumo"||fn==="eliminarConsumo"){
-          var mid2=args[0];
-          var mov=(typeof state!=="undefined"&&state.movimientos)?state.movimientos.find(function(x){return String(x.id)===String(mid2);}):null;
-          if(mov){
-            var pr=(typeof state!=="undefined"&&state.productos)?state.productos.find(function(x){return String(x.id)===String(mov.prodId);}):null;
-            return auditCompactObject(Object.assign({},mov,{producto:mov.materialName||(pr?pr.nombre:""),codigo:mov.materialCode||(pr?pr.codigo:"")}));
-          }
-          return null;
-        }
-        if(fn==="eliminarObra") return {obra:String(args[0]||"")};
-        if(fn==="eliminarRubro") return {subrubro:String(args[0]||"")};
-      }
-
-      if(MODULO==="Avances"){
-        if(fn==="deleteSemana"){
-          var ss=typeof getSemanaByNum==="function"?getSemanaByNum(args[0]):null;
-          return auditCompactObject(ss);
-        }
-        if(fn==="deleteTarea"){
-          var tt=typeof getTask==="function"?getTask(args[0],args[1]):null;
-          return auditCompactObject(tt);
-        }
-        if(fn==="saveEditObra"||fn==="deleteCurrentObra") return auditCompactObject(typeof currentObra==="function"?currentObra():null);
-        if(fn==="editarCertificado"||fn==="eliminarCertificado") return auditCompactObject((typeof getCertificados==="function"?getCertificados():[]).find(function(x){return String(x.id)===String(args[0]);})||null);
-        if(fn==="deleteItemCQ"||fn==="saveItemCQ") return auditCompactObject((typeof state!=="undefined"&&state.itemsCQ?state.itemsCQ:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
-        if(fn==="deletePagoFuera") return auditCompactObject((typeof state!=="undefined"&&state.pagosFuera?state.pagosFuera:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
-        if(fn==="deleteConstructor") return auditCompactObject((typeof constructoresConfig!=="undefined"?constructoresConfig:[]).find(function(x){return String(x.id)===String(args[0]);})||null);
-      }
-
-      if(MODULO==="Control de Obras"){
-        if(fn==="deleteCurrentWorkReport"||fn==="saveWork"){
-          var ei=(typeof editIndex!=="undefined"&&editIndex)?Number(editIndex.value):NaN;
-          return auditCompactObject((typeof records!=="undefined"&&isFinite(ei))?records[ei]:null);
-        }
-        if(fn==="deletePartnerItem"){
-          var wi=Number(args[0]),tipo=args[1],jj=Number(args[2]);
-          return auditCompactObject(typeof db!=="undefined"&&db.works&&db.works[wi]&&db.works[wi][tipo]?db.works[wi][tipo][jj]:null);
-        }
-        if(fn==="deleteGeneralWork"||fn==="saveGeneralWork") return auditCompactObject(typeof db!=="undefined"&&db.works?db.works[Number(args[0])]:null);
-        if(fn==="saveGlobalWages"||fn==="saveCertifyPanel"||fn==="saveWageAllocation") return auditCompactObject({formulario:auditFormSnapshot(),contexto:auditVisibleContext()});
-      }
-    }catch(e){console.warn("audit specific",fn,e)}
-    return null;
-  }
-
   function registrar(cfg,args,before,contextoAntes,extra){
     var now=new Date();
     var rec={
@@ -3900,22 +3778,25 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
     if(typeof original!=="function"||original.__cqAuditWrapped)return false;
     function wrapped(){
       var args=Array.prototype.slice.call(arguments);
+      var before=null;
       var contextoAntes={};
       var extra={formularioAntes:{},formularioDespues:{},contextoVisible:"",objetoAntes:null,objetoDespues:null};
       try{
         contextoAntes=captureContext(cfg.fn)||{};
         extra.formularioAntes=auditFormSnapshot();
         extra.contextoVisible=auditVisibleContext();
-        extra.objetoAntes=auditSpecificObject(cfg.fn,args)||auditFindByArgs(args);
+        extra.objetoAntes=auditFindByArgs(args);
+        if(extra.objetoAntes)before=extra.objetoAntes;
       }catch(e){}
       var result;
-      try{result=original.apply(this,args);}catch(e){throw e;}
+      try{result=original.apply(this,args);}
+      catch(e){throw e;}
       function finish(v){
         try{
           extra.formularioDespues=auditFormSnapshot();
-          extra.objetoDespues=auditSpecificObject(cfg.fn,args)||auditFindByArgs(args);
+          extra.objetoDespues=auditFindByArgs(args);
         }catch(e){}
-        registrar(cfg,args,extra.objetoAntes,contextoAntes,extra);
+        registrar(cfg,args,before,contextoAntes,extra);
         return v;
       }
       if(result&&typeof result.then==="function")return result.then(finish);
@@ -3939,6 +3820,50 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
   setInterval(flush,15000);
   setTimeout(install,0);
   setTimeout(flush,500);
+})();
+</script>
+
+
+
+
+
+<script id="cq-inicio-definitivo">
+(function(){
+  function cqOrigen(){
+    try{
+      const q=new URLSearchParams(location.search).get("origen");
+      if(q==="empleados"||q==="gerencia") return q;
+    }catch(e){}
+    return "gerencia";
+  }
+
+  window.cqVolverInicio=function(ev){
+    if(ev){
+      try{ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();}catch(e){}
+    }
+    const origen=cqOrigen();
+    // Los módulos están en la raíz. Ambos index se calculan desde esa raíz,
+    // por lo que funciona tanto en file:// como en Netlify.
+    const destino = origen==="empleados" ? "empleados/index.html" : "index.html";
+    location.href = destino;
+    return false;
+  };
+
+  function preparar(){
+    document.querySelectorAll('a[href="index.html"], a[href="./index.html"]').forEach(function(a){
+      const texto=(a.textContent||"").toLowerCase();
+      const aria=(a.getAttribute("aria-label")||"").toLowerCase();
+      const title=(a.getAttribute("title")||"").toLowerCase();
+      const cls=String(a.className||"").toLowerCase();
+      if(texto.includes("inicio")||aria.includes("inicio")||title.includes("inicio")||cls.includes("home")){
+        a.setAttribute("href","#");
+        a.onclick=window.cqVolverInicio;
+      }
+    });
+  }
+
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",preparar,{once:true});
+  else preparar();
 })();
 </script>
 

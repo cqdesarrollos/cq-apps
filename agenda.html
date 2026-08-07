@@ -682,17 +682,14 @@ async function startFB(){
 }
 window.addEventListener('fb-ready',startFB);
 
-function getUsuario(){return localStorage.getItem(USER_KEY)||''}
+function getUsuario(){
+  return window._cqUsuarioActual || localStorage.getItem('cq_usuario_actual') || '';
+}
 function cambiarUsuario(){
-  const actual=getUsuario();
-  const opciones=state.socios.map(s=>s.nombre).join(', ');
-  const n=prompt(`¿Quién está usando la agenda?\nSocios: ${opciones}`,actual);
-  if(!n||!n.trim())return;
-  const socio=state.socios.find(s=>s.nombre.toLowerCase()===n.trim().toLowerCase());
-  localStorage.setItem(USER_KEY,socio?socio.nombre:n.trim());
+  // El usuario se toma automáticamente del login de Gerencia.
   renderUser();
 }
-function renderUser(){document.getElementById('userName').textContent=getUsuario()||'Elegir socio'}
+function renderUser(){document.getElementById('userName').textContent=getUsuario()||'Gerencia'}
 
 function showView(v){
   ['agenda','calendario','asignaciones','config'].forEach(x=>{
@@ -1052,7 +1049,7 @@ modalTarea.addEventListener('click',e=>{if(e.target===modalTarea)cerrarModal()})
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){cerrarModal();cerrarModalRecordatorio()}});
 document.getElementById('modalRecordatorio')?.addEventListener('click',e=>{if(e.target.id==='modalRecordatorio')cerrarModalRecordatorio()});
 renderAll();
-setTimeout(()=>{if(!getUsuario())cambiarUsuario()},500);
+setTimeout(renderUser,500);
 </script>
 
 <script type="module" id="cq-gerencia-only-script">

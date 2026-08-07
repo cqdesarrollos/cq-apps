@@ -465,27 +465,27 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
           <span class="btn-left"><span class="icon">💳</span>Gastos</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-caja" href="caja.html">
+        <a class="btn btn-caja" href="caja.html?origen=gerencia">
           <span class="btn-left"><span class="icon">💵</span>Caja Chica</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-materiales" href="materiales.html">
+        <a class="btn btn-materiales" href="materiales.html?origen=gerencia">
           <span class="btn-left"><span class="icon">🧱</span>Materiales</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-acopio" href="acopio.html">
+        <a class="btn btn-acopio" href="acopio.html?origen=gerencia">
           <span class="btn-left"><span class="icon">📦</span>Acopio</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-panol" href="panol.html">
+        <a class="btn btn-panol" href="panol.html?origen=gerencia">
           <span class="btn-left"><span class="icon">🧰</span>Pañol</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-avances" href="avance.html">
+        <a class="btn btn-avances" href="avance.html?origen=gerencia">
           <span class="btn-left"><span class="icon">🏗️</span>Avances</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-control" href="control_obras.html">
+        <a class="btn btn-control" href="control_obras.html?origen=gerencia">
           <span class="btn-left"><span class="icon">👷</span>Control de Obras</span>
           <span class="arrow">›</span>
         </a>
@@ -576,7 +576,7 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
 #cq-gerencia-auth h2{margin:0 0 5px;font-size:22px}
 #cq-gerencia-auth p{margin:0 0 15px;color:#c7d0de;font-size:12px;line-height:1.4}
 #cq-gerencia-auth label{display:block;font-size:11px;font-weight:800;margin:10px 0 5px}
-#cq-gerencia-auth input{
+#cq-gerencia-auth input,#cq-gerencia-auth select{
   width:100%;border:1px solid rgba(255,255,255,.18);border-radius:12px;
   padding:12px;background:#fff;color:#0b1b51;font-size:14px;outline:none
 }
@@ -586,11 +586,40 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
 }
 #cq-gerencia-auth .msg{min-height:17px;margin-top:10px;font-size:11px;color:#ffd2d2}
 #cq-gerencia-auth .checking{text-align:center;font-weight:800;color:#dce8e3}
-#cq-gerencia-user{
-  position:fixed;right:12px;bottom:12px;z-index:1000;display:none;
-  background:rgba(255,255,255,.94);color:#0b1b51;border-radius:999px;
-  padding:7px 10px;font-size:10px;font-weight:900;box-shadow:0 6px 18px rgba(0,0,0,.18)
+#cq-gerencia-user-wrap{
+  position:fixed;
+  right:14px;
+  top:46px;
+  z-index:1000;
+  display:none;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:4px;
 }
+#cq-gerencia-user{
+  display:block!important;
+  background:rgba(255,255,255,.10);
+  color:#dce8e3;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:999px;
+  padding:4px 7px;
+  font-size:8px;
+  font-weight:800;
+  box-shadow:none;
+}
+#cq-gerencia-salir{
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.10);
+  color:#dce8e3;
+  border-radius:999px;
+  padding:6px 11px;
+  font-size:10px;
+  font-weight:900;
+  cursor:pointer;
+  box-shadow:none;
+}
+#cq-gerencia-salir:active{transform:scale(.96)}
+
 </style>
 
 <div id="cq-gerencia-auth">
@@ -599,8 +628,12 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
     <form id="cq-auth-form" style="display:none">
       <h2>Gerencia</h2>
       <p>Acceso exclusivo para usuarios autorizados.</p>
-      <label>Correo</label>
-      <input id="cq-auth-email" type="email" autocomplete="username" placeholder="usuario@cqgerencia.com" required>
+      <label>Usuario</label>
+      <select id="cq-auth-user" required>
+        <option value="">Seleccionar usuario</option>
+        <option value="emilio">Emilio</option>
+        <option value="juan">Juan</option>
+      </select>
       <label>Contraseña</label>
       <input id="cq-auth-pass" type="password" inputmode="text" autocomplete="current-password" required>
       <button type="submit">Ingresar</button>
@@ -608,7 +641,10 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
     </form>
   </div>
 </div>
-<div id="cq-gerencia-user"></div>
+<div id="cq-gerencia-user-wrap">
+  <div id="cq-gerencia-user"></div>
+  <button id="cq-gerencia-salir" type="button">Salir</button>
+</div>
 
 <script type="module">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -636,9 +672,17 @@ const overlay=document.getElementById("cq-gerencia-auth");
 const checking=document.getElementById("cq-auth-checking");
 const form=document.getElementById("cq-auth-form");
 const msg=document.getElementById("cq-auth-msg");
-const emailInput=document.getElementById("cq-auth-email");
+const userInput=document.getElementById("cq-auth-user");
 const passInput=document.getElementById("cq-auth-pass");
 const badge=document.getElementById("cq-gerencia-user");
+const userWrap=document.getElementById("cq-gerencia-user-wrap");
+const salirBtn=document.getElementById("cq-gerencia-salir");
+let cqAutoLoginEnCurso=false;
+
+const GERENCIA_USERS={
+  emilio:"emilio@cqgerencia.com",
+  juan:"juan@cqgerencia.com"
+};
 
 function keyFromEmail(email){
   const map={
@@ -657,6 +701,16 @@ function showLogin(text=""){
   form.style.display="block";
   msg.textContent=text;
   passInput.value="";
+  if(userInput){
+    try{
+      const ultimo=localStorage.getItem("cq_gerencia_ultimo_usuario")||"";
+      userInput.value=GERENCIA_USERS[ultimo] ? ultimo : "";
+    }catch(e){
+      userInput.value="";
+    }
+  }
+  if(userWrap) userWrap.style.display="none";
+  setTimeout(intentarIngresoAutomatico,120);
 }
 async function gerenciaProfile(user){
   const key=keyFromEmail(user?.email);
@@ -679,7 +733,7 @@ function grant(profile){
   checking.style.display="block";
   form.style.display="none";
   badge.textContent="🔐 "+profile.nombre+" · Gerencia";
-  badge.style.display="block";
+  if(userWrap) userWrap.style.display="flex";
 
   if(!history.state || !history.state.cqGerenciaHome){
     try{
@@ -738,13 +792,76 @@ window.addEventListener("popstate",function(){
   }
 });
 
+if(salirBtn){
+  salirBtn.addEventListener("click",async ()=>{
+    try{
+      localStorage.removeItem("cq_gerencia_recordada");
+      document.documentElement.classList.remove("cq-gerencia-recordada");
+    }catch(e){}
+    try{
+      await signOut(auth);
+    }catch(e){
+      console.warn("No se pudo cerrar sesión:",e);
+    }finally{
+      window._cqGerenciaProfile=null;
+      showLogin();
+    }
+  });
+}
+
+async function intentarIngresoAutomatico(){
+  if(cqAutoLoginEnCurso || form.style.display==="none") return;
+  const key=userInput.value;
+  if(!GERENCIA_USERS[key] || !passInput.value) return;
+  cqAutoLoginEnCurso=true;
+  try{
+    form.requestSubmit();
+  }finally{
+    setTimeout(()=>{ cqAutoLoginEnCurso=false; },900);
+  }
+}
+
+/* Si el navegador/gestor completa usuario y contraseña guardados,
+   ingresar automáticamente sin exigir tocar el botón. */
+userInput.addEventListener("change",()=>{
+  try{
+    if(GERENCIA_USERS[userInput.value]){
+      localStorage.setItem("cq_gerencia_ultimo_usuario",userInput.value);
+    }
+  }catch(e){}
+  setTimeout(intentarIngresoAutomatico,50);
+});
+passInput.addEventListener("input",()=>setTimeout(intentarIngresoAutomatico,80));
+passInput.addEventListener("change",()=>setTimeout(intentarIngresoAutomatico,50));
+
+/* Algunos gestores de contraseñas completan los campos sin disparar eventos. */
+let cqAutofillChecks=0;
+const cqAutofillTimer=setInterval(()=>{
+  cqAutofillChecks++;
+  intentarIngresoAutomatico();
+  if(cqAutofillChecks>=20 || auth.currentUser) clearInterval(cqAutofillTimer);
+},250);
+
 form.addEventListener("submit",async e=>{
   e.preventDefault();
+  const key=userInput.value;
+  const email=GERENCIA_USERS[key];
+  if(!email){
+    msg.textContent="Seleccioná un usuario.";
+    return;
+  }
+  if(!passInput.value){
+    msg.textContent="Ingresá la contraseña.";
+    return;
+  }
   msg.textContent="Verificando…";
   try{
-    await signInWithEmailAndPassword(auth,emailInput.value.trim(),passInput.value);
+    localStorage.setItem("cq_gerencia_ultimo_usuario",key);
+    await signInWithEmailAndPassword(auth,email,passInput.value);
   }catch(e){
-    msg.textContent="Correo o contraseña incorrectos.";
+    msg.textContent="Usuario o contraseña incorrectos.";
+  }finally{
+    cqAutoLoginEnCurso=false;
   }
 });
 </script>

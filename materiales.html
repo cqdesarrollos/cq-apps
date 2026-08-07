@@ -6753,17 +6753,19 @@ function renderCargaTab(){
           +'<div class="hist-fecha">'+fmtFecha(c.fecha)+'</div>'
           +'<div class="hist-mat">'+c.matName+'<div class="hist-obra-tag">'+c.obraName+'</div></div>'
           +'<div class="hist-val">'+fmtN(c.qty)+(c.nota?' <span style="font-size:9px;color:#A8BFA8">'+c.nota+'</span>':'')+'</div>'
-          +'<div class="hist-actions">'
-          +(isEditing
-            ? '<button class="hist-btn del" onclick="window.cancelarEditCarga()">Cancelar</button>'
-              +'<button class="hist-btn edit" onclick="window.guardarEditCarga('+c.id+')">Guardar</button>'
-            : isPendingDel
-              ? '<button class="hist-btn del" onclick="window.cancelarBorrar()" style="opacity:.6">No</button>'
-                +'<button class="hist-btn del" onclick="window.borrarCarga('+c.id+')" style="background:#FDECEA;border-color:#C0392B">Eliminar</button>'
-              : '<button class="hist-btn edit" onclick="window.editarCarga('+c.id+')">Editar</button>'
-                +'<button class="hist-btn del" onclick="window.confirmarBorrar('+c.id+')">✕</button>'
-          )
-          +'</div>'
+          +(window.__cqMaterialesEmployeeRO
+            ? ''
+            : '<div class="hist-actions">'
+              +(isEditing
+                ? '<button class="hist-btn del" onclick="window.cancelarEditCarga()">Cancelar</button>'
+                  +'<button class="hist-btn edit" onclick="window.guardarEditCarga('+c.id+')">Guardar</button>'
+                : isPendingDel
+                  ? '<button class="hist-btn del" onclick="window.cancelarBorrar()" style="opacity:.6">No</button>'
+                    +'<button class="hist-btn del" onclick="window.borrarCarga('+c.id+')" style="background:#FDECEA;border-color:#C0392B">Eliminar</button>'
+                  : '<button class="hist-btn edit" onclick="window.editarCarga('+c.id+')">Editar</button>'
+                    +'<button class="hist-btn del" onclick="window.confirmarBorrar('+c.id+')">✕</button>'
+              )
+              +'</div>')
           +'</div>';
         var editRow=isEditing
           ? '<div class="hist-edit-row">'
@@ -7506,6 +7508,173 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
 })();
 </script>
 
+
+
+
+
+<script id="cq-inicio-definitivo">
+(function(){
+  function cqOrigen(){
+    try{
+      const q=new URLSearchParams(location.search).get("origen");
+      if(q==="empleados"||q==="gerencia") return q;
+    }catch(e){}
+    return "gerencia";
+  }
+
+  window.cqVolverInicio=function(ev){
+    if(ev){
+      try{ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();}catch(e){}
+    }
+    const origen=cqOrigen();
+    // Los módulos están en la raíz. Ambos index se calculan desde esa raíz,
+    // por lo que funciona tanto en file:// como en Netlify.
+    const destino = origen==="empleados" ? "empleados/index.html" : "index.html";
+    location.href = destino;
+    return false;
+  };
+
+  function preparar(){
+    document.querySelectorAll('a[href="index.html"], a[href="./index.html"]').forEach(function(a){
+      const texto=(a.textContent||"").toLowerCase();
+      const aria=(a.getAttribute("aria-label")||"").toLowerCase();
+      const title=(a.getAttribute("title")||"").toLowerCase();
+      const cls=String(a.className||"").toLowerCase();
+      if(texto.includes("inicio")||aria.includes("inicio")||title.includes("inicio")||cls.includes("home")){
+        a.setAttribute("href","#");
+        a.onclick=window.cqVolverInicio;
+      }
+    });
+  }
+
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",preparar,{once:true});
+  else preparar();
+})();
+</script>
+
+
+
+<!-- CQ permisos empleados v2: solo lectura; en Catálogo únicamente agregar -->
+<style id="cq-employee-materiales-readonly-v3-style">
+.cq-employee-materiales-note{
+  display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);color:#e7f2ed;
+  font-size:9.5px;font-weight:850;margin-left:6px;vertical-align:middle;white-space:nowrap;
+}
+html:not(.cq-employee-materiales-readonly) .cq-employee-materiales-note{display:none!important}
+
+/* Operaciones: toda la planilla es lectura. En Catálogo solo se permite + Material. */
+html.cq-employee-materiales-readonly #view-catalogo .catalog-edit-inline,
+html.cq-employee-materiales-readonly #view-catalogo [onclick*="openEditarNombreMat"],
+html.cq-employee-materiales-readonly #view-catalogo [onclick*="guardarNombreMat"],
+html.cq-employee-materiales-readonly #view-catalogo [onclick*="eliminarMaterial"],
+html.cq-employee-materiales-readonly #view-catalogo [onclick*="openGestionarCats"],
+html.cq-employee-materiales-readonly #view-catalogo [onclick*="openCargaMasivaCatalogo"],
+html.cq-employee-materiales-readonly #modal-nuevo-mat [onclick*="promptNuevaCategoria"],
+html.cq-employee-materiales-readonly #modal-editar-mat-nombre,
+html.cq-employee-materiales-readonly #modal-gestionar-cats,
+html.cq-employee-materiales-readonly #modal-carga-masiva-catalogo{display:none!important}
+
+/* Carga / historial / obras: sin controles de escritura. */
+html.cq-employee-materiales-readonly #view-carga .btn-cargar,
+html.cq-employee-materiales-readonly #view-carga [onclick*="openCargaMasiva"],
+html.cq-employee-materiales-readonly #view-carga [onclick*="openEditarNombreMat"],
+html.cq-employee-materiales-readonly #view-carga .hist-actions,
+html.cq-employee-materiales-readonly #view-carga .hist-edit-row,
+html.cq-employee-materiales-readonly #view-obras [onclick*="openEdit("],
+html.cq-employee-materiales-readonly [onclick*="openNuevaObra"],
+html.cq-employee-materiales-readonly [onclick*="openOrdenObras"],
+html.cq-employee-materiales-readonly [onclick*="openRenombrarObra"],
+html.cq-employee-materiales-readonly [onclick*="toggleTerminada"],
+html.cq-employee-materiales-readonly [onclick*="toggleModoFirebase"]{display:none!important}
+</style>
+<script id="cq-employee-materiales-readonly-v3-script">
+(function(){
+  const CACHE_KEY="cq_auth_profile_1h", TTL=3600000;
+  const originals={};
+
+  function getProfile(){
+    try{
+      if(window._cqAuthProfile) return window._cqAuthProfile;
+      const raw=localStorage.getItem(CACHE_KEY); if(!raw) return null;
+      const p=JSON.parse(raw), age=Date.now()-(Number(p.validadoEn)||0);
+      if(age<0 || age>TTL) return null;
+      return p;
+    }catch(e){ return null; }
+  }
+  function isEmployee(){
+    const p=getProfile(); if(!p) return false;
+    const mods=Array.isArray(p.modulos)?p.modulos:[];
+    return (String(p.rol||'').toLowerCase()==='operaciones' || mods.indexOf('gerencia')<0) && mods.indexOf('materiales')>=0;
+  }
+  function deny(){ alert('Solo lectura · No se puede modificar'); return false; }
+
+  const blockedFns=[
+    'openEdit','saveEdit','setVal','openEditarNombreMat','guardarNombreMat','eliminarMaterialSeleccionado',
+    'openGestionarCats','renombrarCategoria','eliminarCategoria','promptNuevaCategoria',
+    'openCargaMasivaCatalogo','procesarCargaMasivaCatalogo',
+    'openCargaMasiva','procesarCargaMasiva','openOrdenObras','resetOrdenObras','moveObra','moveObraConfig',
+    'openNuevaObra','openAddObra','guardarNuevaObra','openRenombrarObra','openRenombrarObraFromCtx','guardarRenombrarObra',
+    'toggleTerminada','registrarCarga','editarCarga','guardarEditCarga','borrarCarga','confirmarBorrar','cancelarBorrar',
+    'toggleModoFirebase'
+  ];
+
+  function guardFunctions(){
+    if(!isEmployee()) return;
+    window.__cqMaterialesEmployeeRO=true;
+    blockedFns.forEach(function(name){
+      try{
+        if(typeof window[name]==='function' && !originals[name]){
+          originals[name]=window[name];
+          window[name]=function(){ return deny(); };
+        }
+      }catch(e){}
+    });
+
+    /* ÚNICA escritura manual permitida: crear un material NUEVO desde Catálogo. */
+    if(typeof window.guardarNuevoMat==='function' && !originals.guardarNuevoMat){
+      originals.guardarNuevoMat=window.guardarNuevoMat;
+      window.guardarNuevoMat=function(){
+        if(!isEmployee()) return originals.guardarNuevoMat.apply(this,arguments);
+        try{
+          const nombre=(document.getElementById('nuevo-mat-nombre')?.value||'').trim();
+          const codigo=(document.getElementById('nuevo-mat-codigo')?.value||'').trim();
+          if(!nombre){ alert('Ingresá un nombre.'); return false; }
+          const activos=(typeof getAllMats==='function'?getAllMats():window.ALL_MATS||[]).filter(function(m){return !window.isMatDeleted || !isMatDeleted(m.id);});
+          const nk=(typeof claveMaterialUnificar==='function'?claveMaterialUnificar(nombre):nombre.toLowerCase());
+          const ck=codigo.toLowerCase();
+          const existe=activos.some(function(m){
+            const mn=(typeof claveMaterialUnificar==='function'?claveMaterialUnificar(m.mat):String(m.mat||'').toLowerCase());
+            const mc=String((typeof getMatCodigo==='function'?getMatCodigo(m):(m.codigo||''))||'').trim().toLowerCase();
+            return (nk&&mn===nk)||(ck&&mc===ck);
+          });
+          if(existe){ alert('Ese material ya existe en el catálogo. En modo solo lectura no se puede modificar.'); return false; }
+        }catch(e){}
+        return originals.guardarNuevoMat.apply(this,arguments);
+      };
+    }
+  }
+
+  function applyUI(){
+    if(!isEmployee()) return;
+    window.__cqMaterialesEmployeeRO=true;
+    document.documentElement.classList.add('cq-employee-materiales-readonly');
+    const hdr=document.querySelector('.hdr-r,.hdr,.header');
+    if(hdr && !document.querySelector('.cq-employee-materiales-note')){
+      const s=document.createElement('span');
+      s.className='cq-employee-materiales-note';
+      s.textContent='👁 Solo lectura · No se puede modificar';
+      hdr.appendChild(s);
+    }
+    try{ if(typeof window.renderCargaTab==='function') window.renderCargaTab(); }catch(e){}
+  }
+
+  function boot(){ applyUI(); guardFunctions(); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
+  document.addEventListener('cq-auth-ready',function(){ boot(); setTimeout(boot,50); });
+  [100,400,900,1600].forEach(function(ms){setTimeout(boot,ms)});
+})();
+</script>
 </body>
 </html>
 
