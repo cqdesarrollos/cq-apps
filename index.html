@@ -438,6 +438,482 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
 }
 </style>
 
+
+<style id="cq-menu-agrupado-final">
+/* Menú principal agrupado: 5 accesos */
+.grid{grid-template-rows:repeat(5,minmax(0,1fr))!important;gap:8px!important;}
+.btn{padding:11px 12px!important;}
+.footer span:first-child::after{content:"Finanzas · Materiales y logística · Obras · Agenda · Indicadores"!important;}
+.cq-grupo-modal .indicadores-options{gap:11px;}
+.cq-grupo-modal .indicadores-option{min-height:96px;}
+.cq-grupo-modal .indicadores-option:nth-child(3)::after{background:#d9c8f2;}
+.cq-grupo-modal .indicadores-option:nth-child(3) .indicadores-option-icon{background:linear-gradient(145deg,#f0eafa,#ddd0f1);}
+.cq-grupo-modal .indicadores-option:nth-child(3) .indicadores-option-tag{background:#f0eafa;color:#69489a;}
+@media(max-height:760px){
+  .grid{gap:6px!important;}
+  .btn{padding:9px 10px!important;}
+}
+</style>
+
+
+<style id="cq-botones-premium">
+/* Botones principales: más limpios, compactos y con identidad por grupo */
+.grid{gap:9px!important;}
+.btn{
+  position:relative!important;
+  overflow:hidden!important;
+  min-height:58px!important;
+  border:1px solid rgba(23,59,50,.10)!important;
+  border-radius:15px!important;
+  padding:10px 13px!important;
+  background:linear-gradient(135deg,#ffffff 0%,#f8fbf9 100%)!important;
+  box-shadow:0 5px 15px rgba(23,59,50,.065)!important;
+  color:#173b32!important;
+  transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease!important;
+}
+.btn::before{
+  content:""!important;
+  position:absolute!important;
+  left:0!important;top:9px!important;bottom:9px!important;
+  width:4px!important;border-radius:0 5px 5px 0!important;
+  background:var(--accent,#3f8e6d)!important;
+}
+.btn:hover{
+  transform:translateY(-1px)!important;
+  box-shadow:0 9px 22px rgba(23,59,50,.10)!important;
+  border-color:rgba(23,59,50,.16)!important;
+}
+.btn:active{transform:scale(.992)!important;}
+.btn-left{gap:11px!important;font-size:14px!important;font-weight:850!important;letter-spacing:-.01em!important;}
+.btn .icon{
+  width:36px!important;height:36px!important;min-width:36px!important;
+  display:grid!important;place-items:center!important;
+  border-radius:11px!important;
+  font-size:17px!important;
+  background:var(--iconbg,#e8f3ee)!important;
+  box-shadow:inset 0 0 0 1px rgba(23,59,50,.055)!important;
+}
+.btn .arrow{
+  width:27px!important;height:27px!important;
+  display:grid!important;place-items:center!important;
+  border-radius:9px!important;
+  background:#f0f4f2!important;
+  color:#6f837a!important;
+  font-size:20px!important;font-weight:500!important;
+}
+#btnFinanzasMenu{--accent:#4b7fc0;--iconbg:#eaf2fb;}
+#btnMaterialesMenu{--accent:#b88331;--iconbg:#fff3df;}
+#btnObrasMenu{--accent:#3f8e6d;--iconbg:#e6f3ed;}
+.btn-agenda{--accent:#9a6bb7;--iconbg:#f2eafa;}
+.btn-indicadores{--accent:#527a6e;--iconbg:#e7efec;}
+
+/* Selector emergente: tarjetas con más jerarquía y menos aspecto de lista */
+.indicadores-modal{
+  border-radius:21px!important;
+  box-shadow:0 26px 70px rgba(12,38,30,.26)!important;
+}
+.indicadores-modal-hd{padding:17px 18px 13px!important;}
+.indicadores-options{padding:12px 14px 16px!important;gap:9px!important;}
+.indicadores-option{
+  position:relative!important;
+  min-height:76px!important;
+  border-radius:14px!important;
+  padding:10px 11px!important;
+  border:1px solid #dce6e1!important;
+  background:linear-gradient(135deg,#fff,#f9fbfa)!important;
+  box-shadow:0 4px 13px rgba(23,59,50,.045)!important;
+}
+.indicadores-option:hover{
+  border-color:#b9cec4!important;
+  box-shadow:0 8px 19px rgba(23,59,50,.08)!important;
+}
+.indicadores-option-icon{
+  width:39px!important;height:39px!important;min-width:39px!important;
+  border-radius:11px!important;font-size:18px!important;
+}
+.indicadores-option-title{font-size:12.5px!important;letter-spacing:-.01em!important;}
+.indicadores-option-desc{font-size:9.3px!important;line-height:1.3!important;margin-top:2px!important;}
+.indicadores-option-tag{margin-top:5px!important;padding:3px 7px!important;font-size:7.5px!important;}
+.indicadores-option-arrow{
+  width:26px!important;height:26px!important;border-radius:8px!important;
+  background:#eef3f0!important;display:grid!important;place-items:center!important;
+  color:#71837b!important;
+}
+@media(max-height:760px){
+  .grid{gap:6px!important;}
+  .btn{min-height:50px!important;padding:7px 11px!important;}
+  .btn .icon{width:31px!important;height:31px!important;min-width:31px!important;font-size:15px!important;}
+  .btn-left{font-size:12.5px!important;}
+}
+</style>
+
+
+<style id="cq-gerencia-premium-v1">
+/* ===== INGRESO GERENCIA ===== */
+#cq-gerencia-auth{
+  background:
+    radial-gradient(circle at 84% 8%,rgba(0,206,124,.19),transparent 27%),
+    radial-gradient(circle at 10% 20%,rgba(255,255,255,.055),transparent 25%),
+    linear-gradient(155deg,#071a37 0%,#0c3b36 54%,#061c2a 100%)!important;
+  padding:18px!important;
+}
+#cq-gerencia-auth .card{
+  width:100%!important;
+  max-width:400px!important;
+  padding:0!important;
+  border:1px solid rgba(111,231,176,.24)!important;
+  border-radius:27px!important;
+  overflow:hidden!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.105),rgba(255,255,255,.05))!important;
+  box-shadow:0 28px 78px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.06)!important;
+  backdrop-filter:blur(16px)!important;
+}
+#cq-gerencia-auth .checking{
+  padding:28px 20px!important;
+  color:#dbeae4!important;
+}
+#cq-auth-form{
+  padding:25px 22px 20px!important;
+}
+.cq-auth-logo{
+  height:128px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin:-3px auto 5px;
+}
+.cq-auth-logo img{
+  display:block;
+  width:138px;
+  height:116px;
+  object-fit:contain;
+  filter:drop-shadow(0 14px 24px rgba(0,0,0,.19));
+}
+#cq-gerencia-auth h2{
+  margin:0!important;
+  text-align:center!important;
+  font-size:25px!important;
+  line-height:1.05!important;
+  letter-spacing:-.025em!important;
+  font-weight:900!important;
+}
+#cq-gerencia-auth .cq-auth-sub{
+  margin:8px 0 25px!important;
+  text-align:center!important;
+  color:#ceddd7!important;
+  font-size:12.5px!important;
+  font-weight:500!important;
+}
+#cq-gerencia-auth label{
+  margin:0 0 7px 3px!important;
+  color:#69e7a9!important;
+  font-size:10px!important;
+  font-weight:900!important;
+  letter-spacing:.07em!important;
+  text-transform:uppercase!important;
+}
+.cq-auth-field{
+  position:relative;
+  display:flex;
+  align-items:center;
+  min-height:55px;
+  margin-bottom:16px;
+  border:1px solid rgba(101,229,168,.38);
+  border-radius:17px;
+  background:rgba(4,34,29,.34);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.012);
+  transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+}
+.cq-auth-field:focus-within{
+  border-color:#68e8aa;
+  background:rgba(4,34,29,.46);
+  box-shadow:0 0 0 3px rgba(98,230,159,.10);
+}
+.cq-auth-field-icon{
+  flex:0 0 46px;
+  display:grid;
+  place-items:center;
+  color:#5de5a1;
+  font-size:18px;
+  filter:saturate(.9);
+}
+#cq-gerencia-auth .cq-auth-field input,
+#cq-gerencia-auth .cq-auth-field select{
+  width:100%!important;
+  min-width:0!important;
+  height:53px!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:16px!important;
+  padding:0 12px 0 0!important;
+  background:transparent!important;
+  color:#eef5f2!important;
+  font-size:14px!important;
+  font-weight:700!important;
+  box-shadow:none!important;
+}
+#cq-gerencia-auth .cq-auth-field select{color:#d8e5e0!important}
+#cq-gerencia-auth .cq-auth-field select option{color:#0b1b51;background:#fff}
+#cq-gerencia-auth .cq-auth-field input::placeholder{color:#bfcfc9;opacity:.86}
+.cq-auth-eye{
+  flex:0 0 45px!important;
+  width:45px!important;
+  height:53px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  color:#61e5a4!important;
+  box-shadow:none!important;
+  font-size:18px!important;
+}
+#cq-gerencia-auth .cq-auth-submit{
+  width:100%!important;
+  min-height:55px!important;
+  margin:8px 0 0!important;
+  border:0!important;
+  border-radius:17px!important;
+  padding:13px 16px!important;
+  background:linear-gradient(135deg,#62e69f,#22bf79)!important;
+  color:#07392b!important;
+  font-size:14px!important;
+  font-weight:900!important;
+  box-shadow:0 12px 27px rgba(0,206,124,.19)!important;
+  cursor:pointer!important;
+}
+#cq-gerencia-auth .cq-auth-submit:active{transform:scale(.993)}
+.cq-auth-secure{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  margin-top:17px;
+  color:#9cc5b5;
+  font-size:9.5px;
+  font-weight:700;
+}
+#cq-gerencia-auth .msg{
+  min-height:16px!important;
+  margin:8px 0 0!important;
+  text-align:center!important;
+}
+
+/* ===== PANEL PRINCIPAL / BOTONES ===== */
+.panel{
+  background:linear-gradient(145deg,rgba(5,26,47,.52),rgba(5,47,40,.56))!important;
+  border:1px solid rgba(105,224,171,.15)!important;
+  box-shadow:0 18px 46px rgba(0,0,0,.23),inset 0 1px 0 rgba(255,255,255,.035)!important;
+  backdrop-filter:blur(12px)!important;
+}
+.grid{gap:9px!important}
+.btn{
+  --accent:#00ce7c;
+  --glow:rgba(0,206,124,.10);
+  height:100%!important;
+  min-height:58px!important;
+  border:1px solid color-mix(in srgb,var(--accent) 40%,rgba(255,255,255,.10))!important;
+  border-radius:16px!important;
+  padding:10px 13px!important;
+  background:
+    radial-gradient(circle at 88% 0%,var(--glow),transparent 34%),
+    linear-gradient(135deg,rgba(17,73,64,.88),rgba(8,43,45,.90))!important;
+  color:#f4f8f6!important;
+  box-shadow:0 7px 20px rgba(0,0,0,.15),inset 0 1px 0 rgba(255,255,255,.04)!important;
+}
+.btn::before{
+  left:0!important;top:9px!important;bottom:9px!important;width:3px!important;
+  background:var(--accent)!important;
+  box-shadow:0 0 12px var(--glow)!important;
+}
+.btn-left{
+  color:#f4f8f6!important;
+  font-size:14px!important;
+  font-weight:900!important;
+}
+.btn .icon{
+  width:38px!important;height:38px!important;min-width:38px!important;
+  border-radius:12px!important;
+  display:grid!important;place-items:center!important;
+  background:color-mix(in srgb,var(--accent) 25%,rgba(255,255,255,.06))!important;
+  border:1px solid color-mix(in srgb,var(--accent) 42%,transparent)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 7px 16px rgba(0,0,0,.10)!important;
+}
+.btn .arrow{
+  width:30px!important;height:30px!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.055)!important;
+  color:#d7e9e2!important;
+}
+#btnFinanzasMenu{--accent:#31d485;--glow:rgba(49,212,133,.16)}
+#btnMaterialesMenu{--accent:#31a7e2;--glow:rgba(49,167,226,.15)}
+#btnObrasMenu{--accent:#9166df;--glow:rgba(145,102,223,.16)}
+.btn-agenda{--accent:#44c87a;--glow:rgba(68,200,122,.15)}
+.btn-indicadores{--accent:#27a5d7;--glow:rgba(39,165,215,.15)}
+.btn:hover{
+  transform:translateY(-1px)!important;
+  border-color:var(--accent)!important;
+  box-shadow:0 11px 25px rgba(0,0,0,.19),0 0 0 1px var(--glow)!important;
+}
+
+/* Cabecera un poco más refinada sin cambiar el logo */
+.status,#cq-gerencia-user,#cq-gerencia-salir,.cq-actividad-mini{
+  backdrop-filter:blur(9px);
+}
+@media(max-height:760px){
+  #cq-auth-form{padding:18px 18px 15px!important}
+  .cq-auth-logo{height:102px}
+  .cq-auth-logo img{width:116px;height:94px}
+  #cq-gerencia-auth .cq-auth-sub{margin-bottom:17px!important}
+  .cq-auth-field{min-height:49px;margin-bottom:11px}
+  #cq-gerencia-auth .cq-auth-field input,
+  #cq-gerencia-auth .cq-auth-field select{height:47px!important}
+  #cq-gerencia-auth .cq-auth-submit{min-height:49px!important}
+  .grid{gap:6px!important}
+  .btn{min-height:50px!important;padding:7px 11px!important}
+  .btn .icon{width:32px!important;height:32px!important;min-width:32px!important}
+}
+</style>
+
+
+<style id="cq-gerencia-premium-v2">
+/* Evita el fondo/cuadrado blanco que Chrome/Google Password Manager puede aplicar al completar la clave */
+@keyframes cqGerenciaAutofillDetect{from{opacity:.999}to{opacity:1}}
+#cq-gerencia-auth input:-webkit-autofill{
+  animation-name:cqGerenciaAutofillDetect!important;
+  animation-duration:.01s!important;
+}
+#cq-gerencia-auth input:-webkit-autofill,
+#cq-gerencia-auth input:-webkit-autofill:hover,
+#cq-gerencia-auth input:-webkit-autofill:focus,
+#cq-gerencia-auth input:-webkit-autofill:active{
+  -webkit-text-fill-color:#eef5f2!important;
+  caret-color:#eef5f2!important;
+  -webkit-box-shadow:0 0 0 1000px #123d34 inset!important;
+  box-shadow:0 0 0 1000px #123d34 inset!important;
+  transition:background-color 9999s ease-out 0s!important;
+  border-radius:15px!important;
+}
+#cq-gerencia-auth input:autofill{
+  color:#eef5f2!important;
+  background:#123d34!important;
+}
+#cq-gerencia-auth .cq-auth-field-pass{
+  overflow:hidden!important;
+}
+#cq-gerencia-auth .cq-auth-field-pass input{
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  background-color:transparent!important;
+}
+
+/* Submenús premium: Finanzas, Materiales, Obras e Indicadores */
+.indicadores-modal-bg{
+  background:
+    radial-gradient(circle at 84% 8%,rgba(0,206,124,.15),transparent 27%),
+    linear-gradient(155deg,rgba(5,25,45,.985),rgba(5,49,41,.985))!important;
+}
+.indicadores-modal{
+  width:100%!important;
+  max-width:500px!important;
+  padding:16px!important;
+  border:1px solid rgba(101,229,168,.13)!important;
+  border-radius:24px!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.02))!important;
+  box-shadow:0 28px 75px rgba(0,0,0,.30)!important;
+  backdrop-filter:blur(16px)!important;
+}
+.indicadores-modal-hd{
+  padding:5px 3px 14px!important;
+  margin:0!important;
+}
+.indicadores-modal-kicker{color:#62dfa4!important}
+.indicadores-modal-title{
+  color:#f4f8f6!important;
+  font-size:25px!important;
+  letter-spacing:-.025em!important;
+}
+.indicadores-modal-sub{color:#b9cdc5!important}
+.indicadores-modal-x{
+  width:36px!important;height:36px!important;
+  border-radius:12px!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  background:rgba(255,255,255,.055)!important;
+  color:#dfece7!important;
+  box-shadow:none!important;
+}
+.indicadores-options{
+  padding:0!important;
+  gap:9px!important;
+}
+.indicadores-option{
+  --subaccent:#42d58d;
+  --subglow:rgba(66,213,141,.13);
+  min-height:78px!important;
+  padding:10px 11px!important;
+  gap:11px!important;
+  border-radius:16px!important;
+  color:#f4f8f6!important;
+  border:1px solid color-mix(in srgb,var(--subaccent) 38%,rgba(255,255,255,.08))!important;
+  background:
+    radial-gradient(circle at 92% 0%,var(--subglow),transparent 35%),
+    linear-gradient(135deg,rgba(18,74,64,.88),rgba(8,43,45,.92))!important;
+  box-shadow:0 7px 18px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+.indicadores-option::after{display:none!important}
+.indicadores-option:nth-child(2){--subaccent:#4aa9e8;--subglow:rgba(74,169,232,.14)}
+.indicadores-option:nth-child(3){--subaccent:#a079e8;--subglow:rgba(160,121,232,.15)}
+.indicadores-option:hover{
+  transform:translateY(-1px)!important;
+  border-color:var(--subaccent)!important;
+  box-shadow:0 11px 24px rgba(0,0,0,.18),0 0 0 1px var(--subglow)!important;
+}
+.indicadores-option-icon{
+  width:42px!important;height:42px!important;min-width:42px!important;
+  border-radius:12px!important;
+  background:color-mix(in srgb,var(--subaccent) 24%,rgba(255,255,255,.05))!important;
+  border:1px solid color-mix(in srgb,var(--subaccent) 40%,transparent)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 6px 14px rgba(0,0,0,.10)!important;
+  font-size:19px!important;
+}
+.indicadores-option-title{
+  color:#f5f8f7!important;
+  font-size:13px!important;
+  font-weight:900!important;
+}
+.indicadores-option-desc{
+  color:#afc8be!important;
+  font-size:9.4px!important;
+  margin-top:3px!important;
+}
+.indicadores-option-tag{
+  color:#ccecdf!important;
+  background:rgba(255,255,255,.065)!important;
+  border:1px solid rgba(255,255,255,.07)!important;
+  margin-top:5px!important;
+}
+.indicadores-option-arrow{
+  width:29px!important;height:29px!important;
+  border-radius:999px!important;
+  border:1px solid rgba(255,255,255,.11)!important;
+  background:rgba(255,255,255,.05)!important;
+  color:#d8e9e2!important;
+}
+.indicadores-modal-foot{color:#9cb8ad!important}
+
+/* Un poco más refinados también los accesos del panel principal */
+.btn{
+  overflow:hidden!important;
+}
+.btn::after{
+  content:""!important;
+  position:absolute!important;
+  inset:0!important;
+  pointer-events:none!important;
+  background:linear-gradient(110deg,transparent 0%,rgba(255,255,255,.035) 42%,transparent 70%)!important;
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -461,32 +937,16 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
 
     <section class="panel">
       <div class="grid">
-        <a class="btn btn-gastos" href="gastos.html">
-          <span class="btn-left"><span class="icon">💳</span>Gastos</span>
+        <a class="btn btn-gastos" href="#" id="btnFinanzasMenu">
+          <span class="btn-left"><span class="icon">💳</span>Finanzas</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-caja" href="caja.html?origen=gerencia">
-          <span class="btn-left"><span class="icon">💵</span>Caja Chica</span>
+        <a class="btn btn-materiales" href="#" id="btnMaterialesMenu">
+          <span class="btn-left"><span class="icon">🧱</span>Materiales y logística</span>
           <span class="arrow">›</span>
         </a>
-        <a class="btn btn-materiales" href="materiales.html?origen=gerencia">
-          <span class="btn-left"><span class="icon">🧱</span>Materiales</span>
-          <span class="arrow">›</span>
-        </a>
-        <a class="btn btn-acopio" href="acopio.html?origen=gerencia">
-          <span class="btn-left"><span class="icon">📦</span>Acopio</span>
-          <span class="arrow">›</span>
-        </a>
-        <a class="btn btn-panol" href="panol.html?origen=gerencia">
-          <span class="btn-left"><span class="icon">🧰</span>Pañol</span>
-          <span class="arrow">›</span>
-        </a>
-        <a class="btn btn-avances" href="avance.html?origen=gerencia">
-          <span class="btn-left"><span class="icon">🏗️</span>Avances</span>
-          <span class="arrow">›</span>
-        </a>
-        <a class="btn btn-control" href="control_obras.html?origen=gerencia">
-          <span class="btn-left"><span class="icon">👷</span>Control de Obras</span>
+        <a class="btn btn-avances" href="#" id="btnObrasMenu">
+          <span class="btn-left"><span class="icon">🏗️</span>Obras</span>
           <span class="arrow">›</span>
         </a>
         <a class="btn btn-agenda" href="agenda.html">
@@ -626,17 +1086,29 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
   <div class="card">
     <div id="cq-auth-checking" class="checking">🔐 Verificando acceso a Gerencia…</div>
     <form id="cq-auth-form" style="display:none">
-      <h2>Gerencia</h2>
-      <p>Acceso exclusivo para usuarios autorizados.</p>
-      <label>Usuario</label>
-      <select id="cq-auth-user" required>
-        <option value="">Seleccionar usuario</option>
-        <option value="emilio">Emilio</option>
-        <option value="juan">Juan</option>
-      </select>
-      <label>Contraseña</label>
-      <input id="cq-auth-pass" type="password" inputmode="text" autocomplete="current-password" required>
-      <button type="submit">Ingresar</button>
+      <div class="cq-auth-logo" aria-hidden="true"></div>
+      <h2>CQ Gerencia</h2>
+      <p class="cq-auth-sub">Ingresá con tu usuario y clave</p>
+
+      <label for="cq-auth-user">Usuario</label>
+      <div class="cq-auth-field cq-auth-field-user">
+        <span class="cq-auth-field-icon">♙</span>
+        <select id="cq-auth-user" required>
+          <option value="">Seleccionar usuario</option>
+          <option value="emilio">Emilio</option>
+          <option value="juan">Juan</option>
+        </select>
+      </div>
+
+      <label for="cq-auth-pass">Clave</label>
+      <div class="cq-auth-field cq-auth-field-pass">
+        <span class="cq-auth-field-icon">🔒</span>
+        <input id="cq-auth-pass" type="password" inputmode="text" autocomplete="current-password" placeholder="Ingresá tu clave" required>
+        <button class="cq-auth-eye" id="cq-auth-eye" type="button" aria-label="Mostrar u ocultar clave">◉</button>
+      </div>
+
+      <button class="cq-auth-submit" type="submit"><span>🔐</span> Ingresar</button>
+      <div class="cq-auth-secure">♢ <span>Acceso seguro · CQ Desarrollos</span></div>
       <div class="msg" id="cq-auth-msg"></div>
     </form>
   </div>
@@ -809,8 +1281,12 @@ if(salirBtn){
   });
 }
 
-async function intentarIngresoAutomatico(){
+async function intentarIngresoAutomatico(forzarAutofill=false){
   if(cqAutoLoginEnCurso || form.style.display==="none") return;
+  /* Mientras la clave se escribe a mano no se envía sola.
+     Si Chrome/Google Password Manager la completa, forzarAutofill permite entrar
+     aunque el campo todavía tenga el foco. */
+  if(!forzarAutofill && document.activeElement===passInput) return;
   const key=userInput.value;
   if(!GERENCIA_USERS[key] || !passInput.value) return;
   cqAutoLoginEnCurso=true;
@@ -831,19 +1307,39 @@ userInput.addEventListener("change",()=>{
   }catch(e){}
   setTimeout(intentarIngresoAutomatico,50);
 });
-passInput.addEventListener("input",()=>setTimeout(intentarIngresoAutomatico,80));
-passInput.addEventListener("change",()=>setTimeout(intentarIngresoAutomatico,50));
+/* Al escribir manualmente, esperar a que el usuario toque Ingresar.
+   Si el navegador completa la clave, change/blur y el detector periódico
+   siguen permitiendo el ingreso automático. */
+passInput.addEventListener("change",()=>setTimeout(()=>intentarIngresoAutomatico(false),80));
+passInput.addEventListener("blur",()=>setTimeout(()=>intentarIngresoAutomatico(false),80));
+
+/* Chrome / Google Password Manager: cuando rellena una clave guardada,
+   detectamos :autofill y entramos automáticamente sin tocar Ingresar. */
+passInput.addEventListener("animationstart",e=>{
+  if(e.animationName==="cqGerenciaAutofillDetect"){
+    setTimeout(()=>intentarIngresoAutomatico(true),120);
+  }
+});
+userInput.addEventListener("animationstart",e=>{
+  if(e.animationName==="cqGerenciaAutofillDetect"){
+    setTimeout(()=>intentarIngresoAutomatico(true),160);
+  }
+});
 
 /* Algunos gestores de contraseñas completan los campos sin disparar eventos. */
 let cqAutofillChecks=0;
 const cqAutofillTimer=setInterval(()=>{
   cqAutofillChecks++;
-  intentarIngresoAutomatico();
-  if(cqAutofillChecks>=20 || auth.currentUser) clearInterval(cqAutofillTimer);
+  let esAutofill=false;
+  try{ esAutofill=passInput.matches(":-webkit-autofill"); }catch(e){}
+  intentarIngresoAutomatico(esAutofill);
+  if(cqAutofillChecks>=24 || auth.currentUser) clearInterval(cqAutofillTimer);
 },250);
 
 form.addEventListener("submit",async e=>{
   e.preventDefault();
+  /* El botón Ingresar siempre debe poder validar la clave escrita manualmente. */
+  cqAutoLoginEnCurso=false;
   const key=userInput.value;
   const email=GERENCIA_USERS[key];
   if(!email){
@@ -865,5 +1361,136 @@ form.addEventListener("submit",async e=>{
   }
 });
 </script>
+
+<div class="indicadores-modal-bg cq-grupo-modal" id="finanzasModal" aria-hidden="true">
+  <div class="indicadores-modal" role="dialog" aria-modal="true" aria-labelledby="finanzasModalTitle">
+    <div class="indicadores-modal-hd">
+      <div>
+        <div class="indicadores-modal-kicker">CQ Desarrollos</div>
+        <div class="indicadores-modal-title" id="finanzasModalTitle">Finanzas</div>
+        <div class="indicadores-modal-sub">Elegí el módulo que querés abrir.</div>
+      </div>
+      <button class="indicadores-modal-x" data-close-modal="finanzasModal" aria-label="Cerrar">×</button>
+    </div>
+    <div class="indicadores-options">
+      <a class="indicadores-option" href="gastos.html">
+        <span class="indicadores-option-icon">💳</span>
+        <span class="indicadores-option-text"><span class="indicadores-option-title">Gastos</span><span class="indicadores-option-desc">Carga, consulta y análisis de gastos de las obras.</span><span class="indicadores-option-tag">Finanzas</span></span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+      <a class="indicadores-option" href="caja.html?origen=gerencia">
+        <span class="indicadores-option-icon">💵</span>
+        <span class="indicadores-option-text"><span class="indicadores-option-title">Caja Chica</span><span class="indicadores-option-desc">Movimientos y control de caja chica.</span><span class="indicadores-option-tag">Caja</span></span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="indicadores-modal-bg cq-grupo-modal" id="materialesModal" aria-hidden="true">
+  <div class="indicadores-modal" role="dialog" aria-modal="true" aria-labelledby="materialesModalTitle">
+    <div class="indicadores-modal-hd">
+      <div>
+        <div class="indicadores-modal-kicker">CQ Desarrollos</div>
+        <div class="indicadores-modal-title" id="materialesModalTitle">Materiales y logística</div>
+        <div class="indicadores-modal-sub">Elegí el módulo que querés abrir.</div>
+      </div>
+      <button class="indicadores-modal-x" data-close-modal="materialesModal" aria-label="Cerrar">×</button>
+    </div>
+    <div class="indicadores-options">
+      <a class="indicadores-option" href="materiales.html?origen=gerencia">
+        <span class="indicadores-option-icon">🧱</span>
+        <span class="indicadores-option-text"><span class="indicadores-option-title">Materiales</span><span class="indicadores-option-desc">Ingresos, consumos, catálogo y stock por obra.</span><span class="indicadores-option-tag">Materiales</span></span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+      <a class="indicadores-option" href="acopio.html?origen=gerencia">
+        <span class="indicadores-option-icon">📦</span>
+        <span class="indicadores-option-text"><span class="indicadores-option-title">Acopio</span><span class="indicadores-option-desc">Control de materiales acopiados y retiros.</span><span class="indicadores-option-tag">Acopio</span></span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+      <a class="indicadores-option" href="panol.html?origen=gerencia">
+        <span class="indicadores-option-icon">🧰</span>
+        <span class="indicadores-option-text"><span class="indicadores-option-title">Pañol</span><span class="indicadores-option-desc">Herramientas, entradas, salidas y asignación a obras.</span><span class="indicadores-option-tag">Pañol</span></span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="indicadores-modal-bg cq-grupo-modal" id="obrasModal" aria-hidden="true">
+  <div class="indicadores-modal" role="dialog" aria-modal="true" aria-labelledby="obrasModalTitle">
+    <div class="indicadores-modal-hd">
+      <div>
+        <div class="indicadores-modal-kicker">CQ Desarrollos</div>
+        <div class="indicadores-modal-title" id="obrasModalTitle">Obras</div>
+        <div class="indicadores-modal-sub">Elegí el módulo que querés abrir.</div>
+      </div>
+      <button class="indicadores-modal-x" data-close-modal="obrasModal" aria-label="Cerrar">×</button>
+    </div>
+    <div class="indicadores-options">
+      <a class="indicadores-option" href="avance.html?origen=gerencia">
+        <span class="indicadores-option-icon">🏗️</span>
+        <span class="indicadores-option-text"><span class="indicadores-option-title">Avances</span><span class="indicadores-option-desc">Avance de obra, tareas, certificados y seguimiento.</span><span class="indicadores-option-tag">Avances</span></span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+      <a class="indicadores-option" href="control_obras.html?origen=gerencia">
+        <span class="indicadores-option-icon">👷</span>
+        <span class="indicadores-option-text"><span class="indicadores-option-title">Control de Obras</span><span class="indicadores-option-desc">Control operativo y novedades de cada obra.</span><span class="indicadores-option-tag">Control</span></span>
+        <span class="indicadores-option-arrow">›</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<script id="cq-grupos-menu-js">
+(function(){
+  const grupos=[
+    ['btnFinanzasMenu','finanzasModal'],
+    ['btnMaterialesMenu','materialesModal'],
+    ['btnObrasMenu','obrasModal']
+  ];
+  function abrir(id){const m=document.getElementById(id);if(m){m.classList.add('open');m.setAttribute('aria-hidden','false');}}
+  function cerrar(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.setAttribute('aria-hidden','true');}}
+  grupos.forEach(([btnId,modalId])=>{
+    const btn=document.getElementById(btnId), modal=document.getElementById(modalId);
+    if(btn) btn.addEventListener('click',e=>{e.preventDefault();abrir(modalId);});
+    if(modal) modal.addEventListener('click',e=>{if(e.target===modal)cerrar(modalId);});
+  });
+  document.querySelectorAll('[data-close-modal]').forEach(b=>b.addEventListener('click',()=>cerrar(b.dataset.closeModal)));
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')grupos.forEach(x=>cerrar(x[1]));});
+})();
+</script>
+
+
+<script id="cq-gerencia-premium-ui">
+(function(){
+  function prepararPremium(){
+    try{
+      const dst=document.querySelector(".cq-auth-logo");
+      const src=document.querySelector(".logo-wrap img.logo");
+      if(dst && src && !dst.querySelector("img")){
+        const img=src.cloneNode(true);
+        img.removeAttribute("class");
+        img.alt="CQ Desarrollos";
+        dst.appendChild(img);
+      }
+      const eye=document.getElementById("cq-auth-eye");
+      const pass=document.getElementById("cq-auth-pass");
+      if(eye && pass && !eye.dataset.ready){
+        eye.dataset.ready="1";
+        eye.addEventListener("click",function(ev){
+          ev.preventDefault();
+          ev.stopPropagation();
+          pass.type=pass.type==="password"?"text":"password";
+          eye.textContent=pass.type==="password"?"◉":"◎";
+        });
+      }
+    }catch(e){}
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",prepararPremium,{once:true});
+  else prepararPremium();
+})();
+</script>
+
 </body>
 </html>
