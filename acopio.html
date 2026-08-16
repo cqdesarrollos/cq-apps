@@ -2412,6 +2412,101 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
 }
 </style>
 
+
+<style id="cq-colores-carga-retirar">
+/* =========================================================
+   RETIRAR — colores suaves por campo
+   Solo estética: no altera lógica, IDs, eventos ni Firebase.
+   ========================================================= */
+#view-retirar .fld label{
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+#view-retirar .fld label::before{
+  content:"" !important;
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  flex:0 0 7px;
+}
+
+/* Material — azul */
+#retirar-mat-search{
+  background:#F1F7FF !important;
+  border-color:#BFD8F4 !important;
+  box-shadow:inset 3px 0 0 #4F8FD8 !important;
+}
+#retirar-mat-search:focus{
+  border-color:#4F8FD8 !important;
+  box-shadow:0 0 0 3px rgba(79,143,216,.11), inset 3px 0 0 #4F8FD8 !important;
+}
+#view-retirar .fld:has(#retirar-mat-search) label::before{background:#4F8FD8 !important;}
+#view-retirar .fld:has(#retirar-mat-search) label{color:#376EA9 !important;}
+
+/* Cantidad — verde */
+#retirar-qty{
+  background:#F0FAF4 !important;
+  border-color:#B9DFC9 !important;
+  box-shadow:inset 3px 0 0 #3A9B68 !important;
+}
+#retirar-qty:focus{
+  border-color:#3A9B68 !important;
+  box-shadow:0 0 0 3px rgba(58,155,104,.11), inset 3px 0 0 #3A9B68 !important;
+}
+#view-retirar .fld:has(#retirar-qty) label::before{background:#3A9B68 !important;}
+#view-retirar .fld:has(#retirar-qty) label{color:#28754D !important;}
+
+/* Fecha — ámbar */
+#retirar-fecha{
+  background:#FFF8EC !important;
+  border-color:#EDD19C !important;
+  box-shadow:inset 3px 0 0 #D39A3A !important;
+}
+#retirar-fecha:focus{
+  border-color:#D39A3A !important;
+  box-shadow:0 0 0 3px rgba(211,154,58,.11), inset 3px 0 0 #D39A3A !important;
+}
+#view-retirar .fld:has(#retirar-fecha) label::before{background:#D39A3A !important;}
+#view-retirar .fld:has(#retirar-fecha) label{color:#9A691B !important;}
+
+/* Subrubro — violeta */
+#retirar-subrubro{
+  background:#F8F3FF !important;
+  border-color:#D7C2EE !important;
+  box-shadow:inset 3px 0 0 #8A63B6 !important;
+}
+#retirar-subrubro:focus{
+  border-color:#8A63B6 !important;
+  box-shadow:0 0 0 3px rgba(138,99,182,.11), inset 3px 0 0 #8A63B6 !important;
+}
+#view-retirar .fld:has(#retirar-subrubro) label::before{background:#8A63B6 !important;}
+#view-retirar .fld:has(#retirar-subrubro) label{color:#6E4899 !important;}
+
+/* Comentario — celeste */
+#retirar-comentario{
+  background:#F1FAFC !important;
+  border:1px solid #BFDDE5 !important;
+  box-shadow:inset 3px 0 0 #4B9EB1 !important;
+}
+#retirar-comentario:focus{
+  border-color:#4B9EB1 !important;
+  outline:none !important;
+  box-shadow:0 0 0 3px rgba(75,158,177,.10), inset 3px 0 0 #4B9EB1 !important;
+}
+#view-retirar .fld:has(#retirar-comentario) label::before{background:#4B9EB1 !important;}
+#view-retirar .fld:has(#retirar-comentario) label{color:#367D8D !important;}
+
+/* En mobile conservar los colores aunque la compactación quite sombras */
+@media(max-width:560px){
+  #retirar-mat-search{box-shadow:inset 3px 0 0 #4F8FD8 !important;}
+  #retirar-qty{box-shadow:inset 3px 0 0 #3A9B68 !important;}
+  #retirar-fecha{box-shadow:inset 3px 0 0 #D39A3A !important;}
+  #retirar-subrubro{box-shadow:inset 3px 0 0 #8A63B6 !important;}
+  #retirar-comentario{box-shadow:inset 3px 0 0 #4B9EB1 !important;}
+}
+</style>
+
 </head>
 <body>
 
@@ -3270,6 +3365,9 @@ async function saveToFirebase(){
     suppressRemoteUntil=Date.now()+1800;
     await f.setDoc(ref,payload);
 
+    // La escritura fue confirmada por Firebase. Los tombstones que ya no están
+    // presentes en este payload pueden darse por consolidados.
+    if(typeof cqConfirmarTombstonesConPayload==='function')cqConfirmarTombstonesConPayload(payload);
     lastSyncedAt=payload.updatedAt;
 
     // Sólo declarar limpio si no hubo NINGÚN persist nuevo mientras se esperaba Firebase.
@@ -3358,11 +3456,30 @@ function listenFirebase(){
       if(lastSyncedAt && remoteUpdatedAt && remoteUpdatedAt===lastSyncedAt)return;
 
       var localBackups=(DB&&DB.backups)||[];
-      DB=sanitizeDB(snap.data().db);
+      var remoteDB=sanitizeDB(snap.data().db);
+
+      // Blindaje de borrados: un snapshot remoto atrasado nunca puede volver a
+      // insertar un retiro que este dispositivo ya confirmó como eliminado.
+      var teniaBorradosPendientes=false;
+      if(typeof cqAplicarTombstonesRetiros==='function'){
+        var rr=cqAplicarTombstonesRetiros(remoteDB);
+        remoteDB=rr.db;
+        teniaBorradosPendientes=rr.encontro;
+      }
+
+      DB=remoteDB;
       if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
       localStorage.setItem(DB_KEY,JSON.stringify(DB));
       lastSyncedAt=remoteUpdatedAt;
       setSyncStatus('Sync: actualizado',false,remoteUpdatedAt||new Date().toISOString());
+
+      // Si el snapshot venía atrasado y todavía contenía un retiro borrado,
+      // volver a publicar inmediatamente la versión correcta sin ese retiro.
+      if(teniaBorradosPendientes){
+        marcarAcopioDirty();
+        scheduleFirebaseSave();
+      }
+
       if(curAcopioId && !getAcopio()) curAcopioId=null;
       if(curAcopioId) abrirAcopio(curAcopioId); else goHome();
     }
@@ -3736,19 +3853,31 @@ document.addEventListener('click',function(e){
   });
 });
 function gastoAcopioId(acopioId,retiroId){return 'acopio_'+String(acopioId)+'_'+String(retiroId);}
+
+// Mientras se hace la primera verificación de Gastos de esta sesión, los retiros
+// que YA tienen vínculo guardado se muestran verdes. Es únicamente visual:
+// Firebase sigue verificando detrás y, si detecta un problema real, recién entonces
+// el punto pasa a rojo. Así se evita el flash rojo al entrar a Acopio.
+var gastosVerificacionInicialLista=false;
+
 function gastoSyncEstadoAcopio(r){
   // Gris solamente si Gastos fue excluido intencionalmente por Pañol con precio.
   if(r&&r.cargarGastos===false && r.cargarPanol===true && r.panolSinPrecio!==true){
     return {cls:'off',txt:'Gastos se registra al consumir desde Pañol'};
   }
 
-  var st=(r&&r.gastosSyncEstado)||'error';
-
-  // Una carga normal que no está en Gastos debe verse roja.
+  // Una carga normal que explícitamente no va a Gastos debe verse roja.
   if(r&&r.cargarGastos===false && r.cargarPanol!==true){
     return {cls:'err',txt:'NO está cargado en Gastos. Verificar.'};
   }
 
+  // Al abrir: si el retiro ya está vinculado a una obra de Gastos, arrancar verde
+  // desde el primer render, sin esperar la lectura inicial de Firebase.
+  if(!gastosVerificacionInicialLista && r && r.gastosObraId && r.cargarGastos!==false){
+    return {cls:'ok',txt:'Cargado en Gastos · verificando…'};
+  }
+
+  var st=(r&&r.gastosSyncEstado)||((r&&r.gastosObraId&&r.cargarGastos!==false)?'pendiente':'error');
   return {
     cls:st==='ok'?'ok':(st==='pendiente'?'wait':'err'),
     txt:st==='ok'?'Cargado OK en Gastos':
@@ -3895,7 +4024,11 @@ async function verificarGastosAcopio(){
     if(cambio){persist();renderRetirarHistorial();}
   }catch(e){
     console.warn('Verificación Gastos Acopio',e);
-  }finally{verificandoGastosAcopio=false;}
+  }finally{
+    gastosVerificacionInicialLista=true;
+    verificandoGastosAcopio=false;
+    try{renderRetirarHistorial();}catch(_e){}
+  }
 }
 function bulkSiguientePrecio(){
   var el=document.getElementById('bulk-mat-precios');
@@ -3999,19 +4132,23 @@ function renderHome(){
     return;
   }
 
-  list.innerHTML=activos.map(function(a){
+  list.innerHTML=activos.map(function(a,idx){
     var t=calcAcopioTotales(a);
     var saldoCero=Math.abs(t.saldo)<0.5;
-    var col=saldoCero?'#8A8F87':(a.color||'#1C3D35');
-    return '<div class="acopio-card'+(saldoCero?' saldo-cero':'')+'" style="border-left:6px solid '+col+'" onclick="abrirAcopio('+a.id+')">'
+    /* Color visual distinto por acopio en la pantalla inicial. No modifica los datos guardados. */
+    var cqHomePalette=['#238B68','#2B7BE0','#C8882A','#7B3FA0','#C65A45','#1E8DB4'];
+    var col=saldoCero?'#8A8F87':cqHomePalette[idx%cqHomePalette.length];
+    return '<div class="acopio-card'+(saldoCero?' saldo-cero':'')+'" style="--cq-acopio-accent:'+col+';border-left:6px solid '+col+'" onclick="abrirAcopio('+a.id+')">'
+      +'<div class="acopio-card-top">'
+      +'<div class="acopio-card-ident"><span class="acopio-card-icon">🏗</span><div class="acopio-card-ttl">'+a.nombre+'</div></div>'
       +'<div class="acopio-actions">'
       +'<button class="acopio-card-btn" title="Subir" onclick="event.stopPropagation();moverAcopio('+a.id+',-1)">↑</button>'
       +'<button class="acopio-card-btn" title="Bajar" onclick="event.stopPropagation();moverAcopio('+a.id+',1)">↓</button>'
       +'<button class="acopio-card-btn" title="Renombrar" onclick="event.stopPropagation();editarNombreAcopio('+a.id+')">✎</button>'
       +'<button class="acopio-card-btn" title="Archivar" onclick="event.stopPropagation();toggleArchivarAcopio('+a.id+')">📦</button>'
-      +'<button class="acopio-card-btn danger" title="Eliminar" onclick="event.stopPropagation();confirmarBorrarAcopio('+a.id+')">✕</button>'
+      +'<button class="acopio-card-btn danger" title="Eliminar" onclick="event.stopPropagation();confirmarBorrarAcopio('+a.id+')">🗑</button>'
       +'</div>'
-      +'<div class="acopio-card-ttl">'+a.nombre+'</div>'
+      +'</div>'
       +'<div class="acopio-card-sub">Creado '+fmtFecha(a.creado)+' · TC $'+fmtN(a.tc||TC_DEFAULT,0)+' · '+a.mats.length+' materiales</div>'
       +'<div class="acopio-card-stats">'
       +'<div><div class="acopio-stat-label">Pagado</div><div class="acopio-stat-val">$'+fmtN(t.totalPagado,0)+'</div></div>'
@@ -5662,38 +5799,40 @@ async function guardarRetiro(){
 
   var okMat=!cargarMateriales,okGas=!cargarGastos,okPanol=!cargarPanol;
 
+  // Sincronizar destinos en paralelo. Antes se esperaban uno detrás de otro,
+  // haciendo que el usuario pagara la suma de todas las demoras de Firebase.
+  // Cada integración mantiene exactamente el mismo manejo de error/estado.
+  var syncTasks=[];
   if(cargarMateriales){
-    try{
-      await sincronizarRetiroConMateriales(retiro,true);
-      okMat=true;
-    }catch(e){
-      console.warn('No se pudo cargar el retiro en Materiales',e);
-    }
+    syncTasks.push(
+      sincronizarRetiroConMateriales(retiro,true).then(function(){okMat=true;}).catch(function(e){
+        console.warn('No se pudo cargar el retiro en Materiales',e);
+      })
+    );
   }
 
   if(cargarPanol){
-    try{
-      await sincronizarRetiroConPanol(retiro,true);
-      okPanol=true;
-    }catch(e){
-      console.warn('No se pudo ingresar el retiro en Pañol',e);
-      retiro.panolSyncEstado='error';
-      retiro.panolSyncError=String(e&&e.message||e);
-      persist();renderRetirarHistorial();
-    }
+    syncTasks.push(
+      sincronizarRetiroConPanol(retiro,true).then(function(){okPanol=true;}).catch(function(e){
+        console.warn('No se pudo ingresar el retiro en Pañol',e);
+        retiro.panolSyncEstado='error';
+        retiro.panolSyncError=String(e&&e.message||e);
+        persist();renderRetirarHistorial();
+      })
+    );
   }
 
   if(cargarGastos){
-    try{
-      await sincronizarRetiroConGastos(retiro,true);
-      okGas=true;
-    }catch(e){
-      console.warn('No se pudo cargar el retiro en Gastos',e);
-      retiro.gastosSyncEstado='error';
-      retiro.gastosSyncError=String(e&&e.message||e);
-      persist();renderRetirarHistorial();
-    }
+    syncTasks.push(
+      sincronizarRetiroConGastos(retiro,true).then(function(){okGas=true;}).catch(function(e){
+        console.warn('No se pudo cargar el retiro en Gastos',e);
+        retiro.gastosSyncEstado='error';
+        retiro.gastosSyncError=String(e&&e.message||e);
+        persist();renderRetirarHistorial();
+      })
+    );
   }
+  if(syncTasks.length)await Promise.all(syncTasks);
 
   var destinos=[];
   if(cargarMateriales)destinos.push(okMat?'Materiales':'Materiales ✕');
@@ -5864,8 +6003,8 @@ function renderRetirarHistorial(){
         +(r.subrubro?'<div style="font-size:9px;color:#7A9E82;margin-top:2px;font-weight:800">'+r.subrubro+'</div>':'')
         +(r.comentario?'<div style="font-size:9px;color:#7A9E82;margin-top:2px">💬 '+String(r.comentario).replace(/</g,'&lt;')+'</div>':'')+'</td>'
       +'<td class="mono r" style="font-weight:700">'+fmtN(r.qty,2)+' '+(m?m.unidad:'')+'</td>'
-      +'<td class="mono r">'+fmtP(val)+'</td>'
-      +'<td class="mono r" style="color:#7A9E82">'+fmtU(toUSD(val))+'</td>'
+      +'<td class="mono r cq-precio-mobile"><span class="cq-precio-pesos">'+fmtP(val)+'</span><span class="cq-precio-usd">'+fmtU(toUSD(val))+'</span></td>'
+      +'<td class="mono r cq-precio-usd-desktop" style="color:#7A9E82">'+fmtU(toUSD(val))+'</td>'
       +'<td class="mat-sync-cell">'+puntoMaterialesRetiro(r)+'</td>'
       +'<td class="gasto-sync-cell">'+puntoGastosRetiro(r)+'</td>'
       +'<td class="gasto-sync-cell">'+puntoPanolRetiro(r)+'</td>'
@@ -6114,21 +6253,19 @@ async function eliminarGastoRetiroAcopioSeguro(retiro){
   var f=window._cqFirebase;
   var gastoId=gastoAcopioId(a.id,retiro.id);
 
-  // Reunir todas las obras posibles. Primero las más probables.
+  // Reunir todas las obras posibles. Primero las más probables, pero sin perder
+  // el respaldo histórico de revisar todas las obras de Gastos.
   var candidatos=[];
   function add(id){
     id=String(id||'').trim();
     if(id && candidatos.indexOf(id)<0)candidatos.push(id);
   }
 
-  // 1) Obra que quedó guardada en el retiro.
   add(retiro.gastosObraId);
 
-  // 2) Obra actual resuelta por índice.
   var actual=obraGastosActualPorIdx(retiro.obraIdx);
   if(actual)add(actual.id);
 
-  // 3) Buscar por nombre histórico, por si cambió el índice/orden de obras.
   var nombreHist=String(retiro.obraHistorica||retiroObraLabel(retiro)||'').trim();
   if(nombreHist && gastosConfigAcopio && Array.isArray(gastosConfigAcopio.obras)){
     var norm=function(v){
@@ -6142,22 +6279,19 @@ async function eliminarGastoRetiroAcopioSeguro(retiro){
     });
   }
 
-  // 4) Respaldo definitivo: revisar todas las obras de Gastos.
-  // Esto cubre retiros viejos donde gastosObraId quedó vacío o incorrecto.
   if(gastosConfigAcopio && Array.isArray(gastosConfigAcopio.obras)){
     gastosConfigAcopio.obras.forEach(function(o){
       if(o&&o.id)add(o.id);
     });
   }
 
-  var encontrado=false;
-
-  for(var i=0;i<candidatos.length;i++){
-    var obraId=candidatos[i];
+  // Antes se hacía getDoc obra por obra. Ahora se consultan todas en paralelo.
+  // La cobertura es exactamente la misma, sólo baja el tiempo de espera.
+  var revisiones=await Promise.all(candidatos.map(async function(obraId){
     try{
       var ref=f.doc(f.db,'gastos',obraId);
       var snap=await f.getDoc(ref);
-      if(!snap.exists())continue;
+      if(!snap.exists())return null;
 
       var data=snap.data()||{};
       var gastos=Array.isArray(data.gastos)?data.gastos:[];
@@ -6168,12 +6302,22 @@ async function eliminarGastoRetiroAcopioSeguro(retiro){
             && String(g&&g.acopioRetiroId||'')===String(retiro.id)
           );
       });
-      if(!existe)continue;
+      return existe?{obraId:obraId,ref:ref}:null;
+    }catch(e){
+      console.warn('No se pudo revisar gasto de Acopio en obra',obraId,e);
+      return null;
+    }
+  }));
 
-      encontrado=true;
+  var encontrados=revisiones.filter(Boolean);
 
+  // Si por datos históricos existiera el mismo retiro en más de una obra,
+  // también se eliminan todos. Las transacciones son sobre docs distintos,
+  // por eso pueden ejecutarse en paralelo de forma segura.
+  await Promise.all(encontrados.map(async function(item){
+    try{
       await f.runTransaction(f.db,async function(tx){
-        var snapTx=await tx.get(ref);
+        var snapTx=await tx.get(item.ref);
         if(!snapTx.exists())return;
 
         var d=snapTx.data()||{};
@@ -6188,50 +6332,148 @@ async function eliminarGastoRetiroAcopioSeguro(retiro){
 
         d.gastos=arr;
         d.updatedAt=new Date().toISOString();
-        tx.set(ref,d);
+        tx.set(item.ref,d);
       });
     }catch(e){
-      console.warn('No se pudo revisar/eliminar gasto de Acopio en obra',obraId,e);
+      // Mantener el mismo comportamiento tolerante que tenía esta función:
+      // registrar el error de una obra sin impedir revisar/eliminar las demás.
+      console.warn('No se pudo eliminar gasto de Acopio en obra',item.obraId,e);
     }
-  }
+  }));
 
   // No encontrarlo también se considera OK: puede haber sido borrado previamente.
   return true;
 }
 
+var cqRetirosBorrando=new Set();
+
+// Retiros eliminados localmente que todavía podrían aparecer en un snapshot
+// remoto atrasado. Se guardan también en localStorage para sobrevivir un reload.
+var CQ_RETIROS_BORRADOS_KEY='cq_acopio_retiros_borrados_v1';
+var cqRetirosBorradosPendientes=(function(){
+  try{
+    var a=JSON.parse(localStorage.getItem(CQ_RETIROS_BORRADOS_KEY)||'[]');
+    return new Set(Array.isArray(a)?a.map(String):[]);
+  }catch(e){return new Set();}
+})();
+function cqGuardarTombstonesRetiros(){
+  try{localStorage.setItem(CQ_RETIROS_BORRADOS_KEY,JSON.stringify(Array.from(cqRetirosBorradosPendientes)));}catch(e){}
+}
+function cqTombstoneKey(acopioId,retiroId){return String(acopioId)+'::'+String(retiroId);}
+function cqAgregarTombstoneRetiro(acopioId,retiroId){
+  cqRetirosBorradosPendientes.add(cqTombstoneKey(acopioId,retiroId));
+  cqGuardarTombstonesRetiros();
+}
+function cqAplicarTombstonesRetiros(db){
+  var encontro=false;
+  if(!db||!Array.isArray(db.acopios)||!cqRetirosBorradosPendientes.size)return {db:db,encontro:false};
+  db.acopios.forEach(function(a){
+    if(!a||!Array.isArray(a.retiros))return;
+    a.retiros=a.retiros.filter(function(r){
+      var k=cqTombstoneKey(a.id,r&&r.id);
+      if(cqRetirosBorradosPendientes.has(k)){encontro=true;return false;}
+      return true;
+    });
+  });
+  return {db:db,encontro:encontro};
+}
+function cqConfirmarTombstonesConPayload(payload){
+  try{
+    var db=payload&&payload.db;
+    if(!db||!Array.isArray(db.acopios))return;
+    var presentes=new Set();
+    db.acopios.forEach(function(a){(a.retiros||[]).forEach(function(r){presentes.add(cqTombstoneKey(a.id,r&&r.id));});});
+    var cambio=false;
+    Array.from(cqRetirosBorradosPendientes).forEach(function(k){
+      if(!presentes.has(k)){cqRetirosBorradosPendientes.delete(k);cambio=true;}
+    });
+    if(cambio)cqGuardarTombstonesRetiros();
+  }catch(e){}
+}
 async function borrarRetiro(id){
+  // Normalizar el id para evitar diferencias número/string según de dónde venga el botón.
+  var idKey=String(id);
+  if(cqRetirosBorrando.has(idKey))return;
+
   var a=getAcopio();
-  var r=(a&&a.retiros||[]).find(function(x){return x.id===id;});
+  var r=(a&&a.retiros||[]).find(function(x){return String(x.id)===idKey;});
   var m=r?getMat(r.matId):null;
   if(!r){toast('No se encontró el retiro.','err');return;}
-  var msg='¿Eliminar el retiro de '+fmtN(r.qty,2)+' '+(m?m.unidad:'')+' de '+(m?m.nom:'material')+'?\n\nSe eliminará también todo lo generado después en Pañol, Materiales y Gastos.';
+
+  var msg='¿Confirmás que querés eliminar este retiro?\n\n'
+    +fmtN(r.qty,2)+' '+(m?m.unidad:'')+' · '+(m?m.nom:'material')
+    +'\n\nTambién se eliminará lo generado por este retiro en Pañol, Materiales y Gastos.';
   if(!confirm(msg))return;
+
+  // Desde acá el borrado queda tomado por ESTE toque. Evita dobles pulsaciones
+  // mientras termina la cascada remota.
+  cqRetirosBorrando.add(idKey);
+
+  // Feedback inmediato en la fila para que se vea que el primer toque fue tomado.
+  var btn=null,tr=null,oldHtml='',oldOpacity='',oldPointer='';
+  try{
+    var botones=Array.from(document.querySelectorAll('#retirar-historial button[onclick*="borrarRetiro"]'));
+    btn=botones.find(function(b){
+      var oc=String(b.getAttribute('onclick')||'');
+      return oc.indexOf('borrarRetiro('+String(id)+')')>=0 || oc.indexOf('borrarRetiro(\''+idKey+'\')')>=0 || oc.indexOf('borrarRetiro("'+idKey+'")')>=0;
+    })||null;
+    if(btn){
+      oldHtml=btn.innerHTML;
+      btn.disabled=true;
+      btn.style.pointerEvents='none';
+      btn.style.opacity='.45';
+      tr=btn.closest('tr');
+      if(tr){
+        oldOpacity=tr.style.opacity;
+        oldPointer=tr.style.pointerEvents;
+        tr.style.opacity='.48';
+        tr.style.pointerEvents='none';
+      }
+    }
+  }catch(_e){}
+  toast('Eliminando retiro…');
 
   var usarMat=r.cargarMateriales!==false;
   var usarGas=r.cargarGastos!==false;
   var usarPanol=r.cargarPanol===true;
 
   try{
-    // 1. Pañol primero: si ese stock ya generó salidas, esta función elimina
-    // también Materiales/Gastos creados por esas salidas.
+    // 1) Pañol primero: puede tener movimientos derivados que deben limpiarse antes.
     if(usarPanol)await sincronizarRetiroConPanol(r,false);
 
-    // 2. Limpiar también las integraciones directas originales de Acopio.
-    // Son operaciones idempotentes: si no existen, no pasa nada.
-    if(usarMat)await sincronizarRetiroConMateriales(r,false);
-    if(usarGas)await eliminarGastoRetiroAcopioSeguro(r);
+    // 2) Las integraciones directas de Acopio en Materiales y Gastos son
+    // independientes y se eliminan en paralelo para mantener el borrado rápido.
+    var limpiezas=[];
+    if(usarMat)limpiezas.push(sincronizarRetiroConMateriales(r,false));
+    if(usarGas)limpiezas.push(eliminarGastoRetiroAcopioSeguro(r));
+    if(limpiezas.length)await Promise.all(limpiezas);
 
-    // 3. Sólo cuando toda la cascada terminó bien, quitar de Acopio.
+    // 3) Sólo al completar la cascada quitar definitivamente de Acopio.
     pushUndo();
     a=getAcopio();
     if(!a)throw new Error('No se encontró el acopio al finalizar');
-    a.retiros=(a.retiros||[]).filter(function(x){return x.id!==id;});
+
+    // Registrar primero el borrado como tombstone. Así, aunque llegue un snapshot
+    // remoto viejo antes de que termine el setDoc de Acopio, este retiro no puede reaparecer.
+    cqAgregarTombstoneRetiro(a.id,idKey);
+    a.retiros=(a.retiros||[]).filter(function(x){return String(x.id)!==idKey;});
     persist();
     renderRetirarHistorial();
+
+    // No esperar el debounce normal de 220 ms: publicar ya el Acopio sin el retiro.
+    clearTimeout(saveTimer);saveTimer=null;saveRequested=true;
+    await saveToFirebase();
     toast('✓ Eliminado de Acopio, Pañol, Materiales y Gastos');
   }catch(e){
     console.warn('Borrado en cascada',e);
+    // Si algo falló, restaurar visualmente la fila para permitir reintentar.
+    try{
+      if(tr){tr.style.opacity=oldOpacity;tr.style.pointerEvents=oldPointer;}
+      if(btn){btn.disabled=false;btn.style.pointerEvents='';btn.style.opacity='';if(oldHtml)btn.innerHTML=oldHtml;}
+    }catch(_e){}
     toast('⚠️ No se completó el borrado: '+String(e&&e.message||e),'err');
+  }finally{
+    cqRetirosBorrando.delete(idKey);
   }
 }
 
@@ -7623,6 +7865,7 @@ function cqConfirmRetProdFilter(ev){
 function cqAplicarFechasRetiro(){
   renderRetirarHistorial();
   cqActualizarResumenFiltros();
+  cqToggleHistFiltros(false);
 }
 function cqActualizarResumenFiltros(){
   var r=document.getElementById('cq-ret-filtros-resumen');if(!r)return;
@@ -9319,5 +9562,571 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
 }
 </style>
 
+
+<style id="cq-solapas-acopio-color-nombre">
+/* Nombres de los acopios: más visuales, sin tocar lógica */
+.acopio-card-ttl{
+  display:inline-block!important;
+  width:auto!important;
+  padding:5px 10px!important;
+  border-radius:9px!important;
+  background:linear-gradient(135deg,#EAF7F0,#F5FBF7)!important;
+  border:1px solid rgba(46,125,94,.18)!important;
+  color:#176246!important;
+  font-weight:900!important;
+  letter-spacing:.01em!important;
+  box-shadow:0 3px 9px rgba(28,61,53,.06)!important;
+}
+.acopio-card:nth-of-type(4n+2) .acopio-card-ttl{background:linear-gradient(135deg,#EDF5FF,#F8FBFF)!important;border-color:rgba(43,123,224,.18)!important;color:#245FAD!important}
+.acopio-card:nth-of-type(4n+3) .acopio-card-ttl{background:linear-gradient(135deg,#FFF4E2,#FFF9F0)!important;border-color:rgba(200,136,42,.20)!important;color:#996316!important}
+.acopio-card:nth-of-type(4n+4) .acopio-card-ttl{background:linear-gradient(135deg,#F5EEFF,#FBF8FF)!important;border-color:rgba(123,63,160,.17)!important;color:#70408B!important}
+.acopio-card.saldo-cero .acopio-card-ttl{background:#ECECE7!important;border-color:#D8D8D0!important;color:#6F756E!important}
+@media(max-width:560px){.acopio-card-ttl{padding:4px 8px!important;border-radius:8px!important}}
+</style>
+
+
+
+<style id="cq-precios-visibles-mobile-v1">
+/* Historial Retirar — en celular mostrar precios sin scroll horizontal. */
+#retirar-historial .cq-precio-mobile .cq-precio-usd{display:none}
+
+@media(max-width:620px){
+  /* Recuperar precio en pesos y agrupar debajo su equivalente en dólares. */
+  #retirar-historial th:nth-child(5),
+  #retirar-historial td:nth-child(5){
+    display:table-cell!important;
+  }
+  #retirar-historial th:nth-child(6),
+  #retirar-historial td:nth-child(6){
+    display:none!important;
+  }
+
+  #retirar-historial th:nth-child(1),
+  #retirar-historial td:nth-child(1){width:8%!important}
+  #retirar-historial th:nth-child(2),
+  #retirar-historial td:nth-child(2){width:12%!important}
+  #retirar-historial th:nth-child(3),
+  #retirar-historial td:nth-child(3){width:28%!important}
+  #retirar-historial th:nth-child(4),
+  #retirar-historial td:nth-child(4){width:11%!important}
+  #retirar-historial th:nth-child(5),
+  #retirar-historial td:nth-child(5){width:18%!important}
+  #retirar-historial th:nth-child(7),
+  #retirar-historial td:nth-child(7),
+  #retirar-historial th:nth-child(8),
+  #retirar-historial td:nth-child(8),
+  #retirar-historial th:nth-child(9),
+  #retirar-historial td:nth-child(9){width:4%!important}
+  #retirar-historial th:nth-child(10),
+  #retirar-historial td:nth-child(10){width:11%!important}
+
+  #retirar-historial th:nth-child(5){
+    font-size:0!important;
+    text-align:right!important;
+  }
+  #retirar-historial th:nth-child(5)::after{
+    content:"PRECIO";
+    font-size:6.5px;
+    font-weight:900;
+    color:#7AAF96;
+  }
+
+  #retirar-historial td:nth-child(5){
+    text-align:right!important;
+    white-space:nowrap!important;
+    padding-left:1px!important;
+    padding-right:2px!important;
+    line-height:1.05!important;
+  }
+  #retirar-historial .cq-precio-mobile .cq-precio-pesos{
+    display:block!important;
+    font-size:7.6px!important;
+    font-weight:900!important;
+    color:#173F32!important;
+    letter-spacing:-.03em!important;
+  }
+  #retirar-historial .cq-precio-mobile .cq-precio-usd{
+    display:block!important;
+    margin-top:2px!important;
+    font-size:6.4px!important;
+    font-weight:800!important;
+    color:#7A9E82!important;
+    letter-spacing:-.03em!important;
+  }
+
+  /* Un poco más de aire útil para el material sin ensanchar la tabla. */
+  #retirar-historial td:nth-child(1){padding-left:2px!important;padding-right:2px!important;font-size:7.3px!important}
+  #retirar-historial td:nth-child(2){padding-left:2px!important;padding-right:2px!important}
+  #retirar-historial td:nth-child(3){padding-left:3px!important;padding-right:3px!important;font-size:8.8px!important}
+  #retirar-historial td:nth-child(4){padding-left:1px!important;padding-right:1px!important;font-size:8px!important}
+  #retirar-historial .badge{font-size:6.8px!important;padding:2px 4px!important}
+
+  #retirar-historial td:nth-child(10) .btn-sm,
+  #retirar-historial td:nth-child(10) .desc-del{
+    width:19px!important;
+    min-width:19px!important;
+    height:21px!important;
+    min-height:21px!important;
+    margin-right:1px!important;
+  }
+}
+</style>
+
+<style id="cq-home-acopio-header-inline-v1">
+/* Pantalla inicial: icono + nombre + acciones en una sola cabecera. */
+.acopio-card{
+  padding-top:16px!important;
+  min-height:0!important;
+}
+.acopio-card::before{content:none!important;display:none!important}
+.acopio-card-top{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  margin-bottom:9px!important;
+  min-width:0!important;
+}
+.acopio-card-ident{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  min-width:0!important;
+  flex:1 1 auto!important;
+}
+.acopio-card-icon{
+  width:32px!important;
+  height:32px!important;
+  min-width:32px!important;
+  display:grid!important;
+  place-items:center!important;
+  border-radius:10px!important;
+  background:#EAF7F0!important;
+  border:1px solid rgba(46,125,94,.14)!important;
+  font-size:15px!important;
+  box-shadow:0 3px 9px rgba(28,61,53,.06)!important;
+}
+.acopio-card-ttl{
+  margin:0!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  line-height:1.15!important;
+}
+.acopio-actions{
+  position:static!important;
+  margin:0!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:5px!important;
+  flex:0 0 auto!important;
+}
+.acopio-actions .acopio-card-btn,
+.acopio-actions .acopio-card-del{
+  width:34px!important;
+  min-width:34px!important;
+  height:34px!important;
+  min-height:34px!important;
+  border-radius:10px!important;
+}
+.acopio-card-sub,.acopio-card-stats{margin-left:0!important}
+
+@media(max-width:560px){
+  .acopio-card{padding:12px!important;padding-left:14px!important}
+  .acopio-card-top{gap:6px!important;margin-bottom:8px!important}
+  .acopio-card-ident{gap:6px!important}
+  .acopio-card-icon{width:28px!important;height:28px!important;min-width:28px!important;font-size:13px!important;border-radius:9px!important}
+  .acopio-card-ttl{font-size:12px!important;padding:4px 6px!important;max-width:105px!important}
+  .acopio-actions{gap:3px!important}
+  .acopio-actions .acopio-card-btn,
+  .acopio-actions .acopio-card-del{width:29px!important;min-width:29px!important;height:29px!important;min-height:29px!important;border-radius:8px!important;font-size:13px!important}
+}
+</style>
+
+
+<style id="cq-final-colores-acopios-y-landscape">
+/* =========================================================
+   AJUSTES FINALES SOLICITADOS
+   1) Cada acopio activo tiene un color distinto en Inicio.
+   2) El historial Retirar queda legible en vertical y horizontal.
+   3) En Inicio se achican apenas los iconos para dar más lugar al nombre.
+   Sólo presentación: no toca Firebase ni la lógica de datos.
+   ========================================================= */
+
+/* El color de cada tarjeta se transmite a icono, nombre y saldo. */
+#acopios-list .acopio-card:not(.saldo-cero){
+  border-left-color:var(--cq-acopio-accent)!important;
+}
+#acopios-list .acopio-card:not(.saldo-cero) .acopio-card-icon{
+  color:var(--cq-acopio-accent)!important;
+  border-color:color-mix(in srgb,var(--cq-acopio-accent) 24%, transparent)!important;
+  background:color-mix(in srgb,var(--cq-acopio-accent) 10%, white)!important;
+}
+#acopios-list .acopio-card:not(.saldo-cero) .acopio-card-ttl{
+  color:var(--cq-acopio-accent)!important;
+  border-color:color-mix(in srgb,var(--cq-acopio-accent) 24%, transparent)!important;
+  background:color-mix(in srgb,var(--cq-acopio-accent) 9%, white)!important;
+}
+#acopios-list .acopio-card:not(.saldo-cero) .acopio-stat-saldo{
+  border-color:color-mix(in srgb,var(--cq-acopio-accent) 30%, #D5CFC3)!important;
+  background:color-mix(in srgb,var(--cq-acopio-accent) 7%, white)!important;
+}
+
+/* Un poco más de lugar al nombre del acopio en celular, achicando SOLO los iconos/acciones. */
+@media(max-width:560px){
+  #acopios-list .acopio-card-icon{
+    width:25px!important;height:25px!important;min-width:25px!important;
+    font-size:11px!important;border-radius:8px!important;
+  }
+  #acopios-list .acopio-card-ident{gap:5px!important}
+  #acopios-list .acopio-actions{gap:2px!important}
+  #acopios-list .acopio-actions .acopio-card-btn,
+  #acopios-list .acopio-actions .acopio-card-del{
+    width:25px!important;min-width:25px!important;height:25px!important;min-height:25px!important;
+    padding:0!important;border-radius:7px!important;font-size:11px!important;
+  }
+  #acopios-list .acopio-card-ttl{
+    max-width:none!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    font-size:11.5px!important;
+    padding:4px 6px!important;
+  }
+}
+
+/* LANDSCAPE DE CELULAR / TABLET CHICA
+   Usar la misma idea que en vertical: pesos + dólares apilados en una sola columna.
+   Así no se pisan Precio / Mat / Gastos / Pañol. */
+@media (orientation:landscape) and (max-width:1000px){
+  #retirar-historial .tbl-wrap{
+    overflow-x:hidden!important;
+    width:100%!important;
+  }
+  #retirar-historial table{
+    width:100%!important;
+    min-width:0!important;
+    table-layout:fixed!important;
+  }
+
+  /* Precio: una sola columna con $ arriba y u$s abajo. */
+  #retirar-historial th:nth-child(5),
+  #retirar-historial td:nth-child(5){display:table-cell!important}
+  #retirar-historial th:nth-child(6),
+  #retirar-historial td:nth-child(6){display:none!important}
+  #retirar-historial .cq-precio-mobile .cq-precio-pesos{
+    display:block!important;
+    font-size:10px!important;
+    line-height:1.08!important;
+    font-weight:900!important;
+    color:#173F32!important;
+    white-space:nowrap!important;
+  }
+  #retirar-historial .cq-precio-mobile .cq-precio-usd{
+    display:block!important;
+    margin-top:2px!important;
+    font-size:8px!important;
+    line-height:1.05!important;
+    font-weight:800!important;
+    color:#7A9E82!important;
+    white-space:nowrap!important;
+  }
+  #retirar-historial th:nth-child(5){font-size:0!important;text-align:right!important}
+  #retirar-historial th:nth-child(5)::after{
+    content:"PRECIO";font-size:7px;font-weight:900;color:#7AAF96;
+  }
+
+  /* Reparto exacto del ancho visible = 100%. */
+  #retirar-historial th:nth-child(1),#retirar-historial td:nth-child(1){width:7%!important}
+  #retirar-historial th:nth-child(2),#retirar-historial td:nth-child(2){width:14%!important}
+  #retirar-historial th:nth-child(3),#retirar-historial td:nth-child(3){width:33%!important}
+  #retirar-historial th:nth-child(4),#retirar-historial td:nth-child(4){width:10%!important}
+  #retirar-historial th:nth-child(5),#retirar-historial td:nth-child(5){width:16%!important}
+  #retirar-historial th:nth-child(7),#retirar-historial td:nth-child(7),
+  #retirar-historial th:nth-child(8),#retirar-historial td:nth-child(8),
+  #retirar-historial th:nth-child(9),#retirar-historial td:nth-child(9){width:4%!important}
+  #retirar-historial th:nth-child(10),#retirar-historial td:nth-child(10){width:8%!important}
+
+  #retirar-historial th,
+  #retirar-historial td{
+    min-width:0!important;
+    padding-left:4px!important;
+    padding-right:4px!important;
+    vertical-align:middle!important;
+  }
+  #retirar-historial th{font-size:7px!important}
+  #retirar-historial td:nth-child(1){font-size:9px!important;white-space:nowrap!important}
+  #retirar-historial td:nth-child(2){font-size:9px!important}
+  #retirar-historial td:nth-child(2) .badge{font-size:8px!important;padding:3px 6px!important;line-height:1.05!important}
+  #retirar-historial td:nth-child(3){font-size:10px!important;line-height:1.12!important;overflow-wrap:anywhere!important}
+  #retirar-historial td:nth-child(3) > div{font-size:8px!important;line-height:1.08!important}
+  #retirar-historial td:nth-child(4){font-size:9px!important;white-space:nowrap!important}
+  #retirar-historial td:nth-child(5){padding-left:2px!important;padding-right:3px!important;text-align:right!important}
+
+  /* M/G/P compactos y perfectamente centrados. */
+  #retirar-historial th:nth-child(7),
+  #retirar-historial th:nth-child(8),
+  #retirar-historial th:nth-child(9){font-size:0!important;text-align:center!important}
+  #retirar-historial th:nth-child(7)::after{content:"M";font-size:7px;font-weight:900;color:#7AAF96}
+  #retirar-historial th:nth-child(8)::after{content:"G";font-size:7px;font-weight:900;color:#7AAF96}
+  #retirar-historial th:nth-child(9)::after{content:"P";font-size:7px;font-weight:900;color:#7AAF96}
+  #retirar-historial td:nth-child(7),
+  #retirar-historial td:nth-child(8),
+  #retirar-historial td:nth-child(9){padding:0!important;text-align:center!important}
+  #retirar-historial .mat-sync-dot,
+  #retirar-historial .gasto-sync-dot,
+  #retirar-historial .panol-sync-dot{
+    width:9px!important;height:9px!important;min-width:9px!important;
+    margin:0 auto!important;display:inline-block!important;
+  }
+
+  /* Editar / eliminar sin superposición. */
+  #retirar-historial td:nth-child(10){
+    padding:0 2px!important;text-align:center!important;white-space:nowrap!important;
+  }
+  #retirar-historial td:nth-child(10) .btn-sm,
+  #retirar-historial td:nth-child(10) .desc-del{
+    display:inline-flex!important;align-items:center!important;justify-content:center!important;
+    width:21px!important;min-width:21px!important;height:21px!important;min-height:21px!important;
+    margin:0 1px!important;padding:0!important;border-radius:6px!important;font-size:9px!important;
+  }
+
+  /* KPIs un poco más bajos para aprovechar el alto horizontal. */
+  #retirar-historial .kpi{padding:7px 10px!important}
+  #retirar-historial .kpi-val{font-size:14px!important}
+  #retirar-historial .kpi-sub{font-size:8px!important}
+}
+</style>
+
+
+<style id="cq-home-exacto-referencia-final">
+/* =========================================================
+   HOME — AJUSTE FINAL SEGÚN REFERENCIA
+   Sólo pantalla Mis acopios. No toca lógica/Firebase/resto.
+   ========================================================= */
+@media (max-width:620px){
+  #view-home #acopios-list .acopio-card{
+    min-height:0!important;
+    height:auto!important;
+    padding:14px 14px 15px 14px!important;
+    border-radius:16px!important;
+    margin-bottom:10px!important;
+  }
+
+  #view-home #acopios-list .acopio-card-top{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:7px!important;
+    width:100%!important;
+    min-width:0!important;
+    margin:0 0 9px 0!important;
+  }
+
+  #view-home #acopios-list .acopio-card-ident{
+    display:flex!important;
+    align-items:center!important;
+    gap:6px!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    overflow:visible!important;
+  }
+
+  #view-home #acopios-list .acopio-card-icon{
+    width:30px!important;
+    min-width:30px!important;
+    height:30px!important;
+    min-height:30px!important;
+    flex:0 0 30px!important;
+    display:grid!important;
+    place-items:center!important;
+    padding:0!important;
+    margin:0!important;
+    border-radius:9px!important;
+    font-size:14px!important;
+    line-height:1!important;
+  }
+
+  #view-home #acopios-list .acopio-card-ttl{
+    display:block!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    width:auto!important;
+    padding:5px 8px!important;
+    margin:0!important;
+    border-radius:9px!important;
+    font-size:11.5px!important;
+    line-height:1.05!important;
+    font-weight:900!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+
+  #view-home #acopios-list .acopio-actions{
+    position:static!important;
+    inset:auto!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-end!important;
+    flex:0 0 auto!important;
+    gap:4px!important;
+    margin:0!important;
+    padding:0!important;
+    flex-wrap:nowrap!important;
+  }
+
+  /* Un único icono real por botón: anula todos los ::before/::after viejos. */
+  #view-home #acopios-list .acopio-actions .acopio-card-btn::before,
+  #view-home #acopios-list .acopio-actions .acopio-card-btn::after,
+  #view-home #acopios-list .acopio-actions .acopio-card-del::before,
+  #view-home #acopios-list .acopio-actions .acopio-card-del::after{
+    content:none!important;
+    display:none!important;
+  }
+
+  #view-home #acopios-list .acopio-actions .acopio-card-btn,
+  #view-home #acopios-list .acopio-actions .acopio-card-del{
+    width:31px!important;
+    min-width:31px!important;
+    max-width:31px!important;
+    height:31px!important;
+    min-height:31px!important;
+    max-height:31px!important;
+    flex:0 0 31px!important;
+    padding:0!important;
+    margin:0!important;
+    display:inline-flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    border-radius:9px!important;
+    font-size:14px!important;
+    line-height:1!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    box-shadow:none!important;
+    transform:none!important;
+  }
+
+  #view-home #acopios-list .acopio-actions .acopio-card-btn[title="Renombrar"]{
+    font-size:14px!important;
+  }
+  #view-home #acopios-list .acopio-actions .acopio-card-btn[title="Archivar"]{
+    font-size:13px!important;
+    border-color:rgba(200,136,42,.32)!important;
+    background:#FFF9EF!important;
+  }
+  #view-home #acopios-list .acopio-actions .acopio-card-btn[title="Eliminar"],
+  #view-home #acopios-list .acopio-actions .acopio-card-btn.danger{
+    font-size:13px!important;
+    color:#C0392B!important;
+    border-color:rgba(192,57,43,.22)!important;
+    background:#FFF5F4!important;
+  }
+
+  #view-home #acopios-list .acopio-card-sub{
+    margin:0 0 9px 0!important;
+    padding:0!important;
+    font-size:9.8px!important;
+    line-height:1.15!important;
+  }
+
+  #view-home #acopios-list .acopio-card-stats{
+    display:grid!important;
+    grid-template-columns:1fr 1fr 1fr!important;
+    gap:7px!important;
+    margin:0!important;
+  }
+  #view-home #acopios-list .acopio-card-stats>div{
+    min-width:0!important;
+    padding:8px 9px!important;
+    border-radius:10px!important;
+  }
+  #view-home #acopios-list .acopio-stat-label{font-size:8px!important}
+  #view-home #acopios-list .acopio-stat-val{font-size:12.5px!important;white-space:nowrap!important}
+}
+
+/* En pantallas muy angostas, sólo se reduce un punto; no se duplican iconos. */
+@media (max-width:390px){
+  #view-home #acopios-list .acopio-actions{gap:3px!important}
+  #view-home #acopios-list .acopio-actions .acopio-card-btn,
+  #view-home #acopios-list .acopio-actions .acopio-card-del{
+    width:29px!important;min-width:29px!important;max-width:29px!important;
+    height:29px!important;min-height:29px!important;max-height:29px!important;
+    flex-basis:29px!important;font-size:13px!important;
+  }
+  #view-home #acopios-list .acopio-card-ttl{font-size:10.8px!important;padding-left:6px!important;padding-right:6px!important}
+}
+</style>
+
 </body>
 </html>
+
+
+<style id="cq-ajuste-final-nombre-completo">
+/* ÚNICO ajuste final: ganar unos píxeles para que el nombre del acopio se vea completo */
+@media (max-width: 620px){
+  .acopio-card .acopio-card-actions,
+  .acopio-card .card-actions,
+  .acopio-card .actions{
+    gap:4px !important;
+  }
+  .acopio-card .acopio-card-actions button,
+  .acopio-card .card-actions button,
+  .acopio-card .actions button{
+    width:38px !important;
+    min-width:38px !important;
+    height:38px !important;
+    padding:0 !important;
+  }
+  .acopio-card .acopio-name,
+  .acopio-card .card-name,
+  .acopio-card .acopio-title{
+    max-width:none !important;
+    flex:1 1 auto !important;
+    min-width:0 !important;
+  }
+}
+</style>
+
+<style id="cq-fix-definitivo-nombre-acopio-completo">
+/* Solo mobile principal: recuperar unos píxeles para mostrar el nombre completo. */
+@media (max-width:620px){
+  #view-home #acopios-list .acopio-card-top{
+    gap:4px!important;
+  }
+  #view-home #acopios-list .acopio-card-icon{
+    width:28px!important;
+    min-width:28px!important;
+    height:28px!important;
+    min-height:28px!important;
+    flex:0 0 28px!important;
+    font-size:13px!important;
+  }
+  #view-home #acopios-list .acopio-actions{
+    gap:2px!important;
+  }
+  #view-home #acopios-list .acopio-actions .acopio-card-btn,
+  #view-home #acopios-list .acopio-actions .acopio-card-del{
+    width:27px!important;
+    min-width:27px!important;
+    max-width:27px!important;
+    height:29px!important;
+    min-height:29px!important;
+    max-height:29px!important;
+    flex:0 0 27px!important;
+    font-size:12px!important;
+    border-radius:8px!important;
+  }
+  #view-home #acopios-list .acopio-card-ttl{
+    font-size:10.4px!important;
+    padding:5px 6px!important;
+    letter-spacing:-.12px!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+    text-overflow:clip!important;
+  }
+}
+</style>

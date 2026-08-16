@@ -1312,6 +1312,455 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
 }
 </style>
 
+
+<style id="cq-roe-indicadores-configurables">
+#modal-body .cq-roe-cfg-note{
+  margin:8px 0 12px;padding:10px 11px;border-radius:12px;
+  background:#EEF6F1;border:1px solid rgba(36,107,82,.13);
+  color:#53665E;font-size:10.5px;line-height:1.4;
+}
+#modal-body .cq-roe-edit-block{
+  margin-top:10px!important;padding:11px;border:1px solid rgba(16,45,37,.10);
+  border-radius:14px;background:rgba(255,255,255,.62);
+}
+#modal-body .cq-roe-edit-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;
+}
+#modal-body .cq-roe-edit-head h4{margin:0!important}
+#modal-body .cq-roe-edit-head small{
+  font:700 9px 'JetBrains Mono',monospace;color:#7B8982;text-transform:uppercase;
+}
+#modal-body .cq-roe-range-grid{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;
+}
+#modal-body .cq-roe-range-grid.two{grid-template-columns:1fr 1fr}
+#modal-body .cq-roe-range-grid label{
+  display:block;font-size:8px;line-height:1.2;font-weight:800;color:#708078;
+  text-transform:uppercase;letter-spacing:.025em;
+}
+#modal-body .cq-roe-cfg-field{
+  display:flex;align-items:center;margin-top:4px;border:1px solid rgba(16,45,37,.12);
+  background:#FFFDF8;border-radius:9px;overflow:hidden;
+}
+#modal-body .cq-roe-cfg-field input{
+  width:100%;min-width:0;border:0!important;background:transparent!important;
+  outline:none!important;padding:8px 6px!important;
+  font:800 11px 'JetBrains Mono',monospace!important;color:#173B32!important;
+}
+#modal-body .cq-roe-cfg-field span{
+  padding-right:6px;font:800 8px 'JetBrains Mono',monospace;color:#839087;
+}
+#modal-body .cq-roe-preview{
+  display:flex;flex-direction:column;gap:3px;margin-top:7px;
+  font:700 9px 'JetBrains Mono',monospace;color:#718078;
+}
+#modal-body .cq-roe-cfg-save,
+#modal-body .cq-roe-cfg-reset{
+  width:100%;min-height:44px;border-radius:13px;font-family:'Space Grotesk',sans-serif;
+  font-size:12px;font-weight:900;cursor:pointer;
+}
+#modal-body .cq-roe-cfg-save{
+  margin-top:14px;border:1px solid rgba(255,255,255,.25);
+  background:linear-gradient(135deg,#173B32,#34A36F);color:#fff;
+  box-shadow:0 10px 20px rgba(52,163,111,.18);
+}
+#modal-body .cq-roe-cfg-reset{
+  margin-top:7px;border:1px solid rgba(181,72,61,.15);
+  background:linear-gradient(180deg,#fff,#FBEDEA);color:#A64C43;
+}
+@media(max-width:400px){
+  #modal-body .cq-roe-range-grid{gap:4px}
+  #modal-body .cq-roe-range-grid label{font-size:7.4px}
+  #modal-body .cq-roe-cfg-field input{font-size:10px!important;padding:7px 4px!important}
+}
+</style>
+
+
+<style id="cq-roe-config-premium-v2">
+/* SOLO ESTÉTICA DEL MODAL "CÓMO LEERLO" */
+#modal-overlay{
+  background:rgba(10,34,29,.58)!important;
+  backdrop-filter:blur(7px)!important;
+  -webkit-backdrop-filter:blur(7px)!important;
+}
+
+#modal-overlay .modal{
+  max-width:520px!important;
+  max-height:88vh!important;
+  padding:0!important;
+  border-radius:28px 28px 0 0!important;
+  overflow:hidden!important;
+  background:
+    radial-gradient(circle at 92% 0%,rgba(52,163,111,.12),transparent 28%),
+    linear-gradient(180deg,#FFFDF8 0%,#F3EEE4 100%)!important;
+  border:1px solid rgba(16,45,37,.10)!important;
+  box-shadow:0 -24px 60px rgba(7,30,25,.30)!important;
+}
+
+#modal-body{
+  padding:18px 16px 20px!important;
+  overflow-y:auto!important;
+  max-height:88vh!important;
+}
+
+#modal-body > h3{
+  margin:0 48px 4px 0!important;
+  font-size:20px!important;
+  line-height:1.05!important;
+  letter-spacing:-.035em!important;
+  color:#12372E!important;
+  font-weight:900!important;
+}
+
+#modal-body > h3::before{
+  content:"⚙️";
+  display:inline-grid;
+  place-items:center;
+  width:32px;
+  height:32px;
+  margin-right:9px;
+  border-radius:11px;
+  background:linear-gradient(135deg,#173B32,#34A36F);
+  color:#fff;
+  font-size:15px;
+  vertical-align:-6px;
+  box-shadow:0 8px 18px rgba(52,163,111,.20);
+}
+
+#modal-body .close{
+  position:absolute!important;
+  top:14px!important;
+  right:14px!important;
+  float:none!important;
+  width:38px!important;
+  height:38px!important;
+  display:grid!important;
+  place-items:center!important;
+  border-radius:13px!important;
+  border:1px solid rgba(16,45,37,.10)!important;
+  background:rgba(255,255,255,.78)!important;
+  color:#6D7B73!important;
+  font-size:19px!important;
+  box-shadow:0 7px 18px rgba(16,45,37,.08)!important;
+  backdrop-filter:blur(8px)!important;
+}
+
+#modal-body .cq-roe-cfg-note{
+  position:relative!important;
+  margin:12px 0 16px!important;
+  padding:12px 13px 12px 42px!important;
+  border-radius:16px!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.84),rgba(235,247,240,.92))!important;
+  border:1px solid rgba(36,107,82,.13)!important;
+  color:#52665E!important;
+  font-size:10.8px!important;
+  line-height:1.5!important;
+  box-shadow:0 8px 20px rgba(16,45,37,.045)!important;
+}
+#modal-body .cq-roe-cfg-note::before{
+  content:"✓";
+  position:absolute;
+  left:13px;
+  top:50%;
+  transform:translateY(-50%);
+  width:21px;
+  height:21px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#DDF2E6;
+  color:#208756;
+  font-size:12px;
+  font-weight:950;
+}
+
+#modal-body .cq-roe-edit-block{
+  position:relative!important;
+  margin:0 0 10px!important;
+  padding:13px!important;
+  border-radius:18px!important;
+  border:1px solid rgba(16,45,37,.09)!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.96),rgba(250,247,239,.90))!important;
+  box-shadow:
+    0 10px 24px rgba(16,45,37,.055),
+    inset 0 1px 0 rgba(255,255,255,.92)!important;
+  overflow:hidden!important;
+}
+#modal-body .cq-roe-edit-block::before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:12px;
+  bottom:12px;
+  width:4px;
+  border-radius:0 999px 999px 0;
+  background:linear-gradient(180deg,#34A36F,#C8953B);
+}
+
+#modal-body .cq-roe-edit-head{
+  margin-bottom:10px!important;
+  padding-left:3px!important;
+}
+#modal-body .cq-roe-edit-head h4{
+  margin:0!important;
+  font-size:12.5px!important;
+  font-weight:900!important;
+  letter-spacing:.02em!important;
+  color:#16372F!important;
+}
+#modal-body .cq-roe-edit-head small{
+  padding:4px 7px!important;
+  border-radius:999px!important;
+  background:#F0ECE2!important;
+  color:#7C887F!important;
+  font:800 8px 'JetBrains Mono',monospace!important;
+  letter-spacing:.06em!important;
+}
+
+#modal-body .cq-roe-range-grid{
+  gap:7px!important;
+}
+#modal-body .cq-roe-range-grid label{
+  font-size:7.7px!important;
+  line-height:1.25!important;
+  color:#77857E!important;
+  font-weight:900!important;
+  letter-spacing:.035em!important;
+}
+
+#modal-body .cq-roe-cfg-field{
+  min-height:40px!important;
+  margin-top:5px!important;
+  border-radius:12px!important;
+  border:1px solid rgba(16,45,37,.105)!important;
+  background:
+    linear-gradient(180deg,#FFFFFF,#F7F3EB)!important;
+  box-shadow:
+    inset 0 1px 2px rgba(16,45,37,.03),
+    0 3px 8px rgba(16,45,37,.025)!important;
+  transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease!important;
+}
+#modal-body .cq-roe-cfg-field:focus-within{
+  border-color:rgba(52,163,111,.48)!important;
+  box-shadow:
+    0 0 0 3px rgba(52,163,111,.10),
+    inset 0 1px 2px rgba(16,45,37,.03)!important;
+  transform:translateY(-1px);
+}
+#modal-body .cq-roe-cfg-field input{
+  min-height:38px!important;
+  padding:8px 7px!important;
+  font-size:11.5px!important;
+  font-weight:900!important;
+  letter-spacing:-.02em!important;
+}
+#modal-body .cq-roe-cfg-field span{
+  padding-right:8px!important;
+  font-size:8px!important;
+  opacity:.72!important;
+}
+
+#modal-body .cq-roe-preview{
+  margin-top:9px!important;
+  padding:8px 9px!important;
+  border-radius:12px!important;
+  background:#F5F1E8!important;
+  border:1px solid rgba(16,45,37,.06)!important;
+  gap:5px!important;
+}
+#modal-body .cq-roe-preview span{
+  position:relative;
+  padding-left:10px;
+}
+#modal-body .cq-roe-preview span::before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:50%;
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  transform:translateY(-50%);
+  background:#34A36F;
+}
+
+#modal-body .cq-roe-cfg-save{
+  position:sticky!important;
+  bottom:0!important;
+  z-index:4!important;
+  min-height:50px!important;
+  margin-top:16px!important;
+  border-radius:16px!important;
+  font-size:13px!important;
+  letter-spacing:.01em!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 42%),
+    linear-gradient(135deg,#17463B,#34A36F)!important;
+  box-shadow:
+    0 14px 28px rgba(52,163,111,.24),
+    inset 0 1px 0 rgba(255,255,255,.24)!important;
+}
+#modal-body .cq-roe-cfg-save:active{
+  transform:scale(.987)!important;
+}
+
+#modal-body .cq-roe-cfg-reset{
+  min-height:42px!important;
+  margin-top:8px!important;
+  margin-bottom:4px!important;
+  border-radius:14px!important;
+  background:
+    linear-gradient(180deg,#FFFDFC,#F8EEEA)!important;
+  color:#A85248!important;
+  border-color:rgba(168,82,72,.16)!important;
+  box-shadow:0 6px 14px rgba(168,82,72,.06)!important;
+}
+
+@media(max-width:420px){
+  #modal-body{padding:16px 12px 18px!important}
+  #modal-body > h3{font-size:18px!important}
+  #modal-body .cq-roe-edit-block{padding:11px!important;border-radius:16px!important}
+  #modal-body .cq-roe-range-grid{gap:5px!important}
+  #modal-body .cq-roe-range-grid label{font-size:7px!important}
+  #modal-body .cq-roe-cfg-field input{font-size:10.5px!important;padding:7px 5px!important}
+  #modal-body .cq-roe-cfg-save{min-height:48px!important}
+}
+</style>
+
+
+<style id="cq-compare-status-labels-fullwidth-final">
+/* COMPARAR — ocupar todo el ancho de la tarjeta */
+#tab-comparar .card{
+  width:100%!important;
+  max-width:none!important;
+}
+#tab-comparar #compare-pick{
+  display:block!important;
+  width:100%!important;
+  max-width:none!important;
+  flex:none!important;
+}
+#tab-comparar .cq-compare-selector-head,
+#tab-comparar .cq-compare-project-list{
+  width:100%!important;
+  max-width:none!important;
+}
+#tab-comparar .cq-compare-project-list{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:7px!important;
+}
+#tab-comparar .cq-compare-project-chip{
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+}
+
+/* Tipo de venta — sin puntos de colores */
+.cq-cmp-type-tag{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:5px!important;
+  min-height:21px!important;
+  padding:4px 7px!important;
+  border-radius:8px!important;
+  border:1px solid transparent!important;
+  font-size:6.7px!important;
+  line-height:1!important;
+  font-weight:900!important;
+  white-space:nowrap!important;
+  box-shadow:none!important;
+}
+.cq-cmp-type-tag .cq-cmp-type-icon{
+  display:inline-flex!important;
+  align-items:center!important;
+  font-size:10px!important;
+  line-height:1!important;
+  color:inherit!important;
+}
+.cq-cmp-type-tag .cq-cmp-type-label{
+  display:inline!important;
+  font-size:6.7px!important;
+  color:inherit!important;
+  font-weight:900!important;
+}
+.cq-cmp-type-tag[class~="2terminadas"]{
+  background:linear-gradient(180deg,#F7FBF8,#EAF5EE)!important;
+  border-color:#C9E5D4!important;
+  color:#287154!important;
+}
+.cq-cmp-type-tag[class~="2pozo"]{
+  background:linear-gradient(180deg,#F7FAFD,#EAF2F8)!important;
+  border-color:#CFDFEC!important;
+  color:#356E9A!important;
+}
+.cq-cmp-type-tag.mixto{
+  background:linear-gradient(180deg,#FFFDF8,#F4F0E8)!important;
+  border-color:#DED6C7!important;
+  color:#705E42!important;
+}
+
+/* Anular definitivamente los viejos puntos */
+.cq-cmp-tag-dots{display:none!important}
+
+/* En el encabezado del cuadro comparativo mostrar la etiqueta compacta,
+   no los puntos viejos */
+.cq-compare-table-v2 thead .cq-cmp-type-tag{
+  display:inline-flex!important;
+  min-width:0!important;
+  width:auto!important;
+  min-height:17px!important;
+  padding:3px 5px!important;
+  margin-top:3px!important;
+  border:1px solid transparent!important;
+  font-size:5.8px!important;
+  color:inherit!important;
+}
+.cq-compare-table-v2 thead .cq-cmp-type-tag > span:last-child,
+.cq-compare-table-v2 thead .cq-cmp-type-label{
+  display:inline!important;
+  font-size:5.8px!important;
+  color:inherit!important;
+}
+.cq-compare-table-v2 thead .cq-cmp-type-icon{
+  display:inline-flex!important;
+  font-size:8px!important;
+}
+
+/* La leyenda debajo del gráfico también usa las nuevas etiquetas */
+.cq-chart-project-legend .cq-cmp-type-tag{
+  margin-left:4px!important;
+}
+
+@media(max-width:420px){
+  #tab-comparar .cq-compare-project-list{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:6px!important;
+  }
+  #tab-comparar .cq-compare-project-chip{
+    padding:8px 27px 8px 9px!important;
+    min-height:54px!important;
+  }
+  .cq-cmp-type-tag{
+    padding:4px 6px!important;
+    font-size:6.4px!important;
+  }
+  .cq-cmp-type-tag .cq-cmp-type-label{font-size:6.4px!important}
+}
+</style>
+
+
+<style id="cq-proyectos-status-labels-final">
+/* PROYECTOS — misma identificación visual que Comparar */
+#tab-obras .cq-proyecto-name-wrap .cq-cmp-type-tag{
+  margin-top:4px!important;
+  width:max-content!important;
+}
+</style>
+
 </head>
 <body>
 
@@ -1364,9 +1813,9 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
   </div>
 
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="calc">Calcular</button>
-    <button class="tab-btn" data-tab="obras">Proyectos</button>
-    <button class="tab-btn" data-tab="comparar">Comparar</button>
+    <button type="button" class="tab-btn active" data-tab="calc" onclick="cqRoeAbrirTab('calc')">Calcular</button>
+    <button type="button" class="tab-btn" data-tab="obras" onclick="cqRoeAbrirTab('obras')">Proyectos</button>
+    <button type="button" class="tab-btn" data-tab="comparar" onclick="cqRoeAbrirTab('comparar')">Comparar</button>
   </nav>
 
   <main>
@@ -1440,8 +1889,77 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
 <script>
 /* ============================ ESTADO ============================ */
 const STORAGE_KEY = 'cq_roetir_obras';
-let obras = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-migrarObras();
+
+const CQ_ROE_CFG_KEY = 'cq_roetir_indicadores_config_v1';
+const CQ_ROE_CFG_DEFAULT = {
+  capital:{a:80000,b:120000},
+  roe:{a:40,b:70,c:120},
+  tirAnual:{a:60,b:100,c:200},
+  tirMensual:{a:4,b:6,c:10},
+  payback:{a:6,b:8,c:10},
+  capitalCosto:{a:30,b:50,c:70}
+};
+
+function cqRoeCloneCfg(v){
+  return JSON.parse(JSON.stringify(v||CQ_ROE_CFG_DEFAULT));
+}
+function cqRoeNormalizeCfg(v){
+  const d=cqRoeCloneCfg(CQ_ROE_CFG_DEFAULT);
+  const x=(v&&typeof v==='object')?v:{};
+  Object.keys(d).forEach(k=>{
+    const src=(x[k]&&typeof x[k]==='object')?x[k]:{};
+    Object.keys(d[k]).forEach(p=>{
+      const n=Number(src[p]);
+      if(Number.isFinite(n))d[k][p]=n;
+    });
+  });
+  return d;
+}
+function cqRoeCfgValida(cfg){
+  return (
+    cfg.capital.a>=0 && cfg.capital.b>cfg.capital.a &&
+    cfg.roe.a>=0 && cfg.roe.b>cfg.roe.a && cfg.roe.c>cfg.roe.b &&
+    cfg.tirAnual.a>=0 && cfg.tirAnual.b>cfg.tirAnual.a && cfg.tirAnual.c>cfg.tirAnual.b &&
+    cfg.tirMensual.a>=0 && cfg.tirMensual.b>cfg.tirMensual.a && cfg.tirMensual.c>cfg.tirMensual.b &&
+    cfg.payback.a>=0 && cfg.payback.b>cfg.payback.a && cfg.payback.c>cfg.payback.b &&
+    cfg.capitalCosto.a>=0 && cfg.capitalCosto.b>cfg.capitalCosto.a && cfg.capitalCosto.c>cfg.capitalCosto.b
+  );
+}
+let cqRoeIndicadoresConfig=cqRoeCloneCfg(CQ_ROE_CFG_DEFAULT);
+try{
+  const rawCfg=localStorage.getItem(CQ_ROE_CFG_KEY);
+  if(rawCfg){
+    const parsedCfg=cqRoeNormalizeCfg(JSON.parse(rawCfg));
+    if(cqRoeCfgValida(parsedCfg))cqRoeIndicadoresConfig=parsedCfg;
+  }
+}catch(e){console.warn('ROE/TIR configuración indicadores',e);}
+
+
+/* CQ FIX: tolerar datos históricos/corruptos sin frenar toda la app */
+let obras = [];
+try{
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const parsed = raw ? JSON.parse(raw) : [];
+  if(Array.isArray(parsed)){
+    obras = parsed;
+  }else if(parsed && Array.isArray(parsed.obras)){
+    /* compatibilidad con alguna versión que haya guardado {obras:[...]} */
+    obras = parsed.obras;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(obras));
+  }else{
+    obras = [];
+  }
+}catch(e){
+  console.warn('ROE/TIR: almacenamiento local inválido; se continúa con Firebase', e);
+  obras = [];
+}
+
+try{
+  migrarObras();
+}catch(e){
+  console.warn('ROE/TIR: no se pudo migrar el estado local; la app continúa', e);
+  if(!Array.isArray(obras)) obras=[];
+}
 function migrarObras(){
   let changed = false;
   obras.forEach(o=>{
@@ -1543,7 +2061,10 @@ function toast(msg){
 }
 let __cqRoeApplyingRemote=false;
 function cqRoeSnapshot(){
-  return {obras:JSON.parse(JSON.stringify(obras||[]))};
+  return {
+    obras:JSON.parse(JSON.stringify(obras||[])),
+    indicadoresConfig:cqRoeCloneCfg(cqRoeIndicadoresConfig)
+  };
 }
 function saveStorage(){
     // Un solo paso de Deshacer: guardar la versión persistida anterior.
@@ -1572,11 +2093,21 @@ window.__cqRoeApplyRemote=function(data){
   __cqRoeApplyingRemote=true;
   try{
     obras=JSON.parse(JSON.stringify(data.obras));
+
+    if(data.indicadoresConfig){
+      const remoteCfg=cqRoeNormalizeCfg(data.indicadoresConfig);
+      if(cqRoeCfgValida(remoteCfg)){
+        cqRoeIndicadoresConfig=remoteCfg;
+        localStorage.setItem(CQ_ROE_CFG_KEY,JSON.stringify(cqRoeIndicadoresConfig));
+      }
+    }
+
     migrarObras();
     localStorage.setItem(STORAGE_KEY,JSON.stringify(obras));
     if(typeof renderObras==="function")renderObras();
     if(typeof renderCompare==="function")renderCompare();
     if(typeof renderComparePick==="function")renderComparePick();
+    if(typeof recalc==="function")recalc();
     return true;
   }finally{
     __cqRoeApplyingRemote=false;
@@ -1724,48 +2255,50 @@ function computeResultados(esc){
 /* ============================ BANDAS / SEMÁFORO ============================ */
 function bandROE(roe){
   if(roe==null) return {color:'gray', label:'—', sub:'sin datos'};
-  const p=roe*100;
-  if(p<40) return {color:'red', label:'Bajo', sub:'no conviene'};
-  if(p<70) return {color:'yellow', label:'Aceptable', sub:'evaluar'};
-  if(p<=120) return {color:'green', label:'Bueno', sub:'avanzar'};
+  const p=roe*100, c=cqRoeIndicadoresConfig.roe;
+  if(p<c.a) return {color:'red', label:'Bajo', sub:'no conviene'};
+  if(p<c.b) return {color:'yellow', label:'Aceptable', sub:'evaluar'};
+  if(p<=c.c) return {color:'green', label:'Bueno', sub:'avanzar'};
   return {color:'green', label:'Excelente', sub:'escalar'};
 }
 function bandTirAnual(t){
   if(t==null) return {color:'gray', label:'—', sub:'sin datos'};
-  const p=t*100;
-  if(p<60) return {color:'red', label:'Mala', sub:'no conviene'};
-  if(p<100) return {color:'yellow', label:'Floja', sub:'evaluar'};
-  if(p<=200) return {color:'green', label:'Buena', sub:'avanzar'};
+  const p=t*100, c=cqRoeIndicadoresConfig.tirAnual;
+  if(p<c.a) return {color:'red', label:'Mala', sub:'no conviene'};
+  if(p<c.b) return {color:'yellow', label:'Floja', sub:'evaluar'};
+  if(p<=c.c) return {color:'green', label:'Buena', sub:'avanzar'};
   return {color:'green', label:'Excelente', sub:'acelerar'};
 }
 function bandTirMensual(t){
   if(t==null) return {color:'gray', label:'—', sub:'sin datos'};
-  const p=t*100;
-  if(p<4) return {color:'red', label:'Mala', sub:''};
-  if(p<6) return {color:'yellow', label:'Floja', sub:''};
-  if(p<10) return {color:'green', label:'Buena', sub:''};
+  const p=t*100, c=cqRoeIndicadoresConfig.tirMensual;
+  if(p<c.a) return {color:'red', label:'Mala', sub:''};
+  if(p<c.b) return {color:'yellow', label:'Floja', sub:''};
+  if(p<c.c) return {color:'green', label:'Buena', sub:''};
   return {color:'green', label:'Excelente', sub:''};
 }
 function bandPayback(p){
   if(p==null) return {color:'gray', label:'—', sub:'no recupera'};
-  if(p>10) return {color:'red', label:'Lento', sub:''};
-  if(p>=8) return {color:'yellow', label:'Revisar', sub:''};
-  if(p>=6) return {color:'green', label:'Bueno', sub:''};
+  const c=cqRoeIndicadoresConfig.payback;
+  if(p>c.c) return {color:'red', label:'Lento', sub:''};
+  if(p>=c.b) return {color:'yellow', label:'Revisar', sub:''};
+  if(p>=c.a) return {color:'green', label:'Bueno', sub:''};
   return {color:'green', label:'Excelente', sub:''};
 }
 function bandCapitalCosto(cc){
   if(cc==null) return {color:'gray', label:'—', sub:''};
-  const p=cc*100;
-  if(p>70) return {color:'red', label:'Pesado', sub:''};
-  if(p>=50) return {color:'yellow', label:'Evaluar', sub:''};
-  if(p>=30) return {color:'green', label:'Bueno', sub:''};
+  const p=cc*100, c=cqRoeIndicadoresConfig.capitalCosto;
+  if(p>c.c) return {color:'red', label:'Pesado', sub:''};
+  if(p>=c.b) return {color:'yellow', label:'Evaluar', sub:''};
+  if(p>=c.a) return {color:'green', label:'Bueno', sub:''};
   return {color:'green', label:'Liviano', sub:''};
 }
 
 function bandCapitalInvertido(cap){
   if(cap==null) return {color:'gray', label:'—', sub:''};
-  if(cap<80000) return {color:'green', label:'Cómodo', sub:''};
-  if(cap<=120000) return {color:'yellow', label:'Cuidar', sub:''};
+  const c=cqRoeIndicadoresConfig.capital;
+  if(cap<c.a) return {color:'green', label:'Cómodo', sub:''};
+  if(cap<=c.b) return {color:'yellow', label:'Cuidar', sub:''};
   return {color:'red', label:'Limitar', sub:''};
 }
 function cellSpan(text, color){ return `<span class="cell-${color}">${text}</span>`; }
@@ -1958,15 +2491,28 @@ function decision(r){
 }
 
 /* ============================ RENDER: TABS ============================ */
-document.querySelectorAll('.tab-btn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab==='obras') renderObras();
-    if(btn.dataset.tab==='comparar') renderComparar();
+function cqRoeAbrirTab(tab){
+  const destino=document.getElementById('tab-'+tab);
+  if(!destino) return false;
+
+  document.querySelectorAll('.tab-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab===tab);
   });
+  document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
+  destino.classList.add('active');
+
+  try{
+    if(tab==='obras' && typeof renderObras==='function') renderObras();
+    if(tab==='comparar' && typeof renderComparar==='function') renderComparar();
+  }catch(e){
+    console.warn('ROE/TIR: error al renderizar pestaña '+tab,e);
+  }
+  return true;
+}
+window.cqRoeAbrirTab=cqRoeAbrirTab;
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>cqRoeAbrirTab(btn.dataset.tab));
 });
 
 /* ============================ RENDER: UNIDADES ============================ */
@@ -2558,8 +3104,6 @@ function renderObras(){
     const abierta=!!cqObrasAbiertas[o.id];
     const u1=(o.unidades||[])[0]||{};
     const u2=(o.unidades||[])[1]||{};
-    const d1=cqTipoUnidadDot(u1);
-    const d2=cqTipoUnidadDot(u2);
 
     return `
       <div class="obra-card obra-card-full cq-proyecto-card ${abierta?'open':''}">
@@ -2567,10 +3111,7 @@ function renderObras(){
           <div class="cq-proyecto-main">
             <div class="cq-proyecto-name-wrap">
               <div class="cq-proyecto-name">${o.nombre||'(sin nombre)'}</div>
-              <div class="cq-unidades-dots" title="Unidad 1 y Unidad 2">
-                <span class="cq-unit-dot ${d1}" title="Unidad 1 · ${u1.tipo||'Pozo'}"></span>
-                <span class="cq-unit-dot ${d2}" title="Unidad 2 · ${u2.tipo||'Pozo'}"></span>
-              </div>
+              ${cqCompareProjectTag(o)}
             </div>
             <div class="cq-proyecto-mini">
               <span>Ganancia <b>${fmtMoney(r.ganancia)}</b></span>
@@ -2743,12 +3284,13 @@ function cqCompareOrderOverlayClick(e){
 
 function cqCompareProjectTag(o){
   const meta=cqCompareTipoMeta(o);
+  const icon = meta.key==='2terminadas'
+    ? '🏠'
+    : (meta.key==='2pozo' ? '🧱' : '🏠 + 🧱');
   return `
     <span class="cq-cmp-type-tag ${meta.key}">
-      <span class="cq-cmp-tag-dots">
-        ${meta.dots.map(d=>`<i class="${d}"></i>`).join('')}
-      </span>
-      <span>${meta.label}</span>
+      <span class="cq-cmp-type-icon">${icon}</span>
+      <span class="cq-cmp-type-label">${meta.label}</span>
     </span>
   `;
 }
@@ -2964,64 +3506,159 @@ function renderCompareResult(){
 }
 
 /* ============================ MODAL: CÓMO LEERLO ============================ */
+function cqRoeCfgInput(id,val,suffix){
+  return `<div class="cq-roe-cfg-field">
+    <input id="${id}" type="number" inputmode="decimal" value="${val}">
+    ${suffix?`<span>${suffix}</span>`:''}
+  </div>`;
+}
+function cqRoeCfgSection(title,help,fields){
+  return `<div class="leg-block cq-roe-edit-block">
+    <div class="cq-roe-edit-head">
+      <h4>${title}</h4>
+      <small>${help}</small>
+    </div>
+    ${fields}
+  </div>`;
+}
+function cqRoeRenderConfigModal(){
+  const c=cqRoeIndicadoresConfig;
+  return `
+    <button class="close" onclick="closeModal()">✕</button>
+    <h3>Cómo leerlo</h3>
+    <div class="cq-roe-cfg-note">Modificá los límites y tocá <b>Guardar configuración</b>. Los cambios se aplican inmediatamente a indicadores, colores, tablas y gráficos.</div>
+
+    ${cqRoeCfgSection('Capital invertido','USD',
+      `<div class="cq-roe-range-grid two">
+        <label>Hasta Cómodo ${cqRoeCfgInput('cfg_cap_a',c.capital.a,'USD')}</label>
+        <label>Hasta Cuidar ${cqRoeCfgInput('cfg_cap_b',c.capital.b,'USD')}</label>
+      </div>
+      <div class="cq-roe-preview">
+        <span>&lt; ${fmtMoney(c.capital.a)} · Cómodo</span>
+        <span>${fmtMoney(c.capital.a)}–${fmtMoney(c.capital.b)} · Cuidar</span>
+        <span>&gt; ${fmtMoney(c.capital.b)} · Limitar</span>
+      </div>`
+    )}
+
+    ${cqRoeCfgSection('ROE','%',
+      `<div class="cq-roe-range-grid">
+        <label>Bajo / Aceptable ${cqRoeCfgInput('cfg_roe_a',c.roe.a,'%')}</label>
+        <label>Aceptable / Bueno ${cqRoeCfgInput('cfg_roe_b',c.roe.b,'%')}</label>
+        <label>Bueno / Excelente ${cqRoeCfgInput('cfg_roe_c',c.roe.c,'%')}</label>
+      </div>`
+    )}
+
+    ${cqRoeCfgSection('TIR anual','%',
+      `<div class="cq-roe-range-grid">
+        <label>Mala / Floja ${cqRoeCfgInput('cfg_tira_a',c.tirAnual.a,'%')}</label>
+        <label>Floja / Buena ${cqRoeCfgInput('cfg_tira_b',c.tirAnual.b,'%')}</label>
+        <label>Buena / Excelente ${cqRoeCfgInput('cfg_tira_c',c.tirAnual.c,'%')}</label>
+      </div>`
+    )}
+
+    ${cqRoeCfgSection('TIR mensual','%',
+      `<div class="cq-roe-range-grid">
+        <label>Mala / Floja ${cqRoeCfgInput('cfg_tirm_a',c.tirMensual.a,'%')}</label>
+        <label>Floja / Buena ${cqRoeCfgInput('cfg_tirm_b',c.tirMensual.b,'%')}</label>
+        <label>Buena / Excelente ${cqRoeCfgInput('cfg_tirm_c',c.tirMensual.c,'%')}</label>
+      </div>`
+    )}
+
+    ${cqRoeCfgSection('Payback','meses',
+      `<div class="cq-roe-range-grid">
+        <label>Excelente / Bueno ${cqRoeCfgInput('cfg_pay_a',c.payback.a,'m')}</label>
+        <label>Bueno / Revisar ${cqRoeCfgInput('cfg_pay_b',c.payback.b,'m')}</label>
+        <label>Revisar / Lento ${cqRoeCfgInput('cfg_pay_c',c.payback.c,'m')}</label>
+      </div>`
+    )}
+
+    ${cqRoeCfgSection('Capital / Costo','%',
+      `<div class="cq-roe-range-grid">
+        <label>Liviano / Bueno ${cqRoeCfgInput('cfg_cc_a',c.capitalCosto.a,'%')}</label>
+        <label>Bueno / Evaluar ${cqRoeCfgInput('cfg_cc_b',c.capitalCosto.b,'%')}</label>
+        <label>Evaluar / Pesado ${cqRoeCfgInput('cfg_cc_c',c.capitalCosto.c,'%')}</label>
+      </div>`
+    )}
+
+    <button type="button" class="cq-roe-cfg-save" onclick="cqRoeGuardarConfigIndicadores()">✓ Guardar configuración</button>
+    <button type="button" class="cq-roe-cfg-reset" onclick="cqRoeRestaurarConfigIndicadores()">↺ Restaurar valores originales</button>
+  `;
+}
 function openModal(which){
   const body = document.getElementById('modal-body');
   if(which==='legend'){
-    body.innerHTML = `
-      <button class="close" onclick="closeModal()">✕</button>
-      <h3>Cómo leerlo</h3>
-      <div class="leg-block">
-        <h4>Capital invertido</h4>
-        <div class="leg-item"><span>&lt; 80k</span><span>Cómodo</span></div>
-        <div class="leg-item"><span>80k–120k</span><span>Cuidar</span></div>
-        <div class="leg-item"><span>&gt; 120k</span><span>Limitar</span></div>
-      </div>
-      <div class="leg-block">
-        <h4>ROE</h4>
-        <div class="leg-item"><span>&lt; 40%</span><span>❌ Bajo</span></div>
-        <div class="leg-item"><span>40–70%</span><span>⚠️ Aceptable</span></div>
-        <div class="leg-item"><span>70–120%</span><span>✔️ Bueno</span></div>
-        <div class="leg-item"><span>&gt; 120%</span><span>🚀 Excelente</span></div>
-      </div>
-      <div class="leg-block">
-        <h4>TIR anual</h4>
-        <div class="leg-item"><span>&lt; 60%</span><span>❌ Mala</span></div>
-        <div class="leg-item"><span>60–100%</span><span>⚠️ Floja</span></div>
-        <div class="leg-item"><span>100–200%</span><span>✔️ Buena</span></div>
-        <div class="leg-item"><span>&gt; 200%</span><span>🚀 Excelente</span></div>
-      </div>
-      <div class="leg-block">
-        <h4>TIR mensual</h4>
-        <div class="leg-item"><span>&lt; 4%</span><span>Mala</span></div>
-        <div class="leg-item"><span>4–6%</span><span>Floja</span></div>
-        <div class="leg-item"><span>6–10%</span><span>Buena</span></div>
-        <div class="leg-item"><span>&gt; 10%</span><span>Excelente</span></div>
-      </div>
-      <div class="leg-block">
-        <h4>Payback</h4>
-        <div class="leg-item"><span>&gt; 10 meses</span><span>❌ Lento</span></div>
-        <div class="leg-item"><span>8–10</span><span>⚠️ Revisar</span></div>
-        <div class="leg-item"><span>6–8</span><span>✔️ Bueno</span></div>
-        <div class="leg-item"><span>&lt; 6</span><span>🔥 Excelente</span></div>
-      </div>
-      <div class="leg-block">
-        <h4>Capital / Costo</h4>
-        <div class="leg-item"><span>&gt; 70%</span><span>🔴 Pesado</span></div>
-        <div class="leg-item"><span>50–70%</span><span>🟡 Evaluar</span></div>
-        <div class="leg-item"><span>30–50%</span><span>✔️ Bueno</span></div>
-        <div class="leg-item"><span>&lt; 30%</span><span>🔥 Liviano</span></div>
-      </div>
-    `;
+    body.innerHTML=cqRoeRenderConfigModal();
   }
   document.getElementById('modal-overlay').classList.add('show');
 }
+function cqRoeNumInput(id){
+  const el=document.getElementById(id);
+  return el ? Number(el.value) : NaN;
+}
+async function cqRoeGuardarConfigIndicadores(){
+  const next={
+    capital:{a:cqRoeNumInput('cfg_cap_a'),b:cqRoeNumInput('cfg_cap_b')},
+    roe:{a:cqRoeNumInput('cfg_roe_a'),b:cqRoeNumInput('cfg_roe_b'),c:cqRoeNumInput('cfg_roe_c')},
+    tirAnual:{a:cqRoeNumInput('cfg_tira_a'),b:cqRoeNumInput('cfg_tira_b'),c:cqRoeNumInput('cfg_tira_c')},
+    tirMensual:{a:cqRoeNumInput('cfg_tirm_a'),b:cqRoeNumInput('cfg_tirm_b'),c:cqRoeNumInput('cfg_tirm_c')},
+    payback:{a:cqRoeNumInput('cfg_pay_a'),b:cqRoeNumInput('cfg_pay_b'),c:cqRoeNumInput('cfg_pay_c')},
+    capitalCosto:{a:cqRoeNumInput('cfg_cc_a'),b:cqRoeNumInput('cfg_cc_b'),c:cqRoeNumInput('cfg_cc_c')}
+  };
+  if(!cqRoeCfgValida(next)){
+    toast('Revisá los límites: deben ir de menor a mayor');
+    return;
+  }
+
+  cqRoeIndicadoresConfig=cqRoeNormalizeCfg(next);
+  localStorage.setItem(CQ_ROE_CFG_KEY,JSON.stringify(cqRoeIndicadoresConfig));
+
+  try{
+    if(typeof window.__cqRoeFirebaseSave==='function'){
+      await window.__cqRoeFirebaseSave(cqRoeSnapshot());
+    }
+  }catch(e){
+    console.warn('ROE/TIR guardar configuración Firebase',e);
+  }
+
+  try{recalc();}catch(e){}
+  try{renderObras();}catch(e){}
+  try{renderComparar();}catch(e){}
+  try{renderCompareResult();}catch(e){}
+
+  const body=document.getElementById('modal-body');
+  if(body)body.innerHTML=cqRoeRenderConfigModal();
+  toast('✓ Configuración aplicada a los indicadores');
+}
+async function cqRoeRestaurarConfigIndicadores(){
+  if(!confirm('¿Restaurar los límites originales de todos los indicadores?'))return;
+  cqRoeIndicadoresConfig=cqRoeCloneCfg(CQ_ROE_CFG_DEFAULT);
+  localStorage.setItem(CQ_ROE_CFG_KEY,JSON.stringify(cqRoeIndicadoresConfig));
+
+  try{
+    if(typeof window.__cqRoeFirebaseSave==='function'){
+      await window.__cqRoeFirebaseSave(cqRoeSnapshot());
+    }
+  }catch(e){
+    console.warn('ROE/TIR restaurar configuración Firebase',e);
+  }
+
+  try{recalc();}catch(e){}
+  try{renderObras();}catch(e){}
+  try{renderComparar();}catch(e){}
+  try{renderCompareResult();}catch(e){}
+
+  const body=document.getElementById('modal-body');
+  if(body)body.innerHTML=cqRoeRenderConfigModal();
+  toast('Valores originales restaurados');
+}
+
 function closeModal(){ document.getElementById('modal-overlay').classList.remove('show'); }
 
 /* ============================ INIT ============================ */
-renderCostos();
-renderUnidad(0);
-renderUnidad(1);
-recalc();
+try{renderCostos();}catch(e){console.warn('ROE/TIR init renderCostos',e);}
+try{renderUnidad(0);}catch(e){console.warn('ROE/TIR init unidad 1',e);}
+try{renderUnidad(1);}catch(e){console.warn('ROE/TIR init unidad 2',e);}
+try{recalc();}catch(e){console.warn('ROE/TIR init recalc',e);}
 </script>
 
 <script id="cq-redisenio-visual-real-js">
