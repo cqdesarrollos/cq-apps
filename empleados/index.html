@@ -99,12 +99,89 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
 .hidden{display:none!important}
 @media(min-height:780px){.hero{padding-top:16px}.logo-wrap{min-height:130px}.logo{width:135px;height:116px}.btn{min-height:60px}}
 </style>
+
+<style id="cq-login-verde-premium">
+.login-overlay{
+  background:
+    radial-gradient(circle at 86% 9%,rgba(71,224,146,.18),transparent 27%),
+    radial-gradient(circle at 12% 20%,rgba(255,255,255,.045),transparent 28%),
+    linear-gradient(160deg,#12392f 0%,#185544 52%,#0d2d25 100%)!important;
+}
+.login-card{
+  max-width:390px!important;
+  padding:24px 22px 22px!important;
+  border-radius:27px!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.105),rgba(255,255,255,.055))!important;
+  border:1px solid rgba(176,255,217,.25)!important;
+  box-shadow:0 26px 70px rgba(0,0,0,.26)!important;
+  backdrop-filter:blur(15px)!important;
+}
+.login-logo{margin:0 auto 10px!important;min-height:132px;display:flex;align-items:center;justify-content:center}
+.cq-logo-svg{display:block;width:145px;height:122px;filter:drop-shadow(0 12px 20px rgba(0,0,0,.18))}
+.panel-logo-svg{width:138px;height:116px}
+.login-card h2{font-size:24px!important;letter-spacing:-.02em!important;margin-top:0!important}
+.login-card .sub{font-size:12.5px!important;margin:7px 0 23px!important;color:#d4e3dd!important;font-weight:500!important}
+.field{margin-bottom:15px!important}
+.field label{
+  font-size:10px!important;
+  color:#7ee9b3!important;
+  margin:0 0 7px 3px!important;
+}
+.field select,.field input{
+  min-height:54px!important;
+  border:1px solid rgba(116,231,175,.42)!important;
+  background:rgba(6,40,31,.38)!important;
+  color:#f2f7f5!important;
+  border-radius:16px!important;
+  padding:13px 15px!important;
+  font-size:14px!important;
+  font-weight:650!important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.015)!important;
+}
+.field select{color:#d9e6e1!important}
+.field select option{color:#17313a;background:#fff}
+.field input::placeholder{color:#c4d3cd;opacity:.82}
+.field select:focus,.field input:focus{
+  border-color:#65e8aa!important;
+  box-shadow:0 0 0 3px rgba(98,230,159,.11)!important;
+}
+.login-btn{
+  min-height:55px!important;
+  margin-top:9px!important;
+  border-radius:16px!important;
+  background:linear-gradient(135deg,#64e9a2,#42bd81)!important;
+  color:#10382d!important;
+  font-size:14px!important;
+  box-shadow:0 10px 24px rgba(53,193,127,.2)!important;
+}
+.login-btn:active{transform:scale(.992)}
+.logo-wrap{min-height:124px!important}
+.logo{display:none!important}
+@media(max-width:420px){
+  .login-card{padding:20px 18px!important;border-radius:24px!important}
+  .login-logo{min-height:116px!important}
+  .cq-logo-svg{width:132px;height:110px}
+  .login-card h2{font-size:22px!important}
+}
+</style>
+
+<style id="cq-password-eye">
+.password-wrap{position:relative;width:100%}
+.password-wrap #loginPass{padding-right:52px!important}
+.password-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:0;border-radius:11px;background:transparent;color:#d9e6e1;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;z-index:2}
+.password-eye:active{background:rgba(98,230,159,.10)}
+</style>
 </head>
 <body>
 
 <div id="loginOverlay" class="login-overlay">
   <div class="login-card">
-    <div class="login-logo"><img src="logo_cq.png" alt="CQ"></div>
+    <div class="login-logo" aria-label="CQ">
+  <svg class="cq-logo-svg" viewBox="0 0 180 150" role="img" aria-label="CQ">
+    <polygon fill="#102a67" points="26,35 88,0 88,31 55,50 55,104 88,85 88,116 26,150"/>
+    <polygon fill="#00d789" points="88,31 147,65 147,117 174,133 147,149 116,131 88,147 88,116 116,100 116,82 88,66"/>
+  </svg>
+</div>
     <h2>CQ Operaciones</h2>
     <div class="sub">Ingresá con tu usuario y clave</div>
 
@@ -120,7 +197,10 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
 
     <div class="field">
       <label>Clave</label>
-      <input id="loginPass" type="password" inputmode="text" autocomplete="current-password" placeholder="Ingresá tu clave">
+      <div class="password-wrap">
+        <input id="loginPass" type="password" inputmode="text" autocomplete="current-password" placeholder="Ingresá tu clave">
+        <button type="button" id="togglePassword" class="password-eye" aria-label="Mostrar contraseña"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+      </div>
     </div>
 
     <button id="loginBtn" class="login-btn">🔐 Ingresar</button>
@@ -135,7 +215,12 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
   </header>
 
   <main class="hero">
-    <div class="logo-wrap"><img class="logo" src="logo_cq.png" alt="CQ Desarrollos"></div>
+    <div class="logo-wrap" aria-label="CQ Desarrollos">
+  <svg class="cq-logo-svg panel-logo-svg" viewBox="0 0 180 150" role="img" aria-label="CQ Desarrollos">
+    <polygon fill="#102a67" points="26,35 88,0 88,31 55,50 55,104 88,85 88,116 26,150"/>
+    <polygon fill="#00d789" points="88,31 147,65 147,117 174,133 147,149 116,131 88,147 88,116 116,100 116,82 88,66"/>
+  </svg>
+</div>
 
     <section class="title">
       <h1>CQ OPERACIONES</h1>
@@ -393,6 +478,21 @@ onAuthStateChanged(auth, async user=>{
     loginMsg.textContent = "No se pudieron verificar los permisos.";
   }
 });
+</script>
+<script id="cq-password-eye-js">
+(function(){
+ const p=document.getElementById("loginPass"), b=document.getElementById("togglePassword");
+ if(!p||!b)return;
+ b.addEventListener("click",function(){
+   const show=p.type==="password";
+   p.type=show?"text":"password";
+   b.innerHTML=show
+     ? '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 3l18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M2 12s3.5-6 10-6c2.1 0 3.9.6 5.3 1.4M22 12s-3.5 6-10 6c-2.1 0-3.9-.6-5.3-1.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
+     : '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+   b.setAttribute("aria-label",show?"Ocultar contraseña":"Mostrar contraseña");
+   p.focus();
+ });
+})();
 </script>
 </body>
 </html>
