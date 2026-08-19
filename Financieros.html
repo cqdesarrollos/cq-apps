@@ -1000,7 +1000,7 @@ nav.tabs button[data-tab="config"]{
 
 <style id="cq-fin-undo-style">
 .cq-fin-header-right{display:flex!important;align-items:center!important;gap:5px!important;flex-wrap:nowrap!important}
-#cqFinUndoBtn{
+#cqFinUndoBtn,#cqFinRedoBtn{
   width:30px!important;height:30px!important;min-width:30px!important;
   padding:0!important;margin:0!important;border-radius:8px!important;
   border:1px solid rgba(255,255,255,.18)!important;
@@ -1009,10 +1009,10 @@ nav.tabs button[data-tab="config"]{
   font:900 15px/1 'Space Grotesk',sans-serif!important;cursor:pointer!important;
   flex:0 0 auto!important;box-shadow:none!important;
 }
-#cqFinUndoBtn:disabled{opacity:.32!important;cursor:default!important}
-#cqFinUndoBtn:not(:disabled):active{transform:scale(.96)!important}
+#cqFinUndoBtn:disabled,#cqFinRedoBtn:disabled{opacity:.32!important;cursor:default!important}
+#cqFinUndoBtn:not(:disabled):active,#cqFinRedoBtn:not(:disabled):active{transform:scale(.96)!important}
 @media(max-width:520px){
-  #cqFinUndoBtn{width:27px!important;height:27px!important;min-width:27px!important;font-size:13px!important}
+  #cqFinUndoBtn,#cqFinRedoBtn{width:27px!important;height:27px!important;min-width:27px!important;font-size:13px!important}
 }
 </style>
 
@@ -1590,6 +1590,27 @@ nav.tabs button[data-tab="presentacion"]::before{content:"🎬"!important}
 }
 </style>
 
+
+<style id="cq-landscape-months-fix-final">
+/* Horizontal móvil: meses completos, sin cortes y aprovechando el ancho */
+@media (orientation:landscape) and (max-height:600px){
+  #app{max-width:100%!important;width:100%!important;}
+  .selector{padding-left:12px!important;padding-right:12px!important;}
+  .selector #monthChips{
+    display:grid!important;
+    grid-template-columns:repeat(12,minmax(0,1fr))!important;
+    width:100%!important;
+    gap:4px!important;
+    overflow:visible!important;
+  }
+  #monthChips .chip{
+    width:100%!important;min-width:0!important;
+    padding:3px 2px!important;font-size:9px!important;
+    white-space:nowrap!important;overflow:visible!important;
+  }
+  main{padding-left:12px!important;padding-right:12px!important;}
+}
+</style>
 </head>
 <body>
 
@@ -1613,7 +1634,7 @@ nav.tabs button[data-tab="presentacion"]::before{content:"🎬"!important}
           <div class="sub">Comercial y financiero</div>
         </div>
       </div>
-      <div class="cq-fin-header-right" id="cq-fin-header-right"><button type="button" id="cqFinUndoBtn" class="cq-fin-undo" onclick="window.cqFinUndo()" title="Deshacer último cambio" aria-label="Deshacer último cambio" disabled>↶</button><a class="cq-header-home" href="index.html" aria-label="Ir a inicio" title="Inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5H15v-6H9v6H3.5a.5.5 0 0 1-.5-.5z"/></svg></a></div>
+      <div class="cq-fin-header-right" id="cq-fin-header-right"><a class="cq-header-home" href="index.html" aria-label="Ir a inicio" title="Inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5H15v-6H9v6H3.5a.5.5 0 0 1-.5-.5z"/></svg></a></div>
     </div>
   </header>
 
@@ -1912,6 +1933,7 @@ function saveState(){
         const next=JSON.stringify(snap);
         if(prev && prev!==next){
           localStorage.setItem("cq_financieros_undo_v1",prev);
+          localStorage.removeItem("cq_financieros_redo_v1");
         }
       }catch(e){console.warn("Financieros undo snapshot",e);}
     }
@@ -4895,49 +4917,68 @@ header.topbar .sub{
 <script id="cq-fin-undo-runtime">
 (function(){
   "use strict";
-  var KEY="cq_financieros_undo_v1";
+  var UNDO_KEY="cq_financieros_undo_v1";
+  var REDO_KEY="cq_financieros_redo_v1";
   window.__cqFinUndoRestoring=false;
 
+  function readJson(key){
+    try{ var raw=localStorage.getItem(key); return raw?JSON.parse(raw):null; }catch(e){ return null; }
+  }
+  function writeSnapshot(key,data){
+    try{
+      if(data) localStorage.setItem(key,JSON.stringify(data));
+      else localStorage.removeItem(key);
+    }catch(e){}
+  }
+  function currentSnapshot(){
+    try{
+      if(typeof window.__cqFinGetSnapshot==="function") return window.__cqFinGetSnapshot();
+    }catch(e){}
+    return null;
+  }
+
   window.cqFinUpdateUndoBtn=function(){
-    var b=document.getElementById("cqFinUndoBtn");
-    if(!b)return;
-    var has=false;
-    try{has=!!localStorage.getItem(KEY);}catch(e){}
-    b.disabled=window.__cqFinUndoRestoring||!has;
+    var u=document.getElementById("cqFinUndoBtn");
+    var r=document.getElementById("cqFinRedoBtn");
+    var hasUndo=false,hasRedo=false;
+    try{
+      hasUndo=!!localStorage.getItem(UNDO_KEY);
+      hasRedo=!!localStorage.getItem(REDO_KEY);
+    }catch(e){}
+    if(u)u.disabled=window.__cqFinUndoRestoring||!hasUndo;
+    if(r)r.disabled=window.__cqFinUndoRestoring||!hasRedo;
   };
 
-  window.cqFinUndo=async function(){
+  async function applyHistory(target,oppositeKey,sourceKey,message){
     if(window.__cqFinUndoRestoring)return;
-    var raw=null,data=null;
-    try{
-      raw=localStorage.getItem(KEY);
-      if(raw)data=JSON.parse(raw);
-    }catch(e){}
-    if(!data){
-      window.cqFinUpdateUndoBtn();
-      return;
-    }
-
+    if(!target){ window.cqFinUpdateUndoBtn(); return; }
+    var current=currentSnapshot();
     window.__cqFinUndoRestoring=true;
     window.cqFinUpdateUndoBtn();
     try{
-      // Usar el aplicador normal del módulo para reconstruir todo el estado.
+      if(!current)throw new Error("Estado actual no disponible");
+      writeSnapshot(oppositeKey,current);
       if(typeof window.__cqFinApplyRemote!=="function")throw new Error("Aplicador no disponible");
-      window.__cqFinApplyRemote(data);
-
-      // Publicar el estado restaurado por el mismo circuito Firebase existente.
+      window.__cqFinApplyRemote(target);
       if(typeof saveState==="function")saveState();
-
-      localStorage.removeItem(KEY);
+      localStorage.removeItem(sourceKey);
       if(typeof renderAll==="function")renderAll();
-      if(typeof toast==="function")toast("↶ Último cambio deshecho");
+      if(typeof toast==="function")toast(message);
     }catch(e){
-      console.warn("Financieros: no se pudo deshacer",e);
-      alert("No se pudo deshacer el último cambio.");
+      console.warn("Financieros: historial no disponible",e);
+      alert("No se pudo completar la operación.");
     }finally{
       window.__cqFinUndoRestoring=false;
       window.cqFinUpdateUndoBtn();
     }
+  }
+
+  window.cqFinUndo=async function(){
+    await applyHistory(readJson(UNDO_KEY),REDO_KEY,UNDO_KEY,"↶ Último cambio deshecho");
+  };
+
+  window.cqFinRedo=async function(){
+    await applyHistory(readJson(REDO_KEY),UNDO_KEY,REDO_KEY,"↷ Último cambio rehecho");
   };
 
   if(document.readyState==="loading"){

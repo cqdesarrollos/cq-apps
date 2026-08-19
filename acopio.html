@@ -2507,6 +2507,40 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
 }
 </style>
 
+
+
+<style id="cq-fecha-subrubro-auto-gris">
+/* Campos que normalmente se completan automáticamente:
+   gris claro para diferenciarlos de los campos de carga manual. */
+#retirar-fecha,
+#retirar-subrubro{
+  background:#F1F2F1 !important;
+  border-color:#D8DDDA !important;
+  box-shadow:inset 3px 0 0 #AEB8B2 !important;
+  color:#435049 !important;
+}
+#retirar-fecha:focus,
+#retirar-subrubro:focus{
+  background:#F6F7F6 !important;
+  border-color:#AEB8B2 !important;
+  box-shadow:0 0 0 3px rgba(120,135,126,.09), inset 3px 0 0 #AEB8B2 !important;
+}
+#view-retirar .fld:has(#retirar-fecha) label::before,
+#view-retirar .fld:has(#retirar-subrubro) label::before{
+  background:#AEB8B2 !important;
+}
+#view-retirar .fld:has(#retirar-fecha) label,
+#view-retirar .fld:has(#retirar-subrubro) label{
+  color:#718078 !important;
+}
+@media(max-width:560px){
+  #retirar-fecha,
+  #retirar-subrubro{
+    box-shadow:inset 3px 0 0 #AEB8B2 !important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -10060,6 +10094,517 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
   #view-home #acopios-list .acopio-card-ttl{font-size:10.8px!important;padding-left:6px!important;padding-right:6px!important}
 }
 </style>
+
+
+
+<!-- CQ 2026-08-18 — Unificación categorías de Acopio con Subrubros de Gastos -->
+<style id="cq-acopio-subrubros-gastos-unificados">
+  /* La clasificación se administra únicamente desde Gastos. */
+  #mat-cat-nueva-wrap,
+  button[onclick="openCategoriasMateriales()"],
+  button[onclick="agregarCategoriaGlobal()"],
+  #modal-categorias{
+    display:none!important;
+  }
+  .cq-subrubro-warning{
+    margin-top:6px;padding:7px 9px;border-radius:8px;
+    background:#FFF7E7;border:1px solid #EFD9AA;color:#8A6725;
+    font-size:9.5px;font-weight:800;line-height:1.35;
+  }
+</style>
+<script id="cq-acopio-subrubros-gastos-unificados-js">
+(function(){
+  var cqOrigGuardarMaterial = (typeof guardarMaterial==='function') ? guardarMaterial : null;
+  var cqOrigGuardarMasiva = (typeof guardarCargaMasivaMateriales==='function') ? guardarCargaMasivaMateriales : null;
+  var cqOrigOpenEdit = (typeof openEditMaterial==='function') ? openEditMaterial : null;
+  var cqOrigOpenNuevo = (typeof openNuevoMaterial==='function') ? openNuevoMaterial : null;
+  var cqOrigOpenMasiva = (typeof openCargaMasivaMateriales==='function') ? openCargaMasivaMateriales : null;
+
+  function norm(v){
+    return String(v||'').trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+  function canonicos(){
+    try{
+      var a=(gastosConfigAcopio&&gastosConfigAcopio.subrubros&&Array.isArray(gastosConfigAcopio.subrubros.mat))
+        ? gastosConfigAcopio.subrubros.mat : [];
+      var out=[];
+      a.forEach(function(x){
+        x=String(x||'').trim();
+        if(x&&!out.some(function(y){return norm(y)===norm(x);})){out.push(x);}
+      });
+      return out;
+    }catch(e){return [];}
+  }
+  function canonico(v){
+    var k=norm(v);
+    return canonicos().find(function(x){return norm(x)===k;})||'';
+  }
+  function options(selected, allowLegacy){
+    var arr=canonicos(), sel=canonico(selected);
+    var html='';
+    if(allowLegacy && selected && !sel){
+      html+='<option value="" disabled selected>⚠ Actual: '+String(selected).replace(/</g,'&lt;').replace(/>/g,'&gt;')+' — asignar subrubro</option>';
+    }
+    html+=arr.map(function(c){
+      return '<option value="'+String(c).replace(/"/g,'&quot;')+'"'+(sel===c?' selected':'')+'>'+c+'</option>';
+    }).join('');
+    return html;
+  }
+  function validarSelect(id){
+    var el=document.getElementById(id);
+    if(!el)return '';
+    return canonico(el.value);
+  }
+  function asegurarConfig(cb){
+    Promise.resolve(typeof cargarConfigGastosAcopio==='function'?cargarConfigGastosAcopio():null)
+      .then(function(){
+        if(!canonicos().length)throw new Error('Sin subrubros de Materiales en Gastos');
+        cb&&cb();
+      })
+      .catch(function(e){
+        console.warn('CQ subrubros Gastos/Acopio',e);
+        if(typeof toast==='function')toast('No se pudieron cargar los subrubros de Gastos','err');
+      });
+  }
+
+  /* Desde ahora, cualquier selector nuevo usa únicamente subrubros de Gastos. */
+  getCats=function(){
+    var a=canonicos();
+    return a.length?a:[];
+  };
+  ensureCat=function(cat){
+    return canonico(cat);
+  };
+  renderMatCatOptions=function(selected){
+    return options(selected,false);
+  };
+
+  /* Ya no se crean/renombran categorías desde Acopio. */
+  agregarCategoriaMaterialDesdeInput=function(){
+    alert('Los subrubros se administran desde la planilla Gastos.');
+  };
+  agregarCategoriaGlobal=agregarCategoriaMaterialDesdeInput;
+  editarCategoriaGlobal=agregarCategoriaMaterialDesdeInput;
+  eliminarCategoriaGlobal=agregarCategoriaMaterialDesdeInput;
+  openCategoriasMateriales=function(){
+    alert('Los subrubros de materiales se administran desde Gastos.');
+  };
+
+  if(cqOrigOpenNuevo){
+    openNuevoMaterial=function(){
+      asegurarConfig(function(){
+        cqOrigOpenNuevo();
+        var s=document.getElementById('mat-cat');
+        if(s)s.innerHTML=options(getLastMatCat?getLastMatCat():'',false);
+      });
+    };
+  }
+  if(cqOrigOpenMasiva){
+    openCargaMasivaMateriales=function(){
+      asegurarConfig(function(){
+        cqOrigOpenMasiva();
+        var s=document.getElementById('bulk-mat-cat');
+        if(s)s.innerHTML=options(getLastMatCat?getLastMatCat():'',false);
+      });
+    };
+  }
+  if(cqOrigOpenEdit){
+    openEditMaterial=function(id){
+      asegurarConfig(function(){
+        var m=(typeof getMat==='function')?getMat(id):null;
+        cqOrigOpenEdit(id);
+        var s=document.getElementById('mat-cat');
+        if(s)s.innerHTML=options(m&&m.cat, true);
+        var old=document.getElementById('cq-acopio-subrubro-warning');
+        if(old)old.remove();
+        if(m&&m.cat&&!canonico(m.cat)){
+          var w=document.createElement('div');
+          w.id='cq-acopio-subrubro-warning';
+          w.className='cq-subrubro-warning';
+          w.textContent='Este material tiene una clasificación anterior ("'+m.cat+'"). Elegí manualmente el subrubro correcto de Gastos y guardá.';
+          s&&s.parentElement&&s.parentElement.appendChild(w);
+        }
+      });
+    };
+  }
+
+  if(cqOrigGuardarMaterial){
+    guardarMaterial=function(){
+      var cat=validarSelect('mat-cat');
+      if(!cat){
+        alert('Elegí un subrubro válido de Gastos antes de guardar.');
+        return;
+      }
+      var s=document.getElementById('mat-cat');
+      if(s)s.value=cat;
+      var nuevo=document.getElementById('mat-cat-nueva');
+      if(nuevo)nuevo.value='';
+      return cqOrigGuardarMaterial();
+    };
+  }
+  if(cqOrigGuardarMasiva){
+    guardarCargaMasivaMateriales=function(){
+      var cat=validarSelect('bulk-mat-cat');
+      if(!cat){
+        alert('Elegí un subrubro válido de Gastos antes de cargar.');
+        return;
+      }
+      document.getElementById('bulk-mat-cat').value=cat;
+      return cqOrigGuardarMasiva();
+    };
+  }
+
+  function rotular(){
+    [
+      ['mat-cat','Subrubro (Gastos)'],
+      ['bulk-mat-cat','Subrubro compartido (Gastos)']
+    ].forEach(function(p){
+      var el=document.getElementById(p[0]);
+      if(!el)return;
+      var fld=el.closest('.fld');
+      var lab=fld&&fld.querySelector('label');
+      if(lab)lab.textContent=p[1];
+    });
+  }
+
+  function refrescar(){
+    rotular();
+    var a=canonicos();
+    if(!a.length)return;
+    try{
+      var s=document.getElementById('mat-cat');
+      if(s&&!document.getElementById('modal-mat').classList.contains('open'))s.innerHTML=options('',false);
+      var b=document.getElementById('bulk-mat-cat');
+      if(b&&!document.getElementById('modal-carga-masiva-mat').classList.contains('open'))b.innerHTML=options('',false);
+    }catch(e){}
+  }
+
+  document.addEventListener('cq-firebase-ready',function(){
+    asegurarConfig(function(){refrescar();});
+  });
+  document.addEventListener('DOMContentLoaded',function(){
+    rotular();
+    setTimeout(function(){asegurarConfig(refrescar);},300);
+  });
+  setTimeout(function(){asegurarConfig(refrescar);},1200);
+})();
+</script>
+
+
+
+<!-- CQ 2026-08-18 — Acopio: selector compacto con lupa al modificar rubro -->
+<style id="cq-acopio-edit-rubro-search-style">
+  #mat-cat{display:none!important}
+
+  .cq-acopio-rubro-picker{
+    position:relative;
+    width:100%;
+  }
+  .cq-acopio-rubro-btn{
+    width:100%;
+    height:32px;
+    min-height:32px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    padding:0 8px;
+    border:1px solid rgba(28,61,53,.13);
+    border-radius:8px;
+    background:linear-gradient(180deg,#FFFFFF,#F8F7F3);
+    color:var(--green);
+    font:800 9px 'Space Grotesk',sans-serif;
+    cursor:pointer;
+    text-align:left;
+  }
+  .cq-acopio-rubro-btn span:first-child{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .cq-acopio-rubro-arrow{
+    flex:0 0 auto;
+    color:#7AAF96;
+    font-size:10px;
+  }
+  .cq-acopio-rubro-menu{
+    display:none;
+    position:absolute;
+    top:calc(100% + 4px);
+    left:0;
+    right:0;
+    z-index:20000;
+    background:#fff;
+    border:1px solid rgba(46,125,94,.20);
+    border-radius:9px;
+    box-shadow:0 12px 28px rgba(28,61,53,.16);
+    overflow:hidden;
+  }
+  .cq-acopio-rubro-menu.open{display:block}
+  .cq-acopio-rubro-search{
+    position:relative;
+    padding:5px;
+    border-bottom:1px solid #EEF2EE;
+    background:#FAFCFA;
+  }
+  .cq-acopio-rubro-search span{
+    position:absolute;
+    left:13px;
+    top:50%;
+    transform:translateY(-50%);
+    font-size:10px;
+    color:#7AAF96;
+    pointer-events:none;
+  }
+  .cq-acopio-rubro-search input{
+    width:100%;
+    height:27px;
+    min-height:27px;
+    padding:3px 7px 3px 26px;
+    border:1px solid rgba(28,61,53,.13);
+    border-radius:7px;
+    background:#fff;
+    color:var(--green);
+    font:700 8px 'Space Grotesk',sans-serif;
+    outline:none;
+  }
+  .cq-acopio-rubro-search input:focus{
+    border-color:rgba(46,125,94,.55);
+    box-shadow:0 0 0 3px rgba(46,125,94,.09);
+  }
+  .cq-acopio-rubro-options{
+    max-height:190px;
+    overflow:auto;
+    padding:3px;
+  }
+  .cq-acopio-rubro-option{
+    width:100%;
+    min-height:27px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    padding:4px 7px;
+    border:0;
+    border-radius:7px;
+    background:#fff;
+    color:#304C3D;
+    text-align:left;
+    font:800 7.8px 'Space Grotesk',sans-serif;
+    cursor:pointer;
+  }
+  .cq-acopio-rubro-option:hover,
+  .cq-acopio-rubro-option.active{
+    background:#EEF7F1;
+    color:#1F6648;
+  }
+  .cq-acopio-rubro-check{
+    opacity:0;
+    color:#2E7D5E;
+    font-size:9px;
+  }
+  .cq-acopio-rubro-option.active .cq-acopio-rubro-check{opacity:1}
+  .cq-acopio-rubro-empty{
+    padding:10px;
+    text-align:center;
+    font-size:8px;
+    font-weight:800;
+    color:#8AA095;
+  }
+
+  /* Compactar específicamente la fila Rubro al editar */
+  #modal-mat .row2:has(#mat-cat){
+    grid-template-columns:1fr 1fr!important;
+    gap:6px!important;
+  }
+  #modal-mat .fld:has(#mat-cat) label{
+    margin-bottom:2px!important;
+    font-size:7.5px!important;
+  }
+</style>
+
+<script id="cq-acopio-edit-rubro-search-js">
+(function(){
+  function esc(s){
+    return String(s==null?'':s)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+  function norm(s){
+    return String(s||'').trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+  function sel(){return document.getElementById('mat-cat');}
+
+  function opciones(){
+    var s=sel();
+    if(!s)return [];
+    var out=[];
+    Array.from(s.options).forEach(function(o){
+      var v=String(o.value||'').trim();
+      var t=String(o.textContent||v).trim();
+      if(v && !out.some(function(x){return norm(x.value)===norm(v);})){
+        out.push({value:v,label:t});
+      }
+    });
+    return out;
+  }
+
+  function ensure(){
+    var s=sel();
+    if(!s)return null;
+    var old=document.getElementById('cq-acopio-rubro-picker');
+    if(old)return old;
+
+    var wrap=document.createElement('div');
+    wrap.id='cq-acopio-rubro-picker';
+    wrap.className='cq-acopio-rubro-picker';
+    wrap.innerHTML=
+      '<button type="button" id="cq-acopio-rubro-btn" class="cq-acopio-rubro-btn">'+
+        '<span id="cq-acopio-rubro-label">Elegir rubro</span>'+
+        '<span class="cq-acopio-rubro-arrow">⌄</span>'+
+      '</button>'+
+      '<div id="cq-acopio-rubro-menu" class="cq-acopio-rubro-menu">'+
+        '<div class="cq-acopio-rubro-search">'+
+          '<span>🔍</span>'+
+          '<input type="text" id="cq-acopio-rubro-search" placeholder="Buscar rubro...">'+
+        '</div>'+
+        '<div id="cq-acopio-rubro-options" class="cq-acopio-rubro-options"></div>'+
+      '</div>';
+
+    s.insertAdjacentElement('afterend',wrap);
+
+    document.getElementById('cq-acopio-rubro-btn').addEventListener('click',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      toggle();
+    });
+    document.getElementById('cq-acopio-rubro-search').addEventListener('input',render);
+    document.getElementById('cq-acopio-rubro-search').addEventListener('click',function(e){e.stopPropagation();});
+    document.getElementById('cq-acopio-rubro-options').addEventListener('click',function(e){
+      var b=e.target.closest('[data-rubro]');
+      if(!b)return;
+      elegir(b.getAttribute('data-rubro'));
+    });
+
+    sync();
+    return wrap;
+  }
+
+  function current(){
+    var s=sel();
+    if(!s)return '';
+    var o=s.options[s.selectedIndex];
+    return o ? String(o.textContent||o.value||'') : '';
+  }
+
+  function sync(){
+    ensure();
+    var lab=document.getElementById('cq-acopio-rubro-label');
+    if(lab)lab.textContent=current() || 'Elegir rubro';
+    render();
+  }
+
+  function render(){
+    var box=document.getElementById('cq-acopio-rubro-options');
+    if(!box)return;
+    var q=norm((document.getElementById('cq-acopio-rubro-search')||{}).value||'');
+    var s=sel();
+    var cur=s?String(s.value||''):'';
+
+    var arr=opciones().filter(function(x){
+      return !q || norm(x.label).indexOf(q)>=0;
+    });
+
+    box.innerHTML=arr.map(function(x){
+      var active=norm(x.value)===norm(cur);
+      return '<button type="button" class="cq-acopio-rubro-option'+(active?' active':'')+'" data-rubro="'+esc(x.value)+'">'+
+        '<span>'+esc(x.label)+'</span><span class="cq-acopio-rubro-check">✓</span>'+
+      '</button>';
+    }).join('') || '<div class="cq-acopio-rubro-empty">Sin coincidencias</div>';
+  }
+
+  function toggle(force){
+    ensure();
+    var menu=document.getElementById('cq-acopio-rubro-menu');
+    if(!menu)return;
+    var open=(typeof force==='boolean')?force:!menu.classList.contains('open');
+    menu.classList.toggle('open',open);
+    if(open){
+      var q=document.getElementById('cq-acopio-rubro-search');
+      if(q){
+        q.value='';
+        setTimeout(function(){try{q.focus({preventScroll:true});}catch(e){}},20);
+      }
+      render();
+    }
+  }
+
+  function elegir(value){
+    var s=sel();
+    if(!s)return;
+    var exact=opciones().find(function(x){return norm(x.value)===norm(value);});
+    if(!exact)return;
+
+    s.value=exact.value;
+    s.dispatchEvent(new Event('change',{bubbles:true}));
+
+    var lab=document.getElementById('cq-acopio-rubro-label');
+    if(lab)lab.textContent=exact.label;
+
+    render();
+    toggle(false);
+  }
+
+  // Cada vez que se abre Nuevo/Editar material, el select se repuebla.
+  // Interceptamos ambas funciones para sincronizar el buscador.
+  var oldEdit=window.openEditMaterial;
+  if(typeof oldEdit==='function'){
+    window.openEditMaterial=function(){
+      var r=oldEdit.apply(this,arguments);
+      setTimeout(sync,0);
+      setTimeout(sync,80);
+      return r;
+    };
+  }
+
+  var oldNuevo=window.openNuevoMaterial;
+  if(typeof oldNuevo==='function'){
+    window.openNuevoMaterial=function(){
+      var r=oldNuevo.apply(this,arguments);
+      setTimeout(sync,0);
+      setTimeout(sync,80);
+      return r;
+    };
+  }
+
+  // Observar cambios en las opciones cargadas desde Gastos.
+  var obs=null;
+  function observe(){
+    var s=sel();
+    if(!s)return;
+    ensure();
+    if(obs)obs.disconnect();
+    obs=new MutationObserver(function(){setTimeout(sync,0);});
+    obs.observe(s,{childList:true,subtree:true});
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){setTimeout(observe,100);});
+  document.addEventListener('cq-firebase-ready',function(){setTimeout(sync,200);});
+  document.addEventListener('firebase-ready',function(){setTimeout(sync,200);});
+
+  document.addEventListener('click',function(e){
+    var p=document.getElementById('cq-acopio-rubro-picker');
+    if(p && !p.contains(e.target))toggle(false);
+  });
+
+  setTimeout(observe,700);
+})();
+</script>
 
 </body>
 </html>

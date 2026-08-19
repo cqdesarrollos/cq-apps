@@ -282,6 +282,33 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
 .fx-input{cursor:text!important;caret-color:#5c3900!important;user-select:text!important}
 .fx-value:focus-within{box-shadow:0 0 0 3px rgba(232,168,56,.25),inset 0 0 0 1px #d99218!important}
 </style>
+
+<style id="cq-saldo-pesos-destacado">
+/* El saldo en pesos es el dato principal de los cuadros superiores */
+.kpis-currency .kpi:first-child{
+  background:linear-gradient(135deg,#fff5cf 0%,#ffe49a 100%)!important;
+  border:2px solid #e8a838!important;
+  box-shadow:0 5px 15px rgba(180,122,16,.18)!important;
+}
+.kpis-currency .kpi:first-child small{
+  color:#80570b!important;
+}
+.kpis-currency .kpi:first-child #kSaldo{
+  color:#6d4800!important;
+  font-weight:950!important;
+  font-size:21px!important;
+}
+.kpis-currency .kpi:first-child .kpi-sub{
+  color:#9a6a12!important;
+  font-weight:900!important;
+}
+@media(max-width:760px){
+  .kpis-currency .kpi:first-child #kSaldo{
+    font-size:17px!important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -300,7 +327,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
 <section class="view active" id="movimientos">
 <div class="kpis kpis-currency"><div class="kpi kpi-ars"><small>Saldo · Pesos</small><strong class="green" id="kSaldo">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Saldo · Dólares</small><strong class="green" id="kSaldoUsd">USD 0</strong><span class="kpi-sub">USD</span></div><div class="kpi kpi-ars"><small>Ingresos · Pesos</small><strong class="blue" id="kIngresos">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Ingresos · Dólares</small><strong class="blue" id="kIngresosUsd">USD 0</strong><span class="kpi-sub">USD</span></div><div class="kpi kpi-ars"><small>Salidas · Pesos</small><strong class="red" id="kGastos">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Salidas · Dólares</small><strong class="red" id="kGastosUsd">USD 0</strong><span class="kpi-sub">USD</span></div></div>
 <div class="toolbar"><button class="btn btn-primary" onclick="openMovement('gasto')"><span class="btn-icon">🧾</span>Registrar salida</button><button class="btn btn-blue" onclick="openMovement('ingreso')"><span class="btn-icon">💰</span>Registrar ingreso</button></div>
-<div class="card"><div class="card-title"><span>Historial de movimientos</span><span><span id="resultCount">0 registros</span> </span></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Destino</th><th>Subrubro / comentario</th><th style="text-align:right">Importe</th><th></th></tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Todavía no hay movimientos cargados.</div></div></div>
+<div class="card"><div class="card-title"><span>Historial de movimientos</span><span><span id="resultCount">0 registros</span> </span></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Destino</th><th>Subrubro / comentario</th><th style="text-align:right">Importe</th></tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Todavía no hay movimientos cargados.</div></div></div>
 </section>
 <section class="view" id="reportes">
 <div class="card report-filter-card">
@@ -332,7 +359,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
 </div>
 </section>
 </main>
-<div class="modal-bg" id="movementModal"><div class="modal"><div class="modal-hd"><h3 id="movementTitle">Agregar gasto</h3><button class="close" onclick="closeModal('movementModal')">×</button></div><div class="modal-body"><form class="grid" id="movementForm" onsubmit="saveMovement(event)"><input id="movementId" type="hidden"/><input id="movementType" type="hidden"/><div class="field"><label>Fecha</label><input id="mDate" required="" type="date"/></div><div class="field"><label>Importe</label><input id="mAmount" min="0.01" placeholder="0,00" required="" step="0.01" type="number"/></div><div class="field"><label>Moneda</label><select id="mCurrency"><option value="ars">Pesos (ARS)</option><option value="usd">Dólares (USD)</option></select></div><div class="field full" id="destinationField"><label>Destino del gasto</label><div class="destination"><div class="dest-option office" id="destOffice" onclick="selectDestination('oficina')">🏢 Oficina</div><div class="dest-option work" id="destWork" onclick="selectDestination('obra')">🏗 Obra</div></div><input id="mDestType" type="hidden"/><select class="hide" id="mWork" style="margin-top:9px" onchange="fillCategories();updateMaterialesButtonCC()"><option value="">Seleccionar obra</option></select></div><input id="mConcept" type="hidden"/>
+<div class="modal-bg" id="movementModal"><div class="modal"><div class="modal-hd"><h3 id="movementTitle">Agregar gasto</h3><button class="close" onclick="closeModal('movementModal')">×</button></div><div class="modal-body"><form class="grid" id="movementForm" onsubmit="saveMovement(event)"><input id="movementId" type="hidden"/><input id="movementType" type="hidden"/><div class="field"><label>Fecha</label><input id="mDate" required="" type="date"/></div><div class="field"><label>Importe</label><input id="mAmount" min="0.01" placeholder="0,00" required="" step="0.01" type="number"/></div><div class="field"><label>Moneda</label><select id="mCurrency"><option value="ars">Pesos (ARS)</option><option value="usd">Dólares (USD)</option></select></div><div class="field" id="mTcField"><label>Tipo de cambio</label><div class="cq-mtc-wrap"><span>$</span><input id="mTc" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="TC Gerencia"/></div><small class="cq-mtc-help" id="mTcHelp">Caja Gerencia · editable para este movimiento</small></div><div class="field full" id="destinationField"><label>Destino del gasto</label><div class="destination"><div class="dest-option office" id="destOffice" onclick="selectDestination('oficina')">🏢 Oficina</div><div class="dest-option work" id="destWork" onclick="selectDestination('obra')">🏗 Obra</div></div><input id="mDestType" type="hidden"/><select class="hide" id="mWork" style="margin-top:9px" onchange="fillCategories();updateMaterialesButtonCC()"><option value="">Seleccionar obra</option></select></div><input id="mConcept" type="hidden"/>
 <div class="field full" id="categoryField"><label>Categoría</label><select id="mCategory" onchange="fillSubrubros();updateMaterialesButtonCC()"><option value="">Seleccionar categoría</option></select></div>
 <div class="field full" id="subrubroField"><label>Subrubro</label>
 <div class="cq-search-combo">
@@ -378,7 +405,35 @@ window.__cqCajaChicaSetState=function(next){
   if(!next||typeof next!=='object')return;
   db=next;
 };
-function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(x&&Array.isArray(x.movements)){x.deletedMovementIds=Array.isArray(x.deletedMovementIds)?x.deletedMovementIds:[];x.works=Array.isArray(x.works)&&x.works.length?x.works:[...DEFAULT_WORKS];x.concepts=Array.isArray(x.concepts)&&x.concepts.length?x.concepts:[...DEFAULT_CONCEPTS];x.exchangeRate=Number(x.exchangeRate)||1200;return x}}catch(e){}return{movements:[],deletedMovementIds:[],works:[...DEFAULT_WORKS],concepts:[...DEFAULT_CONCEPTS],exchangeRate:1200}}
+function load(){
+  let tcCache=0;
+  try{
+    const c=JSON.parse(localStorage.getItem('cq_tc_gerencia_confirmado_v1')||'null');
+    tcCache=Number(c&&c.value)||0;
+  }catch(e){}
+
+  try{
+    const x=JSON.parse(localStorage.getItem(KEY));
+    if(x&&Array.isArray(x.movements)){
+      x.deletedMovementIds=Array.isArray(x.deletedMovementIds)?x.deletedMovementIds:[];
+      x.works=Array.isArray(x.works)&&x.works.length?x.works:[...DEFAULT_WORKS];
+      x.concepts=Array.isArray(x.concepts)&&x.concepts.length?x.concepts:[...DEFAULT_CONCEPTS];
+
+      // Al iniciar, nunca usar un TC local viejo como fuente maestra.
+      // Si ya existe un TC confirmado de Caja Gerencia, mostrar ése hasta recibir la actualización online.
+      x.exchangeRate=tcCache>0?tcCache:0;
+      return x;
+    }
+  }catch(e){}
+
+  return{
+    movements:[],
+    deletedMovementIds:[],
+    works:[...DEFAULT_WORKS],
+    concepts:[...DEFAULT_CONCEPTS],
+    exchangeRate:tcCache>0?tcCache:0
+  };
+}
 function saveLocalCC(){localStorage.setItem(KEY,JSON.stringify(db))}
 function save(){
   saveLocalCC();
@@ -488,38 +543,15 @@ function formatExchangeRate(value){return new Intl.NumberFormat('es-AR',{maximum
 function initExchangeRate(){
   const input=document.getElementById('exchangeRate');
   if(!input)return;
-  input.readOnly=false;
-  input.removeAttribute('readonly');
-  input.removeAttribute('aria-readonly');
-  input.removeAttribute('tabindex');
-  input.title='Tomado de Caja Gerencia. Podés modificarlo para Caja Chica.';
-  input.value=formatExchangeRate(db.exchangeRate||1200);
 
-  if(!input.dataset.cqEditableBind){
-    input.dataset.cqEditableBind='1';
-    input.addEventListener('focus',function(){
-      this.value=String(Number(db.exchangeRate)||'');
-      try{this.select();}catch(e){}
-    });
-    input.addEventListener('input',function(){
-      const n=parseExchangeRate(this.value);
-      if(n>0){
-        window.__cqTcManualCC=true;
-        db.exchangeRate=n;
-        try{save();}catch(e){}
-        try{render();}catch(e){}
-      }
-    });
-    input.addEventListener('blur',function(){
-      const n=parseExchangeRate(this.value);
-      if(n>0){
-        window.__cqTcManualCC=true;
-        db.exchangeRate=n;
-        try{save();}catch(e){}
-      }
-      this.value=formatExchangeRate(db.exchangeRate||1200);
-    });
-  }
+  // El TC del encabezado es siempre el TC maestro de Caja Gerencia.
+  // No se modifica desde Caja Chica: los ajustes excepcionales se hacen
+  // únicamente dentro del gasto que se está cargando.
+  input.readOnly=true;
+  input.setAttribute('readonly','readonly');
+  input.setAttribute('aria-readonly','true');
+  input.title='Tipo de cambio maestro tomado de Caja Gerencia';
+  input.value=Number(db.exchangeRate)>0?formatExchangeRate(db.exchangeRate):'—';
 }
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function today(){return new Date().toISOString().slice(0,10)}
@@ -1473,88 +1505,159 @@ function fillWorks(){fillWorksFromGastos(document.getElementById('mWork')?.value
 function fillConcepts(){}
 function saveMovement(e){
   e.preventDefault();
+
   const id=document.getElementById('movementId').value;
   const type=document.getElementById('movementType').value;
   const oldItem=id?db.movements.find(x=>x.id===id):null;
   const destType=type==='gasto'?document.getElementById('mDestType').value:'';
-  const obraId=type==='gasto'?(destType==='oficina'?'oficina':document.getElementById('mWork').value):'';
+
   if(type==='gasto'&&!destType)return alert('Elegí Oficina u Obra.');
-  if(type==='gasto'&&destType==='obra'&&!obraId)return alert('Seleccioná una obra.');
+
   const category=type==='gasto'?document.getElementById('mCategory').value:'';
   const subrubro=type==='gasto'?document.getElementById('mSubrubro').value:'';
   if(type==='gasto'&&!category)return alert('Seleccioná una categoría.');
   if(type==='gasto'&&!subrubro)return alert('Seleccioná un subrubro.');
+
+  const totalAmount=Number(document.getElementById('mAmount').value);
+  if(!(totalAmount>0))return alert('Ingresá un importe total válido.');
+
+  let obraIds=[];
+  if(type==='gasto'&&destType==='obra'){
+    obraIds=(window.cqObrasSeleccionadasCC||[]).map(String).filter(Boolean);
+    if(!obraIds.length)return alert('Seleccioná al menos una obra.');
+
+    if(id&&obraIds.length>1){
+      return alert('Para modificar un movimiento existente seleccioná una sola obra.');
+    }
+
+    // Con UNA sola obra, usar directamente el importe total.
+    // La distribución manual sólo se pide cuando hay 2 o más obras.
+    if(obraIds.length>1){
+      const suma=obraIds.reduce((s,obraId)=>s+(Number((window.cqImportesPorObraCC||{})[obraId])||0),0);
+      const faltantes=obraIds.filter(obraId=>!(Number((window.cqImportesPorObraCC||{})[obraId])>0));
+      if(faltantes.length){
+        return alert('Ingresá un importe para cada obra seleccionada.');
+      }
+      if(Math.abs(suma-totalAmount)>0.009){
+        return alert('La suma de los importes por obra debe ser igual al importe total.');
+      }
+    }
+  }else if(type==='gasto'){
+    obraIds=['oficina'];
+  }else{
+    obraIds=[''];
+  }
+
   const notes=document.getElementById('mNotes').value.trim();
-  const work=type==='gasto'?(destType==='oficina'?'Oficina':obraLabelCC(obraId)):'';
   const now=new Date().toISOString();
-  const item={
-    id:id||uuid(),
-    type,
-    date:document.getElementById('mDate').value,
-    amount:Number(document.getElementById('mAmount').value),
-    currency:document.getElementById('mCurrency').value==='usd'?'usd':'ars',
-    destType,
-    work,
-    workId:obraId,
-    gastosObraId:obraId,
-    category,
-    subrubro,
-    concept:type==='ingreso'?'Ingreso de efectivo':subrubro,
-    notes,
-    tc:oldItem&&Number(oldItem.tc)>0?Number(oldItem.tc):(Number(db.exchangeRate)||0),
-    createdAt:oldItem?.createdAt||now,
-    updatedAt:now,
-    gastosSyncEstado:type==='gasto'?'pendiente':'',
-    materialesAgregar:type==='gasto'&&category==='mat'&&destType==='obra'&&ccMaterialesCantidad>0&&!!ccMaterialSeleccionado,
-    materialesCantidad:type==='gasto'&&category==='mat'&&destType==='obra'?Number(ccMaterialesCantidad)||0:0,
-    materialesProducto:type==='gasto'&&category==='mat'&&destType==='obra'&&ccMaterialSeleccionado?{
-      id:ccMaterialSeleccionado.id,name:ccMaterialSeleccionado.name,code:ccMaterialSeleccionado.code||'',category:ccMaterialSeleccionado.category||''
-    }:null,
-    materialesSyncEstado:type==='gasto'&&category==='mat'&&destType==='obra'&&ccMaterialesCantidad>0&&!!ccMaterialSeleccionado?'pendiente':(type==='gasto'&&category==='mat'?'no':''),
-    materialesSyncError:type==='gasto'&&category==='mat'&&!(destType==='obra'&&ccMaterialesCantidad>0&&!!ccMaterialSeleccionado)?'No se agregó a Materiales':''
-  };
-  cqUndoCapture(id?'edición de movimiento':'nuevo movimiento');
-  if(id)db.movements=db.movements.map(x=>x.id===id?item:x);
-  else db.movements.push(item);
+  const currency=document.getElementById('mCurrency').value==='usd'?'usd':'ars';
+  const tcCampo=Number(document.getElementById('mTc')?.value)||0;
+  const tc=tcCampo>0?tcCampo:(oldItem&&Number(oldItem.tc)>0?Number(oldItem.tc):(Number(window.cqTcGerenciaCC)||Number(db.exchangeRate)||0));
+
+  const items=obraIds.map((obraId,idx)=>{
+    const amount=(type==='gasto'&&destType==='obra'&&obraIds.length>1)
+      ?Number((window.cqImportesPorObraCC||{})[obraId])||0
+      :totalAmount;
+    const work=type==='gasto'?(destType==='oficina'?'Oficina':obraLabelCC(obraId)):'';
+
+    return {
+      id:(id&&idx===0)?id:uuid(),
+      type,
+      date:document.getElementById('mDate').value,
+      amount,
+      currency,
+      destType,
+      work,
+      workId:obraId,
+      gastosObraId:obraId,
+      category,
+      subrubro,
+      concept:type==='ingreso'?'Ingreso de efectivo':subrubro,
+      notes,
+      tc,
+      createdAt:(oldItem&&idx===0)?(oldItem.createdAt||now):now,
+      updatedAt:now,
+      gastosSyncEstado:type==='gasto'?'pendiente':'',
+
+      // Con una sola obra se conserva el flujo actual hacia Materiales.
+      // Con varias obras no se duplica una cantidad de material entre destinos.
+      materialesAgregar:type==='gasto'&&category==='mat'&&destType==='obra'&&obraIds.length===1&&ccMaterialesCantidad>0&&!!ccMaterialSeleccionado,
+      materialesCantidad:type==='gasto'&&category==='mat'&&destType==='obra'&&obraIds.length===1?Number(ccMaterialesCantidad)||0:0,
+      materialesProducto:type==='gasto'&&category==='mat'&&destType==='obra'&&obraIds.length===1&&ccMaterialSeleccionado?{
+        id:ccMaterialSeleccionado.id,
+        name:ccMaterialSeleccionado.name,
+        code:ccMaterialSeleccionado.code||'',
+        category:ccMaterialSeleccionado.category||''
+      }:null,
+      materialesSyncEstado:type==='gasto'&&category==='mat'&&destType==='obra'&&obraIds.length===1&&ccMaterialesCantidad>0&&!!ccMaterialSeleccionado
+        ?'pendiente'
+        :(type==='gasto'&&category==='mat'?'no':''),
+      materialesSyncError:type==='gasto'&&category==='mat'&&!(destType==='obra'&&obraIds.length===1&&ccMaterialesCantidad>0&&!!ccMaterialSeleccionado)
+        ?(obraIds.length>1?'Carga múltiple: no se agregó automáticamente a Materiales':'No se agregó a Materiales')
+        :'',
+
+      repartoGrupo:obraIds.length>1?('ccsplit_'+Date.now().toString(36)):'',
+      repartoTotal:obraIds.length>1?totalAmount:0,
+      repartoCantidadObras:obraIds.length
+    };
+  });
+
+  cqUndoCapture(
+    id?'edición de movimiento':
+    (items.length>1?'gasto distribuido entre obras':'nuevo movimiento')
+  );
+
+  if(id){
+    db.movements=db.movements.map(x=>x.id===id?items[0]:x);
+  }else{
+    db.movements.push(...items);
+  }
+
   save();
   closeModal('movementModal');
   render();
 
-  const auditAntes=oldItem?cqAuditMovementSummaryCC(oldItem):null;
-  const auditDespues=cqAuditMovementSummaryCC(item);
-  cqRegistrarActividadCC(id?'modificar':'agregar','movimiento',cqAuditDetalleMovimientoCC(item,id?'modificar':'agregar'),Object.assign({
-    movimientoId:String(item.id),
-    tipoMovimiento:String(item.type||''),
-    obraId:String(item.gastosObraId||''),
-    obra:String(item.work||''),
-    importe:Number(item.amount)||0,
-    moneda:String(item.currency||'ars'),
-    tc:Number(item.tc)||0,
-    rubro:String(item.category||''),
-    rubroLabel:String(CAT_LABELS_CC[item.category]||item.category||''),
-    subrubro:String(item.subrubro||item.concept||''),
-    concepto:String(item.concept||''),
-    comentario:String(item.notes||''),
-    producto:item.materialesProducto?String(item.materialesProducto.name||''):'',
-    codigoProducto:item.materialesProducto?String(item.materialesProducto.code||''):'',
-    cantidad:item.materialesAgregar?Number(item.materialesCantidad)||0:0,
-    contexto:cqAuditMovementSummaryCC(item),
-    versionAuditoria:3,
-    formulario:cqAuditFormSnapshotCC(),
-    antesCompleto:auditAntes||null,
-    despuesCompleto:auditDespues||null
-  },cqAuditBeforeAfterCC(auditAntes,auditDespues)));
+  items.forEach((item,idx)=>{
+    const before=(idx===0?oldItem:null);
+    const auditAntes=before?cqAuditMovementSummaryCC(before):null;
+    const auditDespues=cqAuditMovementSummaryCC(item);
 
-  if(type==='gasto'){
-    launchSyncCC(item,oldItem||null);
-    syncMaterialesCC(item,oldItem||null).catch(e=>{
-      console.warn('Caja Chica → Materiales',e);
-      item.materialesSyncEstado='error';
-      item.materialesSyncError=String(e&&e.message||e);
-      item.materialesSyncAt=new Date().toISOString();
-      save();render();
-    });
-  }
+    cqRegistrarActividadCC(id?'modificar':'agregar','movimiento',cqAuditDetalleMovimientoCC(item,id?'modificar':'agregar'),Object.assign({
+      movimientoId:String(item.id),
+      tipoMovimiento:String(item.type||''),
+      obraId:String(item.gastosObraId||''),
+      obra:String(item.work||''),
+      importe:Number(item.amount)||0,
+      moneda:String(item.currency||'ars'),
+      tc:Number(item.tc)||0,
+      rubro:String(item.category||''),
+      rubroLabel:String(CAT_LABELS_CC[item.category]||item.category||''),
+      subrubro:String(item.subrubro||item.concept||''),
+      concepto:String(item.concept||''),
+      comentario:String(item.notes||''),
+      producto:item.materialesProducto?String(item.materialesProducto.name||''):'',
+      codigoProducto:item.materialesProducto?String(item.materialesProducto.code||''):'',
+      cantidad:item.materialesAgregar?Number(item.materialesCantidad)||0:0,
+      contexto:cqAuditMovementSummaryCC(item),
+      versionAuditoria:3,
+      formulario:cqAuditFormSnapshotCC(),
+      antesCompleto:auditAntes||null,
+      despuesCompleto:auditDespues||null,
+      repartoTotal:Number(item.repartoTotal)||0,
+      repartoCantidadObras:Number(item.repartoCantidadObras)||1
+    },cqAuditBeforeAfterCC(auditAntes,auditDespues)));
+
+    if(type==='gasto'){
+      launchSyncCC(item,before||null);
+      syncMaterialesCC(item,before||null).catch(err=>{
+        console.warn('Caja Chica → Materiales',err);
+        item.materialesSyncEstado='error';
+        item.materialesSyncError=String(err&&err.message||err);
+        item.materialesSyncAt=new Date().toISOString();
+        save();render();
+      });
+    }
+  });
 }
 async function deleteMovement(id){
   const sid=String(id||'');
@@ -1668,12 +1771,12 @@ function render(){
     </td>
     <td class="amount ${x.type==='gasto'?'red':'green'}">${x.type==='gasto'?'- ':'+ '}${movementMainCC(x)}
       <span class="amount-usd">${x.type==='gasto'?'- ':'+ '}${movementSecondaryCC(x)} · TC ${formatExchangeRate(movementRateCC(x))}</span>
+      <div class="row-actions cq-amount-actions">
+        ${dualSyncDotCC(x)}
+        <button class="mini" onclick="openMovement('${x.type}','${x.id}')" title="Editar" aria-label="Editar">✏️</button>
+        <button class="mini" onclick="deleteMovement('${x.id}')" title="Eliminar" aria-label="Eliminar">🗑️</button>
+      </div>
     </td>
-    <td><div class="row-actions">
-      ${dualSyncDotCC(x)}
-      <button class="mini" onclick="openMovement('${x.type}','${x.id}')" title="Editar" aria-label="Editar">✏️</button>
-      <button class="mini" onclick="deleteMovement('${x.id}')" title="Eliminar" aria-label="Eliminar">🗑️</button>
-    </div></td>
   </tr>`).join('');
   renderReports()
 }
@@ -1862,7 +1965,7 @@ function refreshCC(){
   try{saveLocalCC();}catch(e){}
   try{if(typeof initExchangeRate==="function"){
     const input=document.getElementById("exchangeRate");
-    if(input&&document.activeElement!==input)input.value=formatExchangeRate(window.__cqCajaChicaGetState().exchangeRate||1200);
+    if(input&&document.activeElement!==input)input.value=Number(window.__cqCajaChicaGetState().exchangeRate)>0?formatExchangeRate(window.__cqCajaChicaGetState().exchangeRate):'—';
   }}catch(e){}
   try{if(typeof render==="function")render();}catch(e){console.warn(e);}
 }
@@ -2298,7 +2401,16 @@ function aplicarTipoCambioGerencia(data,forzar=false){
   if(!(value>0))return false;
   window.cqTcGerenciaCC=value;
 
-  if(window.__cqTcManualCC && !forzar)return true;
+  // Guardar por separado el último TC CONFIRMADO de Caja Gerencia.
+  // Ese valor es el que se muestra instantáneamente en el próximo arranque,
+  // mientras Firebase consulta si hubo una actualización.
+  try{
+    localStorage.setItem('cq_tc_gerencia_confirmado_v1',JSON.stringify({
+      value:value,
+      confirmedAt:new Date().toISOString(),
+      source:'Caja Gerencia'
+    }));
+  }catch(e){}
 
   if(typeof db!=="undefined"){
     db.exchangeRate=value;
@@ -2363,10 +2475,10 @@ onAuthStateChanged(authTC,user=>{
 });
 
 window.addEventListener("focus",()=>{
-  if(authTC.currentUser && !window.__cqTcManualCC)iniciarSyncTCGerencia();
+  if(authTC.currentUser)iniciarSyncTCGerencia();
 });
 document.addEventListener("visibilitychange",()=>{
-  if(document.visibilityState==="visible" && authTC.currentUser && !window.__cqTcManualCC){
+  if(document.visibilityState==="visible" && authTC.currentUser){
     iniciarSyncTCGerencia();
   }
 });
@@ -2515,6 +2627,1060 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     return before-state.movements.length;
   }catch(e){return 0;}
 };
+</script>
+
+
+
+<style id="cq-historial-compacto-alineado">
+/* Acciones dentro de la columna del importe, sin crear una fila nueva */
+#movimientos .cq-amount-actions{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:5px!important;
+  margin-top:7px!important;
+  padding:0!important;
+  border:0!important;
+  width:100%!important;
+}
+#movimientos .cq-amount-actions .mini{
+  flex:0 0 auto!important;
+}
+
+/* Móvil: fecha/destino a la izquierda, detalle del gasto perfectamente alineado
+   en la columna central, e importe + acciones a la derecha. */
+@media(max-width:760px){
+  #movimientos tr{
+    display:grid!important;
+    grid-template-columns:145px minmax(0,1fr) 155px!important;
+    grid-template-areas:
+      "date type amount"
+      "dest desc amount"!important;
+    column-gap:8px!important;
+    row-gap:4px!important;
+    align-items:start!important;
+  }
+
+  #movimientos td:nth-child(1){grid-area:date!important}
+  #movimientos td:nth-child(2){
+    grid-area:type!important;
+    justify-self:start!important;
+    width:100%!important;
+    padding-left:0!important;
+    margin-left:0!important;
+  }
+  #movimientos td:nth-child(3){
+    grid-area:dest!important;
+    justify-self:start!important;
+    width:100%!important;
+  }
+  #movimientos td:nth-child(4){
+    grid-area:desc!important;
+    justify-self:start!important;
+    width:100%!important;
+    padding-left:0!important;
+    margin-left:0!important;
+    text-align:left!important;
+  }
+  #movimientos td:nth-child(4)>b,
+  #movimientos td:nth-child(4)>.note{
+    display:block!important;
+    margin-left:0!important;
+    padding-left:0!important;
+    text-align:left!important;
+  }
+
+  #movimientos td:nth-child(5){
+    grid-area:amount!important;
+    align-self:start!important;
+    justify-self:stretch!important;
+    text-align:right!important;
+    white-space:nowrap!important;
+  }
+
+  #movimientos .cq-amount-actions{
+    justify-content:flex-end!important;
+    margin-top:6px!important;
+  }
+  #movimientos .cq-amount-actions .mini{
+    width:28px!important;
+    height:28px!important;
+    font-size:11px!important;
+  }
+}
+
+/* Teléfonos angostos: conservar alineación sin ensanchar la tarjeta */
+@media(max-width:430px){
+  #movimientos tr{
+    grid-template-columns:118px minmax(0,1fr) 132px!important;
+    column-gap:6px!important;
+  }
+}
+</style>
+
+
+
+<style id="cq-multiobra-distribucion-style">
+/* Flujo al elegir Obra:
+   Destino -> Categoría -> Subrubro -> Obras -> Importes */
+#movementForm{align-items:start}
+#categoryField{order:10}
+#subrubroField{order:11}
+#cq-obras-field-cc{order:12}
+#commentField{order:30}
+
+/* El select viejo de obra queda sólo como compatibilidad interna */
+#mWork{display:none!important}
+
+/* Categoría y subrubro comparten ancho completo y se ven claros */
+#categoryField,#subrubroField,#cq-obras-field-cc{grid-column:1/-1!important}
+#categoryField select{
+  min-height:39px;
+  font-size:12px;
+  font-weight:800;
+  background:#fff;
+}
+#subrubroField .cq-search-combo input{
+  min-height:39px;
+  font-size:12px;
+  font-weight:750;
+}
+
+/* Selección múltiple de obras */
+#cq-obras-field-cc{
+  display:none;
+  flex-direction:column;
+  gap:6px;
+}
+#cq-obras-field-cc.show{display:flex}
+#cq-obras-field-cc>label{
+  font-size:10px;
+  text-transform:uppercase;
+  font-weight:900;
+  color:var(--muted);
+  letter-spacing:.06em;
+}
+.cq-obras-picker-cc{position:relative}
+#cq-obras-btn-cc{
+  width:100%;
+  min-height:40px;
+  border:1px solid #cfddd2;
+  border-radius:10px;
+  background:#fff;
+  padding:8px 11px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  color:#213d33;
+  font:800 12px inherit;
+  cursor:pointer;
+  text-align:left;
+}
+#cq-obras-btn-cc .cq-obras-btn-copy{
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+#cq-obras-btn-cc .cq-obras-arrow{color:var(--green2);font-size:13px}
+#cq-obras-panel-cc{
+  display:none;
+  position:absolute;
+  z-index:240;
+  left:0;right:0;
+  top:calc(100% + 5px);
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:0 16px 34px rgba(20,55,42,.18);
+  overflow:hidden;
+}
+.cq-obras-picker-cc.open #cq-obras-panel-cc{display:block}
+.cq-obras-list-cc{
+  max-height:235px;
+  overflow:auto;
+  padding:5px;
+}
+.cq-obra-opt-cc{
+  width:100%;
+  min-height:34px;
+  border:0;
+  border-radius:8px;
+  background:#fff;
+  padding:7px 9px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  color:#304f43;
+  text-align:left;
+  font:800 11px inherit;
+  cursor:pointer;
+}
+.cq-obra-opt-cc:hover,.cq-obra-opt-cc.active{
+  background:#edf7f1;
+  color:#176247;
+}
+.cq-check-cc{
+  width:18px;height:18px;
+  border-radius:5px;
+  border:1.5px solid #b7c9bf;
+  display:grid;
+  place-items:center;
+  flex:0 0 auto;
+  color:#fff;
+  font-size:11px;
+}
+.cq-obra-opt-cc.active .cq-check-cc{
+  border-color:var(--green2);
+  background:var(--green2);
+}
+.cq-obras-panel-ft-cc{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px;
+  border-top:1px solid #edf2ee;
+  background:#fafcfa;
+}
+.cq-obras-count-cc{
+  color:var(--muted);
+  font-size:9.5px;
+  font-weight:800;
+}
+#cq-obras-ok-cc{
+  min-width:86px;
+  min-height:32px;
+  border:0;
+  border-radius:9px;
+  background:linear-gradient(135deg,#0d8054,#15b878);
+  color:#fff;
+  font:900 11px inherit;
+  cursor:pointer;
+}
+
+/* Distribución por obra */
+#cq-distribucion-cc{
+  display:none;
+  margin-top:3px;
+  border:1px solid #dce8e0;
+  border-radius:12px;
+  background:#f9fbfa;
+  overflow:hidden;
+}
+#cq-distribucion-cc.show{display:block}
+.cq-distrib-hd-cc{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:9px 10px;
+  background:#f2f7f3;
+  border-bottom:1px solid #e3ece6;
+}
+.cq-distrib-hd-cc b{
+  font-size:10.5px;
+  color:#315547;
+}
+#cq-distrib-estado-cc{
+  font-size:9.5px;
+  font-weight:900;
+  border-radius:999px;
+  padding:4px 7px;
+  background:#fff3dc;
+  color:#8c640e;
+  white-space:nowrap;
+}
+#cq-distrib-estado-cc.ok{
+  background:#e7f6ed;
+  color:#147348;
+}
+#cq-distrib-estado-cc.err{
+  background:#fdecea;
+  color:#a83227;
+}
+#cq-distrib-lista-cc{
+  display:grid;
+  gap:0;
+}
+.cq-distrib-row-cc{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 145px;
+  gap:10px;
+  align-items:center;
+  padding:9px 10px;
+  border-bottom:1px solid #edf2ee;
+}
+.cq-distrib-row-cc:last-child{border-bottom:0}
+.cq-distrib-obra-cc{
+  min-width:0;
+  font-size:11px;
+  font-weight:900;
+  color:#294c3e;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.cq-distrib-input-wrap-cc{
+  display:flex;
+  align-items:center;
+  border:1px solid #cfdcd3;
+  border-radius:9px;
+  background:#fff;
+  padding-left:8px;
+}
+.cq-distrib-input-wrap-cc span{
+  color:#72897d;
+  font-weight:900;
+  font-size:11px;
+}
+.cq-distrib-input-cc{
+  min-width:0!important;
+  width:100%!important;
+  border:0!important;
+  box-shadow:none!important;
+  padding:7px 8px!important;
+  background:transparent!important;
+  text-align:right;
+  font-size:11px!important;
+  font-weight:900!important;
+}
+.cq-distrib-resumen-cc{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:6px;
+  padding:8px;
+  background:#fff;
+  border-top:1px solid #edf2ee;
+}
+.cq-distrib-kpi-cc{
+  border:1px solid #e1e9e3;
+  border-radius:9px;
+  padding:7px 8px;
+  background:#fbfcfb;
+}
+.cq-distrib-kpi-cc small{
+  display:block;
+  font-size:8px;
+  text-transform:uppercase;
+  color:#80958a;
+  font-weight:900;
+}
+.cq-distrib-kpi-cc strong{
+  display:block;
+  margin-top:2px;
+  font-size:11px;
+  color:#294c3e;
+}
+.cq-distrib-kpi-cc.restante strong{color:#9a6810}
+.cq-distrib-kpi-cc.restante.ok strong{color:#147348}
+.cq-distrib-kpi-cc.restante.err strong{color:#a83227}
+
+/* Cuando el destino es Obra, el selector viejo no ocupa lugar. */
+#destinationField #mWork{display:none!important}
+
+@media(max-width:760px){
+  #categoryField select,
+  #subrubroField .cq-search-combo input,
+  #cq-obras-btn-cc{min-height:36px!important;font-size:11px!important}
+  .cq-obras-list-cc{max-height:210px}
+  .cq-obra-opt-cc{font-size:10px;min-height:31px}
+  .cq-distrib-row-cc{
+    grid-template-columns:minmax(0,1fr) 120px;
+    gap:7px;
+    padding:8px;
+  }
+  .cq-distrib-obra-cc{font-size:10px}
+  .cq-distrib-resumen-cc{gap:4px;padding:6px}
+  .cq-distrib-kpi-cc{padding:6px}
+  .cq-distrib-kpi-cc small{font-size:7px}
+  .cq-distrib-kpi-cc strong{font-size:10px}
+}
+</style>
+
+<script id="cq-multiobra-distribucion-js">
+(function(){
+  window.cqObrasSeleccionadasCC=[];
+  window.cqImportesPorObraCC={};
+
+  function getObrasDisponibles(){
+    const cat=document.getElementById('mCategory')?.value||'';
+    return (gastosConfigCC?.obras||[])
+      .filter(o=>o&&o.id&&o.id!=='oficina'&&!isOficinaCC(o.id))
+      .filter(o=>!cat || categoriasPermitidasCC(o.id).includes(cat));
+  }
+
+  function ensureUI(){
+    if(document.getElementById('cq-obras-field-cc'))return;
+
+    const sub=document.getElementById('subrubroField');
+    if(!sub)return;
+
+    const field=document.createElement('div');
+    field.id='cq-obras-field-cc';
+    field.className='field full';
+    field.innerHTML=
+      '<label>Obras</label>'+
+      '<div class="cq-obras-picker-cc" id="cq-obras-picker-cc">'+
+        '<button type="button" id="cq-obras-btn-cc">'+
+          '<span class="cq-obras-btn-copy" id="cq-obras-label-cc">Seleccionar obras</span>'+
+          '<span class="cq-obras-arrow">⌄</span>'+
+        '</button>'+
+        '<div id="cq-obras-panel-cc">'+
+          '<div class="cq-obras-list-cc" id="cq-obras-list-cc"></div>'+
+          '<div class="cq-obras-panel-ft-cc">'+
+            '<span class="cq-obras-count-cc" id="cq-obras-count-cc">0 seleccionadas</span>'+
+            '<button type="button" id="cq-obras-ok-cc">OK</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div id="cq-distribucion-cc">'+
+        '<div class="cq-distrib-hd-cc"><b>Distribución del importe</b><span id="cq-distrib-estado-cc">Pendiente</span></div>'+
+        '<div id="cq-distrib-lista-cc"></div>'+
+        '<div class="cq-distrib-resumen-cc">'+
+          '<div class="cq-distrib-kpi-cc"><small>Importe total</small><strong id="cq-total-gasto-cc">$ 0</strong></div>'+
+          '<div class="cq-distrib-kpi-cc"><small>Asignado</small><strong id="cq-total-asignado-cc">$ 0</strong></div>'+
+          '<div class="cq-distrib-kpi-cc restante" id="cq-restante-box-cc"><small>Restante</small><strong id="cq-restante-cc">$ 0</strong></div>'+
+        '</div>'+
+      '</div>';
+
+    sub.insertAdjacentElement('afterend',field);
+
+    document.getElementById('cq-obras-btn-cc').addEventListener('click',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const p=document.getElementById('cq-obras-picker-cc');
+      p.classList.toggle('open');
+      renderObrasLista();
+    });
+
+    document.getElementById('cq-obras-list-cc').addEventListener('click',function(e){
+      const b=e.target.closest('[data-cq-obra]');
+      if(!b)return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const id=String(b.dataset.cqObra);
+      const i=cqObrasSeleccionadasCC.indexOf(id);
+      if(i>=0){
+        cqObrasSeleccionadasCC.splice(i,1);
+        delete cqImportesPorObraCC[id];
+      }else{
+        cqObrasSeleccionadasCC.push(id);
+        // En selección múltiple, el importe queda vacío para escribir directamente.
+        if(cqImportesPorObraCC[id]==null)cqImportesPorObraCC[id]='';
+      }
+
+      // Importante: NO cerrar el panel al elegir; queda abierto hasta OK.
+      renderObrasLista();
+      syncObrasLabel();
+    });
+
+    document.getElementById('cq-obras-ok-cc').addEventListener('click',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('cq-obras-picker-cc').classList.remove('open');
+
+      if(cqObrasSeleccionadasCC.length===1){
+        cqImportesPorObraCC[cqObrasSeleccionadasCC[0]]=
+          document.getElementById('mAmount')?.value||'';
+      }
+
+      renderDistribucion();
+      syncLegacyWork();
+      updateMaterialesButtonCC();
+    });
+
+    document.getElementById('cq-distrib-lista-cc').addEventListener('input',function(e){
+      const inp=e.target.closest('[data-cq-importe-obra]');
+      if(!inp)return;
+      cqImportesPorObraCC[String(inp.dataset.cqImporteObra)]=inp.value;
+      syncDistribucionEstado();
+    });
+
+    document.getElementById('mAmount').addEventListener('input',function(){
+      syncDistribucionEstado();
+    });
+
+    document.getElementById('mCategory').addEventListener('change',function(){
+      // Si cambia la categoría, descartar obras que ya no admiten esa categoría.
+      const validos=new Set(getObrasDisponibles().map(o=>String(o.id)));
+      cqObrasSeleccionadasCC=cqObrasSeleccionadasCC.filter(id=>validos.has(String(id)));
+      Object.keys(cqImportesPorObraCC).forEach(id=>{
+        if(!validos.has(String(id)))delete cqImportesPorObraCC[id];
+      });
+      syncAfterCategoryOrSubrubro();
+    });
+
+    document.getElementById('mSubrubroSearch').addEventListener('input',function(){
+      setTimeout(syncAfterCategoryOrSubrubro,0);
+    });
+
+    document.getElementById('mSubrubroPanel').addEventListener('click',function(){
+      setTimeout(syncAfterCategoryOrSubrubro,0);
+    });
+  }
+
+  function moneyLocal(n){
+    const curr=document.getElementById('mCurrency')?.value||'ars';
+    const num=Number(n)||0;
+    return curr==='usd'
+      ?('USD '+num.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}))
+      :('$ '+num.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  }
+
+  function renderObrasLista(){
+    ensureUI();
+    const box=document.getElementById('cq-obras-list-cc');
+    const arr=getObrasDisponibles();
+
+    box.innerHTML=arr.length?arr.map(o=>{
+      const id=String(o.id);
+      const on=cqObrasSeleccionadasCC.includes(id);
+      return '<button type="button" class="cq-obra-opt-cc'+(on?' active':'')+'" data-cq-obra="'+esc(id)+'">'+
+        '<span class="cq-check-cc">'+(on?'✓':'')+'</span>'+
+        '<span>'+esc(o.label||o.short||o.id)+'</span>'+
+      '</button>';
+    }).join(''):'<div class="note" style="padding:12px;text-align:center">No hay obras disponibles para esta categoría.</div>';
+
+    document.getElementById('cq-obras-count-cc').textContent=
+      cqObrasSeleccionadasCC.length+' seleccionada'+(cqObrasSeleccionadasCC.length===1?'':'s');
+  }
+
+  function syncObrasLabel(){
+    ensureUI();
+    const lab=document.getElementById('cq-obras-label-cc');
+    if(!cqObrasSeleccionadasCC.length){
+      lab.textContent='Seleccionar obras';
+    }else if(cqObrasSeleccionadasCC.length===1){
+      lab.textContent=obraLabelCC(cqObrasSeleccionadasCC[0]);
+    }else{
+      lab.textContent=cqObrasSeleccionadasCC.length+' obras seleccionadas';
+    }
+    document.getElementById('cq-obras-count-cc').textContent=
+      cqObrasSeleccionadasCC.length+' seleccionada'+(cqObrasSeleccionadasCC.length===1?'':'s');
+  }
+
+  function renderDistribucion(){
+    ensureUI();
+    const wrap=document.getElementById('cq-distribucion-cc');
+    const list=document.getElementById('cq-distrib-lista-cc');
+
+    // La distribución manual sólo aparece cuando hay más de una obra.
+    if(cqObrasSeleccionadasCC.length<=1){
+      wrap.classList.remove('show');
+      list.innerHTML='';
+      if(cqObrasSeleccionadasCC.length===1){
+        cqImportesPorObraCC[cqObrasSeleccionadasCC[0]]=document.getElementById('mAmount')?.value||'';
+      }
+      syncDistribucionEstado();
+      return;
+    }
+
+    wrap.classList.add('show');
+    const moneda=document.getElementById('mCurrency')?.value==='usd'?'USD':'$';
+
+    list.innerHTML=cqObrasSeleccionadasCC.map(id=>{
+      const val=cqImportesPorObraCC[id]??'';
+      return '<div class="cq-distrib-row-cc">'+
+        '<div class="cq-distrib-obra-cc">'+esc(obraLabelCC(id))+'</div>'+
+        '<div class="cq-distrib-input-wrap-cc">'+
+          '<span>'+moneda+'</span>'+
+          '<input class="cq-distrib-input-cc" type="number" min="0.01" step="0.01" inputmode="decimal" '+
+            'data-cq-importe-obra="'+esc(id)+'" value="'+esc(val)+'" placeholder="0,00">'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    syncDistribucionEstado();
+  }
+
+  function syncDistribucionEstado(){
+    ensureUI();
+    const total=Number(document.getElementById('mAmount')?.value)||0;
+    if(cqObrasSeleccionadasCC.length===1){
+      cqImportesPorObraCC[cqObrasSeleccionadasCC[0]]=total>0?String(total):'';
+    }
+
+    const asignado=cqObrasSeleccionadasCC.length===1
+      ? total
+      : cqObrasSeleccionadasCC.reduce(
+          (s,id)=>s+(Number(cqImportesPorObraCC[id])||0),0
+        );
+    const restante=total-asignado;
+
+    document.getElementById('cq-total-gasto-cc').textContent=moneyLocal(total);
+    document.getElementById('cq-total-asignado-cc').textContent=moneyLocal(asignado);
+    document.getElementById('cq-restante-cc').textContent=moneyLocal(Math.abs(restante));
+
+    const box=document.getElementById('cq-restante-box-cc');
+    const estado=document.getElementById('cq-distrib-estado-cc');
+    box.classList.remove('ok','err');
+    estado.classList.remove('ok','err');
+
+    if(!cqObrasSeleccionadasCC.length){
+      estado.textContent='Pendiente';
+      return;
+    }
+
+    if(Math.abs(restante)<=0.009 && total>0){
+      box.classList.add('ok');
+      estado.classList.add('ok');
+      estado.textContent='✓ Completo';
+      document.getElementById('cq-restante-cc').textContent=moneyLocal(0);
+    }else if(restante<0){
+      box.classList.add('err');
+      estado.classList.add('err');
+      estado.textContent='Excede total';
+      document.getElementById('cq-restante-cc').textContent='-'+moneyLocal(Math.abs(restante));
+    }else{
+      estado.textContent='Faltan '+moneyLocal(restante);
+    }
+  }
+
+  function syncLegacyWork(){
+    const el=document.getElementById('mWork');
+    if(el)el.value=cqObrasSeleccionadasCC[0]||'';
+  }
+
+  function syncAfterCategoryOrSubrubro(){
+    ensureUI();
+    const dest=document.getElementById('mDestType')?.value||'';
+    const cat=document.getElementById('mCategory')?.value||'';
+    const sub=document.getElementById('mSubrubro')?.value||'';
+    const field=document.getElementById('cq-obras-field-cc');
+
+    // Las obras aparecen recién después de elegir categoría y subrubro.
+    field.classList.toggle('show',dest==='obra'&&!!cat&&!!sub);
+    if(dest!=='obra'||!cat||!sub){
+      document.getElementById('cq-obras-picker-cc')?.classList.remove('open');
+    }
+
+    renderObrasLista();
+    syncObrasLabel();
+    renderDistribucion();
+    syncLegacyWork();
+    updateMaterialesButtonCC();
+  }
+
+  // Categoría para "Obra" se define antes de elegir la obra:
+  // mostrar todas las categorías de obra normal, y después filtrar
+  // la lista de obras según compatibilidad con esa categoría.
+  const oldFillCategories=window.fillCategories;
+  window.fillCategories=function(selected=''){
+    const el=document.getElementById('mCategory');
+    const dest=document.getElementById('mDestType')?.value||'';
+    let cats;
+
+    if(dest==='oficina'){
+      cats=categoriasPermitidasCC('oficina');
+    }else if(dest==='obra'){
+      cats=Object.keys(CAT_LABELS_CC).filter(c=>c!=='ofi');
+    }else{
+      cats=[];
+    }
+
+    el.innerHTML='<option value="">Seleccionar categoría</option>'+
+      cats.map(k=>'<option value="'+k+'">'+esc(CAT_LABELS_CC[k]||k)+'</option>').join('');
+
+    if(selected&&cats.includes(selected))el.value=selected;
+    else if(cats.length===1)el.value=cats[0];
+    else el.value='';
+
+    fillSubrubros();
+    setTimeout(syncAfterCategoryOrSubrubro,0);
+  };
+
+  // Reemplazar selección de destino conservando el selector múltiple.
+  window.selectDestination=function(v){
+    currentDestination=v;
+    document.getElementById('mDestType').value=v;
+    document.getElementById('destOffice').classList.toggle('active',v==='oficina');
+    document.getElementById('destWork').classList.toggle('active',v==='obra');
+    document.getElementById('mWork').classList.add('hide');
+
+    if(v==='oficina'){
+      cqObrasSeleccionadasCC=[];
+      cqImportesPorObraCC={};
+    }
+
+    if(document.getElementById('movementType').value==='gasto'){
+      fillCategories(document.getElementById('mCategory').value||'');
+    }
+    setTimeout(syncAfterCategoryOrSubrubro,0);
+  };
+
+  // Al editar, cargar la obra existente y su importe.
+  const oldOpenMovement=window.openMovement;
+  window.openMovement=async function(type,id=''){
+    await oldOpenMovement(type,id);
+    ensureUI();
+
+    const m=id?db.movements.find(x=>x.id===id):null;
+    cqObrasSeleccionadasCC=[];
+    cqImportesPorObraCC={};
+
+    if(m&&m.type==='gasto'&&m.destType==='obra'&&m.gastosObraId){
+      const oid=String(m.gastosObraId);
+      cqObrasSeleccionadasCC=[oid];
+      cqImportesPorObraCC[oid]=String(m.amount||'');
+      syncLegacyWork();
+    }
+
+    setTimeout(syncAfterCategoryOrSubrubro,0);
+  };
+
+  // Con varias obras no ofrecer una sola carga automática de material,
+  // porque no sabría a cuál cantidad asignarla.
+  const oldUpdateMat=window.updateMaterialesButtonCC;
+  window.updateMaterialesButtonCC=function(){
+    if(typeof oldUpdateMat==='function')oldUpdateMat();
+    const row=document.getElementById('ccMaterialesRow');
+    if(row && (window.cqObrasSeleccionadasCC||[]).length>1){
+      row.classList.remove('show');
+    }
+  };
+
+  document.addEventListener('click',function(e){
+    const picker=document.getElementById('cq-obras-picker-cc');
+    if(picker && !picker.contains(e.target))picker.classList.remove('open');
+  });
+
+  document.getElementById('mCurrency')?.addEventListener('change',function(){
+    renderDistribucion();
+  });
+
+  document.addEventListener('DOMContentLoaded',function(){
+    setTimeout(ensureUI,80);
+  });
+  setTimeout(ensureUI,500);
+})();
+</script>
+
+
+
+<style id="cq-tc-por-gasto-style">
+/* TC maestro del encabezado: solo lectura */
+#exchangeRate[readonly]{
+  cursor:default!important;
+  caret-color:transparent!important;
+  user-select:none!important;
+}
+
+/* TC por gasto: visible, compacto y editable sólo como excepción */
+#movementForm #mTcField{position:relative}
+.cq-mtc-wrap{
+  display:flex;
+  align-items:center;
+  min-height:39px;
+  border:1px solid #cfddd2;
+  border-radius:10px;
+  background:#f3f5f4;
+  padding-left:10px;
+  transition:.15s ease;
+}
+.cq-mtc-wrap:focus-within{
+  background:#fff;
+  border-color:var(--green2);
+  box-shadow:0 0 0 3px #2e7d5e18;
+}
+.cq-mtc-wrap span{
+  color:#70847a;
+  font-weight:900;
+  font-size:12px;
+}
+#mTc{
+  width:100%;
+  min-width:0;
+  border:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+  padding:9px 9px 9px 4px!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  color:#314a40;
+}
+.cq-mtc-help{
+  display:block;
+  margin-top:2px;
+  font-size:8px;
+  line-height:1.2;
+  font-weight:800;
+  color:#83968d;
+}
+.cq-mtc-help.manual{color:#b16f0b}
+.cq-mtc-help.ok{color:#178454}
+
+@media(max-width:760px){
+  .cq-mtc-wrap{min-height:34px}
+  #mTc{padding:7px 7px 7px 3px!important;font-size:11px!important}
+  .cq-mtc-help{font-size:7.5px}
+}
+</style>
+
+<script id="cq-tc-por-gasto-js">
+(function(){
+  let cqTcUsuarioEditando=false;
+
+  function tcGerenciaActual(){
+    return Number(window.cqTcGerenciaCC)||Number(db&&db.exchangeRate)||0;
+  }
+
+  function setTcForm(value,origen){
+    const inp=document.getElementById('mTc');
+    const help=document.getElementById('mTcHelp');
+    if(!inp)return;
+    const n=Number(value)||0;
+    if(n>0)inp.value=n;
+    if(help){
+      help.classList.remove('manual','ok');
+      if(origen==='manual'){
+        help.textContent='TC modificado para este movimiento';
+        help.classList.add('manual');
+      }else if(origen==='movimiento'){
+        help.textContent='TC guardado en este movimiento';
+      }else{
+        help.textContent='Caja Gerencia';
+        help.classList.add('ok');
+      }
+    }
+  }
+
+  async function cargarTcGerenciaEnFormulario(forzar){
+    if(cqTcUsuarioEditando && !forzar)return;
+    try{
+      if(typeof window.cqRecargarTCDesdeGerenciaCC==='function'){
+        await window.cqRecargarTCDesdeGerenciaCC();
+      }
+    }catch(e){
+      console.warn('Caja Chica · no se pudo refrescar TC antes del gasto',e);
+    }
+    const tc=tcGerenciaActual();
+    if(tc>0)setTcForm(tc,'gerencia');
+  }
+
+  function bindTc(){
+    const inp=document.getElementById('mTc');
+    if(!inp||inp.dataset.cqBound==='1')return;
+    inp.dataset.cqBound='1';
+
+    inp.addEventListener('focus',function(){
+      cqTcUsuarioEditando=true;
+      try{this.select();}catch(e){}
+    });
+    inp.addEventListener('input',function(){
+      const help=document.getElementById('mTcHelp');
+      if(help){
+        help.textContent='TC modificado para este movimiento';
+        help.classList.remove('ok');
+        help.classList.add('manual');
+      }
+    });
+    inp.addEventListener('blur',function(){
+      const n=Number(this.value)||0;
+      if(!(n>0)){
+        cqTcUsuarioEditando=false;
+        cargarTcGerenciaEnFormulario(true);
+        return;
+      }
+      // Queda manual sólo para este formulario/movimiento.
+      cqTcUsuarioEditando=true;
+    });
+  }
+
+  // Cargar primero TC de Gerencia al abrir un movimiento nuevo.
+  const prevOpen=window.openMovement;
+  window.openMovement=async function(type,id=''){
+    bindTc();
+
+    // Para cualquier movimiento nuevo (salida o ingreso), refrescar desde Gerencia ANTES de abrir.
+    if(!id){
+      cqTcUsuarioEditando=false;
+      await cargarTcGerenciaEnFormulario(true);
+    }
+
+    const r=await prevOpen(type,id);
+
+    const m=id?db.movements.find(x=>x.id===id):null;
+    if(m&&Number(m.tc)>0){
+      cqTcUsuarioEditando=true;
+      setTcForm(Number(m.tc),'movimiento');
+    }else{
+      cqTcUsuarioEditando=false;
+      await cargarTcGerenciaEnFormulario(true);
+    }
+
+    // El TC se puede revisar/modificar tanto en salida como en ingreso.
+    const field=document.getElementById('mTcField');
+    if(field)field.classList.remove('hide');
+    return r;
+  };
+
+  // Si Gerencia cambia mientras el modal está abierto y el usuario NO tocó el TC,
+  // actualizar también el formulario.
+  const obs=setInterval(function(){
+    const modal=document.getElementById('movementModal');
+    if(!modal||!modal.classList.contains('open'))return;
+    const tipo=document.getElementById('movementType')?.value||'';
+    if(tipo!=='gasto'&&tipo!=='ingreso')return;
+    if(cqTcUsuarioEditando)return;
+
+    const tc=tcGerenciaActual();
+    const inp=document.getElementById('mTc');
+    if(inp&&tc>0&&Math.abs((Number(inp.value)||0)-tc)>0.001){
+      setTcForm(tc,'gerencia');
+    }
+  },1200);
+
+  document.addEventListener('DOMContentLoaded',function(){
+    bindTc();
+    const field=document.getElementById('mTcField');
+    if(field)field.classList.remove('hide');
+  });
+
+  setTimeout(bindTc,500);
+})();
+</script>
+
+
+
+<style id="cq-tc-master-persistente-style">
+#movementForm #mTcField label::after{
+  content:" · GERENCIA";
+  color:#1f8b61;
+  font-size:.82em;
+  font-weight:900;
+}
+#exchangeRate[readonly]{
+  background:transparent!important;
+}
+</style>
+
+<script id="cq-tc-master-persistente-js">
+(function(){
+  function cache(){
+    try{
+      const c=JSON.parse(localStorage.getItem('cq_tc_gerencia_confirmado_v1')||'null');
+      return Number(c&&c.value)||0;
+    }catch(e){return 0;}
+  }
+
+  // Inmediatamente después de cargar DOM, reforzar el último valor confirmado
+  // sin esperar a Firebase. Luego el listener de Gerencia lo actualiza si cambió.
+  document.addEventListener('DOMContentLoaded',function(){
+    const tc=cache();
+    if(tc>0){
+      try{
+        window.cqTcGerenciaCC=tc;
+        if(typeof db!=='undefined')db.exchangeRate=tc;
+        const h=document.getElementById('exchangeRate');
+        if(h)h.value=typeof formatExchangeRate==='function'?formatExchangeRate(tc):String(tc);
+      }catch(e){}
+    }
+  });
+
+  // Exponer para diagnóstico manual si alguna vez hace falta.
+  window.cqTcConfirmadoGerenciaCC=function(){return cache();};
+})();
+</script>
+
+
+
+<style id="cq-obras-selector-grande-v2">
+/* Selector múltiple de obras más grande y cómodo */
+#cq-obras-panel-cc{
+  max-height:min(70vh,560px)!important;
+}
+.cq-obras-list-cc{
+  max-height:min(58vh,470px)!important;
+}
+.cq-obra-opt-cc{
+  min-height:40px!important;
+  font-size:12px!important;
+  padding:9px 10px!important;
+}
+.cq-check-cc{
+  width:20px!important;
+  height:20px!important;
+}
+#cq-obras-panel-cc .cq-obras-panel-ft-cc{
+  position:sticky;
+  bottom:0;
+  z-index:2;
+}
+
+/* En celular, abrir como panel grande desde arriba, no desde mitad de pantalla */
+@media(max-width:760px){
+  #cq-obras-picker-cc.open #cq-obras-panel-cc{
+    position:fixed!important;
+    top:72px!important;
+    left:10px!important;
+    right:10px!important;
+    bottom:auto!important;
+    width:auto!important;
+    max-height:calc(100vh - 92px)!important;
+    border-radius:14px!important;
+    box-shadow:0 18px 45px rgba(20,55,42,.28)!important;
+  }
+  #cq-obras-picker-cc.open .cq-obras-list-cc{
+    max-height:calc(100vh - 165px)!important;
+  }
+  .cq-obra-opt-cc{
+    min-height:42px!important;
+    font-size:12px!important;
+    padding:10px 11px!important;
+  }
+  #cq-obras-ok-cc{
+    min-height:38px!important;
+    font-size:12px!important;
+  }
+}
+</style>
+
+
+<script id="cq-obras-selector-scroll-v2">
+(function(){
+  let cqScrollYObras=0;
+
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest('#cq-obras-btn-cc');
+    if(btn){
+      cqScrollYObras=window.scrollY||document.documentElement.scrollTop||0;
+      setTimeout(function(){
+        // Mantener la pantalla donde estaba: el panel móvil es fixed.
+        window.scrollTo({top:cqScrollYObras,behavior:'auto'});
+      },0);
+    }
+
+    const ok=e.target.closest('#cq-obras-ok-cc');
+    if(ok){
+      setTimeout(function(){
+        window.scrollTo({top:cqScrollYObras,behavior:'auto'});
+      },0);
+    }
+  },true);
+})();
+</script>
+
+
+
+<script id="cq-importes-select-all-v3">
+(function(){
+  function seleccionarTodoImporte(e){
+    const inp=e.target.closest && e.target.closest('.cq-distrib-input-cc');
+    if(!inp)return;
+
+    // Al tocar un importe ya escrito, seleccionarlo completo en azul.
+    // Así el próximo número reemplaza todo sin borrar cifra por cifra.
+    setTimeout(function(){
+      try{ inp.select(); }catch(err){}
+    },0);
+  }
+
+  document.addEventListener('focusin', seleccionarTodoImporte, true);
+  document.addEventListener('click', seleccionarTodoImporte, true);
+})();
 </script>
 
 </body>

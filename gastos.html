@@ -1533,7 +1533,14 @@ let config=loadConfig();let state={};let curObra=localStorage.getItem('gastos_cu
 function updateModoFirebaseBtn(){const b=document.getElementById('btn-modo-firebase');if(b)b.textContent=modoFirebase?'🟢 Firebase ON':'🟠 Modo prueba';}
 function toggleModoFirebase(){modoFirebase=!modoFirebase;updateModoFirebaseBtn();if(!modoFirebase){if(unsubConfig){unsubConfig();unsubConfig=null;}if(unsubObra){unsubObra();unsubObra=null;}setSyncStatus('Modo prueba');}else{setSyncStatus('Firebase: conectando...');startFirebaseSync();}}
 
-function normalizeConfig(c){c=c||{};c.obras=Array.isArray(c.obras)?c.obras:DEFAULT_OBRAS.map(o=>({...o}));c.subrubros=c.subrubros||{};c.categoryLabels=(c.categoryLabels&&typeof c.categoryLabels==='object')?c.categoryLabels:{};Object.keys(DEFAULT_CAT_LABELS).forEach(cat=>{const v=String(c.categoryLabels[cat]||'').trim();c.categoryLabels[cat]=v||DEFAULT_CAT_LABELS[cat];});Object.assign(CAT_LABELS,DEFAULT_CAT_LABELS,c.categoryLabels);c.defaultTC=parseFloat(c.defaultTC)||1400;Object.keys(DEFAULT_SUBRUBROS).forEach(cat=>{if(!Array.isArray(c.subrubros[cat]))c.subrubros[cat]=[...DEFAULT_SUBRUBROS[cat]];else DEFAULT_SUBRUBROS[cat].forEach(x=>{const existe=c.subrubros[cat].some(v=>String(v).trim().toLocaleLowerCase('es')===String(x).trim().toLocaleLowerCase('es'));if(!existe)c.subrubros[cat].push(x)})});Object.keys(c.subrubros).forEach(cat=>{if(Array.isArray(c.subrubros[cat]))c.subrubros[cat].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'}));});if(!c.obras.some(o=>o.id==='oficina'))c.obras.unshift({id:'oficina',label:'Oficina',short:'Oficina'});return c}
+function normalizeConfig(c){c=c||{};c.obras=Array.isArray(c.obras)?c.obras:DEFAULT_OBRAS.map(o=>({...o}));c.subrubros=c.subrubros||{};c.categoryLabels=(c.categoryLabels&&typeof c.categoryLabels==='object')?c.categoryLabels:{};Object.keys(DEFAULT_CAT_LABELS).forEach(cat=>{const v=String(c.categoryLabels[cat]||'').trim();c.categoryLabels[cat]=v||DEFAULT_CAT_LABELS[cat];});Object.assign(CAT_LABELS,DEFAULT_CAT_LABELS,c.categoryLabels);c.defaultTC=parseFloat(c.defaultTC)||1400;
+Object.keys(DEFAULT_SUBRUBROS).forEach(cat=>{
+  // Los defaults se usan sólo si la categoría nunca tuvo configuración.
+  // Si ya existe un array (aunque falte un subrubro), se respeta exactamente:
+  // así un subrubro eliminado en Config NO vuelve a aparecer al sincronizar.
+  if(!Array.isArray(c.subrubros[cat]))c.subrubros[cat]=[...DEFAULT_SUBRUBROS[cat]];
+});
+Object.keys(c.subrubros).forEach(cat=>{if(Array.isArray(c.subrubros[cat]))c.subrubros[cat].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'}));});if(!c.obras.some(o=>o.id==='oficina'))c.obras.unshift({id:'oficina',label:'Oficina',short:'Oficina'});return c}
 function loadConfig(){try{return normalizeConfig(JSON.parse(localStorage.getItem('gastos_config')||'null')||{obras:DEFAULT_OBRAS,subrubros:DEFAULT_SUBRUBROS})}catch(e){return normalizeConfig({obras:DEFAULT_OBRAS,subrubros:DEFAULT_SUBRUBROS})}}
 function getDefaultTC(){return parseFloat(config.defaultTC)||1400}
 function setDefaultTC(tc){tc=parseFloat(tc);if(!isNaN(tc)&&tc>0){config.defaultTC=tc;localStorage.setItem('gastos_config',JSON.stringify(config));if(window._dbReady)persistConfig();}}
@@ -5574,6 +5581,248 @@ onAuthStateChanged(auth,async user=>{
     padding:3px 4px!important;
     border-radius:8px!important;
     font-size:8.2px!important;
+  }
+}
+</style>
+
+
+
+<style id="cq-gastos-resumen-legibilidad-v1">
+/* Agrandar contenido únicamente dentro de Gastos y Resumen */
+#view-gastos .sec-ttl,
+#view-resumen .sec-ttl{
+  font-size:12px!important;
+  letter-spacing:.065em!important;
+  margin-top:18px!important;
+  margin-bottom:10px!important;
+}
+
+#view-gastos .filter,
+#view-gastos .filtro-mes-wrap input,
+#view-resumen .filter{
+  font-size:13px!important;
+}
+
+#view-gastos .filtro-mes-lbl{
+  font-size:10.5px!important;
+}
+
+#view-gastos .kpi{
+  padding:11px 14px!important;
+}
+#view-gastos .kpi-lbl,
+#view-resumen .kpi-lbl{
+  font-size:10.5px!important;
+}
+#view-gastos .kpi-val{
+  font-size:15px!important;
+}
+
+#view-gastos .card-hd,
+#view-resumen .card-hd{
+  padding:13px 16px!important;
+  font-size:13px!important;
+}
+#view-gastos .card-hd span,
+#view-resumen .card-hd span{
+  font-size:12px!important;
+}
+
+#view-gastos .tbl th,
+#view-resumen .tbl th{
+  font-size:11px!important;
+  padding:10px 12px!important;
+}
+#view-gastos .tbl td,
+#view-resumen .tbl td{
+  font-size:13.5px!important;
+  padding:10px 12px!important;
+}
+#view-gastos .tbl td.mono,
+#view-gastos .tbl td.r-val,
+#view-resumen .tbl td.mono,
+#view-resumen .tbl td.r-val{
+  font-size:12.5px!important;
+}
+
+#view-gastos .tag,
+#view-resumen .tag{
+  font-size:11px!important;
+  padding:3px 8px!important;
+}
+
+#view-gastos .btn-sm,
+#view-resumen .btn-sm{
+  font-size:12px!important;
+  min-height:31px!important;
+}
+
+#view-resumen .fin-card{
+  padding:18px!important;
+}
+#view-resumen .fin-row{
+  padding:8px 0!important;
+}
+#view-resumen .fin-lbl{
+  font-size:13.5px!important;
+}
+#view-resumen .fin-val{
+  font-size:13.5px!important;
+}
+#view-resumen .fin-row.tot .fin-val{
+  font-size:16px!important;
+}
+#view-resumen .empty{
+  font-size:13.5px!important;
+}
+
+/* En móvil, mantenerlo grande sin desbordar */
+@media(max-width:650px){
+  #view-gastos .tbl td,
+  #view-resumen .tbl td{font-size:13px!important;}
+  #view-gastos .tbl th,
+  #view-resumen .tbl th{font-size:10.5px!important;}
+  #view-resumen .fin-lbl,
+  #view-resumen .fin-val{font-size:13px!important;}
+}
+</style>
+
+
+
+<style id="cq-gastos-grande-pero-compacto-v2">
+/* GASTOS: más legible, pero manteniendo alta densidad para que entre en pantalla */
+#view-gastos{
+  padding-left:12px!important;
+  padding-right:12px!important;
+  padding-bottom:20px!important;
+}
+
+#view-gastos .kpi-row{
+  margin-bottom:8px!important;
+  border-radius:10px!important;
+}
+#view-gastos .kpi{
+  padding:8px 10px!important;
+}
+#view-gastos .kpi-lbl{
+  font-size:10px!important;
+  line-height:1.05!important;
+}
+#view-gastos .kpi-val{
+  font-size:14px!important;
+  line-height:1.05!important;
+}
+
+#view-gastos .sec-ttl{
+  font-size:11.5px!important;
+  margin:10px 0 7px!important;
+}
+#view-gastos .sec-actions{
+  gap:5px!important;
+}
+
+#view-gastos .filter,
+#view-gastos .filtro-mes-wrap input[type=month]{
+  font-size:12.5px!important;
+  padding-top:6px!important;
+  padding-bottom:6px!important;
+}
+#view-gastos .filtro-mes-lbl{
+  font-size:10px!important;
+}
+
+#view-gastos .card{
+  margin-bottom:8px!important;
+}
+#view-gastos .card-hd{
+  padding:9px 12px!important;
+  font-size:12.5px!important;
+}
+#view-gastos .card-hd span{
+  font-size:11px!important;
+}
+
+/* Tabla: letra mayor pero filas más bajas */
+#view-gastos .tbl{
+  table-layout:auto!important;
+}
+#view-gastos .tbl th{
+  font-size:10.5px!important;
+  padding:7px 8px!important;
+  line-height:1.05!important;
+}
+#view-gastos .tbl td{
+  font-size:13px!important;
+  padding:7px 8px!important;
+  line-height:1.12!important;
+}
+#view-gastos .tbl td.mono,
+#view-gastos .tbl td.r-val{
+  font-size:12px!important;
+}
+#view-gastos .tag{
+  font-size:10.5px!important;
+  padding:2px 6px!important;
+}
+#view-gastos .btn-sm{
+  font-size:11px!important;
+  min-height:28px!important;
+  padding:4px 8px!important;
+}
+
+/* El botón principal sigue claro pero ocupa menos alto */
+#view-gastos .btn-add-gasto{
+  min-height:42px!important;
+  height:42px!important;
+  padding:0 18px!important;
+  font-size:14px!important;
+}
+
+/* Móvil: aprovechar todo el ancho sin achicar la tipografía */
+@media(max-width:650px){
+  #view-gastos{
+    padding:8px 7px 18px!important;
+  }
+  #view-gastos .kpi{
+    padding:7px 7px!important;
+    min-width:0!important;
+  }
+  #view-gastos .kpi-lbl{font-size:9.5px!important;}
+  #view-gastos .kpi-val{font-size:13.5px!important;}
+
+  #view-gastos .sec-ttl{
+    margin:8px 0 6px!important;
+    font-size:11px!important;
+  }
+
+  #view-gastos .tbl{
+    display:table!important;
+    width:100%!important;
+    overflow:visible!important;
+  }
+  #view-gastos .tbl th{
+    font-size:9.5px!important;
+    padding:6px 5px!important;
+    white-space:normal!important;
+  }
+  #view-gastos .tbl td{
+    font-size:12px!important;
+    padding:6px 5px!important;
+    line-height:1.08!important;
+    overflow-wrap:anywhere!important;
+  }
+  #view-gastos .tbl td.mono,
+  #view-gastos .tbl td.r-val{
+    font-size:11px!important;
+  }
+  #view-gastos .tag{
+    font-size:9.5px!important;
+    padding:2px 5px!important;
+  }
+  #view-gastos .btn-sm{
+    font-size:10.5px!important;
+    min-height:26px!important;
+    padding:3px 6px!important;
   }
 }
 </style>

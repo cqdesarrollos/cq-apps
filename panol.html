@@ -1912,6 +1912,22 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
 }
 </style>
 
+
+<style id="cq-panol-tabs-mas-grandes-v1">
+.tabs{padding:10px 10px!important;gap:8px!important}
+.tb{height:62px!important;min-height:62px!important;padding:7px 9px!important;border-radius:15px!important;gap:8px!important}
+.tb-ico{font-size:21px!important}
+.tb-copy b{font-size:13px!important;line-height:1.05!important}
+.tb-copy small{font-size:9px!important;margin-top:4px!important}
+@media(max-width:560px){
+  .tabs{padding:9px 7px!important;gap:6px!important}
+  .tb{height:58px!important;min-height:58px!important;padding:6px 5px!important;gap:5px!important}
+  .tb-ico{font-size:19px!important}
+  .tb-copy b{font-size:12px!important}
+  .tb-copy small{font-size:8.2px!important}
+}
+</style>
+
 </head>
 <body>
 
@@ -2828,6 +2844,7 @@ setInterval(verificarGastosPanol,12000);
 
 document.addEventListener('firebase-ready',function(){
   cargarConfigGastosPanol().then(function(){
+    cqCargarHistorialSubrubrosGastosPanol(false).catch(function(e){console.warn(e);});
     renderSubrubrosEntradaPanol('cf','');
     renderSubrubrosEntradaPanol('masiva','');
     if(curTab==='obras')renderObrasTab();
@@ -3069,21 +3086,69 @@ function panolAplicarAcopioAutoritativo(local,remote){
   var rm=(Array.isArray(remote.movimientos)?remote.movimientos:[]).filter(panolEsEntradaAcopio);
   var rl=(Array.isArray(remote.lotes)?remote.lotes:[]).filter(panolEsLoteAcopio);
   var rp=Array.isArray(remote.productos)?remote.productos:[];
-  var oldIds=new Set(ll.filter(panolEsLoteAcopio).map(function(l){return String(l.id||'');}));
+
+  // Guardar la versión LOCAL de los lotes de Acopio antes de reemplazarlos.
+  // Ahí está reflejado lo ya consumido en Pañol.
+  var lotesAcopioLocales={};
+  ll.filter(panolEsLoteAcopio).forEach(function(l){
+    lotesAcopioLocales[String(l.id||'')]=JSON.parse(JSON.stringify(l));
+  });
+
+  var oldIds=new Set(Object.keys(lotesAcopioLocales));
   var validIds=new Set(rl.map(function(l){return String(l.id||'');}));
+
   lm=lm.filter(function(m){return !panolEsEntradaAcopio(m);});
   ll=ll.filter(function(l){return !panolEsLoteAcopio(l);});
+
+  // Si Acopio eliminó realmente un lote, también se quitan las salidas
+  // que apuntaban exclusivamente a ese lote inexistente.
   lm=lm.filter(function(m){
     if(!m||m.tipo!=='salida')return true;
-    return !(Array.isArray(m.detalle)?m.detalle:[]).some(function(d){var id=String(d&&d.loteId||'');return oldIds.has(id)&&!validIds.has(id);});
+    return !(Array.isArray(m.detalle)?m.detalle:[]).some(function(d){
+      var id=String(d&&d.loteId||'');
+      return oldIds.has(id)&&!validIds.has(id);
+    });
   });
+
   rm.forEach(function(m){lm.push(JSON.parse(JSON.stringify(m)));});
-  rl.forEach(function(l){ll.push(JSON.parse(JSON.stringify(l)));});
+
+  rl.forEach(function(remoto){
+    var id=String(remoto&&remoto.id||'');
+    var previo=lotesAcopioLocales[id];
+    var merged=JSON.parse(JSON.stringify(remoto));
+
+    if(previo){
+      // Acopio manda la cantidad ORIGINAL ingresada.
+      // Pañol conserva cuánto de ese lote ya fue consumido.
+      var origLocal=Number(previo.cantidadOriginal);
+      if(!(origLocal>=0))origLocal=Number(previo.cantidad)||0;
+
+      var remLocal=Number(previo.cantidad)||0;
+      var consumido=Math.max(0,origLocal-remLocal);
+
+      var origRemoto=Number(merged.cantidadOriginal);
+      if(!(origRemoto>=0))origRemoto=Number(merged.cantidad)||0;
+
+      merged.cantidadOriginal=origRemoto;
+      merged.cantidad=Math.max(0,parseFloat((origRemoto-consumido).toFixed(6)));
+    }
+
+    ll.push(merged);
+  });
+
   var needed=new Set();
   rl.forEach(function(l){if(l&&l.prodId)needed.add(String(l.prodId));});
   rm.forEach(function(m){if(m&&m.prodId)needed.add(String(m.prodId));});
-  needed.forEach(function(pid){if(lp.some(function(p){return String(p&&p.id||'')===pid;}))return;var p=rp.find(function(x){return String(x&&x.id||'')===pid;});if(p)lp.push(JSON.parse(JSON.stringify(p)));});
-  local.movimientos=lm;local.lotes=ll;local.productos=lp;return local;
+  needed.forEach(function(pid){
+    if(lp.some(function(p){return String(p&&p.id||'')===pid;}))return;
+    var p=rp.find(function(x){return String(x&&x.id||'')===pid;});
+    if(p)lp.push(JSON.parse(JSON.stringify(p)));
+  });
+
+  local.movimientos=lm;
+  local.lotes=ll;
+  local.productos=lp;
+  return local;
 }
 
 async function persist(opts){
@@ -3406,6 +3471,7 @@ document.addEventListener('click',function(e){
 function cerrarModal(id){ document.getElementById(id).classList.remove('open'); }
 function abrirModal(id){ document.getElementById(id).classList.add('open'); }
 
+var cqConsumoProdIdPanol='';
 var curTab='stock';
 var curObra=null;
 var curObraRubroFiltro='all';
@@ -3428,7 +3494,14 @@ function renderActive(){
 
 // ---------- RUBROS ----------
 function getRubros(){
-  return state.rubros.slice().sort(function(a,b){return a.localeCompare(b,'es');});
+  // Los rubros visibles de Pañol deben coincidir con los subrubros de
+  // Materiales configurados en Gastos. Evita mostrar rubros históricos
+  // locales (por ejemplo, "INSTALACIONES (DEPLANO)") que ya no existen.
+  var desdeGastos=subrubrosMaterialesEntradaPanol();
+  var base=desdeGastos.length?desdeGastos:state.rubros.slice();
+  return base.filter(Boolean).filter(function(v,i,a){
+    return a.findIndex(function(x){return String(x).toLowerCase()===String(v).toLowerCase();})===i;
+  }).sort(function(a,b){return String(a).localeCompare(String(b),'es',{sensitivity:'base',numeric:true});});
 }
 function rubroOptionsHTML(selected){
   return getRubros().map(function(r){return '<option value="'+r+'"'+(r===selected?' selected':'')+'>'+r+'</option>';}).join('')
@@ -3506,8 +3579,214 @@ function catalogoMaterialesFiltradoPorSubrubroPanol(subrubro){
   // se muestra el catálogo completo para que la primera selección cree esa relación.
   return matches.length?matches:arr;
 }
+
+/* ==========================================================
+   CQ — SUBRUBRO DE ENTRADA TOMADO DESDE GASTOS
+   Materiales aporta identidad (nombre/código).
+   Gastos aporta el subrubro histórico real.
+   Si nunca fue cargado en Gastos, queda vacío para elección manual.
+   ========================================================== */
+var cqHistorialSubrubrosGastosPanol=null;
+var cqHistorialSubrubrosGastosTs=0;
+var cqHistorialSubrubrosGastosLoading=null;
+
+function cqNormHistGastoPanol(v){
+  return String(v||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function cqGastoEsMaterialPanol(g){
+  if(!g)return false;
+  var cat=String(g.cat||g.categoria||'').toLowerCase();
+  return !cat || cat==='mat' || cat==='materiales' || cat==='material';
+}
+
+function cqNombreProductoEnGastoPanol(g){
+  if(!g)return '';
+  return String(
+    g.materialNombre ||
+    g.nombreMaterial ||
+    g.producto ||
+    g.material ||
+    g.detalleMaterial ||
+    g.nota ||
+    ''
+  ).trim();
+}
+
+function cqCodigoProductoEnGastoPanol(g){
+  if(!g)return '';
+  return String(
+    g.materialCodigo ||
+    g.codigoMaterial ||
+    g.codigo ||
+    g.code ||
+    ''
+  ).trim();
+}
+
+async function cqCargarHistorialSubrubrosGastosPanol(forzar){
+  var ahora=Date.now();
+  if(!forzar && cqHistorialSubrubrosGastosPanol && (ahora-cqHistorialSubrubrosGastosTs)<30000){
+    return cqHistorialSubrubrosGastosPanol;
+  }
+  if(cqHistorialSubrubrosGastosLoading)return cqHistorialSubrubrosGastosLoading;
+
+  cqHistorialSubrubrosGastosLoading=(async function(){
+    try{
+      await cargarConfigGastosPanol();
+      if(!window._dbReady||!window._getDoc)throw new Error('Firebase no disponible');
+
+      var obras=obrasGastosPanol();
+      var rows=[];
+
+      for(var i=0;i<obras.length;i++){
+        var oid=String(obras[i].id||'');
+        if(!oid)continue;
+        try{
+          var snap=await window._getDoc(window._doc(window._db,'gastos',oid));
+          if(!snap.exists())continue;
+          var data=snap.data()||{};
+          var gastos=Array.isArray(data.gastos)?data.gastos:[];
+          gastos.forEach(function(g){
+            if(!cqGastoEsMaterialPanol(g))return;
+            var sub=String(g.subrubro||'').trim();
+            if(!sub)return;
+            rows.push({
+              subrubro:sub,
+              nombre:cqNombreProductoEnGastoPanol(g),
+              codigo:cqCodigoProductoEnGastoPanol(g),
+              fecha:String(g.fecha||g.createdAt||g.updatedAt||''),
+              ts:(function(){
+                var d=Date.parse(g.updatedAt||g.createdAt||g.fecha||'');
+                return isNaN(d)?0:d;
+              })()
+            });
+          });
+        }catch(e){
+          console.warn('Pañol · no se pudo leer Gastos de obra '+oid,e);
+        }
+      }
+
+      rows.sort(function(a,b){return Number(b.ts||0)-Number(a.ts||0);});
+      cqHistorialSubrubrosGastosPanol=rows;
+      cqHistorialSubrubrosGastosTs=Date.now();
+      return rows;
+    }finally{
+      cqHistorialSubrubrosGastosLoading=null;
+    }
+  })();
+
+  return cqHistorialSubrubrosGastosLoading;
+}
+
+function cqCoincideProductoConGastoPanol(row,codigo,nombre){
+  var code=cqNormHistGastoPanol(codigo);
+  var name=cqNormHistGastoPanol(nombre);
+  var rc=cqNormHistGastoPanol(row&&row.codigo);
+  var rn=cqNormHistGastoPanol(row&&row.nombre);
+
+  // Código exacto gana siempre cuando existe en ambos lados.
+  if(code && rc && code===rc)return true;
+
+  if(!name || !rn)return false;
+
+  // Nombre exacto.
+  if(name===rn)return true;
+
+  // Gastos antiguos pueden guardar "Producto · cantidad" en detalle/nota.
+  if(rn.indexOf(name+' ')===0)return true;
+
+  return false;
+}
+
+async function cqSubrubroHistoricoDesdeGastosPanol(codigo,nombre){
+  var rows=await cqCargarHistorialSubrubrosGastosPanol(false);
+  var hit=rows.find(function(r){
+    return cqCoincideProductoConGastoPanol(r,codigo,nombre);
+  });
+  if(!hit)return '';
+
+  // Solo devolver un valor que siga existiendo en la configuración actual de Gastos.
+  return validarSubrubroEntradaPanol(hit.subrubro) || '';
+}
+
+async function cqAplicarSubrubroDesdeGastosPanol(codigo,nombre){
+  var sub=document.getElementById('cf-subrubro');
+  if(!sub)return '';
+
+  // Vaciar inmediatamente para no dejar visible el rubro de otro producto.
+  sub.value='';
+  sub.placeholder='Buscando en Gastos…';
+
+  try{
+    var encontrado=await cqSubrubroHistoricoDesdeGastosPanol(codigo,nombre);
+    sub.value=encontrado||'';
+    sub.placeholder=encontrado?'Subrubro tomado de Gastos':'Seleccionar o escribir…';
+    return encontrado;
+  }catch(e){
+    console.warn('Pañol · subrubro desde Gastos',e);
+    sub.value='';
+    sub.placeholder='Seleccionar o escribir…';
+    return '';
+  }
+}
+window.cqAplicarSubrubroDesdeGastosPanol=cqAplicarSubrubroDesdeGastosPanol;
+
+function seleccionarProductoExistenteEntradaPanol(prod){
+  if(!prod)return;
+  var nom=document.getElementById('cf-producto');
+  var cod=document.getElementById('cf-codigo');
+  var sub=document.getElementById('cf-subrubro');
+  if(nom)nom.value=prod.nombre||'';
+  if(cod)cod.value=prod.codigo||'';
+
+  // El rubro histórico guardado en Pañol NO define la nueva carga.
+  // Buscar el subrubro real usado previamente en Gastos.
+  if(sub)sub.value='';
+  cqAplicarSubrubroDesdeGastosPanol(prod.codigo||'',prod.nombre||'');
+
+  if(prod.materialesProducto){
+    cfMaterialSeleccionadoPanol={
+      id:prod.materialesProducto.id,
+      name:prod.materialesProducto.name||prod.nombre||'',
+      code:prod.materialesProducto.code||prod.codigo||'',
+      category:prod.materialesProducto.category||prod.rubro||''
+    };
+  }else{
+    cfMaterialSeleccionadoPanol=null;
+  }
+  cfNuevoProductoManual=false;
+  var combo=document.getElementById('cf-producto-combo');
+  if(combo)combo.classList.remove('open');
+
+  // Al elegir un producto existente, dejar todo el nombre seleccionado
+  // para poder borrarlo o reemplazarlo de una sola vez.
+  if(nom){
+    setTimeout(function(){
+      try{
+        nom.focus({preventScroll:true});
+        nom.select();
+      }catch(e){
+        try{nom.focus();nom.setSelectionRange(0,nom.value.length);}catch(_){}
+      }
+    },40);
+  }
+}
+window.seleccionarProductoExistenteEntradaPanol=seleccionarProductoExistenteEntradaPanol;
+
 function seleccionarMaterialCatalogoEntradaPanol(item){
   if(!item)return;
+  var vinculado=productoPanolPorMaterialCatalogo(item);
+  if(vinculado){
+    seleccionarProductoExistenteEntradaPanol(vinculado);
+    return;
+  }
+
   cfMaterialSeleccionadoPanol={
     id:item.id,name:item.name,code:item.code||'',category:item.category||''
   };
@@ -3515,11 +3794,26 @@ function seleccionarMaterialCatalogoEntradaPanol(item){
 
   var nom=document.getElementById('cf-producto');
   var cod=document.getElementById('cf-codigo');
+  var sub=document.getElementById('cf-subrubro');
   if(nom)nom.value=item.name||'';
   if(cod)cod.value=item.code||'';
 
+  // Materiales solo aporta nombre/código/identidad.
+  // El subrubro se busca exclusivamente en la planilla de Gastos.
+  if(sub)sub.value='';
+  cqAplicarSubrubroDesdeGastosPanol(item.code||'',item.name||'');
+
   var combo=document.getElementById('cf-producto-combo');
   if(combo)combo.classList.remove('open');
+
+  if(nom){
+    setTimeout(function(){
+      try{nom.focus({preventScroll:true});nom.select();}
+      catch(e){try{nom.focus();nom.setSelectionRange(0,nom.value.length);}catch(_){}}
+      var c=document.getElementById('cf-producto-combo');
+      if(c)c.classList.remove('open');
+    },40);
+  }
 }
 function nuevoProductoEntradaPanol(){
   cfMaterialSeleccionadoPanol=null;
@@ -3545,11 +3839,35 @@ function onEntradaSubrubroSeleccionadoPanol(tipo){
 }
 
 // ---------- STOCK (PAÑOL) ----------
+function cqNormProductoPanol(v){
+  return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+}
+function cqProductoEquivalenteIdsPanol(prodId){
+  var base=state.productos.find(function(p){return String(p.id)===String(prodId);});
+  if(!base)return [String(prodId)];
+  var baseMat=base.materialesProducto&&base.materialesProducto.id?String(base.materialesProducto.id):'';
+  var baseCod=cqNormProductoPanol(base.codigo);
+  var baseNom=cqNormProductoPanol(base.nombre);
+  return state.productos.filter(function(p){
+    if(String(p.id)===String(base.id))return true;
+    var mat=p.materialesProducto&&p.materialesProducto.id?String(p.materialesProducto.id):'';
+    var cod=cqNormProductoPanol(p.codigo);
+    var nom=cqNormProductoPanol(p.nombre);
+    if(baseMat&&mat&&baseMat===mat)return true;
+    if(baseCod&&cod&&baseCod===cod)return true;
+    if(baseNom&&nom&&baseNom===nom)return true;
+    return false;
+  }).map(function(p){return String(p.id);});
+}
 function stockDeProducto(prodId){
-  return state.lotes.filter(function(l){return l.prodId===prodId;}).reduce(function(a,l){return a+l.cantidad;},0);
+  var ids=cqProductoEquivalenteIdsPanol(prodId);
+  return state.lotes.filter(function(l){return ids.indexOf(String(l.prodId))>=0;})
+    .reduce(function(a,l){return a+Number(l.cantidad||0);},0);
 }
 function lotesDeProducto(prodId){
-  return state.lotes.filter(function(l){return l.prodId===prodId && l.cantidad>0;}).sort(function(a,b){return a.fechaTs-b.fechaTs;});
+  var ids=cqProductoEquivalenteIdsPanol(prodId);
+  return state.lotes.filter(function(l){return ids.indexOf(String(l.prodId))>=0 && Number(l.cantidad)>0;})
+    .sort(function(a,b){return Number(a.fechaTs||0)-Number(b.fechaTs||0);});
 }
 function findProductoPorCodigo(codigo){
   codigo=(codigo||'').trim().toLowerCase();
@@ -3567,10 +3885,11 @@ function buscarProductoParaCarga(codigo,nombre){
   if(codigo){
     var porCodigo=findProductoPorCodigo(codigo);
     if(porCodigo) return porCodigo;
-  }else{
-    var porNombre=findProductoPorNombre(nombre);
-    if(porNombre) return porNombre;
   }
+  // Siempre intentar también por nombre exacto: evita duplicar un mismo material
+  // cuando una carga vieja no tenía código o el código se completó después.
+  var porNombre=findProductoPorNombre(nombre);
+  if(porNombre) return porNombre;
   return null;
 }
 
@@ -3583,53 +3902,93 @@ async function renderCfProductoDropdown(open){
   var combo=document.getElementById('cf-producto-combo');
   if(!inp||!panel||!combo)return;
 
-  try{
-    await cargarCatalogoMaterialesPanol();
-  }catch(e){
-    console.warn('Catálogo Materiales para Pañol',e);
-  }
+  try{await cargarCatalogoMaterialesPanol();}catch(e){console.warn('Catálogo Materiales para Pañol',e);}
 
   var q=normCatalogoPanol(inp.value||'');
   var subSel=document.getElementById('cf-subrubro');
   var subrubro=subSel?String(subSel.value||'').trim():'';
-  var arr=catalogoMaterialesFiltradoPorSubrubroPanol(subrubro);
 
+  // Primero, SIEMPRE productos ya existentes en Pañol.
+  var locales=state.productos.filter(function(p){
+    if(subrubro && cqNormProductoPanol(p.rubro)!==cqNormProductoPanol(subrubro))return false;
+    var txt=cqNormProductoPanol((p.nombre||'')+' '+(p.codigo||'')+' '+(p.rubro||''));
+    return !q || txt.indexOf(q)>=0;
+  }).sort(function(a,b){return String(a.nombre).localeCompare(String(b.nombre),'es');}).slice(0,80);
+
+  var localRows=locales.map(function(p){
+    return '<button type="button" class="combo-item" data-local-prod-id="'+escHTML(p.id)+'">'
+      +'<span class="combo-item-main"><span class="combo-item-name">'+escHTML(p.nombre)+'</span>'
+      +'<span class="combo-item-meta">'+(p.codigo?('Código '+escHTML(p.codigo)+' · '):'')+escHTML(p.rubro||'')+' · Ya existe en Pañol</span></span>'
+      +'<span class="combo-item-stock">'+fmtN(stockDeProducto(p.id))+' u</span></button>';
+  }).join('');
+
+  var arr=catalogoMaterialesFiltradoPorSubrubroPanol(subrubro);
   if(q){
     arr=arr.filter(function(x){
-      return [x.name,x.code,x.category].some(function(v){
-        return normCatalogoPanol(v).includes(q);
-      });
+      return [x.name,x.code,x.category].some(function(v){return normCatalogoPanol(v).includes(q);});
     });
   }
 
-  var rows=arr.slice(0,150).map(function(x){
-    var p=productoPanolPorMaterialCatalogo(x);
-    var stock=p?stockDeProducto(p.id):0;
+  // No repetir en "Materiales" lo que ya está reconocido en Pañol.
+  var catalogRows=arr.filter(function(x){
+    return !locales.some(function(p){
+      if(p.materialesProducto&&String(p.materialesProducto.id)===String(x.id))return true;
+      if(x.code&&p.codigo&&cqNormProductoPanol(x.code)===cqNormProductoPanol(p.codigo))return true;
+      return cqNormProductoPanol(x.name)===cqNormProductoPanol(p.nombre);
+    });
+  }).slice(0,100).map(function(x){
     return '<button type="button" class="combo-item" data-cat-id="'+escHTML(x.id)+'">'
       +'<span class="combo-item-main"><span class="combo-item-name">'+escHTML(x.name)+'</span>'
       +'<span class="combo-item-meta">'+(x.code?('Código '+escHTML(x.code)+' · '):'')+escHTML(x.category||'')+'</span></span>'
-      +'<span style="display:flex;align-items:center;gap:6px"><span class="cf-catalog-source">Materiales</span>'
-      +(p?'<span class="combo-item-stock">'+fmtN(stock)+' u</span>':'')+'</span></button>';
+      +'<span class="cf-catalog-source">Materiales</span></button>';
   }).join('');
 
-  panel.innerHTML=(rows||'<div class="combo-empty">No hay coincidencias exactas para este subrubro.</div>')
-    +'<button type="button" class="cf-new-product" id="cf-nuevo-producto-btn">＋ Nuevo producto en Pañol</button>';
+  var sinCoincidencias='';
+  var mostrarNuevo=false;
 
+  // "Nuevo producto" sólo corresponde cuando el usuario está escribiendo algo
+  // que realmente no existe ni en Pañol ni en Materiales.
+  var tieneTexto=!!String(inp.value||'').trim();
+  var seleccionadoExistente=!!cfMaterialSeleccionadoPanol || !!findProductoPorNombre(String(inp.value||'').trim());
+
+  if(tieneTexto && !seleccionadoExistente && !localRows && !catalogRows){
+    mostrarNuevo=true;
+    sinCoincidencias='<div class="combo-empty">No hay coincidencias.</div>';
+  }
+
+  panel.innerHTML=(localRows+catalogRows+sinCoincidencias)
+    +(mostrarNuevo?'<button type="button" class="cf-new-product" id="cf-nuevo-producto-btn">＋ Nuevo producto en Pañol</button>':'');
+
+  Array.prototype.forEach.call(panel.querySelectorAll('[data-local-prod-id]'),function(btn){
+    btn.addEventListener('click',function(){
+      var prod=state.productos.find(function(p){return String(p.id)===String(btn.getAttribute('data-local-prod-id'));});
+      if(prod)seleccionarProductoExistenteEntradaPanol(prod);
+    });
+  });
   Array.prototype.forEach.call(panel.querySelectorAll('.combo-item[data-cat-id]'),function(btn){
     btn.addEventListener('click',function(){
-      var item=cqCatalogoMaterialesPanol.find(function(x){
-        return String(x.id)===String(btn.getAttribute('data-cat-id'));
-      });
+      var item=cqCatalogoMaterialesPanol.find(function(x){return String(x.id)===String(btn.getAttribute('data-cat-id'));});
       if(item)seleccionarMaterialCatalogoEntradaPanol(item);
     });
   });
 
   var nuevo=document.getElementById('cf-nuevo-producto-btn');
   if(nuevo)nuevo.addEventListener('click',nuevoProductoEntradaPanol);
-
   if(open)combo.classList.add('open');
 }
-function showCfProductoDropdown(){ renderCfProductoDropdown(true); }
+function showCfProductoDropdown(){
+  var inp=document.getElementById('cf-producto');
+  var nombre=String(inp?inp.value:'').trim();
+
+  // Si ya hay un producto válido seleccionado, el focus sólo sirve para marcarlo;
+  // no reabrir el desplegable.
+  if(cfMaterialSeleccionadoPanol || findProductoPorNombre(nombre)){
+    var combo=document.getElementById('cf-producto-combo');
+    if(combo)combo.classList.remove('open');
+    return;
+  }
+  renderCfProductoDropdown(true);
+}
 async function onCfCodigoInput(){
   var codigo=String(document.getElementById('cf-codigo').value||'').trim();
   if(!codigo){
@@ -3651,12 +4010,17 @@ function onCfProductoInput(){
   var inp=document.getElementById('cf-producto');
   var nombre=String(inp?inp.value:'').trim();
 
+  var existente=findProductoPorNombre(nombre);
+  if(existente){
+    seleccionarProductoExistenteEntradaPanol(existente);
+    return;
+  }
+
   if(cfMaterialSeleccionadoPanol &&
      normCatalogoPanol(nombre)!==normCatalogoPanol(cfMaterialSeleccionadoPanol.name)){
     cfMaterialSeleccionadoPanol=null;
     cfNuevoProductoManual=true;
   }
-
   renderCfProductoDropdown(true);
 }
 
@@ -3796,7 +4160,17 @@ function renderStock(){
 
   var rubroSel=document.getElementById('stock-rubro-filter');
   var prevRubros=rubroSel?Array.from(rubroSel.selectedOptions||[]).map(function(o){return String(o.value);}):[];
-  var rubros=getRubros().slice().sort(function(a,b){return String(a).localeCompare(String(b),'es',{sensitivity:'base'});});
+  // En el filtro de Stock mostrar solamente rubros que realmente tienen
+  // al menos un producto cargado en Pañol. La fuente de nombres sigue siendo
+  // la configuración vigente de Materiales/Gastos, para no reintroducir rubros viejos.
+  var rubrosConProductos={};
+  state.productos.forEach(function(p){
+    var k=String((p&&p.rubro)||'').trim().toLowerCase();
+    if(k)rubrosConProductos[k]=true;
+  });
+  var rubros=getRubros().filter(function(r){
+    return !!rubrosConProductos[String(r||'').trim().toLowerCase()];
+  }).sort(function(a,b){return String(a).localeCompare(String(b),'es',{sensitivity:'base'});});
   if(rubroSel){
     rubroSel.innerHTML=rubros.map(function(r){return '<option value="'+escHTML(r)+'">'+escHTML(r)+'</option>';}).join('');
     Array.from(rubroSel.options).forEach(function(o){o.selected=prevRubros.indexOf(String(o.value))>=0;});
@@ -3937,7 +4311,7 @@ function toggleLotes(prodId){
 function cargarProductoUnitario(){
   var subRaw=(document.getElementById('cf-subrubro').value||'').trim();
   var subrubro=validarSubrubroEntradaPanol(subRaw);
-  if(!subrubro){alert('Elegí un subrubro existente de Materiales.');return;}
+  if(!subrubro){alert('Elegí un subrubro de Gastos para este producto.');return;}
 
   var codigo=document.getElementById('cf-codigo').value.trim();
   var nombre=document.getElementById('cf-producto').value.trim();
@@ -4051,7 +4425,7 @@ function parsearLineaMasiva(linea){
 function procesarCargaMasiva(){
   var subRaw=(document.getElementById('masiva-subrubro').value||'').trim();
   var subrubro=validarSubrubroEntradaPanol(subRaw);
-  if(!subrubro){alert('Elegí un subrubro existente de Materiales para este lote.');return;}
+  if(!subrubro){alert('Elegí un subrubro de Gastos para este lote.');return;}
 
   function lines(id){return String(document.getElementById(id).value||'').split(/\r?\n/);}
   var codigos=lines('masiva-codigos'),productos=lines('masiva-productos'),
@@ -4234,6 +4608,10 @@ function productoConsumoLabel(p){
   return p.nombre+codigoTag(p);
 }
 function getProductoDesdeConsumoInput(){
+  if(cqConsumoProdIdPanol){
+    var seleccionado=state.productos.find(function(p){return String(p.id)===String(cqConsumoProdIdPanol);});
+    if(seleccionado)return seleccionado;
+  }
   var prodInp=document.getElementById('consumo-prod-input');
   var codInp=document.getElementById('consumo-codigo-input');
   var prodVal=prodInp?(prodInp.value||'').trim().toLowerCase():'';
@@ -4251,6 +4629,7 @@ function getProductoDesdeConsumoInput(){
   }) || null;
 }
 function completarConsumoProducto(prod){
+  cqConsumoProdIdPanol=prod&&prod.id?String(prod.id):'';
   var prodInp=document.getElementById('consumo-prod-input');
   var codInp=document.getElementById('consumo-codigo-input');
   var subInp=document.getElementById('consumo-subrubro');
@@ -4328,6 +4707,7 @@ function renderConsumoCodigoDropdown(open){
 }
 function showConsumoCodigoDropdown(){ renderConsumoCodigoDropdown(true); }
 function onConsumoCodigoInput(){
+  cqConsumoProdIdPanol='';
   var prod=getProductoDesdeConsumoInput();
   if(prod){
     completarConsumoProducto(prod);
@@ -4379,6 +4759,7 @@ function updateConsumoHelp(prod){
   }
 }
 function onConsumoProductoInput(){
+  cqConsumoProdIdPanol='';
   var prod=getProductoDesdeConsumoInput();
   if(prod){
     completarConsumoProducto(prod);
@@ -5244,6 +5625,7 @@ async function registrarConsumo(){
   document.getElementById('consumo-comentario').value='';
   var ci=document.getElementById('consumo-codigo-input');if(ci)ci.value='';
   var pi=document.getElementById('consumo-prod-input');if(pi)pi.value='';
+  cqConsumoProdIdPanol='';
   cqMaterialSeleccionadoPanol=null;
   renderObraDetalle();
 
@@ -5287,15 +5669,35 @@ async function registrarConsumo(){
 
 function consumirStockFIFO(prodId,cantidad){
   var lotes=lotesDeProducto(prodId);
-  var restante=cantidad;
+  var restante=Number(cantidad)||0;
   var detalle=[];
   for(var i=0;i<lotes.length && restante>0;i++){
     var lote=lotes[i];
-    var tomar=Math.min(lote.cantidad,restante);
-    lote.cantidad=parseFloat((lote.cantidad-tomar).toFixed(6));
-    restante=parseFloat((restante-tomar).toFixed(6));
-    detalle.push({loteId:lote.id,cantidad:tomar,precio:lote.precio,tipoCambio:lote.tipoCambio||null});
+    var disponible=Math.max(0,Number(lote.cantidad)||0);
+    var tomar=Math.min(disponible,restante);
+    if(tomar<=0)continue;
+
+    lote.cantidad=Math.max(0,parseFloat((disponible-tomar).toFixed(6)));
+    restante=Math.max(0,parseFloat((restante-tomar).toFixed(6)));
+
+    detalle.push({
+      loteId:lote.id,
+      cantidad:tomar,
+      precio:Number(lote.precio)||0,
+      tipoCambio:lote.tipoCambio||null
+    });
   }
+
+  if(restante>0.000001){
+    // No debería ocurrir porque registrarConsumo valida stock antes.
+    // Si ocurre, restaurar lo descontado para no dejar un consumo parcial.
+    detalle.forEach(function(d){
+      var lote=state.lotes.find(function(l){return String(l.id)===String(d.loteId);});
+      if(lote)lote.cantidad=parseFloat((Number(lote.cantidad||0)+Number(d.cantidad||0)).toFixed(6));
+    });
+    throw new Error('No se pudo descontar completamente el stock solicitado.');
+  }
+
   return {detalle:detalle};
 }
 
@@ -7829,6 +8231,455 @@ window.cqRecargarTCPanolDesdeCajaGerencia=cargarTCGerencia;
     wrapped.__cqTcCajaWrap=true;
     window.showTab=wrapped;
   }
+})();
+</script>
+
+
+
+<!-- CQ 2026-08-18 — Pañol: subrubro automático desde Materiales, validado por Gastos -->
+<script id="cq-panol-subrubros-auto-v1">
+(function(){
+  function norm(v){
+    return String(v||'').trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/\s+/g,' ');
+  }
+  function canonico(cat){
+    var arr=[];
+    try{arr=typeof subrubrosMaterialesEntradaPanol==='function'?subrubrosMaterialesEntradaPanol():[];}catch(e){}
+    var k=norm(cat);
+    return arr.find(function(x){return norm(x)===k;})||'';
+  }
+
+  function aplicarCategoriaMaterialesAEntrada(item){
+    if(!item)return '';
+    var c=canonico(item.category||'');
+    var input=document.getElementById('cf-subrubro');
+    if(c&&input){
+      input.value=c;
+      try{renderSubrubrosEntradaPanol('cf',c);}catch(e){}
+    }
+    return c;
+  }
+
+  // Cuando se elige un material del catálogo, Materiales aporta también el subrubro.
+  // Gastos sigue siendo el validador de la lista vigente.
+  var oldSel=window.seleccionarMaterialCatalogoEntradaPanol;
+  if(typeof oldSel==='function'){
+    window.seleccionarMaterialCatalogoEntradaPanol=function(item){
+      var r=oldSel.apply(this,arguments);
+      var c=aplicarCategoriaMaterialesAEntrada(item);
+      if(!c){
+        // Fallback al mecanismo histórico de Gastos que ya tenía Pañol.
+        try{
+          var inp=document.getElementById('cf-subrubro');
+          if(inp&&!String(inp.value||'').trim() && item){
+            cqAplicarSubrubroDesdeGastosPanol(item.code||'',item.name||'');
+          }
+        }catch(e){}
+      }
+      return r;
+    };
+  }
+
+  // Producto ya existente en Pañol: si está vinculado a Materiales,
+  // mantener su rubro sincronizado con la categoría actual de Materiales.
+  var oldExist=window.seleccionarProductoExistenteEntradaPanol;
+  if(typeof oldExist==='function'){
+    window.seleccionarProductoExistenteEntradaPanol=function(prod){
+      try{
+        var c=canonico(prod&&prod.materialesProducto&&prod.materialesProducto.category);
+        if(c&&prod){
+          prod.rubro=c;
+          var input=document.getElementById('cf-subrubro');
+          if(input)input.value=c;
+        }
+      }catch(e){}
+      return oldExist.apply(this,arguments);
+    };
+  }
+
+  // Blindaje al registrar una entrada: si se eligió un material del catálogo,
+  // no depender de que el usuario haya tocado el campo Subrubro.
+  var oldCargar=window.cargarProductoUnitario;
+  if(typeof oldCargar==='function'){
+    window.cargarProductoUnitario=function(){
+      try{
+        if(typeof cfMaterialSeleccionadoPanol!=='undefined' && cfMaterialSeleccionadoPanol){
+          var c=canonico(cfMaterialSeleccionadoPanol.category||'');
+          var input=document.getElementById('cf-subrubro');
+          if(c&&input)input.value=c;
+        }
+      }catch(e){}
+      return oldCargar.apply(this,arguments);
+    };
+  }
+
+  // Al consumir a obra, si el producto está vinculado a Materiales y el campo quedó vacío,
+  // completar automáticamente con la categoría unificada.
+  var oldCompletar=window.completarConsumoProducto;
+  if(typeof oldCompletar==='function'){
+    window.completarConsumoProducto=function(prod){
+      try{
+        var c=canonico(
+          (prod&&prod.materialesProducto&&prod.materialesProducto.category) ||
+          (prod&&prod.rubro) || ''
+        );
+        if(c&&prod)prod.rubro=c;
+      }catch(e){}
+      var r=oldCompletar.apply(this,arguments);
+      try{
+        var input=document.getElementById('consumo-subrubro');
+        var c2=canonico(
+          (prod&&prod.materialesProducto&&prod.materialesProducto.category) ||
+          (prod&&prod.rubro) || ''
+        );
+        if(c2&&input)input.value=c2;
+      }catch(e){}
+      return r;
+    };
+  }
+})();
+</script>
+
+
+
+<!-- CQ 2026-08-18 — Seleccionar todo el texto al tocar campos -->
+<style id="cq-select-all-fields-style">
+  #cf-subrubro::selection,
+  #cf-codigo::selection,
+  #cf-producto::selection,
+  #consumo-subrubro::selection,
+  #consumo-codigo-input::selection,
+  #consumo-prod-input::selection{
+    background:#2B7BE0;
+    color:#fff;
+  }
+</style>
+
+<script id="cq-select-all-fields-js">
+(function(){
+  var IDS=[
+    'cf-subrubro',
+    'cf-codigo',
+    'cf-producto',
+    'consumo-subrubro',
+    'consumo-codigo-input',
+    'consumo-prod-input'
+  ];
+
+  function seleccionarTodo(el){
+    if(!el || !el.value)return;
+    setTimeout(function(){
+      try{
+        el.focus({preventScroll:true});
+        el.select();
+      }catch(e){
+        try{
+          el.focus();
+          el.setSelectionRange(0,String(el.value||'').length);
+        }catch(_){}
+      }
+    },25);
+  }
+
+  // Delegación para que también funcione con los campos de Obras,
+  // que se vuelven a crear cada vez que se abre una obra.
+  document.addEventListener('click',function(e){
+    var el=e.target;
+    if(!el || IDS.indexOf(el.id)<0)return;
+
+    // Primer toque: marcar todo el contenido en azul.
+    // No frenamos el evento para conservar apertura de listas/desplegables.
+    seleccionarTodo(el);
+  });
+
+  document.addEventListener('focusin',function(e){
+    var el=e.target;
+    if(!el || IDS.indexOf(el.id)<0)return;
+    seleccionarTodo(el);
+  });
+
+  // También disponible para usos puntuales desde otras funciones.
+  window.cqSeleccionarTodoCampoPanol=seleccionarTodo;
+})();
+</script>
+
+
+
+<!-- CQ 2026-08-18 — Prioridad correcta de subrubro: Pañol > Materiales > Gastos -->
+<script id="cq-panol-prioridad-subrubro-v2">
+(function(){
+  function norm(v){
+    return String(v||'').trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+
+  function canonico(v){
+    var arr=[];
+    try{
+      arr=(typeof subrubrosMaterialesEntradaPanol==='function')
+        ? subrubrosMaterialesEntradaPanol()
+        : [];
+    }catch(e){}
+    var k=norm(v);
+    return arr.find(function(x){return norm(x)===k;}) || '';
+  }
+
+  function ponerSubrubro(v,origen){
+    var c=canonico(v);
+    var el=document.getElementById('cf-subrubro');
+    if(!c || !el)return '';
+    el.value=c;
+    el.dataset.cqSubOrigen=origen||'';
+    el.placeholder='Subrubro tomado de '+(origen||'origen');
+    try{renderSubrubrosEntradaPanol('cf',c);}catch(e){}
+    return c;
+  }
+
+  async function buscarGastosSiHaceFalta(codigo,nombre){
+    var el=document.getElementById('cf-subrubro');
+    if(!el)return '';
+
+    // Si ya vino de Pañol o Materiales, Gastos NO lo pisa.
+    var actual=canonico(el.value);
+    if(actual)return actual;
+
+    el.placeholder='Buscando en Gastos…';
+    try{
+      var encontrado=await cqSubrubroHistoricoDesdeGastosPanol(codigo,nombre);
+      var c=canonico(encontrado);
+      if(c){
+        ponerSubrubro(c,'Gastos');
+        return c;
+      }
+    }catch(e){
+      console.warn('Pañol · subrubro desde Gastos',e);
+    }
+    el.placeholder='Seleccionar o escribir…';
+    return '';
+  }
+
+  // Reemplaza la función histórica para que nunca borre un valor válido ya encontrado.
+  cqAplicarSubrubroDesdeGastosPanol=buscarGastosSiHaceFalta;
+  window.cqAplicarSubrubroDesdeGastosPanol=buscarGastosSiHaceFalta;
+
+  function seleccionarExistente(prod){
+    if(!prod)return;
+
+    var nom=document.getElementById('cf-producto');
+    var cod=document.getElementById('cf-codigo');
+    var sub=document.getElementById('cf-subrubro');
+
+    if(nom)nom.value=prod.nombre||'';
+    if(cod)cod.value=prod.codigo||'';
+    if(sub){
+      sub.value='';
+      sub.dataset.cqSubOrigen='';
+    }
+
+    // PRIORIDAD 1: el producto ya cargado en PAÑOL.
+    var c=ponerSubrubro(prod.rubro||'','Stock Pañol');
+
+    // PRIORIDAD 2: categoría actual del catálogo de MATERIALES.
+    if(!c && prod.materialesProducto){
+      c=ponerSubrubro(prod.materialesProducto.category||'','Materiales');
+    }
+
+    if(prod.materialesProducto){
+      cfMaterialSeleccionadoPanol={
+        id:prod.materialesProducto.id,
+        name:prod.materialesProducto.name||prod.nombre||'',
+        code:prod.materialesProducto.code||prod.codigo||'',
+        category:prod.materialesProducto.category||prod.rubro||''
+      };
+    }else{
+      cfMaterialSeleccionadoPanol=null;
+    }
+
+    cfNuevoProductoManual=false;
+
+    var combo=document.getElementById('cf-producto-combo');
+    if(combo)combo.classList.remove('open');
+
+    // PRIORIDAD 3: sólo si Pañol y Materiales no resolvieron, buscar en GASTOS.
+    if(!c){
+      buscarGastosSiHaceFalta(prod.codigo||'',prod.nombre||'');
+    }
+
+    if(nom){
+      setTimeout(function(){
+        try{nom.focus({preventScroll:true});nom.select();}
+        catch(e){try{nom.focus();nom.setSelectionRange(0,nom.value.length);}catch(_){}}
+      },40);
+    }
+  }
+
+  function seleccionarCatalogo(item){
+    if(!item)return;
+
+    // Si ya existe en Pañol, manda primero el rubro guardado en stock.
+    var vinculado=null;
+    try{vinculado=productoPanolPorMaterialCatalogo(item);}catch(e){}
+    if(vinculado){
+      seleccionarExistente(vinculado);
+      return;
+    }
+
+    cfMaterialSeleccionadoPanol={
+      id:item.id,
+      name:item.name||'',
+      code:item.code||'',
+      category:item.category||''
+    };
+    cfNuevoProductoManual=false;
+
+    var nom=document.getElementById('cf-producto');
+    var cod=document.getElementById('cf-codigo');
+    var sub=document.getElementById('cf-subrubro');
+
+    if(nom)nom.value=item.name||'';
+    if(cod)cod.value=item.code||'';
+    if(sub){
+      sub.value='';
+      sub.dataset.cqSubOrigen='';
+    }
+
+    // No está en Pañol: PRIORIDAD 2 = Materiales.
+    var c=ponerSubrubro(item.category||'','Materiales');
+
+    var combo=document.getElementById('cf-producto-combo');
+    if(combo)combo.classList.remove('open');
+
+    // Sólo si Materiales tampoco tiene categoría válida, ir a Gastos.
+    if(!c){
+      buscarGastosSiHaceFalta(item.code||'',item.name||'');
+    }
+
+    if(nom){
+      setTimeout(function(){
+        try{nom.focus({preventScroll:true});nom.select();}
+        catch(e){try{nom.focus();nom.setSelectionRange(0,nom.value.length);}catch(_){}}
+      },40);
+    }
+  }
+
+  // Sustituir tanto el binding global como window para cubrir onclick y llamadas internas.
+  seleccionarProductoExistenteEntradaPanol=seleccionarExistente;
+  window.seleccionarProductoExistenteEntradaPanol=seleccionarExistente;
+
+  seleccionarMaterialCatalogoEntradaPanol=seleccionarCatalogo;
+  window.seleccionarMaterialCatalogoEntradaPanol=seleccionarCatalogo;
+
+  // Blindaje final al cargar: respetar la prioridad incluso si el usuario no tocó Subrubro.
+  var oldCargar=window.cargarProductoUnitario;
+  if(typeof oldCargar==='function'){
+    window.cargarProductoUnitario=function(){
+      var nom=(document.getElementById('cf-producto')||{}).value||'';
+      var cod=(document.getElementById('cf-codigo')||{}).value||'';
+      var prod=null;
+
+      try{
+        prod=buscarProductoParaCarga(cod,nom);
+      }catch(e){}
+
+      var c='';
+      if(prod)c=ponerSubrubro(prod.rubro||'','Stock Pañol');
+      if(!c && cfMaterialSeleccionadoPanol){
+        c=ponerSubrubro(cfMaterialSeleccionadoPanol.category||'','Materiales');
+      }
+
+      return oldCargar.apply(this,arguments);
+    };
+    cargarProductoUnitario=window.cargarProductoUnitario;
+  }
+})();
+</script>
+
+
+
+<!-- CQ 2026-08-18 — Si se borra Subrubro/Código/Producto, limpiar los 3 -->
+<script id="cq-panol-clear-triplet-v1">
+(function(){
+  var limpiando=false;
+
+  var grupos=[
+    {
+      ids:['cf-subrubro','cf-codigo','cf-producto'],
+      reset:function(){
+        try{cfMaterialSeleccionadoPanol=null;}catch(e){}
+        try{cfNuevoProductoManual=false;}catch(e){}
+        var combo=document.getElementById('cf-producto-combo');
+        var panel=document.getElementById('cf-subrubro-panel');
+        if(combo)combo.classList.remove('open');
+        if(panel)panel.classList.remove('open');
+      }
+    },
+    {
+      ids:['consumo-subrubro','consumo-codigo-input','consumo-prod-input'],
+      reset:function(){
+        try{cqConsumoProdIdPanol='';}catch(e){}
+        try{cqMaterialSeleccionadoPanol=null;}catch(e){}
+        var pc=document.getElementById('consumo-prod-combo');
+        var cc=document.getElementById('consumo-codigo-combo');
+        var sp=document.getElementById('consumo-subrubro-panel');
+        if(pc)pc.classList.remove('open');
+        if(cc)cc.classList.remove('open');
+        if(sp)sp.classList.remove('open');
+
+        var help=document.getElementById('consumo-prod-help');
+        if(help){
+          help.textContent='Escribí y elegí un producto cargado en pañol.';
+          help.style.color='var(--tenue)';
+        }
+      }
+    }
+  ];
+
+  function grupoDe(id){
+    return grupos.find(function(g){return g.ids.indexOf(id)>=0;})||null;
+  }
+
+  function limpiarGrupo(g){
+    if(!g || limpiando)return;
+    limpiando=true;
+    try{
+      g.ids.forEach(function(id){
+        var el=document.getElementById(id);
+        if(el)el.value='';
+      });
+      if(typeof g.reset==='function')g.reset();
+    }finally{
+      limpiando=false;
+    }
+  }
+
+  document.addEventListener('input',function(e){
+    var el=e.target;
+    if(!el || limpiando)return;
+    var g=grupoDe(el.id);
+    if(!g)return;
+
+    // Sólo dispara cuando el usuario dejó completamente vacío uno de los tres.
+    if(String(el.value||'').trim()===''){
+      limpiarGrupo(g);
+    }
+  },true);
+
+  // También contempla borrar con "X", autofill o cambios que disparen change.
+  document.addEventListener('change',function(e){
+    var el=e.target;
+    if(!el || limpiando)return;
+    var g=grupoDe(el.id);
+    if(!g)return;
+    if(String(el.value||'').trim()===''){
+      limpiarGrupo(g);
+    }
+  },true);
+
+  window.cqLimpiarTripletaPanol=function(tipo){
+    limpiarGrupo(tipo==='obras'?grupos[1]:grupos[0]);
+  };
 })();
 </script>
 
