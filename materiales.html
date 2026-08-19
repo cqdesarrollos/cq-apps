@@ -4328,6 +4328,64 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 }
 </style>
 
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
+
+<style id="cq-reporte-export-materiales-v1">
+#modal-reporte .cq-report-export-actions{
+  display:flex;align-items:center;justify-content:flex-end;gap:6px;
+  padding:6px 8px 2px;
+}
+#modal-reporte .cq-report-export-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  min-height:29px;padding:5px 10px;border-radius:9px;
+  font:900 8.5px 'Space Grotesk',sans-serif;cursor:pointer;
+  border:1px solid #DCE7E0;background:#fff;color:#29483D;
+  box-shadow:0 4px 10px rgba(28,61,53,.06);
+}
+#modal-reporte .cq-report-export-btn.excel{
+  background:#EDF8F1;border-color:#BFDCC9;color:#176B3A;
+}
+#modal-reporte .cq-report-export-btn.pdf{
+  background:#FFF1F0;border-color:#EDC7C3;color:#A33A31;
+}
+#modal-reporte .cq-report-export-btn:active{transform:scale(.98)}
+@media(max-width:520px){
+  #modal-reporte .cq-report-export-actions{justify-content:stretch}
+  #modal-reporte .cq-report-export-btn{flex:1;font-size:8px}
+}
+</style>
+
+
+<style id="cq-report-export-outside-v3">
+.cq-main-report-actions{
+  display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;
+}
+.cq-main-export,.cq-main-chart-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:31px;padding:6px 11px;border-radius:9px;
+  font:900 9.5px 'Space Grotesk',sans-serif;cursor:pointer;white-space:nowrap;
+}
+.cq-main-export.excel{
+  background:#EAF7EF;border:1px solid #B9DBC5;color:#146B37;
+}
+.cq-main-export.pdf{
+  background:#FFF0EE;border:1px solid #ECC5C0;color:#A23D34;
+}
+.cq-main-chart-btn{
+  background:#1C3D35;border:1px solid #1C3D35;color:#fff;
+}
+.cq-main-export:active,.cq-main-chart-btn:active{transform:scale(.98)}
+@media(max-width:560px){
+  #obras-content .card-hd{align-items:flex-start!important;gap:8px!important}
+  .cq-main-report-actions{gap:4px}
+  .cq-main-export,.cq-main-chart-btn{min-height:29px;padding:5px 8px;font-size:8px}
+}
+</style>
+
 </head>
 <body>
 
@@ -4646,7 +4704,7 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
   <div class="modal-xl">
     <div class="modal-hd">
       <span class="modal-ttl" id="reporte-ttl">Reporte de obras</span>
-      <button class="modal-x" onclick="window.cerrarReporteObras()">x</button>
+      <button class="modal-x" onclick="window.cerrarReporteObras()">×</button>
     </div>
     
 <div class="cq-report-shared-filter">
@@ -4702,6 +4760,7 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
   <button class="reporte-tab active" id="rtab-tabla" onclick="window.switchReporteTab('tabla')">Tabla</button>
   <button class="reporte-tab" id="rtab-grafico" onclick="window.switchReporteTab('grafico')">Gráfico</button>
 </div>
+
 
 <div class="reporte-section" id="reporte-tabla-section"></div>
 
@@ -8998,6 +9057,238 @@ window.cqModalReportApply=cqModalReportApply;
 window.renderReporteCompartido=renderReporteCompartido;
 
 
+
+
+function cqReporteMaterialesDataExport(){
+  // Fuente única: la MISMA tabla visible del Reporte de Materiales.
+  // Así Excel/PDF respetan exactamente obra, subrubro y material filtrados.
+  var root=document.getElementById('obras-content');
+  var table=root?root.querySelector('table.tbl'):null;
+
+  if(!table){
+    return {headers:[],rows:[],obras:[]};
+  }
+
+  var headers=Array.from(table.querySelectorAll('thead th')).map(function(th){
+    return String(th.textContent||'').trim();
+  });
+
+  var rows=Array.from(table.querySelectorAll('tbody tr')).map(function(tr){
+    return Array.from(tr.querySelectorAll('td')).map(function(td,idx){
+      var txt=String(td.textContent||'').trim();
+
+      // Primera columna contiene nombre + badge de subrubro. Separarlos limpiamente.
+      if(idx===0){
+        var name=td.querySelector('.cq-main-report-name');
+        var cat=td.querySelector('.cq-main-report-cat');
+        return {
+          __material:true,
+          name:name?String(name.textContent||'').trim():txt,
+          category:cat?String(cat.textContent||'').trim():''
+        };
+      }
+
+      if(txt==='-' || txt==='')return '';
+
+      // Convertir formato argentino a número cuando corresponde.
+      var clean=txt.replace(/\s/g,'').replace(/\./g,'').replace(',','.');
+      var n=Number(clean);
+      return isNaN(n)?txt:n;
+    });
+  }).filter(function(r){return r.length>0;});
+
+  // Normalizar para exportación en columnas Material / Subrubro / obras / promedio.
+  var normalizedHeaders=['Material','Subrubro'].concat(headers.slice(1));
+  var normalizedRows=rows.map(function(r){
+    var first=r[0]&&r[0].__material?r[0]:{name:String(r[0]||''),category:''};
+    return [first.name,first.category].concat(r.slice(1));
+  });
+
+  // Obras visibles = encabezados entre Subrubro y Promedio.
+  var obras=normalizedHeaders.slice(2,-1);
+
+  return {
+    headers:normalizedHeaders,
+    rows:normalizedRows,
+    obras:obras
+  };
+}
+
+function cqReporteNombreArchivo(ext){
+  var now=new Date();
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var fecha=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());
+  return 'CQ_Reporte_Materiales_'+fecha+'.'+ext;
+}
+
+function cqEscapeExport(v){
+  return String(v==null?'':v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+async function exportarReporteMaterialesExcel(){
+  try{
+    var data=cqReporteMaterialesDataExport();
+    if(!data.rows.length){
+      alert('No hay datos para exportar con los filtros actuales.');
+      return;
+    }
+
+    // Cargar SheetJS si todavía no está disponible.
+    if(typeof XLSX==='undefined'){
+      await cqCargarScriptReporte('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+    }
+    if(typeof XLSX==='undefined'){
+      alert('No se pudo cargar el módulo de Excel. Revisá la conexión e intentá de nuevo.');
+      return;
+    }
+
+    // El archivo refleja EXACTAMENTE los filtros activos del reporte.
+    var aoa=[
+      ['CQ DESARROLLOS · REPORTE DE MATERIALES'],
+      ['Fecha',new Date().toLocaleDateString('es-AR')],
+      ['Obras seleccionadas',data.obras.join(' · ')],
+      ['Fuente','Tabla visible con filtros actuales'],
+      ['Filas exportadas',data.rows.length],
+      [],
+      data.headers
+    ].concat(data.rows);
+
+    var ws=XLSX.utils.aoa_to_sheet(aoa);
+
+    var widths=[{wch:42},{wch:28}];
+    data.obras.forEach(function(){widths.push({wch:15});});
+    widths.push({wch:15});
+    ws['!cols']=widths;
+
+    var headerRow=7;
+    var lastCol=XLSX.utils.encode_col(data.headers.length-1);
+    ws['!autofilter']={ref:'A'+headerRow+':'+lastCol+(headerRow+data.rows.length)};
+
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Reporte Materiales');
+
+    XLSX.writeFile(wb,cqReporteNombreArchivo('xlsx'),{
+      bookType:'xlsx',
+      compression:true
+    });
+
+    if(typeof showToast==='function')showToast('✓ Excel .xlsx descargado');
+  }catch(e){
+    console.error('Exportar Excel Materiales',e);
+    alert('No se pudo generar el Excel .xlsx.');
+  }
+}
+window.exportarReporteMaterialesExcel=exportarReporteMaterialesExcel;
+
+function cqCargarScriptReporte(src){
+  return new Promise(function(resolve,reject){
+    var existente=Array.from(document.scripts).find(function(s){return s.src===src;});
+    if(existente){
+      if(existente.dataset.loaded==='1')return resolve();
+      existente.addEventListener('load',resolve,{once:true});
+      existente.addEventListener('error',reject,{once:true});
+      setTimeout(resolve,1200);
+      return;
+    }
+    var s=document.createElement('script');
+    s.src=src;
+    s.async=true;
+    s.onload=function(){s.dataset.loaded='1';resolve();};
+    s.onerror=reject;
+    document.head.appendChild(s);
+  });
+}
+
+function cqAbrirPDFImprimible(data){
+  var w=window.open('','_blank');
+  if(!w){
+    alert('El navegador bloqueó la ventana del PDF. Permití ventanas emergentes para este sitio.');
+    return;
+  }
+  var filas=data.rows.map(function(r){
+    return '<tr>'+r.map(function(v,idx){
+      var txt=(idx>=2 && v!=='' && typeof v==='number')
+        ?new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(v)
+        :cqEscapeExport(v);
+      return '<td>'+txt+'</td>';
+    }).join('')+'</tr>';
+  }).join('');
+
+  w.document.write(
+    '<!doctype html><html><head><meta charset="UTF-8"><title>Reporte Materiales</title>'+
+    '<style>@page{size:A4 landscape;margin:10mm}body{font-family:Arial,sans-serif;color:#17372e}'+
+    'h1{font-size:18px;margin:0 0 5px}p{font-size:10px;margin:3px 0 10px}'+
+    'table{width:100%;border-collapse:collapse;font-size:8px}th,td{border:1px solid #ccd8d1;padding:4px;text-align:left}'+
+    'th{background:#1c3d35;color:white}td:nth-child(n+3){text-align:right}</style></head><body>'+
+    '<h1>CQ DESARROLLOS · REPORTE DE MATERIALES</h1>'+
+    '<p>Fecha: '+new Date().toLocaleDateString('es-AR')+' · Obras: '+cqEscapeExport(data.obras.join(' · '))+'</p>'+
+    '<table><thead><tr>'+data.headers.map(function(h){return '<th>'+cqEscapeExport(h)+'</th>';}).join('')+
+    '</tr></thead><tbody>'+filas+'</tbody></table>'+
+    '<script>window.onload=function(){setTimeout(function(){window.print();},250)}<\/script>'+
+    '</body></html>'
+  );
+  w.document.close();
+}
+
+async function exportarReporteMaterialesPDF(){
+  var data=cqReporteMaterialesDataExport();
+  if(!data.rows.length){
+    alert('No hay datos para exportar con los filtros actuales.');
+    return;
+  }
+
+  try{
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      await cqCargarScriptReporte('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+    }
+    if(window.jspdf && window.jspdf.jsPDF){
+      var jsPDF=window.jspdf.jsPDF;
+      var doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(13);
+      doc.text('CQ DESARROLLOS · REPORTE DE MATERIALES',10,11);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(7.5);
+      doc.text('Fecha: '+new Date().toLocaleDateString('es-AR')+' · Obras: '+data.obras.join(' · '),10,16);
+
+      // Si autoTable no está cargado, cargarlo en el momento.
+      if(typeof doc.autoTable!=='function'){
+        await cqCargarScriptReporte('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js');
+      }
+
+      if(typeof doc.autoTable==='function'){
+        doc.autoTable({
+          startY:20,
+          head:[data.headers],
+          body:data.rows.map(function(r){
+            return r.map(function(v,idx){
+              return (idx>=2 && v!=='' && typeof v==='number')
+                ?new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(v)
+                :String(v==null?'':v);
+            });
+          }),
+          theme:'grid',
+          styles:{fontSize:6.2,cellPadding:1.4,overflow:'linebreak'},
+          headStyles:{fillColor:[28,61,53],textColor:[255,255,255],fontStyle:'bold'},
+          margin:{left:7,right:7,bottom:8}
+        });
+        doc.save(cqReporteNombreArchivo('pdf'));
+        if(typeof showToast==='function')showToast('✓ PDF descargado');
+        return;
+      }
+    }
+  }catch(e){
+    console.warn('PDF directo no disponible, usando impresión',e);
+  }
+
+  // Respaldo universal: abre el mismo reporte listo para "Guardar como PDF".
+  cqAbrirPDFImprimible(data);
+}
+window.exportarReporteMaterialesPDF=exportarReporteMaterialesPDF;
+
 // ── FIN REPORTE ─────────────────────────────────────
 
 function selectTodasObras(){
@@ -9072,7 +9363,11 @@ function renderCompareObras(){
   document.getElementById('obras-content').innerHTML='<div class="card">'
     +'<div class="card-hd" style="display:flex;justify-content:space-between;align-items:center">'
     +'<span>'+sel.length+' '+(sel.length===1?'obra':'obras')+' · '+mats.length+' materiales</span>'
-    +'<button onclick="window.abrirGraficoDirecto()" style="background:#1C3D35;border:none;border-radius:6px;padding:5px 13px;font-size:11px;font-weight:800;color:#fff;cursor:pointer">📊 Ver gráfico</button>'
+    +'<div class="cq-main-report-actions">'
+      +'<button type="button" class="cq-main-export excel" onclick="window.exportarReporteMaterialesExcel()">⬇ Excel</button>'
+      +'<button type="button" class="cq-main-export pdf" onclick="window.exportarReporteMaterialesPDF()">⬇ PDF</button>'
+      +'<button type="button" class="cq-main-chart-btn" onclick="window.abrirGraficoDirecto()">📊 Ver gráfico</button>'
+    +'</div>'
     +'</div>'
     +'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Material</th>'+hdrs+'<th class="r" style="background:#F2F7F3;border-left:2px solid #DDE8DE;color:#1C3D35;white-space:nowrap">Promedio</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div></div>';
@@ -12796,11 +13091,13 @@ window.abrirGraficoDirecto = function(){
         var actual=categoriaActual(m);
         var can=canonico(actual);
 
-        // Todo material que no coincida con un subrubro vigente se asigna,
-        // por pedido de CQ, a Agua+Tanque+Flexibles para acelerar la clasificación.
-        if(!can && defaultSinAsignar){
-          can=defaultSinAsignar;
-          cambiosDefault++;
+        // Un material sin categoría válida NO debe caer automáticamente en Agua+Tanque+Flexibles.
+        // Primero se intenta recuperar una categoría aprendida; si no, queda pendiente.
+        if(!can){
+          var aprendida=(typeof categoriaAprendidaPara==='function')
+            ? categoriaAprendidaPara(getMatCodigo(m)||m.codigo||'',m.mat||'')
+            : '';
+          can=canonico(aprendida);
         }
 
         if(can){
@@ -13102,9 +13399,10 @@ window.abrirGraficoDirecto = function(){
     });
     box.innerHTML=opts.map(function(o){
       var active=String(o.value)===String(s.value);
-      var val=String(o.value).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var val=String(o.value);
+      var valAttr=JSON.stringify(val).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       var txt=String(o.textContent||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      return '<button type="button" class="cq-edit-sub-option'+(active?' active':'')+'" onclick="cqChooseEditSub(\\''+val+'\\')">'+
+      return '<button type="button" class="cq-edit-sub-option'+(active?' active':'')+'" onclick="cqChooseEditSub('+valAttr+')">'+
         '<span>'+txt+'</span><span class="cq-edit-sub-check">✓</span></button>';
     }).join('') || '<div style="padding:12px;text-align:center;font-size:10px;color:#83988F;font-weight:800">Sin coincidencias</div>';
   };
@@ -13178,7 +13476,12 @@ window.abrirGraficoDirecto = function(){
       if(!m || isMatDeleted(m.id))return;
       var actual=state.matCategorias[m.id] || m.catName || '';
       var c=canon(actual);
-      if(!c && agua)c=agua;
+      if(!c){
+        var aprendida=(typeof categoriaAprendidaPara==='function')
+          ? categoriaAprendidaPara(getMatCodigo(m)||m.codigo||'',m.mat||'')
+          : '';
+        c=canon(aprendida);
+      }
       if(c){
         state.matCategorias[m.id]=c;
         m.catName=c;
@@ -13873,6 +14176,289 @@ window.abrirGraficoDirecto = function(){
   }
 }
 </style>
+
+
+<script id="cq-fix-categorias-materiales-y-pallets-v1">
+(function(){
+  function norm(v){
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+
+  function canon(nombre){
+    var cats=(Array.isArray(CATS)?CATS:[]);
+    var n=norm(nombre);
+    var c=cats.find(function(x){return norm(x.name)===n;});
+    return c?c.name:'';
+  }
+
+  function catDisponible(preferidas){
+    for(var i=0;i<preferidas.length;i++){
+      var c=canon(preferidas[i]);
+      if(c)return c;
+    }
+    return '';
+  }
+
+  function categoriaSeguraPorNombre(mat){
+    if(!mat)return '';
+    var n=norm(mat.mat||'');
+
+    // Reglas exactas / muy seguras basadas en el catálogo histórico de CQ.
+    var reglas=[
+      {keys:['pallets cemento'],cat:['Cemento']},
+      {keys:['pallets hercal'],cat:['Hercal']},
+      {keys:['cemento'],cat:['Cemento']},
+      {keys:['hercal'],cat:['Hercal']},
+
+      {keys:['hierro','malla q','mallas q'],cat:['Hierros y mallas']},
+      {keys:['vigueta'],cat:['Viguetas']},
+      {keys:['bovedilla'],cat:['Bovedillas']},
+      {keys:['tabique','portante','ladrillo','ladrillon','techo 16','techo 11'],cat:['Palmar','Ladrillos']},
+
+      {keys:['techi cau','asfalt','impermeabil'],cat:['Pinturas asfálticas+aislantes']},
+      {keys:['agrotileno','alambre','clavo'],cat:['Clavos+Alambre+Agrotileno']},
+      {keys:['hidrofugo','fino interior','fino exterior'],cat:['Revoque']},
+      {keys:['yeso','guardacanto yesero'],cat:['Yeso']},
+
+      {keys:['peg porcelanato','peg ceramica','pegamento','pastina'],cat:['Pegamento+pastina']},
+      {keys:['piso ','revestimiento','porcelanato','ceramica'],cat:['Pisos y revest.']},
+
+      {keys:['pintura','fijador','masilla'],cat:['Pinturas']},
+      {keys:['telgopor'],cat:['Telgopor']},
+
+      {keys:['tanque','flexible','agua '],cat:['Agua+Tanque+Flexibles']},
+      {keys:['cloaca','camara'],cat:['Cloacas+Cámara']},
+      {keys:['sigas','gas '],cat:['Gas+Aprobación']},
+
+      {keys:['hidromet','grifer','sanitario','bacha','fv '],cat:['Bachas+Sanitarios+Griferías']},
+      {keys:['horno','anafe','campana'],cat:['Horno+Anafe+Campana']},
+      {keys:['caldera'],cat:['Caldera']},
+      {keys:['bomba'],cat:['Bombas']},
+      {keys:['radiador'],cat:['Radiadores']},
+      {keys:['mesada'],cat:['Mesadas']},
+      {keys:['vanitory'],cat:['Vanitorys']},
+      {keys:['espejo','mampara'],cat:['Espejo+Mampara']},
+      {keys:['mueble'],cat:['Muebles']},
+      {keys:['abertura','ventana','puerta aluminio'],cat:['Aberturas']},
+      {keys:['cerradura','picaporte','cerrajer'],cat:['Cerrajería y picaportes']},
+      {keys:['pergola'],cat:['Pérgola materiales']},
+      {keys:['hormigon'],cat:['Hormigón']},
+      {keys:['arido','arena','piedra'],cat:['Áridos']},
+      {keys:['zinguer'],cat:['Zinguería']},
+      {keys:['atrim'],cat:['Atrim']},
+      {keys:['flete'],cat:['Flete']},
+      {keys:['contenedor'],cat:['Contenedor']},
+      {keys:['limpieza'],cat:['Limpieza']},
+      {keys:['decoracion'],cat:['Decoración']},
+      {keys:['ferreter'],cat:['Ferretería']}
+    ];
+
+    for(var i=0;i<reglas.length;i++){
+      var r=reglas[i];
+      if(r.keys.some(function(k){return n.indexOf(norm(k))>=0;})){
+        var c=catDisponible(r.cat);
+        if(c)return c;
+      }
+    }
+    return '';
+  }
+
+  // Mapeo seguro de los materiales históricos incluidos en la planilla.
+  var mapaIds={
+    1:'Hierros y mallas',2:'Hierros y mallas',3:'Hierros y mallas',
+    4:'Hierros y mallas',5:'Hierros y mallas',6:'Hierros y mallas',
+
+    7:'Cemento',8:'Hercal',9:'Cemento',10:'Hercal',
+
+    11:'Ladrillos',12:'Ladrillos',13:'Ladrillos',14:'Ladrillos',
+    15:'Palmar',16:'Palmar',17:'Ladrillos',18:'Ladrillos',
+    19:'Bovedillas',20:'Ladrillos',21:'Ladrillos',
+
+    22:'Pinturas asfálticas+aislantes',
+    23:'Revoque',
+    24:'Clavos+Alambre+Agrotileno',
+    25:'Revoque',
+
+    26:'Clavos+Alambre+Agrotileno',27:'Clavos+Alambre+Agrotileno',
+    28:'Revoque',29:'Revoque',30:'Yeso',31:'Yeso',
+
+    32:'Viguetas',33:'Viguetas',34:'Viguetas',35:'Viguetas',36:'Viguetas',
+    37:'Viguetas',38:'Viguetas',39:'Viguetas',40:'Viguetas',41:'Viguetas',42:'Viguetas',
+
+    43:'Pegamento+pastina',44:'Pegamento+pastina',45:'Pegamento+pastina',
+    46:'Pisos y revest.',47:'Pisos y revest.',48:'Pisos y revest.',49:'Pisos y revest.',
+
+    50:'Pinturas',51:'Pinturas',52:'Pinturas',53:'Pinturas',
+    54:'Pinturas',55:'Pinturas',56:'Pinturas',
+    57:'Telgopor'
+  };
+
+  function fijarCategoria(mat,categoria,manual){
+    if(!mat||!categoria)return false;
+    var c=canon(categoria);
+    if(!c)return false;
+
+    if(!state.matCategorias)state.matCategorias={};
+    state.matCategorias[mat.id]=c;
+    mat.catName=c;
+
+    var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
+    if(ex)ex.catName=c;
+
+    try{moverMaterialACategoria(Number(mat.id),c);}catch(e){}
+    try{guardarMemoriaCategoriaMaterial(mat,c);}catch(e){}
+
+    if(manual){
+      if(!state.categoriaManual)state.categoriaManual={};
+      state.categoriaManual[mat.id]=c;
+    }
+    return true;
+  }
+
+  function restaurarPallets(){
+    if(!state.deletedMatIds)state.deletedMatIds=[];
+    state.deletedMatIds=state.deletedMatIds.filter(function(id){
+      return Number(id)!==9 && Number(id)!==10;
+    });
+
+    // Blindar las fórmulas solicitadas.
+    if(typeof CALCULATED_MATS==='object'){
+      CALCULATED_MATS[9]=function(obraIdx){
+        var v=getVal(7,obraIdx);
+        return v!=null?parseFloat((Number(v)/80).toFixed(2)):null;
+      };
+      CALCULATED_MATS[10]=function(obraIdx){
+        var v=getVal(8,obraIdx);
+        return v!=null?parseFloat((Number(v)/80).toFixed(2)):null;
+      };
+    }
+
+    var p9=(ALL_MATS||[]).find(function(m){return Number(m.id)===9;});
+    var p10=(ALL_MATS||[]).find(function(m){return Number(m.id)===10;});
+
+    if(p9){
+      p9.mat='PALLETS CEMENTO';
+      if(!state.matNombres)state.matNombres={};
+      state.matNombres[9]='PALLETS CEMENTO';
+      fijarCategoria(p9,'Cemento',false);
+    }
+    if(p10){
+      p10.mat='PALLETS HERCAL';
+      if(!state.matNombres)state.matNombres={};
+      state.matNombres[10]='PALLETS HERCAL';
+      fijarCategoria(p10,'Hercal',false);
+    }
+  }
+
+  async function repararClasificacionAgua(forzar){
+    try{
+      if(!state||!Array.isArray(ALL_MATS))return false;
+      restaurarPallets();
+
+      if(!state.categoriaManual)state.categoriaManual={};
+
+      var cambios=0;
+      var agua=canon('Agua+Tanque+Flexibles');
+
+      (ALL_MATS||[]).forEach(function(m){
+        if(!m||isMatDeleted(m.id))return;
+
+        // Una selección manual del usuario gana siempre.
+        var manual=state.categoriaManual[m.id];
+        if(manual&&canon(manual)){
+          if(norm(state.matCategorias[m.id]||m.catName)!==norm(manual)){
+            fijarCategoria(m,manual,false);
+            cambios++;
+          }
+          return;
+        }
+
+        var actual=canon(state.matCategorias[m.id]||m.catName||'');
+        var objetivo='';
+
+        // Los IDs históricos tienen clasificación conocida con alta confianza.
+        if(mapaIds[Number(m.id)]){
+          objetivo=catDisponible([mapaIds[Number(m.id)]]);
+        }
+
+        // Para materiales nuevos/extra, solo reclasificar automáticamente si están
+        // en Agua (por el bug anterior), sin categoría, o con una categoría inválida.
+        if(!objetivo && (!actual || (agua&&norm(actual)===norm(agua)))){
+          objetivo=categoriaSeguraPorNombre(m);
+        }
+
+        if(objetivo && norm(objetivo)!==norm(actual)){
+          fijarCategoria(m,objetivo,false);
+          cambios++;
+        }
+      });
+
+      restaurarPallets();
+
+      if(cambios||forzar){
+        suppressRemoteUntil=Date.now()+7000;
+        try{
+          if(typeof persist==='function')await persist();
+        }catch(e){console.warn('Persist clasificación reparada',e);}
+        try{renderActive();}catch(e){}
+        try{renderCatalogo();}catch(e){}
+      }
+      return true;
+    }catch(e){
+      console.warn('CQ reparar categorías Materiales',e);
+      return false;
+    }
+  }
+
+  // El cambio manual del Catálogo queda fijado y se vuelve a guardar después
+  // de cualquier rebuild automático, evitando que Firebase/normalizaciones lo reviertan.
+  var guardarAnterior=window.guardarNombreMat;
+  if(typeof guardarAnterior==='function'){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var id=Number(selectedCargaMat);
+      var sel=document.getElementById('editar-mat-cat');
+      var elegida=sel?String(sel.value||'').trim():'';
+
+      suppressRemoteUntil=Date.now()+7000;
+      var r=guardarAnterior.apply(this,arguments);
+
+      var mat=(ALL_MATS||[]).find(function(m){return Number(m.id)===id;});
+      if(mat&&elegida&&canon(elegida)){
+        fijarCategoria(mat,elegida,true);
+        suppressRemoteUntil=Date.now()+7000;
+        try{await persist();}catch(e){console.warn(e);}
+        try{renderActive();}catch(e){}
+        try{renderCatalogo();}catch(e){}
+      }
+      return r;
+    };
+  }
+
+  // En cada carga real de Firebase reparar sobre el estado compartido.
+  var loadAnterior=window.loadFromFirebase||(
+    typeof loadFromFirebase==='function'?loadFromFirebase:null
+  );
+  if(typeof loadAnterior==='function'){
+    var loadNuevo=async function(){
+      var r=await loadAnterior.apply(this,arguments);
+      await repararClasificacionAgua(false);
+      return r;
+    };
+    window.loadFromFirebase=loadFromFirebase=loadNuevo;
+  }
+
+  document.addEventListener('firebase-ready',function(){
+    setTimeout(function(){repararClasificacionAgua(false);},2200);
+    setTimeout(function(){repararClasificacionAgua(false);},5000);
+  });
+  document.addEventListener('DOMContentLoaded',function(){
+    setTimeout(function(){repararClasificacionAgua(false);},3000);
+  });
+
+  window.cqRepararCategoriasMateriales=repararClasificacionAgua;
+})();
+</script>
 
 </body>
 </html>

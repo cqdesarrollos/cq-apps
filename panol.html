@@ -1928,6 +1928,51 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
 }
 </style>
 
+
+<style id="cq-access-guard-alineado-final">
+#cq-access-guard{
+  position:fixed!important;
+  inset:0!important;
+  width:100vw!important;
+  height:100dvh!important;
+  min-height:100vh!important;
+  padding:
+    calc(18px + env(safe-area-inset-top))
+    calc(18px + env(safe-area-inset-right))
+    calc(18px + env(safe-area-inset-bottom))
+    calc(18px + env(safe-area-inset-left))!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+}
+#cq-access-guard.hidden{display:none!important}
+#cq-access-guard .guard-card{
+  position:relative!important;
+  inset:auto!important;
+  width:min(360px,100%)!important;
+  max-width:360px!important;
+  margin:auto!important;
+  padding:22px 18px!important;
+  transform:none!important;
+  text-align:center!important;
+  box-sizing:border-box!important;
+}
+#cq-access-guard .guard-ico,
+#cq-access-guard .guard-title,
+#cq-access-guard .guard-msg{
+  width:100%!important;
+  text-align:center!important;
+}
+@media(max-width:560px){
+  #cq-access-guard .guard-card{
+    width:min(330px,100%)!important;
+    padding:20px 16px!important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -2045,8 +2090,8 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
     <div class="cq-stock-date-range">
       <label>Fecha de carga</label>
       <div class="cq-stock-date-range-grid">
-        <div><small>Desde</small><input type="date" id="stock-fecha-desde" onchange="window.renderStockList();window.actualizarResumenFiltrosStock()"></div>
-        <div><small>Hasta</small><input type="date" id="stock-fecha-hasta" onchange="window.renderStockList();window.actualizarResumenFiltrosStock()"></div>
+        <div><small>Desde</small><input type="date" id="stock-fecha-desde" onchange="window.cqValidarRangoFechaStockPanol()"></div>
+        <div><small>Hasta</small><input type="date" id="stock-fecha-hasta" onchange="window.cqValidarRangoFechaStockPanol()"></div>
       </div>
     </div>
 
@@ -3169,10 +3214,40 @@ async function persist(opts){
         delete remotoPrev.updatedAt;
       }
 
-      // Las entradas nacidas en Acopio son autoritativas desde Firebase.
-      // Evita que una copia vieja de Pañol las borre al guardar otra cosa.
+      // Las entradas nacidas en Acopio son autoritativas desde Firebase,
+      // SALVO cuando el usuario hizo un borrado explícito.
       if(remotoPrev){
         state=panolAplicarAcopioAutoritativo(state,remotoPrev);
+
+        // Aplicar tombstones de esta operación DESPUÉS de reconciliar Acopio.
+        // Evita que Firebase reponga inmediatamente un producto que se acaba de borrar.
+        var borrarProdIds=Array.isArray(opts.eliminarProductoIds)?opts.eliminarProductoIds.map(String):[];
+        if(borrarProdIds.length){
+          state.productos=(state.productos||[]).filter(function(p){
+            return borrarProdIds.indexOf(String(p&&p.id||''))<0;
+          });
+          state.lotes=(state.lotes||[]).filter(function(l){
+            return borrarProdIds.indexOf(String(l&&l.prodId||''))<0;
+          });
+          state.movimientos=(state.movimientos||[]).filter(function(m){
+            return borrarProdIds.indexOf(String(m&&m.prodId||''))<0;
+          });
+        }
+
+        var borrarMovIds=Array.isArray(opts.eliminarMovimientoIds)?opts.eliminarMovimientoIds.map(String):[];
+        if(borrarMovIds.length){
+          state.movimientos=(state.movimientos||[]).filter(function(m){
+            return borrarMovIds.indexOf(String(m&&m.id||''))<0;
+          });
+        }
+
+        var borrarLoteIds=Array.isArray(opts.eliminarLoteIds)?opts.eliminarLoteIds.map(String):[];
+        if(borrarLoteIds.length){
+          state.lotes=(state.lotes||[]).filter(function(l){
+            return borrarLoteIds.indexOf(String(l&&l.id||''))<0;
+          });
+        }
+
         normalizeState();
       }
 
@@ -3190,7 +3265,8 @@ async function persist(opts){
       if(panolTieneDatos(remotoPrev)
          && panolEstadoParcialSospechoso(state,remotoPrev)
          && !opts.restauracion
-         && !opts.permitirReduccionMasiva){
+         && !opts.permitirReduccionMasiva
+         && !(Array.isArray(opts.eliminarProductoIds)&&opts.eliminarProductoIds.length)){
         console.warn('Escritura parcial bloqueada: el estado local perdió demasiados productos respecto de Firebase.');
         state=panolClonarEstado(remotoPrev);
         normalizeState();
@@ -3245,34 +3321,15 @@ async function loadFromFirebase(){
     }
 
     if(panolTieneDatos(remoto)){
-      var referenciaCarga=await panolMejorReferenciaProteccion();
-
-      if(referenciaCarga
-         && panolEstadoParcialSospechoso(remoto,referenciaCarga.state)){
-        console.warn('Firebase devolvió un Pañol parcial. Se conserva la referencia más completa: '+referenciaCarga.origen);
-        state=panolClonarEstado(referenciaCarga.state);
-        normalizeState();
-        localStorage.setItem(DB_KEY,JSON.stringify(state));
-        panolGuardarBackupLocal(state,'protección contra snapshot parcial');
-
-        suppressRemoteUntil=Date.now()+1500;
-        await window._setDoc(
-          window._doc(window._db,DOC_COL,DOC_ID),
-          JSON.parse(JSON.stringify(Object.assign({},state,{
-            updatedAt:new Date().toISOString(),
-            recoveredFrom:'protección parcial · '+referenciaCarga.origen
-          })))
-        );
-        await panolGuardarBackupFirebase(state,'snapshot parcial recuperado desde '+referenciaCarga.origen);
-        setSyncStatus('Recuperado · estado completo','ok');
-      }else{
-        state=panolClonarEstado(remoto);
-        normalizeState();
-        localStorage.setItem(DB_KEY,JSON.stringify(state));
-        panolGuardarBackupLocal(state,'carga desde Firebase');
-        await panolGuardarBackupFirebase(state,'carga válida desde Firebase');
-        setSyncStatus('Firebase ON','ok');
-      }
+      // CQ multi-dispositivo v2: al abrir, Firebase es autoritativo.
+      // Un backup/local más "grande" puede ser simplemente una versión vieja y
+      // nunca debe republicarse automáticamente sobre cambios de otro dispositivo.
+      state=panolClonarEstado(remoto);
+      normalizeState();
+      localStorage.setItem(DB_KEY,JSON.stringify(state));
+      panolGuardarBackupLocal(state,'carga desde Firebase');
+      await panolGuardarBackupFirebase(state,'carga válida desde Firebase');
+      setSyncStatus('Firebase ON','ok');
     }else{
       var rescate=await panolRescatarMejorEstado(remoto);
       if(rescate&&panolTieneDatos(rescate.state)){
@@ -3321,68 +3378,15 @@ function startFirebase(){
       delete d.updatedAt;
 
       if(!panolTieneDatos(d)){
-        if(panolTieneDatos(state)){
-          console.warn('Snapshot vacío ignorado para proteger Pañol.');
-          setSyncStatus('🟠 Snapshot vacío bloqueado','err');
-          suppressRemoteUntil=Date.now()+1500;
-          await window._setDoc(
-            window._doc(window._db,DOC_COL,DOC_ID),
-            JSON.parse(JSON.stringify(Object.assign({},state,{
-              updatedAt:new Date().toISOString(),
-              recoveredFrom:'estado local protegido'
-            })))
-          );
-          await panolGuardarBackupFirebase(state,'snapshot vacío bloqueado');
-          setSyncStatus('Protegido · restaurado','ok');
-          return;
-        }
-
-        var rescate=await panolRescatarMejorEstado(d);
-        if(rescate&&panolTieneDatos(rescate.state)){
-          state=panolClonarEstado(rescate.state);
-          normalizeState();
-          localStorage.setItem(DB_KEY,JSON.stringify(state));
-          suppressRemoteUntil=Date.now()+1500;
-          await window._setDoc(
-            window._doc(window._db,DOC_COL,DOC_ID),
-            JSON.parse(JSON.stringify(Object.assign({},state,{
-              updatedAt:new Date().toISOString(),
-              recoveredFrom:rescate.origen
-            })))
-          );
-          await panolGuardarBackupFirebase(state,'snapshot vacío recuperado desde '+rescate.origen);
-          renderActive();
-          setSyncStatus('Recuperado · '+rescate.origen,'ok');
-        }
+        // CQ multi-dispositivo v2: un snapshot remoto vacío NO habilita a un
+        // dispositivo a reinyectar automáticamente su copia local.
+        console.warn('Snapshot remoto vacío recibido; no se republica el estado local automáticamente.');
+        setSyncStatus('🟠 Firebase devolvió estado vacío','err');
         return;
       }
 
-      var referenciaSnapshot=await panolMejorReferenciaProteccion();
-      if(referenciaSnapshot
-         && panolEstadoParcialSospechoso(d,referenciaSnapshot.state)){
-        console.warn('Snapshot parcial ignorado para proteger Pañol.');
-        setSyncStatus('🟠 Estado parcial bloqueado','err');
-
-        state=panolClonarEstado(referenciaSnapshot.state);
-        normalizeState();
-        localStorage.setItem(DB_KEY,JSON.stringify(state));
-        panolGuardarBackupLocal(state,'snapshot parcial bloqueado');
-
-        suppressRemoteUntil=Date.now()+1500;
-        await window._setDoc(
-          window._doc(window._db,DOC_COL,DOC_ID),
-          JSON.parse(JSON.stringify(Object.assign({},state,{
-            updatedAt:new Date().toISOString(),
-            recoveredFrom:'snapshot parcial bloqueado · '+referenciaSnapshot.origen
-          })))
-        );
-        await panolGuardarBackupFirebase(state,'snapshot parcial bloqueado');
-        panolLimpiarFiltrosVisualesStock();
-        setSyncStatus('Protegido · estado completo','ok');
-        renderActive();
-        return;
-      }
-
+      // Firebase manda. Los backups quedan para recuperación manual, nunca
+      // para sobrescribir automáticamente cambios de otro dispositivo.
       state=panolClonarEstado(d);
       normalizeState();
       localStorage.setItem(DB_KEY,JSON.stringify(state));
@@ -4080,30 +4084,62 @@ function guardarEdicionProducto(){
   showToast('✓ Producto modificado');
 }
 async function eliminarProducto(prodId){
-  var prod=state.productos.find(function(p){return p.id===prodId;});
-  if(!prod) return;
+  var prod=state.productos.find(function(p){return String(p.id)===String(prodId);});
+  if(!prod)return;
 
-  var stockActual=stockDeProducto(prodId);
-  var salidas=state.movimientos.filter(function(m){return m.prodId===prodId && m.tipo==='salida';});
-  var tieneMovs=state.movimientos.some(function(m){return m.prodId===prodId;});
+  // El stock de Pañol puede tener duplicados históricos del mismo producto.
+  // Si el sistema los considera equivalentes para stock, al borrar hay que
+  // quitar el grupo completo para que no "reaparezca" otro registro idéntico.
+  var ids=(typeof cqProductoEquivalenteIdsPanol==='function')
+    ?cqProductoEquivalenteIdsPanol(prodId).map(String)
+    :[String(prodId)];
+
+  var productosGrupo=state.productos.filter(function(p){
+    return ids.indexOf(String(p.id))>=0;
+  });
+
+  var stockActual=state.lotes.filter(function(l){
+    return ids.indexOf(String(l.prodId))>=0;
+  }).reduce(function(a,l){return a+Number(l.cantidad||0);},0);
+
+  var salidas=state.movimientos.filter(function(m){
+    return ids.indexOf(String(m.prodId))>=0 && m.tipo==='salida';
+  });
+  var tieneMovs=state.movimientos.some(function(m){
+    return ids.indexOf(String(m.prodId))>=0;
+  });
 
   var msg='¿Eliminar el producto "'+prod.nombre+'"'+codigoTag(prod)+'?';
-  if(stockActual>0) msg+='\n\nTiene stock actual de '+fmtN(stockActual)+' unidad(es) que se van a eliminar del pañol.';
-  if(salidas.length) msg+='\n\nTambién se van a quitar de Materiales y Gastos las '+salidas.length+' salida'+(salidas.length===1?'':'s')+' vinculada'+(salidas.length===1?'':'s')+'.';
-  if(tieneMovs) msg+='\n\nTambién se eliminará TODO el historial de este producto en Pañol.';
-  if(!confirm(msg)) return;
+  if(productosGrupo.length>1){
+    msg+='\n\nSe encontraron '+productosGrupo.length+' registros equivalentes del mismo producto. Se van a borrar juntos para evitar duplicados.';
+  }
+  if(stockActual>0){
+    msg+='\n\nTiene stock actual de '+fmtN(stockActual)+' unidad(es) que se van a eliminar del pañol.';
+  }
+  if(salidas.length){
+    msg+='\n\nTambién se van a quitar de Materiales y Gastos las '+salidas.length+' salida'+(salidas.length===1?'':'s')+' vinculada'+(salidas.length===1?'':'s')+'.';
+  }
+  if(tieneMovs){
+    msg+='\n\nTambién se eliminará TODO el historial de este producto en Pañol.';
+  }
+  if(!confirm(msg))return;
 
   var errores=[];
 
-  // Primero quitar los vínculos externos mientras todavía tenemos nombre/código del producto.
+  // Eliminar vínculos externos de todas las salidas equivalentes.
   for(var i=0;i<salidas.length;i++){
     var mov=salidas[i];
+    var prodMov=state.productos.find(function(p){
+      return String(p.id)===String(mov.prodId);
+    }) || prod;
+
     try{
-      await sincronizarConsumoConMateriales(mov,false,prod);
+      await sincronizarConsumoConMateriales(mov,false,prodMov);
     }catch(e){
       console.warn('No se pudo quitar de Materiales',e);
       errores.push('Materiales');
     }
+
     try{
       if(mov.gastosObraId){
         await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),true);
@@ -4112,41 +4148,47 @@ async function eliminarProducto(prodId){
       console.warn('No se pudo quitar de Gastos',e);
       errores.push('Gastos');
     }
-
   }
 
-  // Borrado total del producto dentro de Pañol:
-  // stock, lotes y TODO el historial (entradas + salidas).
-  state.movimientos=state.movimientos.filter(function(m){return String(m&&m.prodId||'')!==String(prodId);});
-  state.lotes=state.lotes.filter(function(l){return String(l&&l.prodId||'')!==String(prodId);});
-  state.productos=state.productos.filter(function(p){return String(p&&p.id||'')!==String(prodId);});
+  state.movimientos=(state.movimientos||[]).filter(function(m){
+    return ids.indexOf(String(m&&m.prodId||''))<0;
+  });
+  state.lotes=(state.lotes||[]).filter(function(l){
+    return ids.indexOf(String(l&&l.prodId||''))<0;
+  });
+  state.productos=(state.productos||[]).filter(function(p){
+    return ids.indexOf(String(p&&p.id||''))<0;
+  });
 
-  // Limpiar también referencias visuales locales para que no reaparezca
-  // en favoritos / últimos usados.
-  try{
-    var favs=JSON.parse(localStorage.getItem('cq_panol_favs')||'[]');
-    if(Array.isArray(favs)){
-      favs=favs.filter(function(id){return String(id)!==String(prodId);});
-      localStorage.setItem('cq_panol_favs',JSON.stringify(favs));
-    }
-  }catch(e){}
-  try{
-    var rec=JSON.parse(localStorage.getItem('cq_panol_recent')||'[]');
-    if(Array.isArray(rec)){
-      rec=rec.filter(function(id){return String(id)!==String(prodId);});
-      localStorage.setItem('cq_panol_recent',JSON.stringify(rec));
-    }
-  }catch(e){}
+  // Limpiar referencias locales de todos los IDs equivalentes.
+  ['cq_panol_favs','cq_panol_recent'].forEach(function(key){
+    try{
+      var arr=JSON.parse(localStorage.getItem(key)||'[]');
+      if(Array.isArray(arr)){
+        arr=arr.filter(function(id){return ids.indexOf(String(id))<0;});
+        localStorage.setItem(key,JSON.stringify(arr));
+      }
+    }catch(e){}
+  });
 
-  await persist();
+  var ok=await persist({
+    eliminarProductoIds:ids,
+    permitirReduccionMasiva:true
+  });
+
+  if(ok===false){
+    showToast('⚠️ No se pudo confirmar el borrado en Firebase. Verificar conexión.','err');
+    return;
+  }
+
   renderStock();
   if(curTab==='obras')renderObrasTab();
   if(curTab==='reportes')renderReportes();
 
   if(errores.length){
-    showToast('⚠️ Producto eliminado, pero alguna sincronización falló. Verificar.','err');
+    showToast('⚠️ Producto borrado de Pañol, pero alguna sincronización externa falló.','err');
   }else{
-    showToast('✓ Producto, stock e historial eliminados de Pañol · vínculos externos actualizados');
+    showToast('✓ Producto eliminado definitivamente');
   }
 }
 
@@ -4238,6 +4280,87 @@ function limpiarStockFechaFiltro(){
 }
 window.limpiarStockFechaFiltro=limpiarStockFechaFiltro;
 
+
+function cqFechaKeyDesdeValorPanol(v){
+  if(v==null || v==='')return '';
+
+  if(typeof v==='object'){
+    try{
+      if(typeof v.toDate==='function'){
+        var td=v.toDate();
+        if(td && !isNaN(td.getTime()))return fechaLocalKeyPanol(td.getTime());
+      }
+    }catch(e){}
+    if(typeof v.toMillis==='function'){
+      try{return fechaLocalKeyPanol(v.toMillis());}catch(e){}
+    }
+    if(typeof v.seconds==='number'){
+      return fechaLocalKeyPanol(Number(v.seconds)*1000);
+    }
+  }
+
+  // Si ya viene YYYY-MM-DD, conservar la fecha literal.
+  var s=String(v).trim();
+  var iso=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(iso)return iso[1]+'-'+iso[2]+'-'+iso[3];
+
+  var n=Number(v);
+  if(isFinite(n) && n>0)return fechaLocalKeyPanol(n);
+
+  var d=new Date(s);
+  if(isNaN(d.getTime()))return '';
+  return fechaLocalKeyPanol(d.getTime());
+}
+
+function cqFechaCargaObjetoPanol(obj){
+  if(!obj)return '';
+  // Prioridad explícita para el origen real de la carga.
+  var candidatos=[
+    obj.fechaTs,
+    obj.ts,
+    obj.fecha,
+    obj.fechaCarga,
+    obj.createdAt,
+    obj.created_at,
+    obj.updatedAt
+  ];
+  for(var i=0;i<candidatos.length;i++){
+    var k=cqFechaKeyDesdeValorPanol(candidatos[i]);
+    if(k)return k;
+  }
+  return '';
+}
+
+function cqFechaDentroRangoPanol(key,desde,hasta){
+  if(!key)return false;
+  if(desde && key<desde)return false;
+  if(hasta && key>hasta)return false;
+  return true;
+}
+
+function cqProductoTieneCargaEnRangoPanol(prodId,desde,hasta){
+  if(!desde && !hasta)return true;
+
+  var ids=(typeof cqProductoEquivalenteIdsPanol==='function')
+    ?cqProductoEquivalenteIdsPanol(prodId).map(String)
+    :[String(prodId)];
+
+  // 1) Lotes: son la fuente más directa de "fecha de carga".
+  var porLote=(state.lotes||[]).some(function(l){
+    if(!l || ids.indexOf(String(l.prodId))<0)return false;
+    var f=cqFechaCargaObjetoPanol(l);
+    return cqFechaDentroRangoPanol(f,desde,hasta);
+  });
+  if(porLote)return true;
+
+  // 2) Respaldo: movimientos de entrada, para datos históricos.
+  return (state.movimientos||[]).some(function(m){
+    if(!m || m.tipo!=='entrada' || ids.indexOf(String(m.prodId))<0)return false;
+    var f=cqFechaCargaObjetoPanol(m);
+    return cqFechaDentroRangoPanol(f,desde,hasta);
+  });
+}
+
 function renderStockList(){
   var q=(document.getElementById('stock-search').value||'').trim().toLowerCase();
   var rubroEl=document.getElementById('stock-rubro-filter');
@@ -4253,14 +4376,7 @@ function renderStockList(){
     if(rubroFs.length && rubroFs.indexOf(String(p.rubro))<0) return false;
     if(q && (p.codigo||'').toLowerCase().indexOf(q)<0 && p.nombre.toLowerCase().indexOf(q)<0) return false;
     if(fechaDesde || fechaHasta){
-      var tieneCargaFecha=state.lotes.some(function(l){
-        if(l.prodId!==p.id || Number(l.cantidad)<=0)return false;
-        var f=fechaLocalKeyPanol(l.fechaTs);
-        if(fechaDesde && f<fechaDesde)return false;
-        if(fechaHasta && f>fechaHasta)return false;
-        return true;
-      });
-      if(!tieneCargaFecha)return false;
+      if(!cqProductoTieneCargaEnRangoPanol(p.id,fechaDesde,fechaHasta))return false;
     }
     if(dispF!=='all'){
       var stockActual=lotesDeProducto(p.id).reduce(function(s,l){return s+(Number(l.cantidad)||0);},0);
@@ -4273,7 +4389,7 @@ function renderStockList(){
   });
 
   if(!productos.length){
-    lista.innerHTML='<div class="empty-state"><div class="ic">📭</div>Todavía no hay productos cargados en el pañol.</div>';
+    lista.innerHTML='<div class="empty-state"><div class="ic">📭</div>No hay productos que coincidan con los filtros actuales.</div>';
     return;
   }
 
@@ -4476,10 +4592,12 @@ function procesarCargaMasiva(){
 }
 
 function abrirHistorialProducto(prodId){
-  var prod=state.productos.find(function(p){return p.id===prodId;});
+  var prod=state.productos.find(function(p){return String(p.id)===String(prodId);});
   if(!prod) return;
   document.getElementById('hist-prod-titulo').textContent=prod.nombre+codigoTag(prod);
-  var movs=state.movimientos.filter(function(m){return m.prodId===prodId;}).sort(function(a,b){return b.ts-a.ts;});
+  var movs=state.movimientos.filter(function(m){
+    return String(m.prodId)===String(prodId);
+  }).sort(function(a,b){return Number(b.ts||0)-Number(a.ts||0);});
   var body=document.getElementById('hist-prod-body');
   if(!movs.length){ body.innerHTML='<div class="empty-hist">Sin movimientos todavía.</div>'; abrirModal('modal-hist-prod'); return; }
   body.innerHTML=movs.map(function(m){
@@ -5736,7 +5854,8 @@ function descontarStockDesdeDetalle(detalle){
 }
 
 function refrescarVistaActual(prodId){
-  if(document.getElementById('modal-hist-prod').classList.contains('open')) abrirHistorialProducto(prodId);
+  var mh=document.getElementById('modal-hist-prod');
+  if(mh&&mh.classList.contains('open')) abrirHistorialProducto(prodId);
   if(curTab==='obras') renderObrasTab();
   if(curTab==='stock') renderStock();
   if(curTab==='reportes') renderReportes();
@@ -5744,9 +5863,9 @@ function refrescarVistaActual(prodId){
 
 // ---------- EDITAR / BORRAR CARGAS (ENTRADA) ----------
 function editarCarga(movId){
-  var mov=state.movimientos.find(function(m){return m.id===movId && m.tipo==='entrada';});
+  var mov=state.movimientos.find(function(m){return String(m.id)===String(movId) && m.tipo==='entrada';});
   if(!mov) return;
-  var lote=state.lotes.find(function(l){return l.id===mov.detalle[0].loteId;});
+  var lote=state.lotes.find(function(l){return String(l.id)===String(mov.detalle[0].loteId);});
   if(!lote){ alert('No se encontró el lote asociado a esta carga.'); return; }
 
   var nuevaCantidadStr=prompt('Nueva cantidad cargada:', mov.cantidad);
@@ -5790,19 +5909,56 @@ function editarCarga(movId){
   showToast('✓ Carga modificada');
 }
 
-function eliminarCarga(movId){
-  var mov=state.movimientos.find(function(m){return m.id===movId && m.tipo==='entrada';});
-  if(!mov) return;
-  var lote=state.lotes.find(function(l){return l.id===mov.detalle[0].loteId;});
-  var consumido=lote?parseFloat((lote.cantidadOriginal-lote.cantidad).toFixed(6)):0;
+async function eliminarCarga(movId){
+  var mov=state.movimientos.find(function(m){
+    return String(m.id)===String(movId) && m.tipo==='entrada';
+  });
+  if(!mov)return;
+
+  var detalle=Array.isArray(mov.detalle)?mov.detalle:[];
+  var loteId=detalle.length?String(detalle[0].loteId||''):'';
+  var lote=state.lotes.find(function(l){
+    return String(l.id)===loteId;
+  })||null;
+
+  var consumido=lote
+    ?parseFloat((Number(lote.cantidadOriginal||0)-Number(lote.cantidad||0)).toFixed(6))
+    :0;
+
   var msg='¿Eliminar esta carga?';
-  if(consumido>0) msg+='\n\nOjo: ya se consumieron '+fmtN(consumido)+' unidad(es) de este lote. Los consumos ya registrados no se van a modificar, pero este lote va a dejar de existir en el stock.';
-  if(!confirm(msg)) return;
-  if(lote) state.lotes=state.lotes.filter(function(l){return l.id!==lote.id;});
-  state.movimientos=state.movimientos.filter(function(m){return m.id!==movId;});
-  persist();
-  refrescarVistaActual(mov.prodId);
-  showToast('✓ Carga eliminada');
+  if(consumido>0){
+    msg+='\n\nOjo: ya se consumieron '+fmtN(consumido)+' unidad(es) de este lote. Los consumos ya registrados no se van a modificar, pero esta entrada y su lote van a desaparecer del historial y del stock.';
+  }
+  if(!confirm(msg))return;
+
+  var prodId=mov.prodId;
+
+  if(loteId){
+    state.lotes=(state.lotes||[]).filter(function(l){
+      return String(l.id)!==loteId;
+    });
+  }
+
+  state.movimientos=(state.movimientos||[]).filter(function(m){
+    return String(m.id)!==String(movId);
+  });
+
+  // IMPORTANTÍSIMO: esperar el guardado. persist() reconcilia entradas de Acopio
+  // contra Firebase; estos tombstones se aplican DESPUÉS de esa reconciliación
+  // para que la entrada eliminada no reaparezca en el historial.
+  var ok=await persist({
+    eliminarMovimientoIds:[String(movId)],
+    eliminarLoteIds:loteId?[loteId]:[],
+    permitirReduccionMasiva:true
+  });
+
+  if(ok===false){
+    showToast('⚠️ No se pudo confirmar el borrado en Firebase. Verificar conexión.','err');
+    return;
+  }
+
+  refrescarVistaActual(prodId);
+  showToast('✓ Carga eliminada del stock y del historial');
 }
 
 // ---------- EDITAR / BORRAR CONSUMOS (SALIDA) ----------
@@ -5889,13 +6045,13 @@ async function editarConsumo(movId){
 }
 
 async function eliminarConsumo(movId){
-  var mov=state.movimientos.find(function(m){return m.id===movId&&m.tipo==='salida';});
+  var mov=state.movimientos.find(function(m){return String(m.id)===String(movId)&&m.tipo==='salida';});
   if(!mov)return;
   if(!confirm('¿Eliminar este consumo? El stock se repone.'))return;
 
   restaurarStockDesdeDetalle(mov.detalle);
-  state.movimientos=state.movimientos.filter(function(m){return m.id!==movId;});
-  await persist();
+  state.movimientos=state.movimientos.filter(function(m){return String(m.id)!==String(movId);});
+  await persist({eliminarMovimientoIds:[String(movId)]});
   refrescarVistaActual(mov.prodId);
 
   var okMat=mov.materialesAgregar===false,okGas=true;
@@ -8681,6 +8837,21 @@ window.cqRecargarTCPanolDesdeCajaGerencia=cargarTCGerencia;
     limpiarGrupo(tipo==='obras'?grupos[1]:grupos[0]);
   };
 })();
+</script>
+
+
+<script id="cq-stock-fecha-handler-final">
+function cqValidarRangoFechaStockPanol(){
+  var d=document.getElementById('stock-fecha-desde');
+  var h=document.getElementById('stock-fecha-hasta');
+  if(d&&h&&d.value&&h.value&&d.value>h.value){
+    showToast('⚠️ La fecha Desde no puede ser posterior a Hasta','err');
+    h.value='';
+  }
+  renderStockList();
+  actualizarResumenFiltrosStock();
+}
+window.cqValidarRangoFechaStockPanol=cqValidarRangoFechaStockPanol;
 </script>
 
 </body>

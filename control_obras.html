@@ -3879,6 +3879,8 @@ const CONTROL_DOC_ID="main";
 const CONTROL_COLLECTION="control_obras_app";
 const LOCAL_DIRTY_KEY="cq_control_obras_dirty_v1";
 const LOCAL_REV_KEY="cq_control_obras_rev_v1";
+const LOCAL_BASE_TOKEN_KEY="cq_control_obras_base_token_v2";
+const LOCAL_DIRTY_BASE_KEY="cq_control_obras_dirty_base_v2";
 
 let unsubControl=null;
 let saveTimerControl=null;
@@ -3887,6 +3889,8 @@ let loadingControl=false;
 let lastRemoteToken="";
 let localDirtyControl=localStorage.getItem(LOCAL_DIRTY_KEY)==="1";
 let localRevisionControl=Number(localStorage.getItem(LOCAL_REV_KEY)||0)||0;
+let localBaseTokenControl=localStorage.getItem(LOCAL_BASE_TOKEN_KEY)||"";
+let localDirtyBaseControl=localStorage.getItem(LOCAL_DIRTY_BASE_KEY)||"";
 let initializedControl=false;
 let suppressRemoteControlUntil=0;
 
@@ -3903,6 +3907,10 @@ async function waitFirebase(){
 }
 
 function markDirty(){
+  if(!localDirtyControl){
+    localDirtyBaseControl=localBaseTokenControl||"";
+    try{localStorage.setItem(LOCAL_DIRTY_BASE_KEY,localDirtyBaseControl);}catch(e){}
+  }
   localDirtyControl=true;
   localRevisionControl++;
   try{
@@ -3913,7 +3921,18 @@ function markDirty(){
 
 function clearDirty(){
   localDirtyControl=false;
-  try{localStorage.removeItem(LOCAL_DIRTY_KEY);}catch(e){}
+  localDirtyBaseControl="";
+  try{
+    localStorage.removeItem(LOCAL_DIRTY_KEY);
+    localStorage.removeItem(LOCAL_DIRTY_BASE_KEY);
+  }catch(e){}
+}
+function setBaseTokenControl(token){
+  localBaseTokenControl=String(token||"");
+  try{
+    if(localBaseTokenControl)localStorage.setItem(LOCAL_BASE_TOKEN_KEY,localBaseTokenControl);
+    else localStorage.removeItem(LOCAL_BASE_TOKEN_KEY);
+  }catch(e){}
 }
 
 function cloneSafe(v){
@@ -4004,6 +4023,24 @@ async function saveSharedControl(){
   try{
     const fdb=await waitFirebase();
     const ref=doc(fdb,CONTROL_COLLECTION,CONTROL_DOC_ID);
+
+    // CQ multi-dispositivo v2: antes de publicar un documento completo,
+    // confirmar que Firebase sigue en la versión sobre la que nació el cambio.
+    const latestBeforeSave=await getDoc(ref);
+    if(latestBeforeSave.exists() && latestBeforeSave.data() && latestBeforeSave.data().db){
+      const latestToken=String(latestBeforeSave.data().updatedAt||"");
+      if(localDirtyBaseControl && latestToken && latestToken!==localDirtyBaseControl){
+        db=mergeRemoteKeepingPhotos(latestBeforeSave.data().db);
+        window.db=db;
+        lastRemoteToken=latestToken;
+        setBaseTokenControl(latestToken);
+        clearDirty();
+        refreshAfterRemote();
+        setControlStatus("ok","Actualizado desde otro dispositivo");
+        return;
+      }
+    }
+
     const payload={
       db:sharedDbFromLocal(),
       updatedAt:new Date().toISOString(),
@@ -4014,6 +4051,7 @@ async function saveSharedControl(){
     suppressRemoteControlUntil=Date.now()+1800;
     await setDoc(ref,payload,{merge:false});
     lastRemoteToken=payload.updatedAt;
+    setBaseTokenControl(payload.updatedAt);
 
     if(localRevisionControl===revAtStart){
       clearDirty();
@@ -4059,15 +4097,30 @@ async function initialLoad(){
     const snap=await getDoc(ref);
 
     if(localDirtyControl){
-      // Hay cambios locales sin confirmar: nunca pisarlos al iniciar.
+      // CQ multi-dispositivo v2: sólo reanudar el dirty si Firebase sigue
+      // exactamente en la versión base. Marcas legacy o remotas más nuevas se descartan.
       if(snap.exists()){
         lastRemoteToken=String((snap.data()||{}).updatedAt||"");
       }
-      await saveSharedControl();
+      const puedeReanudar=!!(localDirtyBaseControl && lastRemoteToken && localDirtyBaseControl===lastRemoteToken);
+      if(puedeReanudar){
+        await saveSharedControl();
+      }else if(snap.exists() && snap.data() && snap.data().db){
+        console.warn("Control de Obras: se descartó una marca local pendiente antigua para no sobrescribir Firebase.");
+        clearDirty();
+        db=mergeRemoteKeepingPhotos(snap.data().db);
+        window.db=db;
+        setBaseTokenControl(lastRemoteToken);
+        refreshAfterRemote();
+        setControlStatus("ok","Firebase sincronizado");
+      }else{
+        clearDirty();
+      }
     }else if(snap.exists() && snap.data() && snap.data().db){
       db=mergeRemoteKeepingPhotos(snap.data().db);
       window.db=db;
       lastRemoteToken=String(snap.data().updatedAt||"");
+      setBaseTokenControl(lastRemoteToken);
       refreshAfterRemote();
       setControlStatus("ok","Firebase sincronizado");
     }else{
@@ -4088,6 +4141,7 @@ async function initialLoad(){
         db=mergeRemoteKeepingPhotos(snap2.data().db);
         window.db=db;
         lastRemoteToken=remoteToken;
+        setBaseTokenControl(remoteToken);
         refreshAfterRemote();
         setControlStatus("ok","Firebase sincronizado");
       },e=>{

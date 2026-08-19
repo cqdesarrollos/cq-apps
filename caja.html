@@ -1863,6 +1863,8 @@ const CC_COL="caja_chica_app";
 const CC_DOC="main";
 const DIRTY_KEY="cq_caja_chica_dirty_v1";
 const MIGRATION_KEY="cq_caja_chica_firebase_migrated_v1";
+const BASE_TOKEN_KEY="cq_caja_chica_base_token_v2";
+const DIRTY_BASE_KEY="cq_caja_chica_dirty_base_v2";
 
 let unsubCC=null;
 let timerCC=null;
@@ -1870,6 +1872,8 @@ let savingCC=false;
 let initializedCC=false;
 let applyingRemoteCC=false;
 let dirtyCC=localStorage.getItem(DIRTY_KEY)==="1";
+let baseTokenCC=localStorage.getItem(BASE_TOKEN_KEY)||"";
+let dirtyBaseCC=localStorage.getItem(DIRTY_BASE_KEY)||"";
 let suppressCCUntil=0;
 let lastTokenCC="";
 
@@ -1946,12 +1950,27 @@ function setStatusCC(state,text){
 }
 function markDirtyCC(){
   if(applyingRemoteCC)return;
+  if(!dirtyCC){
+    dirtyBaseCC=baseTokenCC||"";
+    try{localStorage.setItem(DIRTY_BASE_KEY,dirtyBaseCC);}catch(e){}
+  }
   dirtyCC=true;
   try{localStorage.setItem(DIRTY_KEY,"1");}catch(e){}
 }
 function clearDirtyCC(){
   dirtyCC=false;
-  try{localStorage.removeItem(DIRTY_KEY);}catch(e){}
+  dirtyBaseCC="";
+  try{
+    localStorage.removeItem(DIRTY_KEY);
+    localStorage.removeItem(DIRTY_BASE_KEY);
+  }catch(e){}
+}
+function setBaseTokenCC(token){
+  baseTokenCC=String(token||"");
+  try{
+    if(baseTokenCC)localStorage.setItem(BASE_TOKEN_KEY,baseTokenCC);
+    else localStorage.removeItem(BASE_TOKEN_KEY);
+  }catch(e){}
 }
 async function firebaseCC(){
   let tries=0;
@@ -1995,6 +2014,7 @@ async function saveRemoteCC(){
       updatedBy:String(window._cqUsuarioActual||"")
     },{merge:false});
     lastTokenCC=token;
+    setBaseTokenCC(token);
     clearDirtyCC();
     try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
     setStatusCC("ok","Firebase sincronizado");
@@ -2027,19 +2047,26 @@ async function startCC(){
       const remote=normalizeCC(snap.data().state);
       lastTokenCC=String(snap.data().updatedAt||"");
 
-      // Una sola vez por dispositivo, unir la historia local previa con Firebase
-      // para no perder movimientos existentes del empleado al migrar.
-      const next=migrated?remote:mergeMigrationCC(remote,local);
+      // CQ multi-dispositivo v2: una marca dirty sólo se reanuda si nació
+      // exactamente sobre la misma versión remota. Si es legacy o Firebase
+      // cambió desde otro equipo, remoto gana y se evita el rollback.
+      if(dirtyCC && (!dirtyBaseCC || !lastTokenCC || dirtyBaseCC!==lastTokenCC)){
+        console.warn("Caja Chica: se descartó una marca local pendiente antigua para no sobrescribir Firebase.");
+        clearDirtyCC();
+      }
+
+      const next=dirtyCC ? mergeMigrationCC(remote,local) : (migrated?remote:mergeMigrationCC(remote,local));
       applyingRemoteCC=true;
       window.__cqCajaChicaSetState(next);
       refreshCC();
       applyingRemoteCC=false;
 
-      if(!migrated && JSON.stringify(next)!==JSON.stringify(remote)){
-        markDirtyCC();
+      if(dirtyCC || (!migrated && JSON.stringify(next)!==JSON.stringify(remote))){
+        if(!dirtyCC)markDirtyCC();
         await saveRemoteCC();
       }else{
         try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
+        setBaseTokenCC(lastTokenCC);
         clearDirtyCC();
       }
     }else{
@@ -2057,6 +2084,7 @@ async function startCC(){
       applyingRemoteCC=true;
       window.__cqCajaChicaSetState(normalizeCC(cloneCC(s.data().state)));
       lastTokenCC=token;
+      setBaseTokenCC(token);
       refreshCC();
       applyingRemoteCC=false;
       setStatusCC("ok","Firebase sincronizado");

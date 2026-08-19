@@ -2541,6 +2541,32 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
 }
 </style>
 
+
+<style id="cq-precios-historial-fix-20260819">
+/* 19/08/2026 — importes del historial: evitar pesos/dólares amontonados. */
+#retirar-historial td.cq-precio-mobile,
+#retirar-historial td.cq-precio-usd-desktop{
+  min-width:92px!important;
+  padding-left:7px!important;
+  padding-right:7px!important;
+  vertical-align:middle!important;
+}
+#retirar-historial .cq-precio-pesos,
+#retirar-historial .cq-precio-usd{
+  line-height:1.25!important;
+  letter-spacing:-.02em!important;
+}
+@media(min-width:621px){
+  #retirar-historial .cq-precio-mobile .cq-precio-pesos{display:block!important;white-space:nowrap!important;font-size:10px!important}
+  #retirar-historial .cq-precio-mobile .cq-precio-usd{display:none!important}
+  #retirar-historial td.cq-precio-usd-desktop{display:table-cell!important;white-space:nowrap!important;font-size:10px!important}
+}
+@media(max-width:620px){
+  #retirar-historial td.cq-precio-mobile{min-width:0!important;padding-left:3px!important;padding-right:3px!important}
+  #retirar-historial .cq-precio-mobile .cq-precio-pesos{display:block!important;white-space:nowrap!important;font-size:8.8px!important;line-height:1.15!important}
+  #retirar-historial .cq-precio-mobile .cq-precio-usd{display:block!important;white-space:nowrap!important;font-size:7.2px!important;line-height:1.15!important;margin-top:3px!important}
+}
+</style>
 </head>
 <body>
 
@@ -3152,12 +3178,21 @@ var suppressRemoteUntil=0;
 
 // Protección fuerte contra pérdidas de retiros.
 var LOCAL_DIRTY_KEY='cq_acopio_local_dirty_v1';
+var LOCAL_BASE_TOKEN_KEY='cq_acopio_base_token_v2';
+var LOCAL_DIRTY_BASE_KEY='cq_acopio_dirty_base_v2';
 var localDirty=(localStorage.getItem(LOCAL_DIRTY_KEY)==='1');
-var localDirtySince=localDirty?Date.now():0;
+var localBaseToken=localStorage.getItem(LOCAL_BASE_TOKEN_KEY)||'';
+var localDirtyBase=localStorage.getItem(LOCAL_DIRTY_BASE_KEY)||'';
+var localDirtySince=0;
 var localRevision=0;
 var saveRequested=false;
 
 function marcarAcopioDirty(){
+  // CQ multi-dispositivo v2: recordar sobre qué versión remota nació el cambio.
+  if(!localDirty){
+    localDirtyBase=localBaseToken||'';
+    try{localStorage.setItem(LOCAL_DIRTY_BASE_KEY,localDirtyBase);}catch(e){}
+  }
   localDirty=true;
   localDirtySince=Date.now();
   localRevision++;
@@ -3166,7 +3201,18 @@ function marcarAcopioDirty(){
 function limpiarAcopioDirty(){
   localDirty=false;
   localDirtySince=0;
-  try{localStorage.removeItem(LOCAL_DIRTY_KEY);}catch(e){}
+  localDirtyBase='';
+  try{
+    localStorage.removeItem(LOCAL_DIRTY_KEY);
+    localStorage.removeItem(LOCAL_DIRTY_BASE_KEY);
+  }catch(e){}
+}
+function guardarBaseAcopio(token){
+  localBaseToken=String(token||'');
+  try{
+    if(localBaseToken)localStorage.setItem(LOCAL_BASE_TOKEN_KEY,localBaseToken);
+    else localStorage.removeItem(LOCAL_BASE_TOKEN_KEY);
+  }catch(e){}
 }
 var firebaseUnsub=null;
 var lastAutoBackupAt=0;
@@ -3397,12 +3443,54 @@ async function saveToFirebase(){
     var payload=buildFirebasePayload();
 
     suppressRemoteUntil=Date.now()+1800;
-    await f.setDoc(ref,payload);
+
+    // CQ 19/08/2026 — escritura segura multiusuario.
+    // Antes cada teléfono publicaba el documento COMPLETO y el último en guardar
+    // podía borrar retiros creados segundos antes desde otro equipo.
+    // La transacción conserva los retiros remotos que este dispositivo todavía
+    // no conocía, sin revivir retiros eliminados localmente (tombstones).
+    await f.runTransaction(f.db,async function(tx){
+      var snapActual=await tx.get(ref);
+      if(snapActual.exists() && snapActual.data() && snapActual.data().db){
+        var remoto=sanitizeDB(JSON.parse(JSON.stringify(snapActual.data().db)));
+        var local=sanitizeDB(JSON.parse(JSON.stringify(payload.db)));
+
+        (local.acopios||[]).forEach(function(acLocal){
+          var acRemoto=(remoto.acopios||[]).find(function(x){return String(x&&x.id)===String(acLocal&&acLocal.id);});
+          if(!acRemoto)return;
+          var locales=Array.isArray(acLocal.retiros)?acLocal.retiros:[];
+          var idsLocales=new Set(locales.map(function(r){return String(r&&r.id);}));
+          (Array.isArray(acRemoto.retiros)?acRemoto.retiros:[]).forEach(function(r){
+            var rid=String(r&&r.id);
+            var tomb=(typeof cqTombstoneKey==='function')?cqTombstoneKey(acLocal.id,rid):'';
+            if(!idsLocales.has(rid) && !(tomb && cqRetirosBorradosPendientes && cqRetirosBorradosPendientes.has(tomb))){
+              locales.push(r);
+              idsLocales.add(rid);
+            }
+          });
+          acLocal.retiros=locales;
+        });
+
+        payload.db=local;
+      }
+      payload.updatedAt=new Date().toISOString();
+      tx.set(ref,payload);
+    });
+
+    // Adoptar también en memoria cualquier retiro concurrente que la transacción
+    // haya conservado, para que la pantalla local no vuelva a publicarlo incompleto.
+    try{
+      var backupsLocales=(DB&&DB.backups)||[];
+      DB=sanitizeDB(JSON.parse(JSON.stringify(payload.db)));
+      DB.backups=backupsLocales;
+      localStorage.setItem(DB_KEY,JSON.stringify(DB));
+    }catch(_mergeErr){}
 
     // La escritura fue confirmada por Firebase. Los tombstones que ya no están
     // presentes en este payload pueden darse por consolidados.
     if(typeof cqConfirmarTombstonesConPayload==='function')cqConfirmarTombstonesConPayload(payload);
     lastSyncedAt=payload.updatedAt;
+    guardarBaseAcopio(payload.updatedAt);
 
     // Sólo declarar limpio si no hubo NINGÚN persist nuevo mientras se esperaba Firebase.
     if(localRevision===revisionQueGuardo){
@@ -3440,15 +3528,23 @@ async function loadFromFirebase(){
     var ref=f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID);
     var snap=await f.getDoc(ref);
 
-    // Si existe una modificación local pendiente (por ejemplo un retiro creado
-    // antes de que terminara de iniciar Firebase), JAMÁS reemplazarla por remoto.
+    // CQ multi-dispositivo v2: un dirty sólo puede publicarse al reabrir si
+    // nació exactamente sobre la misma versión remota. Marcas legacy o basadas
+    // en otra versión se descartan y Firebase pasa a ser autoritativo.
     if(localDirty){
-      if(snap.exists()) lastSyncedAt=snap.data().updatedAt||null;
-      listenFirebase();
-      await saveToFirebase();
-      if(curAcopioId && !getAcopio())curAcopioId=null;
-      if(curAcopioId)abrirAcopio(curAcopioId);else goHome();
-      return;
+      var remoteTokenInicio=(snap.exists()&&snap.data())?String(snap.data().updatedAt||''):'';
+      var puedeReanudarDirty=!!(localDirtyBase && remoteTokenInicio && localDirtyBase===remoteTokenInicio);
+      if(puedeReanudarDirty){
+        lastSyncedAt=remoteTokenInicio||null;
+        listenFirebase();
+        await saveToFirebase();
+        if(curAcopioId && !getAcopio())curAcopioId=null;
+        if(curAcopioId)abrirAcopio(curAcopioId);else goHome();
+        return;
+      }
+      console.warn('Acopio: se descartó una marca local pendiente antigua para no sobrescribir Firebase.');
+      limpiarAcopioDirty();
+      saveRequested=false;
     }
 
     if(snap.exists()&&snap.data().db){
@@ -3457,6 +3553,7 @@ async function loadFromFirebase(){
       if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
       localStorage.setItem(DB_KEY,JSON.stringify(DB));
       lastSyncedAt=snap.data().updatedAt||null;
+      guardarBaseAcopio(lastSyncedAt);
     }else{
       marcarAcopioDirty();
       await saveToFirebase();
@@ -3505,6 +3602,7 @@ function listenFirebase(){
       if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
       localStorage.setItem(DB_KEY,JSON.stringify(DB));
       lastSyncedAt=remoteUpdatedAt;
+      guardarBaseAcopio(remoteUpdatedAt);
       setSyncStatus('Sync: actualizado',false,remoteUpdatedAt||new Date().toISOString());
 
       // Si el snapshot venía atrasado y todavía contenía un retiro borrado,
@@ -4906,23 +5004,34 @@ function autocompletarSubrubroRetiroPorMaterial(matId){
   var input=document.getElementById('retirar-subrubro');
   if(!input)return;
 
-  // 1) Gastos define qué subrubros existen actualmente.
-  // 2) Acopio recuerda la asociación habitual Material → Subrubro.
-  // 3) Para materiales sin preferencia todavía, el historial sirve solo
-  //    para inicializarla una vez, siempre validando contra Gastos.
-  var sub=subrubroPreferidoMaterialAcopio(matId);
+  // Al cambiar de material, nunca conservar el subrubro del material anterior.
+  input.value='';
+
+  // La clasificación actual del propio material (m.cat) es la fuente principal.
+  // Desde la unificación 2026-08-18, m.cat contiene el Subrubro de Materiales de Gastos.
+  var mat=getMat(parseInt(matId));
+  var validos=subrubrosMaterialesAcopio();
+  var catActual=String(mat&&mat.cat||'').trim();
+  var sub=validos.find(function(x){
+    return String(x).trim().toLowerCase()===catActual.toLowerCase();
+  })||'';
+
+  // Compatibilidad con materiales viejos: si todavía no tienen una clasificación
+  // válida, usar la preferencia guardada o el historial del mismo producto.
+  if(!sub)sub=subrubroPreferidoMaterialAcopio(matId);
   if(!sub){
     sub=buscarSubrubroHistoricoMaterialAcopio(matId);
-    if(sub){
-      if(guardarPreferenciaSubrubroMaterialAcopio(matId,sub)){
-        try{persist();}catch(_e){}
-      }
-    }
   }
 
   if(sub){
-    input.value=sub;
-    try{llenarSubrubrosAcopio('retirar-subrubro',sub);}catch(_e){}
+    // Mantener sincronizada la preferencia con la clasificación vigente del material.
+    if(guardarPreferenciaSubrubroMaterialAcopio(matId,sub)){
+      try{persist();}catch(_e){}
+    }
+    try{llenarSubrubrosAcopio('retirar-subrubro',sub);}catch(_e){ input.value=sub; }
+  }else{
+    // Si no existe una asociación válida, dejarlo vacío para no arrastrar un valor incorrecto.
+    try{llenarSubrubrosAcopio('retirar-subrubro','');}catch(_e){ input.value=''; }
   }
 }
 
@@ -5085,8 +5194,60 @@ function cqAplicarBloqueosPorPanol(prefix){
     }
   }
 }
-function onRetirarPanolToggle(){cqAplicarBloqueosPorPanol('retirar');}
-function onRetiroPanolToggle(){cqAplicarBloqueosPorPanol('retiro');}
+function cqSeleccionarObraAcopioParaPanol(prefix){
+  var panol=document.getElementById(prefix+'-cargar-panol');
+  if(!panol||!panol.checked)return;
+
+  var obras=getObrasGastosObjects();
+  var idx=obras.findIndex(function(o){
+    var vals=[o&&o.id,o&&o.label,o&&o.short];
+    return vals.some(function(v){return normObraAcopio(v)==='acopio';});
+  });
+  if(idx<0)return;
+
+  if(prefix==='retirar'){
+    // En una carga nueva, mover automáticamente la obra activa a "Acopio"
+    // SIN cambiar el material que el usuario ya había seleccionado.
+    var selAntes=document.getElementById('retirar-mat-sel');
+    var matIdAntes=selAntes?String(selAntes.value||''):'';
+
+    curRetirarObra=idx;
+    try{renderRetirar();}catch(_e){}
+
+    if(matIdAntes){
+      var selDespues=document.getElementById('retirar-mat-sel');
+      if(selDespues){
+        var existe=Array.from(selDespues.options||[]).some(function(op){
+          return String(op.value)===matIdAntes;
+        });
+        if(existe){
+          selDespues.value=matIdAntes;
+          var opt=selDespues.options[selDespues.selectedIndex];
+          var buscador=document.getElementById('retirar-mat-search');
+          if(buscador)buscador.value=opt?opt.textContent:'';
+          // Reaplicar el subrubro del mismo material seleccionado.
+          try{autocompletarSubrubroRetiroPorMaterial(matIdAntes);}catch(_e){}
+        }
+      }
+    }
+  }else{
+    // En edición, seleccionar "Acopio" en el desplegable de obra.
+    var sel=document.getElementById('retiro-obra');
+    if(sel){
+      var id=String(obras[idx].id);
+      var existe=Array.from(sel.options||[]).some(function(op){return String(op.value)===id;});
+      if(existe)sel.value=id;
+    }
+  }
+}
+function onRetirarPanolToggle(){
+  cqAplicarBloqueosPorPanol('retirar');
+  cqSeleccionarObraAcopioParaPanol('retirar');
+}
+function onRetiroPanolToggle(){
+  cqAplicarBloqueosPorPanol('retiro');
+  cqSeleccionarObraAcopioParaPanol('retiro');
+}
 function onRetirarPanolSinPrecioToggle(){cqAplicarBloqueosPorPanol('retirar');}
 function onRetiroPanolSinPrecioToggle(){cqAplicarBloqueosPorPanol('retiro');}
 window.onRetirarPanolToggle=onRetirarPanolToggle;
