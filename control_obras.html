@@ -1782,6 +1782,119 @@ h1{font-size:19px!important;margin:2px 0 0!important}
 }
 </style>
 
+
+<style id="cq-certificacion-intermedia-columnas-v1">
+/* Certificación: dos bloques a la misma altura */
+.certify-columns{
+  display:grid;
+  grid-template-columns:minmax(0,1.45fr) minmax(220px,.85fr);
+  gap:8px;
+  padding:8px;
+  align-items:start;
+}
+.certify-column{
+  min-width:0;
+  border:1px solid #e0e6e3;
+  border-radius:11px;
+  overflow:hidden;
+  background:#fbfcfb;
+}
+.certify-column-title{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 9px;
+  font-size:10px;
+  font-weight:900;
+}
+.certify-column-title b{
+  min-width:22px;
+  height:22px;
+  padding:0 6px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  font-size:9px;
+}
+.certify-column-incomplete .certify-column-title{
+  background:#fff8e3;
+  color:#735500;
+}
+.certify-column-incomplete .certify-column-title b{
+  background:#f3df9f;
+  color:#6a4b00;
+}
+.certify-column-completed .certify-column-title{
+  background:#edf8f1;
+  color:#176b3a;
+}
+.certify-column-completed .certify-column-title b{
+  background:#ccebd7;
+  color:#176b3a;
+}
+.certify-column .certify-task-list,
+.certify-column .certify-completed-list{
+  padding:7px!important;
+  margin:0!important;
+}
+.certify-column .certify-task-row{
+  grid-template-columns:minmax(0,1fr) 78px!important;
+  margin-bottom:5px!important;
+}
+.certify-column .certify-task-row:last-child{margin-bottom:0!important}
+.certify-completed-item{
+  position:relative;
+  padding-right:42px!important;
+}
+.certify-completed-pct{
+  position:absolute;
+  right:7px;
+  top:50%;
+  transform:translateY(-50%);
+  color:#178146;
+  font-weight:950;
+  font-size:10px;
+}
+.certify-input{
+  width:100%!important;
+}
+/* Permite valores intermedios reales, no saltos forzados de 5%. */
+.certify-input:invalid{
+  box-shadow:none!important;
+}
+@media(max-width:680px){
+  .certify-columns{
+    grid-template-columns:minmax(0,1.25fr) minmax(150px,.75fr);
+    gap:6px;
+    padding:6px;
+  }
+  .certify-column .certify-task-row{
+    grid-template-columns:minmax(0,1fr) 66px!important;
+    gap:5px!important;
+  }
+  .certify-column-title{padding:7px;font-size:9px}
+  .certify-completed-item{font-size:9px!important}
+}
+</style>
+
+
+<style id="cq-certificacion-parcial-desplegables-v2">
+/* Certificación: listas desplegables apiladas debajo de cada obra */
+.certify-columns{display:block!important;padding:0!important}
+.certify-incomplete,.certify-completed{margin:8px!important;border:1px solid #dfe7e3!important;border-radius:10px!important;overflow:hidden;background:#fbfcfb}
+.certify-incomplete summary,.certify-completed summary{display:flex;align-items:center;justify-content:space-between;cursor:pointer;list-style:none;padding:9px 10px!important;font-size:10.5px!important;font-weight:900!important}
+.certify-incomplete summary{background:#fff9e9!important;color:#6d5400!important}
+.certify-completed summary{background:#edf8f1!important;color:#176b3a!important}
+.certify-incomplete summary::-webkit-details-marker,.certify-completed summary::-webkit-details-marker{display:none}
+.certify-incomplete summary:after,.certify-completed summary:after{content:'▾';margin-left:auto;color:#748078}
+.certify-incomplete[open] summary:after,.certify-completed[open] summary:after{content:'▴'}
+.certify-incomplete .certify-task-list,.certify-completed .certify-completed-list{padding:7px!important;margin:0!important;display:grid;gap:5px}
+.certify-task-row{grid-template-columns:minmax(0,1fr) 78px!important}
+@media(max-width:560px){.certify-task-row{grid-template-columns:minmax(0,1fr) 70px!important}}
+</style>
+
 </head>
 
 
@@ -2204,15 +2317,20 @@ function fillWorkSelect(selected=""){
 function cqMoney(v){
   return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(v)||0);
 }
-function setEditingAvanceValue(key,value){
-  const n=Math.max(0,Math.min(100,Number(value)||0));
-  editingAvanceValues[key]=n/100;
+function setEditingAvanceValue(key,value,enforceFloor=false,inputEl=null){
   const data=(window.__cqAvancesData||{})[obraDisplay.textContent.replace(/^Obra\s+/, '')];
   const t=data?.tasks?.find(x=>x.key===key);
+  const locked=Math.max(0,Math.min(1,Number(t?.locked)||0));
+  let n=Math.max(0,Math.min(100,Number(String(value).replace(',','.'))||0));
+  if(enforceFloor && n<locked*100)n=locked*100;
+  if(enforceFloor && inputEl){
+    const shown=Math.round(n*10)/10;
+    inputEl.value=String(shown).replace(/\.0$/,'');
+  }
+  editingAvanceValues[key]=n/100;
   if(!t)return;
   const totalMonto=Number(t.monto)||0;
   const avanceMonto=totalMonto*(n/100);
-  const locked=Math.max(0,Math.min(1,Number(t.locked)||0));
   const pendienteMonto=Math.max(avanceMonto-totalMonto*locked,0);
   const avEl=document.getElementById('avanceMonto_'+key);
   const pendEl=document.getElementById('avancePend_'+key);
@@ -2255,15 +2373,19 @@ function cqCurrentPendingForWork(workName){
 function cqSelectPercentInput(input){
   try{input.focus();input.select();if(input.setSelectionRange)input.setSelectionRange(0,String(input.value||'').length)}catch(e){}
 }
-function updateCertifyTask(workName,key,input){
+function updateCertifyTask(workName,key,input,enforceFloor=false){
   const data=(window.__cqAvancesData||{})[workName]; if(!data)return;
   const t=(data.tasks||[]).find(x=>x.key===key); if(!t)return;
   const locked=Math.max(0,Math.min(1,Number(t.locked)||0));
-  const raw=(input&&typeof input==='object'&&'value' in input)?Number(input.value):Number(input);
-  let n=Math.max(0,Math.min(1,(Number(raw)||0)/100));
-  // El único piso protegido es lo YA CERTIFICADO en Avances. Lo propuesto desde Control sí puede corregirse hacia abajo.
-  if(n<locked)n=locked;
-  if(input&&typeof input==='object'&&'value' in input){
+  const avance=Math.max(0,Math.min(1,Number(t.avance)||0));
+  const rawText=(input&&typeof input==='object'&&'value' in input)?String(input.value??''):String(input??'');
+  if(!enforceFloor && rawText.trim()==='')return;
+  const raw=Number(rawText.replace(',','.'));
+  // En Control de Obras el único piso irreversible es lo ya certificado en Avances.
+  // El avance informado puede subirse, bajarse o borrarse hasta ese piso; nunca modifica la certificación.
+  let n=Math.max(0,Math.min(1,(Number.isFinite(raw)?raw:0)/100));
+  if(enforceFloor && n<locked)n=locked;
+  if(enforceFloor && input&&typeof input==='object'&&'value' in input){
     const shown=Math.round(n*1000)/10;
     input.value=String(shown).replace(/\.0$/,'');
   }
@@ -2271,17 +2393,20 @@ function updateCertifyTask(workName,key,input){
   if(!window.__cqCertifyEdits[workName])window.__cqCertifyEdits[workName]={};
   window.__cqCertifyEdits[workName][key]=n;
   const el=document.getElementById('certPend_'+cssSafe(workName)+'_'+cssSafe(key));
-  if(el)el.textContent=cqMoney(certifyPendingAmount(t,n));
+  if(el)el.textContent=cqMoney(Math.max((Number(t.monto)||0)*(n-locked),0));
   const row=document.getElementById('certRow_'+cssSafe(workName)+'_'+cssSafe(key));
-  if(row)row.classList.toggle('pending-cert-now',certifyPendingAmount(t,n)>0.5);
+  if(row)row.classList.toggle('pending-cert-now',Math.abs(n-avance)>0.0001);
   updateCertifyWorkTotal(workName);
 }
-
 function cssSafe(v){return String(v).replace(/[^a-zA-Z0-9_-]/g,'_')}
 function updateCertifyWorkTotal(workName){
   const data=(window.__cqAvancesData||{})[workName]; if(!data)return;
   const edits=(window.__cqCertifyEdits||{})[workName]||{};
-  const total=(data.tasks||[]).reduce((a,t)=>a+certifyPendingAmount(t,(t.key in edits)?edits[t.key]:t.avance),0);
+  const total=(data.tasks||[]).reduce((a,t)=>{
+    const locked=Math.max(0,Math.min(1,Number(t.locked)||0));
+    const target=(t.key in edits)?Math.max(locked,Number(edits[t.key])||0):Math.max(locked,Number(t.avance)||0);
+    return a+Math.max((Number(t.monto)||0)*(target-locked),0);
+  },0);
   const el=document.getElementById('certWorkTotal_'+cssSafe(workName)); if(el)el.textContent=cqMoney(total);
 }
 function toggleCertifyWork(workName){
@@ -2289,7 +2414,22 @@ function toggleCertifyWork(workName){
   el.classList.toggle('compact');
   const b=el.querySelector('.certify-work-toggle');if(b)b.textContent=el.classList.contains('compact')?'▾':'▴';
 }
-function renderCertifyView(){
+function cqCertifyInputIsActive(){
+  const a=document.activeElement;
+  return !!(a && a.classList && a.classList.contains('certify-input'));
+}
+function cqHasCertifyUnsavedEdits(){
+  const all=window.__cqCertifyEdits||{};
+  return Object.values(all).some(v=>v && Object.keys(v).length>0);
+}
+function renderCertifyView(force=false){
+  // No reconstruir Certificar mientras se escribe NI mientras existan cambios
+  // pendientes de guardar. Un refresh remoto no debe pisar el porcentaje cargado.
+  if(!force && (cqCertifyInputIsActive() || cqHasCertifyUnsavedEdits())){
+    window.__cqCertifyRenderPending=true;
+    return;
+  }
+  window.__cqCertifyRenderPending=false;
   refreshCertifyWorkFilter();
   const box=document.getElementById('certifyContent'); if(!box)return;
 
@@ -2318,16 +2458,39 @@ function renderCertifyView(){
     const incomplete=(data.tasks||[]).filter(t=>Number(t.locked)<0.999);
     const completed=(data.tasks||[]).filter(t=>Number(t.locked)>=0.999);
     if(!window.__cqCertifyEdits[name])window.__cqCertifyEdits[name]={};
-    const total=(data.tasks||[]).reduce((a,t)=>a+certifyPendingAmount(t,t.avance),0);
+    // El total de la obra muestra lo informado y todavía no certificado.
+    const total=(data.tasks||[]).reduce((acc,t)=>{
+      const avance=Math.max(0,Math.min(1,Number(t.avance)||0));
+      const locked=Math.max(0,Math.min(1,Number(t.locked)||0));
+      return acc+Math.max((Number(t.monto)||0)*(avance-locked),0);
+    },0);
     const incompleteHtml=incomplete.length?incomplete.map(t=>{
       const advancePct=Math.round((Number(t.avance)||0)*1000)/10;
       const lockedPct=Math.round((Number(t.locked)||0)*1000)/10;
-      const pend=certifyPendingAmount(t,t.avance);
-      return `<div id="certRow_${cssSafe(name)}_${cssSafe(t.key)}" class="certify-task-row ${pend>0.5?'pending-cert-now':''}"><div><div class="certify-task-stage">Semana ${esc(t.week)} · ${esc(t.etapa||'')}</div><div class="certify-task-desc">${esc(t.desc||'Tarea')}</div><div class="certify-task-meta"><span class="certified-now">Actual ${lockedPct}%</span><span class="pending">Pendiente: <b id="certPend_${cssSafe(name)}_${cssSafe(t.key)}">${cqMoney(pend)}</b></span></div></div><div class="certify-input-wrap"><input class="certify-input" inputmode="decimal" type="number" min="${lockedPct}" max="100" step="5" value="${advancePct}" onfocus="cqSelectPercentInput(this)" onclick="cqSelectPercentInput(this)" oninput="updateCertifyTask('${String(name).replace(/'/g,"\\'")}','${String(t.key).replace(/'/g,"\\'")}',this)"></div></div>`;
+      const editMap=(window.__cqCertifyEdits&&window.__cqCertifyEdits[name])||{};
+      const hasEdit=Object.prototype.hasOwnProperty.call(editMap,t.key);
+      const editValue=hasEdit?Math.max(Number(t.locked)||0,Math.min(1,Number(editMap[t.key])||0)):(Number(t.avance)||0);
+      const shownPct=Math.round(editValue*1000)/10;
+      const pend=Math.max((Number(t.monto)||0)*(editValue-(Number(t.locked)||0)),0);
+      return `<div id="certRow_${cssSafe(name)}_${cssSafe(t.key)}" class="certify-task-row${hasEdit&&Math.abs(editValue-(Number(t.avance)||0))>0.0001?' pending-cert-now':''}"><div><div class="certify-task-stage">Semana ${esc(t.week)} · ${esc(t.etapa||'')}</div><div class="certify-task-desc">${esc(t.desc||'Tarea')}</div><div class="certify-task-meta"><span class="certified-now">Certificado ${lockedPct}%</span><span class="pending">Pendiente de certificar: <b id="certPend_${cssSafe(name)}_${cssSafe(t.key)}">${cqMoney(pend)}</b></span></div></div><div class="certify-input-wrap"><input class="certify-input" inputmode="decimal" type="number" min="${lockedPct}" max="100" step="0.1" value="${shownPct}" onfocus="cqSelectPercentInput(this)" onclick="cqSelectPercentInput(this)" oninput="updateCertifyTask('${String(name).replace(/'/g,"\\'")}','${String(t.key).replace(/'/g,"\\'")}',this,false)" onblur="updateCertifyTask('${String(name).replace(/'/g,"\\'")}','${String(t.key).replace(/'/g,"\\'")}',this,true)"></div></div>`;
     }).join(''):'<div class="certify-empty">No quedan tareas incompletas.</div>';
-    const incompleteBlock=`<details class="certify-incomplete"><summary>Incompletas (${incomplete.length})</summary><div class="certify-task-list">${incompleteHtml}</div></details>`;
-    const completedHtml=`<details class="certify-completed"><summary>Completadas (${completed.length})</summary><div class="certify-completed-list">${completed.length?completed.map(t=>`<div class="certify-completed-item"><span class="certify-completed-stage">Semana ${esc(t.week)} · ${esc(t.etapa||'')}</span><strong>${esc(t.desc||'Tarea')}</strong> · Certificado 100%</div>`).join(''):'<div class="certify-completed-item">Sin tareas completadas.</div>'}</div></details>`;
-    cards.push(`<section id="certWork_${cssSafe(name)}" class="certify-work-card"><div class="certify-work-head" onclick="toggleCertifyWork('${String(name).replace(/'/g,"\\'")}')"><div class="certify-work-name">Obra ${esc(name)}</div><div style="display:flex;align-items:center;gap:5px"><div class="certify-work-total" id="certWorkTotal_${cssSafe(name)}">${cqMoney(total)}</div><button type="button" class="certify-work-toggle" aria-label="Compactar obra">▴</button></div></div><div class="certify-work-body">${incompleteBlock}${completedHtml}${incomplete.length?`<div class="certify-actions"><button class="certify-save" onclick="event.stopPropagation();saveCertifyWork('${String(name).replace(/'/g,"\\'")}',this)">Guardar avances</button></div>`:''}</div></section>`);
+    const completedList=completed.length
+      ?completed.map(t=>`<div class="certify-completed-item"><span class="certify-completed-stage">Semana ${esc(t.week)} · ${esc(t.etapa||'')}</span><strong>${esc(t.desc||'Tarea')}</strong><span class="certify-completed-pct">100%</span></div>`).join('')
+      :'<div class="certify-empty">Sin tareas completadas.</div>';
+
+    const saveAdvanceHtml=incomplete.length?`<div class="certify-actions"><button class="certify-save" onclick="event.stopPropagation();saveCertifyWork('${String(name).replace(/'/g,"\\'")}',this)">Guardar avance</button></div>`:'';
+    const stackedLists=`
+      <details class="certify-incomplete" open>
+        <summary>Incompletas (${incomplete.length})</summary>
+        <div class="certify-task-list">${incompleteHtml}</div>
+      </details>
+      ${saveAdvanceHtml}
+      <details class="certify-completed">
+        <summary>Completadas (${completed.length})</summary>
+        <div class="certify-completed-list">${completedList}</div>
+      </details>`;
+
+    cards.push(`<section id="certWork_${cssSafe(name)}" class="certify-work-card"><div class="certify-work-head" onclick="toggleCertifyWork('${String(name).replace(/'/g,"\\'")}')"><div class="certify-work-name">Obra ${esc(name)}</div><div style="display:flex;align-items:center;gap:5px"><div class="certify-work-total" id="certWorkTotal_${cssSafe(name)}">${cqMoney(total)}</div><button type="button" class="certify-work-toggle" aria-label="Compactar obra">▴</button></div></div><div class="certify-work-body">${stackedLists}</div></section>`);
   });
   box.innerHTML=cards.length?cards.join(''):'<div class="empty">No hay obras para mostrar.</div>';
 
@@ -2341,128 +2504,59 @@ function renderCertifyView(){
     const toggle=card.querySelector('.certify-work-toggle');
     if(toggle)toggle.textContent=st.compact?'▾':'▴';
 
-    const incomplete=card.querySelector('.certify-incomplete');
-    if(incomplete)incomplete.open=!!st.incompleteOpen;
-
-    const completed=card.querySelector('.certify-completed');
-    if(completed)completed.open=!!st.completedOpen;
+    const incompleteDetails=card.querySelector('.certify-incomplete');
+    const completedDetails=card.querySelector('.certify-completed');
+    if(incompleteDetails)incompleteDetails.open=!!st.incompleteOpen;
+    if(completedDetails)completedDetails.open=!!st.completedOpen;
   });
 }
 
 async function saveCertifyWork(workName,btn){
   const data=(window.__cqAvancesData||{})[workName],ctx=window.__cqAvancesFirestore;
   if(!data||!ctx||!data.id)return alert('No se pudo vincular esta obra con Avances.');
-
   const originalBtnText=btn?btn.innerHTML:'';
   if(btn){
-    btn.disabled=true;
-    btn.classList.add('saving');
+    btn.disabled=true; btn.classList.add('saving');
     btn.innerHTML='<span class="cq-save-spinner" aria-hidden="true"></span><span>Guardando…</span>';
   }
   const edits=(window.__cqCertifyEdits||{})[workName]||{};
-  const changes={}; let delta=0;
+  const changes={};
   (data.tasks||[]).forEach(t=>{
     if(!(t.key in edits))return;
-    const prev=Math.max(0,Math.min(1,Number(t.avance)||0));
     const locked=Math.max(0,Math.min(1,Number(t.locked)||0));
-    // Se puede corregir el avance propuesto hacia abajo, pero nunca por debajo de lo ya certificado.
-    const next=Math.max(locked,Math.max(0,Math.min(1,Number(edits[t.key])||0)));
+    const prev=Math.max(locked,Math.min(1,Number(t.avance)||0));
+    const next=Math.max(locked,Math.min(1,Number(edits[t.key])||0));
     if(Math.abs(next-prev)<=0.0001)return;
     changes[t.key]=next;
-    delta += certifyPendingAmount(t,next)-certifyPendingAmount(t,prev);
   });
   const keys=Object.keys(changes);
   if(!keys.length){
-    if(btn){
-      btn.disabled=false;
-      btn.classList.remove('saving');
-      btn.innerHTML=originalBtnText||'Guardar avances';
-    }
-    return alert('No hay cambios para guardar.');
+    if(btn){btn.disabled=false;btn.classList.remove('saving');btn.innerHTML=originalBtnText||'Guardar avance';}
+    return alert('No hay cambios de avance para guardar.');
   }
   try{
-    const currentItems={...(data.state.items||{})}; keys.forEach(k=>currentItems[k]=changes[k]);
+    // CONTROL DE OBRAS SOLO INFORMA AVANCE.
+    // Nunca modifica certLocks: lo certificado en Avances es el piso irreversible.
+    // El operario puede subir, bajar o borrar su carga hasta ese piso.
+    const currentItems={...(data.state.items||{})};
+    keys.forEach(k=>{ currentItems[k]=changes[k]; });
     await ctx.fs.setDoc(ctx.fs.doc(ctx.fdb,'obras',data.id),{items:currentItems},{merge:true});
-    keys.forEach(k=>{const t=data.tasks.find(x=>x.key===k);if(t)t.avance=changes[k]}); data.state.items=currentItems;
-    const date=reportDate?.value||todayISO(); if(!db.certificationLoads[date])db.certificationLoads[date]={};
-    db.certificationLoads[date][workName]=Math.max(0,(Number(db.certificationLoads[date][workName])||0)+delta); persistDB();
+    keys.forEach(k=>{const t=data.tasks.find(x=>x.key===k);if(t)t.avance=changes[k];});
+    data.state.items=currentItems;
     window.__cqCertifyEdits[workName]={};
     await syncFromAvances();
-    renderCertifyView();
-
+    renderCertifyView(true);
     if(btn){
-      btn.classList.remove('saving');
-      btn.classList.add('saved');
-      btn.innerHTML='<span>✓</span><span>Guardado</span>';
-      setTimeout(function(){
-        btn.disabled=false;
-        btn.classList.remove('saved');
-        btn.innerHTML=originalBtnText||'Guardar avances';
-      },1200);
+      btn.classList.remove('saving');btn.classList.add('saved');
+      btn.innerHTML='<span>✓</span><span>Avance guardado</span>';
+      setTimeout(function(){btn.disabled=false;btn.classList.remove('saved');btn.innerHTML=originalBtnText||'Guardar avance';},1200);
     }
   }catch(e){
     console.warn(e);
-    if(btn){
-      btn.disabled=false;
-      btn.classList.remove('saving');
-      btn.innerHTML=originalBtnText||'Guardar avances';
-    }
-    alert('No se pudieron guardar los avances en Firebase. Revisá la conexión.');
+    if(btn){btn.disabled=false;btn.classList.remove('saving');btn.innerHTML=originalBtnText||'Guardar avance';}
+    alert('No se pudo guardar el avance en Firebase. Revisá la conexión e intentá nuevamente.');
   }
 }
-
-function renderPendingAvances(workName){
-  const box=document.getElementById('avancePendingList');
-  if(!box)return;
-  const data=(window.__cqAvancesData||{})[workName];
-  editingAvanceValues={};
-  if(!data){box.innerHTML='<div class="avance-empty">No se pudieron leer todavía las tareas de Avances.</div>';return;}
-  const pending=(data.tasks||[]).filter(t=>Number(t.avance)<0.999);
-  if(!pending.length){box.innerHTML='<div class="avance-empty">✓ No hay tareas pendientes: todas las tareas activas están al 100%.</div>';return;}
-  pending.forEach(t=>editingAvanceValues[t.key]=Number(t.avance)||0);
-  box.innerHTML=pending.map(t=>{
-    const pct=Math.round((Number(t.avance)||0)*1000)/10;
-    return `<div class="avance-task-row">
-      <div class="avance-task-main">
-        <div class="avance-task-week">Semana ${esc(t.week)} · ${esc(t.etapa||'')}</div>
-        <div class="avance-task-desc">${esc(t.desc||'Tarea')}</div>
-        <div class="avance-task-money">Avance: <strong id="avanceMonto_${t.key}">${cqMoney((Number(t.monto)||0)*(Number(t.avance)||0))}</strong>${Math.max((Number(t.monto)||0)*((Number(t.avance)||0)-(Number(t.locked)||0)),0)>0?`<span class="pending-money" id="avancePend_${t.key}">${cqMoney(Math.max((Number(t.monto)||0)*((Number(t.avance)||0)-(Number(t.locked)||0)),0))} pendiente de certificación</span>`:`<span class="pending-money" id="avancePend_${t.key}" style="display:none"></span>`}</div>
-      </div>
-      <div class="avance-task-input-wrap">
-        <input class="avance-task-input" type="number" min="0" max="100" step="5" value="${pct}" oninput="setEditingAvanceValue('${t.key}',this.value)">
-      </div>
-    </div>`;
-  }).join('');
-}
-async function savePendingAvances(workName){
-  const data=(window.__cqAvancesData||{})[workName];
-  const ctx=window.__cqAvancesFirestore;
-  if(!data||!ctx||!data.id)return true;
-  const changes={};
-  (data.tasks||[]).forEach(t=>{
-    if(!(t.key in editingAvanceValues))return;
-    const next=Math.max(0,Math.min(1,Number(editingAvanceValues[t.key])||0));
-    const prev=Math.max(0,Math.min(1,Number(t.avance)||0));
-    if(Math.abs(next-prev)>0.0001)changes[t.key]=next;
-  });
-  const keys=Object.keys(changes);
-  if(!keys.length)return true;
-  try{
-    const currentItems={...(data.state.items||{})};
-    keys.forEach(k=>currentItems[k]=changes[k]);
-    await ctx.fs.setDoc(ctx.fs.doc(ctx.fdb,'obras',data.id),{items:currentItems},{merge:true});
-    keys.forEach(k=>{
-      const t=data.tasks.find(x=>x.key===k); if(t)t.avance=changes[k];
-      data.state.items=currentItems;
-    });
-    return true;
-  }catch(e){
-    console.warn('No se pudieron guardar los avances desde Control de Obras',e);
-    alert('El informe se guardó, pero no se pudieron actualizar los avances en Firebase. Revisá la conexión e intentá nuevamente.');
-    return false;
-  }
-}
-
 function openEditor(index=""){
   if(index==="" || !records[index]) return;
   editIndex.value=index;
@@ -3538,6 +3632,50 @@ async function syncFromAvances(){
       const snap=await fs.getDoc(fs.doc(fdb,'obras',o.id));
       return {o,st:snap.exists()?(snap.data()||{}):{}};
     }));
+
+    // Reparación puntual de la prueba del 20/08/2026 en Obra L12 Mz 93.
+    // NO altera la lógica de Avances ni otras obras/tareas.
+    // Solo actúa si encuentra exactamente los valores erróneos conocidos:
+    //   - Contrapiso / Huellas / Perimetrales / Pilar: certificado 11% -> 10%
+    //   - Conforme de obra: certificado 50% -> 0%
+    // También devuelve el avance a esos mismos valores para que la prueba no quede
+    // como pendiente de certificar. Al quedar corregidos, la condición ya no vuelve a ejecutar cambios.
+    for(const row of rows){
+      const workName=cleanName(row.o);
+      const workNorm=String(workName).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+      if(workNorm!=='l12 mz 93' && workNorm!=='12 93' && workNorm!=='obra l12 mz 93')continue;
+
+      const st=row.st||{};
+      const tasks=cqBuildAvanceTasks(st);
+      const contrapiso=tasks.find(t=>String(t.desc||'').toLowerCase().replace(/\s+/g,' ').trim()==='contrapiso / huellas / perimetrales / pilar');
+      const conforme=tasks.find(t=>String(t.desc||'').toLowerCase().replace(/\s+/g,' ').trim()==='conforme de obra');
+      const newLocks={...(st.certLocks||{})};
+      const newItems={...(st.items||{})};
+      let changed=false;
+
+      if(contrapiso){
+        const curLock=Number(newLocks[contrapiso.key])||0;
+        if(Math.abs(curLock-0.11)<0.000001){
+          newLocks[contrapiso.key]=0.10;
+          newItems[contrapiso.key]=0.10;
+          changed=true;
+        }
+      }
+      if(conforme){
+        const curLock=Number(newLocks[conforme.key])||0;
+        if(Math.abs(curLock-0.50)<0.000001){
+          newLocks[conforme.key]=0;
+          newItems[conforme.key]=0;
+          changed=true;
+        }
+      }
+
+      if(changed){
+        await fs.setDoc(fs.doc(fdb,'obras',row.o.id),{certLocks:newLocks,items:newItems},{merge:true});
+        row.st={...st,certLocks:newLocks,items:newItems};
+        console.info('Reparación puntual aplicada a',workName);
+      }
+    }
     rows.forEach(({o,st})=>{
       const tasks=cqBuildAvanceTasks(st);
       const total=tasks.reduce((a,t)=>a+(Number(t.monto)||0),0);

@@ -6250,5 +6250,239 @@ table th{
 })();
 </script>
 
+
+
+<!-- CQ BACKUP AISLADO v1 · agregado sin modificar lógica existente -->
+<button type="button" id="cq-bk-roetir-launcher" class="cq-bk-isolated-launcher" title="Backups" aria-label="Backups">📂</button>
+
+<div id="cq-bk-roetir-overlay" class="cq-bk-isolated-overlay" aria-hidden="true">
+  <div class="cq-bk-isolated-panel" role="dialog" aria-modal="true" aria-label="Backups de ROE & TIR">
+    <div class="cq-bk-isolated-head">
+      <strong>📂 Backups de ROE & TIR</strong>
+      <button type="button" id="cq-bk-roetir-close" class="cq-bk-isolated-x">✕</button>
+    </div>
+    <div class="cq-bk-isolated-note">
+      Backup automático diario desde Firebase. Se conservan físicamente los 30 más recientes.
+      Antes de restaurar se crea un <b>pre_restore</b> del estado actual.
+    </div>
+    <div class="cq-bk-isolated-actions">
+      <button type="button" id="cq-bk-roetir-manual" class="cq-bk-isolated-manual">💾 Crear backup manual</button>
+    </div>
+    <div id="cq-bk-roetir-list" class="cq-bk-isolated-list">
+      <div class="cq-bk-isolated-empty">Cargando backups…</div>
+    </div>
+  </div>
+</div>
+
+<style id="cq-bk-roetir-style">
+#cq-bk-roetir-launcher.cq-bk-isolated-launcher{
+  position:static!important;
+  z-index:auto!important;
+  width:27px!important;height:27px!important;min-width:27px!important;min-height:27px!important;
+  padding:0!important;margin:0!important;border-radius:8px!important;
+  border:1px solid rgba(255,255,255,.15)!important;
+  background:rgba(255,255,255,.09)!important;color:#fff!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  font-size:13px!important;line-height:1!important;cursor:pointer!important;box-shadow:none!important;
+  -webkit-tap-highlight-color:transparent!important;touch-action:manipulation!important;
+  flex:0 0 27px!important;
+}
+#cq-bk-roetir-overlay.cq-bk-isolated-overlay{
+  display:none;position:fixed!important;inset:0!important;z-index:2147483200!important;background:rgba(20,40,33,.48)!important;
+  padding:78px 12px 18px!important;box-sizing:border-box!important;overflow:auto!important;
+}
+#cq-bk-roetir-overlay.cq-bk-isolated-overlay.open{display:block!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-panel{
+  width:min(520px,100%)!important;max-height:calc(100vh - 96px)!important;margin:0 auto!important;background:#fff!important;
+  color:#1C2B22!important;border-radius:15px!important;box-shadow:0 16px 48px rgba(0,0,0,.28)!important;overflow:hidden!important;
+  display:flex!important;flex-direction:column!important;font-family:Arial,Helvetica,sans-serif!important;
+}
+#cq-bk-roetir-overlay .cq-bk-isolated-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;padding:13px 14px!important;border-bottom:1px solid #E8EFEA!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-head strong{font-size:14px!important;color:#1C3D35!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-x{border:0!important;background:#F0F5F1!important;color:#35564A!important;border-radius:8px!important;width:30px!important;height:30px!important;cursor:pointer!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-note{padding:10px 14px!important;background:#F8FBF9!important;color:#6C8379!important;font-size:10px!important;line-height:1.45!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-actions{padding:10px 14px 4px!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-manual{border:1px solid #BFD8CA!important;background:#EAF5EF!important;color:#1C3D35!important;border-radius:9px!important;padding:8px 11px!important;font-size:10px!important;font-weight:800!important;cursor:pointer!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-list{padding:4px 14px 12px!important;overflow:auto!important;min-height:90px!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-row{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;align-items:center!important;padding:10px 0!important;border-bottom:1px solid #EDF2EE!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-title{font-size:11px!important;font-weight:900!important;color:#1C3D35!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-meta{font-size:9px!important;color:#789083!important;margin-top:2px!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-restore{border:1px solid #BFD8CA!important;background:#F3F8F5!important;color:#1C3D35!important;border-radius:8px!important;padding:7px 9px!important;font-size:9px!important;font-weight:800!important;cursor:pointer!important}
+#cq-bk-roetir-overlay .cq-bk-isolated-empty{padding:22px 0!important;color:#789083!important;font-size:11px!important;text-align:center!important}
+</style>
+
+<script type="module" id="cq-bk-roetir-module">
+import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const CQBK_KEY="roetir";
+const CQBK_TITLE="ROE & TIR";
+const CQBK_MAIN_COL="cq_gerencia_datos";
+const CQBK_MAIN_DOC="roe_tir";
+const CQBK_COL="roe_tir_backups";
+const CQBK_KEEP=30;
+
+const launcher=document.getElementById("cq-bk-roetir-launcher");
+const cqBkHeader=document.getElementById("cq-rt-head-right");
+if(launcher && cqBkHeader){
+  const infoBtn=cqBkHeader.querySelector(".cq-rt-info");
+  if(infoBtn) cqBkHeader.insertBefore(launcher,infoBtn);
+  else cqBkHeader.appendChild(launcher);
+}
+const overlay=document.getElementById("cq-bk-roetir-overlay");
+const closer=document.getElementById("cq-bk-roetir-close");
+const manualBtn=document.getElementById("cq-bk-roetir-manual");
+const listBox=document.getElementById("cq-bk-roetir-list");
+
+let busy=false;
+let authUnsub=null;
+
+function dayAR(d=new Date()){
+  try{
+    const pts=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Argentina/Buenos_Aires",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(d);
+    const o={};pts.forEach(p=>o[p.type]=p.value);
+    return `${o.year}-${o.month}-${o.day}`;
+  }catch(e){return d.toISOString().slice(0,10)}
+}
+function stamp(){
+  return new Date().toISOString().replace(/[-:.TZ]/g,"").slice(0,14);
+}
+function pretty(d){
+  if(!d)return "—";
+  try{return new Date(d).toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})}catch(e){return String(d)}
+}
+function fb(){
+  if(!getApps().length)throw new Error("Firebase todavía no está inicializado");
+  const app=getApp();
+  return {db:getFirestore(app),auth:getAuth(app)};
+}
+async function readMain(){
+  const {db}=fb();
+  const snap=await getDoc(doc(db,CQBK_MAIN_COL,CQBK_MAIN_DOC));
+  if(!snap.exists())throw new Error("No existe el documento principal en Firebase");
+  const data=snap.data()||{};
+  if(!Object.keys(data).length)throw new Error("El documento principal está vacío");
+  return data;
+}
+async function cleanup(){
+  const {db}=fb();
+  const q=query(collection(db,CQBK_COL),orderBy("createdAt","desc"),limit(80));
+  const snap=await getDocs(q);
+  const arr=[];snap.forEach(x=>arr.push({id:x.id,...(x.data()||{})}));
+  arr.sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  const old=arr.slice(CQBK_KEEP);
+  for(const b of old){
+    try{await deleteDoc(doc(db,CQBK_COL,b.id))}catch(e){console.warn("No se pudo borrar backup viejo",b.id,e)}
+  }
+}
+async function createBackup(kind="manual"){
+  if(busy)return false;
+  busy=true;
+  try{
+    const {db,auth}=fb();
+    if(!auth.currentUser)throw new Error("Firebase no tiene una sesión iniciada en este origen");
+    const now=new Date(), day=dayAR(now);
+    const id=kind==="auto" ? `auto_${day}` : kind==="pre_restore" ? `pre_restore_${stamp()}` : `manual_${stamp()}`;
+
+    if(kind==="auto"){
+      const ex=await getDoc(doc(db,CQBK_COL,id));
+      if(ex.exists())return true;
+    }
+
+    const payload=await readMain();
+    await setDoc(doc(db,CQBK_COL,id),{
+      kind,fecha:day,createdAt:now.toISOString(),
+      sourceCollection:CQBK_MAIN_COL,sourceDocument:CQBK_MAIN_DOC,
+      payload
+    },{merge:false});
+    await cleanup();
+    return true;
+  }catch(e){
+    console.warn(`Backup ${CQBK_TITLE}`,e);
+    return false;
+  }finally{busy=false}
+}
+async function loadList(){
+  if(!listBox)return;
+  listBox.innerHTML='<div class="cq-bk-isolated-empty">Cargando backups…</div>';
+  try{
+    const {db,auth}=fb();
+    if(!auth.currentUser){
+      listBox.innerHTML='<div class="cq-bk-isolated-empty">Firebase todavía no tiene sesión iniciada en este origen.</div>';
+      return;
+    }
+    const q=query(collection(db,CQBK_COL),orderBy("createdAt","desc"),limit(CQBK_KEEP));
+    const snap=await getDocs(q);
+    const arr=[];snap.forEach(x=>arr.push({id:x.id,...(x.data()||{})}));
+    if(!arr.length){
+      listBox.innerHTML='<div class="cq-bk-isolated-empty">Todavía no hay backups guardados.</div>';
+      return;
+    }
+    listBox.innerHTML="";
+    arr.forEach(b=>{
+      const row=document.createElement("div");row.className="cq-bk-isolated-row";
+      const info=document.createElement("div");
+      const t=document.createElement("div");t.className="cq-bk-isolated-title";t.textContent=pretty(b.createdAt||b.fecha);
+      const m=document.createElement("div");m.className="cq-bk-isolated-meta";
+      m.textContent=b.kind==="auto"?"Automático diario":b.kind==="pre_restore"?"Pre-restauración":"Manual";
+      info.appendChild(t);info.appendChild(m);
+
+      const bt=document.createElement("button");bt.type="button";bt.className="cq-bk-isolated-restore";bt.textContent="Restaurar";
+      bt.onclick=async()=>{
+        if(!confirm(`¿Restaurar este backup de ${CQBK_TITLE}?\n\nEsto reemplazará el estado actual.`))return;
+        if(String(prompt("Escribí RESTAURAR para confirmar:")||"").trim().toUpperCase()!=="RESTAURAR")return;
+        try{
+          const {db}=fb();
+          const bs=await getDoc(doc(db,CQBK_COL,b.id));
+          if(!bs.exists()||!bs.data()?.payload)throw new Error("Backup inválido");
+          const pre=await createBackup("pre_restore");
+          if(!pre)throw new Error("No se pudo crear pre_restore; no se restauró nada");
+          await setDoc(doc(db,CQBK_MAIN_COL,CQBK_MAIN_DOC),bs.data().payload,{merge:false});
+          alert("Backup restaurado. Se creó un pre_restore del estado anterior.");
+          location.reload();
+        }catch(e){console.warn(e);alert("No se pudo restaurar el backup.");}
+      };
+      row.appendChild(info);row.appendChild(bt);listBox.appendChild(row);
+    });
+  }catch(e){
+    console.warn(`Listado backups ${CQBK_TITLE}`,e);
+    listBox.innerHTML='<div class="cq-bk-isolated-empty">No se pudieron leer los backups de Firebase.</div>';
+  }
+}
+async function openPanel(){
+  overlay?.classList.add("open");overlay?.setAttribute("aria-hidden","false");
+  await createBackup("auto");
+  await loadList();
+}
+function closePanel(){
+  overlay?.classList.remove("open");overlay?.setAttribute("aria-hidden","true");
+}
+launcher?.addEventListener("click",openPanel);
+closer?.addEventListener("click",closePanel);
+overlay?.addEventListener("click",e=>{if(e.target===overlay)closePanel()});
+manualBtn?.addEventListener("click",async()=>{
+  manualBtn.disabled=true;
+  const ok=await createBackup("manual");
+  manualBtn.disabled=false;
+  alert(ok?"Backup manual guardado correctamente.":"No se pudo guardar el backup manual.");
+  if(ok)await loadList();
+});
+
+async function startAuto(){
+  try{
+    const {auth}=fb();
+    if(auth.currentUser){setTimeout(()=>createBackup("auto"),1200);return;}
+    if(authUnsub)authUnsub();
+    authUnsub=onAuthStateChanged(auth,user=>{
+      if(user){setTimeout(()=>createBackup("auto"),1200);if(authUnsub){authUnsub();authUnsub=null;}}
+    });
+  }catch(e){
+    setTimeout(startAuto,900);
+  }
+}
+setTimeout(startAuto,700);
+</script>
+
 </body>
 </html>

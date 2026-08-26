@@ -4402,6 +4402,112 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 #cqHomeVisible{position:fixed!important;top:max(8px,env(safe-area-inset-top))!important;left:auto!important;right:8px!important;bottom:auto!important;z-index:2147483647!important;display:flex!important;align-items:center!important;gap:6px!important;padding:8px 11px!important;border-radius:999px!important;background:#1C3D35!important;color:#fff!important;text-decoration:none!important;font:800 11px/1 Arial,Helvetica,sans-serif!important;box-shadow:0 4px 14px rgba(0,0,0,.24)!important;border:1px solid rgba(255,255,255,.25)!important}
 </style>
 <a id="cqHomeVisible" href="index.html" class="cq-header-home-house"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5H15v-6H9v6H3.5a.5.5 0 0 1-.5-.5z"/></svg></a>
+<button id="cqBackupVisible" type="button" aria-label="Backups" title="Backups"
+ onclick="document.getElementById('cqModalBackupMateriales').classList.add('open')">
+ <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+</button>
+
+<style id="cq-backup-materiales-style">
+#cqBackupVisible{
+ position:fixed!important;top:max(8px,env(safe-area-inset-top))!important;right:52px!important;
+ z-index:2147483647!important;display:flex!important;align-items:center!important;justify-content:center!important;
+ width:38px!important;height:34px!important;padding:8px 11px!important;border-radius:999px!important;
+ background:#1C3D35!important;color:#fff!important;border:1px solid rgba(255,255,255,.25)!important;
+ box-shadow:0 4px 14px rgba(0,0,0,.24)!important;cursor:pointer!important;
+}
+#cqBackupVisible svg{width:16px!important;height:16px!important;fill:currentColor!important;display:block!important}
+#cqModalBackupMateriales{z-index:2147483646!important}
+#cqModalBackupMateriales .cq-bk-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid #EEF4EE}
+</style>
+
+<div class="modal-bg" id="cqModalBackupMateriales">
+ <div class="modal">
+  <div class="modal-hd">
+   <span class="modal-ttl">Backups de Materiales</span>
+   <button class="modal-x" type="button" onclick="document.getElementById('cqModalBackupMateriales').classList.remove('open')">x</button>
+  </div>
+  <div class="mbody">
+   <div style="font-size:11px;color:#6F8D78;margin-bottom:10px">Backup automático diario desde Firebase.</div>
+   <button class="btn btn-p" type="button" id="cqBkManualMateriales" style="width:auto;padding:7px 11px;font-size:10px">Crear backup manual</button>
+   <div id="cqBkListaMateriales" style="margin-top:10px"><div class="empty">Abrí esta ventana para cargar los backups.</div></div>
+  </div>
+ </div>
+</div>
+
+<script id="cq-backup-materiales-script">
+(function(){
+ var C='materiales_backups', MC='materiales', MD='data_planilla_exacta_v4', busy=false;
+
+ function fAR(){
+  try{
+   var a=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),o={};
+   a.forEach(function(x){o[x.type]=x.value});
+   return o.year+'-'+o.month+'-'+o.day;
+  }catch(e){return new Date().toISOString().slice(0,10)}
+ }
+ function ready(){return !!(window._dbReady&&window._db&&window._doc&&window._getDoc&&window._setDoc&&window._collection&&window._getDocs)}
+ async function save(kind){
+  if(busy||!ready())return false;
+  busy=true;
+  try{
+   var now=new Date(), day=fAR(), id;
+   if(kind==='auto'){
+    id='materiales_'+day;
+    var old=await window._getDoc(window._doc(window._db,C,id));
+    if(old.exists())return true;
+   }else id=(kind==='pre_restore'?'pre_restore_':'manual_')+now.toISOString().replace(/[-:.TZ]/g,'').slice(0,14);
+   var main=await window._getDoc(window._doc(window._db,MC,MD));
+   if(!main.exists())throw Error('No existe Materiales remoto');
+   await window._setDoc(window._doc(window._db,C,id),{
+    kind:kind,fecha:day,createdAt:now.toISOString(),source:'firebase_confirmado',
+    db:JSON.parse(JSON.stringify(main.data()||{}))
+   });
+   return true;
+  }catch(e){console.warn('Backup Materiales',e);return false}
+  finally{busy=false}
+ }
+ async function render(){
+  var box=document.getElementById('cqBkListaMateriales');
+  if(!ready()){box.innerHTML='<div class="empty">Firebase todavía no está listo.</div>';return}
+  try{
+   var snap=await window._getDocs(window._collection(window._db,C)),arr=[];
+   snap.forEach(function(x){var d=x.data()||{};d.id=x.id;arr.push(d)});
+   arr.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''))});
+   if(!arr.length){box.innerHTML='<div class="empty">Todavía no hay backups.</div>';return}
+   box.innerHTML='';
+   arr.slice(0,30).forEach(function(b){
+    var row=document.createElement('div');row.className='cq-bk-row';
+    var info=document.createElement('div');
+    var rawFecha=String(b.fecha||'');
+    if(!rawFecha){
+      var mm=String(b.id||'').match(/(20\\d{2})[-_]?([01]\\d)[-_]?([0-3]\\d)/);
+      if(mm) rawFecha=mm[1]+'-'+mm[2]+'-'+mm[3];
+    }
+    var p=rawFecha.split('-'),fd=p.length===3?p[2]+'/'+p[1]+'/'+p[0]:rawFecha;
+    info.innerHTML='<b>'+fd+'</b><div style="font-size:9px;color:#7A9E82">'+(b.kind==='auto'?'Automático diario':b.kind==='pre_restore'?'Pre-restauración':'Manual')+'</div>';
+    var bt=document.createElement('button');bt.className='btn btn-s';bt.type='button';bt.textContent='Restaurar';bt.style.cssText='padding:6px 9px;font-size:9px';
+    bt.onclick=async function(){
+     if(!confirm('¿Restaurar este backup? Esto reemplazará Materiales.'))return;
+     if(String(prompt('Escribí RESTAURAR para confirmar:')||'').trim().toUpperCase()!=='RESTAURAR')return;
+     var bs=await window._getDoc(window._doc(window._db,C,b.id));
+     if(!bs.exists()||!bs.data().db){alert('Backup inválido.');return}
+     if(!await save('pre_restore')){alert('No se pudo crear pre_restore. No se restauró nada.');return}
+     await window._setDoc(window._doc(window._db,MC,MD),JSON.parse(JSON.stringify(bs.data().db)));
+     alert('Backup restaurado. Se creó pre_restore.');
+     location.reload();
+    };
+    row.appendChild(info);row.appendChild(bt);box.appendChild(row);
+   });
+  }catch(e){console.warn(e);box.innerHTML='<div class="empty">No se pudieron leer los backups.</div>'}
+ }
+ async function openWork(){await save('auto');await render()}
+ document.getElementById('cqBackupVisible').addEventListener('click',function(){setTimeout(openWork,0)});
+ document.getElementById('cqBkManualMateriales').addEventListener('click',async function(){var x=await save('manual');alert(x?'Backup manual guardado.':'No se pudo guardar.');if(x)render()});
+ document.addEventListener('firebase-ready',function(){setTimeout(function(){save('auto')},1200)});
+ if(window._dbReady)setTimeout(function(){save('auto')},1200);
+})();
+</script>
+
 
 
 <div class="modal-bg" id="modal-orden-obras">
@@ -5038,6 +5144,31 @@ function renombrarExtrasSegunGastos(){
     var nuevo=g?(g.label||g.short||g.id):nombre;
     if(nuevo!==nombre)cambio=true;
     return nuevo;
+  });
+  return cambio;
+}
+
+// Unifica también el nombre guardado dentro de cada carga. Así una misma obra
+// no aparece a veces como "5/98" y otras como "5/98 (Ramón)" cuando Gastos
+// ya tiene definido el nombre completo. La identidad sigue siendo lote/manzana.
+function normalizarNombresObraCargasMateriales(){
+  if(!state||!Array.isArray(state.cargas))return false;
+  var obras=getObras();
+  var cambio=false;
+  state.cargas.forEach(function(c){
+    if(!c)return;
+    var nuevo='';
+    var idx=Number(c.obraIdx);
+    if(Number.isInteger(idx)&&idx>=0&&idx<obras.length)nuevo=obras[idx]||'';
+    if(!nuevo){
+      var clave=claveLoteMz(c.obraNameOrigen||c.obraName||'');
+      var g=obraGastosPorClaveMateriales(clave);
+      if(g)nuevo=g.label||g.short||g.id||'';
+    }
+    if(nuevo && String(c.obraName||'')!==String(nuevo)){
+      c.obraName=nuevo;
+      cambio=true;
+    }
   });
   return cambio;
 }
@@ -7225,13 +7356,40 @@ function isCatDeleted(name){ return (state.deletedCatNames||[]).indexOf(name)>=0
 var EXTRA_CAT_COLORS=['#7B3FA0','#2B7BE0','#C8882A','#1E8DB4','#3A8A20','#C0392B','#6D5BD0','#8A6D2B','#00A6A6','#B8690A'];
 function pickCatColor(idx){return EXTRA_CAT_COLORS[idx%EXTRA_CAT_COLORS.length];}
 function mergeExtrasIntoCats(){
-  (state.extraCats||[]).forEach(function(c){
+  if(!Array.isArray(state.extraCats))state.extraCats=[];
+  if(!Array.isArray(state.extraMats))state.extraMats=[];
+
+  // Si Pañol creó automáticamente un material con un subrubro que todavía no
+  // existía como categoría, crear la categoría también para que el material
+  // aparezca inmediatamente en Catálogo.
+  state.extraMats.forEach(function(m){
+    var nombreCat=String(
+      (state.matCategorias&&state.matCategorias[m.id]) ||
+      m.catName ||
+      'VARIOS'
+    ).trim()||'VARIOS';
+
+    m.catName=nombreCat;
+    if(!state.extraCats.some(function(c){return String(c&&c.name||'')===nombreCat;})
+       && !CATS.some(function(c){return String(c&&c.name||'')===nombreCat;})){
+      state.extraCats.push({
+        name:nombreCat,
+        color:pickCatColor(CATS.length+state.extraCats.length),
+        autoCreated:true,
+        source:'panol'
+      });
+    }
+  });
+
+  state.extraCats.forEach(function(c){
     if(!CATS.some(function(x){return x.name===c.name;})){
       CATS.push({name:c.name, color:c.color||pickCatColor(CATS.length), items:[]});
     }
   });
-  (state.extraMats||[]).forEach(function(m){
-    var cat=CATS.find(function(c){return c.name===m.catName;});
+
+  state.extraMats.forEach(function(m){
+    var catName=String((state.matCategorias&&state.matCategorias[m.id])||m.catName||'VARIOS');
+    var cat=CATS.find(function(c){return c.name===catName;});
     if(cat && !cat.items.some(function(x){return x.id===m.id;})){
       cat.items.push(m);
     }
@@ -7292,6 +7450,7 @@ var unsubMateriales=null;
 var unsubIntegraciones=null;
 var procesandoIntegraciones=false;
 var suppressRemoteUntil=0;
+var cqRemoteRefreshMaterialesTimer=null;
 var CLIENT_ID=localStorage.getItem('materiales_client_id')||('mat_'+Math.random().toString(36).slice(2)+Date.now().toString(36));
 localStorage.setItem('materiales_client_id',CLIENT_ID);
 var currentUserName=localStorage.getItem('materiales_user_name')||'';
@@ -7556,8 +7715,12 @@ async function cqCodigosPorNombreDesdeFuentes(){
 }
 
 var cqCompletandoCodigosFuentes=false;
-async function completarCodigosDesdeAcopioYPanol(){
+var cqUltimaConsultaCodigosFuentes=0;
+var CQ_CODIGOS_FUENTES_COOLDOWN=5*60*1000;
+async function completarCodigosDesdeAcopioYPanol(forzar){
   if(!window._dbReady||!modoFirebase||cqCompletandoCodigosFuentes)return {actualizados:0,conflictos:0};
+  if(!forzar && Date.now()-cqUltimaConsultaCodigosFuentes<CQ_CODIGOS_FUENTES_COOLDOWN)return {actualizados:0,conflictos:0,cache:true};
+  cqUltimaConsultaCodigosFuentes=Date.now();
   cqCompletandoCodigosFuentes=true;
 
   try{
@@ -7654,9 +7817,10 @@ async function persist(){
       // Revisar inmediatamente Acopio + Pañol después de cualquier alta/modificación.
       // Así un material recién creado sin código recibe el código sin tener que recargar.
       if(!cqCompletandoCodigosFuentes){
-        setTimeout(function(){
-          completarCodigosDesdeAcopioYPanol().catch(function(e){console.warn(e);});
-        },120);
+        var haySinCodigo=getAllMats().some(function(m){return m&&!isMatDeleted(m.id)&&!String(getMatCodigo(m)||'').trim();});
+        if(haySinCodigo)setTimeout(function(){
+          completarCodigosDesdeAcopioYPanol(false).catch(function(e){console.warn(e);});
+        },500);
       }
     }catch(e){
       console.warn('Firebase error',e);
@@ -7669,6 +7833,7 @@ async function initApp(){
   await cargarObrasGastosMateriales();
   var migro=renombrarExtrasSegunGastos();
   migro=consolidarExtrasDuplicadasConGastos()||migro;
+  migro=normalizarNombresObraCargasMateriales()||migro;
   if(migro){
     localStorage.setItem(DB_KEY,JSON.stringify(state));
     if(window._dbReady&&modoFirebase){
@@ -7693,6 +7858,7 @@ async function loadFromFirebase(){
       normalizeState();
       var migro=renombrarExtrasSegunGastos();
       migro=consolidarExtrasDuplicadasConGastos()||migro;
+      migro=normalizarNombresObraCargasMateriales()||migro;
       var limpioTechi=cqLimpiarTechiCau29_77Materiales();
       migro=limpioTechi||migro;
       localStorage.setItem(DB_KEY,JSON.stringify(state));
@@ -8137,7 +8303,17 @@ async function startFirebase(){
         unsubMateriales=window._onSnapshot(
           window._doc(window._db,'materiales','data_planilla_exacta_v4'),
           function(snap){
-            if(Date.now()<suppressRemoteUntil)return;
+            if(Date.now()<suppressRemoteUntil){
+              // No descartar cambios externos (por ejemplo, una salida desde Pañol).
+              // Releer la versión más nueva apenas termina la ventana de protección.
+              clearTimeout(cqRemoteRefreshMaterialesTimer);
+              cqRemoteRefreshMaterialesTimer=setTimeout(function(){
+                loadFromFirebase().catch(function(e){
+                  console.warn('No se pudo recuperar actualización externa de Materiales',e);
+                });
+              },Math.max(80,suppressRemoteUntil-Date.now()+80));
+              return;
+            }
             if(!snap.exists())return;
 
             var d=snap.data();
@@ -10857,11 +11033,20 @@ function renderCargaTab(){
     return true;
   });
 
-  // Historial: último registro arriba, según fecha y hora real de carga.
-  // Para registros anteriores a esta mejora, el id (Date.now) funciona como respaldo.
+  // Historial: ordenar PRIMERO por la fecha visible de carga (más nueva arriba).
+  // Si dos cargas tienen la misma fecha, desempatar por hora/timestamp/id más reciente.
+  // Esto evita que una carga del 19/08 aparezca antes que una del 20/08 sólo porque
+  // su id interno fue generado después.
   cargas=cargas.slice().sort(function(a,b){
-    var ta=Number(a.fechaHoraCarga||a.timestamp||a.id||0);
-    var tb=Number(b.fechaHoraCarga||b.timestamp||b.id||0);
+    var fa=String(a.fecha||'');
+    var fb=String(b.fecha||'');
+
+    if(fa!==fb){
+      return fb.localeCompare(fa); // YYYY-MM-DD: descendente
+    }
+
+    var ta=Number(a.fechaHoraCarga||a.timestamp||a.createdAt||a.id||0);
+    var tb=Number(b.fechaHoraCarga||b.timestamp||b.createdAt||b.id||0);
     return tb-ta;
   });
 

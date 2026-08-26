@@ -1586,11 +1586,14 @@ async function loadFromFirebase(){
       const data=conf.data();
       if(data.obras&&data.subrubros){config=normalizeConfig({obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC});localStorage.setItem('gastos_config',JSON.stringify(config));}
     }
-    for(const o of config.obras){
-      const snap=await window._getDoc(window._doc(window._db,'gastos',o.id));
-      if(snap.exists()){state[o.id]=migrateState(snap.data());localStorage.setItem(dbKey(o.id),JSON.stringify(state[o.id]));}
-      else if(!state[o.id])state[o.id]=emptyState();
+    // CQ 23/08/2026 — ahorro de lecturas: al iniciar sólo leer la obra activa.
+    // Las demás conservan su cache local y se actualizan al seleccionarlas mediante subscribeObra().
+    if(curObra){
+      const snap=await window._getDoc(window._doc(window._db,'gastos',curObra));
+      if(snap.exists()){state[curObra]=migrateState(snap.data());localStorage.setItem(dbKey(curObra),JSON.stringify(state[curObra]));}
+      else if(!state[curObra])state[curObra]=emptyState();
     }
+    config.obras.forEach(o=>{if(!state[o.id])state[o.id]=emptyState()});
     if(!config.obras.find(o=>o.id===curObra))curObra=config.obras[0]?.id;
     setSyncStatus('Firebase: conectado','ok');
     readLastSyncMeta();
@@ -1633,9 +1636,22 @@ function subscribeObra(){
 // ── BACKUPS FIREBASE ──────────────────────────────────────────────────────
 const BACKUP_KEEP_DAYS = 30;
 let firebaseInitialLoadDone=false;
-function backupDateKey(d=new Date()){return d.toISOString().slice(0,10)}
-function backupTimestampKey(d=new Date()){return d.toISOString().replace(/[:.]/g,'-')}
+
+// CQ — Backups seguros. Sólo afecta al sistema de backup, no al funcionamiento de Gastos.
+function backupDateKey(d=new Date()){
+  try{
+    const parts=new Intl.DateTimeFormat('en-CA',{
+      timeZone:'America/Argentina/Buenos_Aires',
+      year:'numeric',month:'2-digit',day:'2-digit'
+    }).formatToParts(d);
+    const o={}; parts.forEach(p=>o[p.type]=p.value);
+    return o.year+'-'+o.month+'-'+o.day;
+  }catch(e){ return d.toISOString().slice(0,10); }
+}
+function backupTimestampKey(d=new Date()){return 'manual_'+d.toISOString().replace(/[:.]/g,'-')}
+
 function buildBackupPayload(kind='auto'){
+  // Se conserva para compatibilidad con backups manuales existentes.
   return JSON.parse(JSON.stringify({
     kind,
     dateKey: backupDateKey(),
@@ -1645,6 +1661,40 @@ function buildBackupPayload(kind='auto'){
     curObra
   }));
 }
+
+// Lee la fuente REAL en Firebase para evitar que una caché local vieja se convierta en backup.
+async function buildRemoteBackupPayload(kind='auto'){
+  if(!window._dbReady||!modoFirebase)throw new Error('FIREBASE_NO_DISPONIBLE');
+
+  const configSnap=await window._getDoc(window._doc(window._db,'config','app'));
+  if(!configSnap.exists())throw new Error('CONFIG_REMOTA_NO_EXISTE');
+
+  const rawConfig=configSnap.data()||{};
+  const remoteConfig=normalizeConfig({
+    obras:rawConfig.obras,
+    subrubros:rawConfig.subrubros,
+    categoryLabels:rawConfig.categoryLabels,
+    defaultTC:rawConfig.defaultTC
+  });
+  if(!Array.isArray(remoteConfig.obras)||!remoteConfig.obras.length)throw new Error('CONFIG_REMOTA_INVALIDA');
+
+  const remoteState={};
+  for(const o of remoteConfig.obras){
+    if(!o||!o.id)continue;
+    const snap=await window._getDoc(window._doc(window._db,'gastos',o.id));
+    remoteState[o.id]=snap.exists()?migrateState(snap.data()):emptyState();
+  }
+
+  return JSON.parse(JSON.stringify({
+    kind,
+    dateKey:backupDateKey(),
+    createdAt:new Date().toISOString(),
+    source:'firebase_confirmado',
+    config:remoteConfig,
+    state:remoteState,
+    curObra:(remoteConfig.obras.some(o=>o.id===curObra)?curObra:remoteConfig.obras[0].id)
+  }));
+}
 async function backupNow(kind='manual'){
   if(!window._dbReady||!modoFirebase){alert('El backup automático usa Firebase. Activá Firebase ON para guardar backups.');return;}
   if(!firebaseInitialLoadDone && kind!=='auto'){alert('Esperá unos segundos a que Firebase termine de cargar.');return;}
@@ -1652,7 +1702,7 @@ async function backupNow(kind='manual'){
     setSyncStatus('Backup: guardando...');
     const d=new Date();
     const id=(kind==='auto')?backupDateKey(d):backupTimestampKey(d);
-    const payload=buildBackupPayload(kind);
+    const payload=await buildRemoteBackupPayload(kind);
     await window._setDoc(window._doc(window._db,'gastos_backups',id),payload);
     localStorage.setItem('gastos_last_auto_backup',backupDateKey(d));
     setSyncStatus('Backup guardado','ok');
@@ -1667,12 +1717,13 @@ async function backupNow(kind='manual'){
 async function ensureDailyBackup(){
   if(!window._dbReady||!modoFirebase||!firebaseInitialLoadDone)return;
   const todayKey=backupDateKey();
-  if(localStorage.getItem('gastos_last_auto_backup')===todayKey)return;
   try{
+    // Siempre se confirma en Firebase. localStorage sólo es informativo.
     const ref=window._doc(window._db,'gastos_backups',todayKey);
     const snap=await window._getDoc(ref);
     if(!snap.exists()){
-      await window._setDoc(ref,buildBackupPayload('auto'));
+      const payload=await buildRemoteBackupPayload('auto');
+      await window._setDoc(ref,payload);
     }
     localStorage.setItem('gastos_last_auto_backup',todayKey);
     cleanupOldBackups();
@@ -1707,7 +1758,19 @@ async function showBackups(){
       return `<div class="backup-folder">
         <div class="backup-folder-hd"><span>📁 ${folder}</span><span>${list.length} backup${list.length!==1?'s':''}</span></div>
         ${list.map(b=>{
-          const fecha=new Date(b.createdAt||b.dateKey).toLocaleString('es-AR');
+          const fecha=(function(){
+            const key=String(b.dateKey||b.id||'').match(/(\d{4})-(\d{2})-(\d{2})/);
+            if(key){
+              const hora=b.createdAt?new Date(b.createdAt).toLocaleTimeString('es-AR',{
+                timeZone:'America/Argentina/Buenos_Aires',
+                hour:'2-digit',minute:'2-digit',second:'2-digit'
+              }):'';
+              return key[3]+'/'+key[2]+'/'+key[1]+(hora?', '+hora:'');
+            }
+            return b.createdAt?new Date(b.createdAt).toLocaleString('es-AR',{
+              timeZone:'America/Argentina/Buenos_Aires'
+            }):String(b.dateKey||'');
+          })();
           const tipo=b.kind==='auto'?'Automático diario':'Manual';
           return `<div class="backup-item">
             <div>
@@ -1715,6 +1778,7 @@ async function showBackups(){
               <div class="backup-kind">${tipo} · ID: ${b.id}</div>
             </div>
             <div class="backup-actions">
+              <button class="btn-sm btn-warn" onclick="restoreBackup('${b.id}')">Restaurar</button>
               <button class="btn-sm" onclick="downloadBackup('${b.id}')">Descargar</button>
             </div>
           </div>`;
@@ -1750,35 +1814,64 @@ async function downloadBackup(id){
 }
 async function restoreBackup(id){
   if(!window._dbReady||!modoFirebase){alert('Activá Firebase ON para restaurar backups.');return;}
-  if(!confirm('¿Restaurar este backup? Esto reemplaza la configuración y los datos actuales por la copia elegida.'))return;
+
+  if(!confirm('¿Restaurar este backup?\n\nEsto reemplaza la configuración y los datos actuales de Gastos por la copia elegida.'))return;
+  const palabra=prompt('SEGUNDA CONFIRMACIÓN\n\nEscribí RESTAURAR para continuar:');
+  if(String(palabra||'').trim().toUpperCase()!=='RESTAURAR'){
+    alert('Restauración cancelada.');
+    return;
+  }
+
   try{
     setSyncStatus('Restaurando backup...');
+
     const snap=await window._getDoc(window._doc(window._db,'gastos_backups',id));
     if(!snap.exists()){alert('No se encontró el backup.');return;}
     const b=snap.data();
     if(!b.config||!b.state){alert('Backup inválido.');return;}
+
+    // Antes de tocar Gastos, crear una copia REMOTA del estado actual.
+    const safety=await buildRemoteBackupPayload('pre_restore');
+    const safetyId='pre_restore_'+new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14);
+    await window._setDoc(window._doc(window._db,'gastos_backups',safetyId),safety);
+
     if(unsubConfig){unsubConfig();unsubConfig=null;}
     if(unsubObra){unsubObra();unsubObra=null;}
     suppressRemoteUntil=Date.now()+5000;
+
     config=normalizeConfig(b.config);
     state=b.state||{};
     curObra=b.curObra||config.obras[0]?.id||curObra;
+
     localStorage.setItem('gastos_config',JSON.stringify(config));
     localStorage.setItem('gastos_cur_obra',curObra);
-    config.obras.forEach(o=>{if(!state[o.id])state[o.id]=emptyState();localStorage.setItem(dbKey(o.id),JSON.stringify(state[o.id]));});
-    await window._setDoc(window._doc(window._db,'config','app'),JSON.parse(JSON.stringify({...config,updatedAt:new Date().toISOString()})));
+    config.obras.forEach(o=>{
+      if(!state[o.id])state[o.id]=emptyState();
+      localStorage.setItem(dbKey(o.id),JSON.stringify(state[o.id]));
+    });
+
+    await window._setDoc(
+      window._doc(window._db,'config','app'),
+      JSON.parse(JSON.stringify({...config,updatedAt:new Date().toISOString()}))
+    );
+
     for(const o of config.obras){
-      await window._setDoc(window._doc(window._db,'gastos',o.id),JSON.parse(JSON.stringify({...state[o.id],updatedAt:new Date().toISOString()})));
+      await window._setDoc(
+        window._doc(window._db,'gastos',o.id),
+        JSON.parse(JSON.stringify({...state[o.id],updatedAt:new Date().toISOString()}))
+      );
     }
+
     closeModal('modal-backups');
     renderAll();
     setSyncStatus('Backup restaurado','ok');
-    alert('Backup restaurado correctamente.');
+    alert('Backup restaurado correctamente.\n\nTambién se guardó un pre_restore con el estado anterior.');
     setTimeout(()=>{subscribeConfig();subscribeObra();},800);
   }catch(e){
     console.warn(e);
     setSyncStatus('Restaurar: error','err');
-    alert('No se pudo restaurar el backup.');
+    alert('No se pudo restaurar el backup. Si el proceso llegó a comenzar, revisá el pre_restore antes de volver a intentar.');
+    setTimeout(()=>{try{subscribeConfig();subscribeObra();}catch(_e){}},800);
   }
 }
 async function cleanupOldBackups(){
