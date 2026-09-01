@@ -8093,35 +8093,38 @@ function aplicarIntegracion(ev){
 
   if(ev.active===false){
     var cambio=false;
-    var matIdRemovido=null;
+    var matIdsRemovidos=[];
+    var origenEvDel=cqOrigenCargaNormalizado({origen:ev.source,sourceLabel:ev.sourceLabel,integrationId:ev.integrationId});
+    var obraEvDel=cqClaveObraIntegracion(ev.obraName||'');
 
-    if(idx>=0){
-      matIdRemovido=state.cargas[idx].matId;
-      state.cargas.splice(idx,1);
-      cambio=true;
-    }else if(ev.source&&ev.sourceMovementId){
-      // Respaldo por origen + movimiento + obra. No borrar otras obras de un
-      // movimiento múltiple de Caja Gerencia.
-      var before=state.cargas.length;
-      var origenEvDel=cqOrigenCargaNormalizado({origen:ev.source,sourceLabel:ev.sourceLabel,integrationId:ev.integrationId});
-      var obraEvDel=cqClaveObraIntegracion(ev.obraName||'');
-      var removidas=state.cargas.filter(function(c){
-        return cqOrigenCargaNormalizado(c)===origenEvDel
-          && String(c.sourceMovementId||'')===String(ev.sourceMovementId)
-          && cqClaveObraIntegracion(c.obraNameOrigen||c.obraName||'')===obraEvDel;
-      });
-      if(removidas.length)matIdRemovido=removidas[0].matId;
-      state.cargas=state.cargas.filter(function(c){
-        return !(cqOrigenCargaNormalizado(c)===origenEvDel
-          && String(c.sourceMovementId||'')===String(ev.sourceMovementId)
-          && cqClaveObraIntegracion(c.obraNameOrigen||c.obraName||'')===obraEvDel);
-      });
-      if(state.cargas.length!==before)cambio=true;
+    function coincideBaja(c){
+      if(!c)return false;
+      if(String(c.integracionId||'')===String(ev.integrationId))return true;
+      if(!ev.sourceMovementId)return false;
+      if(cqOrigenCargaNormalizado(c)!==origenEvDel)return false;
+      if(String(c.sourceMovementId||'')!==String(ev.sourceMovementId))return false;
+
+      // En Acopio/Pañol/Caja Chica el sourceMovementId identifica el movimiento exacto.
+      // No exigir obra porque registros históricos pueden haber perdido/renombrado obraName.
+      if(origenEvDel==='acopio'||origenEvDel==='panol'||origenEvDel==='caja_chica')return true;
+
+      // Caja Gerencia puede usar el mismo movimiento en distintas obras.
+      return cqClaveObraIntegracion(c.obraNameOrigen||c.obraName||'')===obraEvDel;
     }
 
-    if(matIdRemovido!=null && limpiarMaterialAutomaticoSinUso(matIdRemovido)){
-      cambio=true;
-    }
+    var antes=(state.cargas||[]).length;
+    state.cargas=(state.cargas||[]).filter(function(c){
+      if(coincideBaja(c)){
+        if(c&&c.matId!=null&&matIdsRemovidos.indexOf(c.matId)<0)matIdsRemovidos.push(c.matId);
+        return false;
+      }
+      return true;
+    });
+    if(state.cargas.length!==antes)cambio=true;
+
+    matIdsRemovidos.forEach(function(matId){
+      if(limpiarMaterialAutomaticoSinUso(matId))cambio=true;
+    });
     return cambio;
   }
   var obraIdx=buscarObraIntegracion(ev.obraName);
@@ -8212,10 +8215,29 @@ function aplicarIntegracion(ev){
 }
 var snapshotIntegracionesPendiente=null;
 
+function cqDocsIntegracionesCambiadas(snapshot){
+  // En el listener limitado, procesar sólo documentos realmente agregados/modificados.
+  // Un documento que sale del TOP por antigüedad aparece como "removed", pero eso
+  // NO significa que la integración haya sido eliminada: simplemente quedó fuera
+  // de la ventana. Las bajas reales llegan como active:false y sí se procesan.
+  try{
+    if(snapshot&&typeof snapshot.docChanges==='function'){
+      var cambios=snapshot.docChanges();
+      if(Array.isArray(cambios)){
+        return cambios.filter(function(ch){return ch&&ch.type!=='removed'&&ch.doc;})
+          .map(function(ch){return ch.doc;});
+      }
+    }
+  }catch(e){console.warn('No se pudieron leer cambios incrementales de integraciones',e);}
+
+  var docs=[];
+  try{snapshot.forEach(function(docSnap){docs.push(docSnap);});}catch(e){}
+  return docs;
+}
+
 async function procesarSnapshotIntegraciones(snapshot){
-  // Antes, si llegaba un segundo snapshot mientras se estaba procesando el primero,
-  // se hacía "return" y ese cambio podía perderse. Ahora siempre conservamos el
-  // snapshot más nuevo y lo procesamos inmediatamente después.
+  // Si llega un segundo snapshot mientras se procesa el primero, conservar siempre
+  // el más nuevo para no perder una modificación/baja de Pañol, Acopio o Cajas.
   if(procesandoIntegraciones){
     snapshotIntegracionesPendiente=snapshot;
     return;
@@ -8227,8 +8249,9 @@ async function procesarSnapshotIntegraciones(snapshot){
     while(actual){
       snapshotIntegracionesPendiente=null;
       var cambio=false;
+      var docsActuales=cqDocsIntegracionesCambiadas(actual);
 
-      actual.forEach(function(docSnap){
+      docsActuales.forEach(function(docSnap){
         try{
           if(aplicarIntegracion(docSnap.data()))cambio=true;
         }catch(e){
@@ -8256,7 +8279,6 @@ async function procesarSnapshotIntegraciones(snapshot){
     }
   }finally{
     procesandoIntegraciones=false;
-    // Cubrir una llegada en el instante exacto del finally.
     if(snapshotIntegracionesPendiente){
       var ultimo=snapshotIntegracionesPendiente;
       snapshotIntegracionesPendiente=null;
@@ -8269,8 +8291,25 @@ function startIntegracionesFirebase(){
   if(!window._dbReady||!window._collection||!window._onSnapshot) return;
   if(unsubIntegraciones)return;
   setSyncStatus('Firebase: leyendo integraciones...');
+
+  var fuenteIntegraciones=window._collection(window._db,'materiales_integraciones');
+
+  // OPTIMIZACIÓN DE LECTURAS:
+  // antes se escuchaba TODA la colección histórica. Ahora sólo las 80 integraciones
+  // con updatedAt más reciente. Toda alta/modificación/baja de las apps CQ actualiza
+  // updatedAt, por lo que entra automáticamente en esta ventana aunque el movimiento
+  // original sea antiguo. Esto mantiene el vínculo en tiempo real sin releer años
+  // de integraciones al abrir Materiales.
+  if(window._query&&window._orderBy&&window._limit){
+    fuenteIntegraciones=window._query(
+      fuenteIntegraciones,
+      window._orderBy('updatedAt','desc'),
+      window._limit(80)
+    );
+  }
+
   unsubIntegraciones=window._onSnapshot(
-    window._collection(window._db,'materiales_integraciones'),
+    fuenteIntegraciones,
     function(snapshot){
       procesarSnapshotIntegraciones(snapshot);
     },
@@ -8303,9 +8342,43 @@ async function startFirebase(){
         unsubMateriales=window._onSnapshot(
           window._doc(window._db,'materiales','data_planilla_exacta_v4'),
           function(snap){
+            if(!snap.exists())return;
+
             if(Date.now()<suppressRemoteUntil){
-              // No descartar cambios externos (por ejemplo, una salida desde Pañol).
-              // Releer la versión más nueva apenas termina la ventana de protección.
+              // CQ 31/08/2026 — NO ignorar altas/bajas externas durante una escritura local.
+              // Antes Acopio podía borrar (o agregar) correctamente en el documento principal,
+              // pero Materiales descartaba ese snapshot durante suppressRemoteUntil y una
+              // escritura local posterior podía volver a dejar el estado anterior.
+              //
+              // En esta ventana tomamos del remoto SOLAMENTE las cargas automáticas de las
+              // integraciones externas (Acopio/Pañol/Cajas). Las cargas manuales/locales y el
+              // resto de la planilla quedan intactos.
+              try{
+                var rd=snap.data()||{};
+                var rem=Array.isArray(rd.cargas)?rd.cargas:[];
+                var loc=Array.isArray(state.cargas)?state.cargas:[];
+
+                function esAutoExterna(c){
+                  if(!c)return false;
+                  if(c.automatico===true)return true;
+                  if(c.integracionId)return true;
+                  var o=cqOrigenCargaNormalizado(c);
+                  return o==='acopio'||o==='panol'||o==='caja_chica'||o==='cq_caja_gerencia'||o==='caja_gerencia';
+                }
+
+                var localesManuales=loc.filter(function(c){return !esAutoExterna(c);});
+                var remotasAutomaticas=rem.filter(esAutoExterna);
+
+                state.cargas=localesManuales.concat(JSON.parse(JSON.stringify(remotasAutomaticas)));
+                normalizeState();
+                localStorage.setItem(DB_KEY,JSON.stringify(state));
+                renderActive();
+                setSyncStatus('Firebase: integración externa actualizada','ok');
+              }catch(e){
+                console.warn('No se pudo fusionar integración externa durante guardado local',e);
+              }
+
+              // Mantener una lectura diferida de respaldo, pero sin descartar este snapshot.
               clearTimeout(cqRemoteRefreshMaterialesTimer);
               cqRemoteRefreshMaterialesTimer=setTimeout(function(){
                 loadFromFirebase().catch(function(e){
@@ -8314,7 +8387,6 @@ async function startFirebase(){
               },Math.max(80,suppressRemoteUntil-Date.now()+80));
               return;
             }
-            if(!snap.exists())return;
 
             var d=snap.data();
             delete d.updatedAt;

@@ -3008,6 +3008,20 @@ async function upsertGastoPanol(obraId,payload,removeOnly){
     tx.set(ref,data);
   });
 }
+function cqPanolSetSyncEstadoActual(movId,destino,estado,error){
+  var actual=(state.movimientos||[]).find(function(m){return String(m&&m.id||'')===String(movId);});
+  if(!actual)return;
+  var at=new Date().toISOString();
+  if(destino==='gastos'){
+    actual.gastosSyncEstado=estado;
+    actual.gastosSyncError=String(error||'');
+    actual.gastosSyncAt=at;
+  }else if(destino==='materiales'){
+    actual.materialesSyncEstado=estado;
+    actual.materialesSyncError=String(error||'');
+    actual.materialesSyncAt=at;
+  }
+}
 async function sincronizarConsumoConGastos(mov,activo){
   if(!mov)throw new Error('Consumo no encontrado');
   await cargarConfigGastosPanol();
@@ -3016,6 +3030,9 @@ async function sincronizarConsumoConGastos(mov,activo){
   mov.gastosSyncEstado=activo===false?'error':'ok';
   mov.gastosSyncError=activo===false?'Eliminado de Gastos':'';
   mov.gastosSyncAt=new Date().toISOString();
+  // Actualizar también la referencia vigente dentro de state. Esto evita que un
+  // reemplazo/reconciliación del estado deje el punto rojo aunque Gastos sí se guardó.
+  cqPanolSetSyncEstadoActual(mov.id,'gastos',mov.gastosSyncEstado,mov.gastosSyncError);
   await persist();
 }
 function puntoGastosPanol(mov){
@@ -3064,9 +3081,10 @@ async function verificarGastosPanol(){
     if(cambio){await persist();if(curTab==='obras')renderObrasTab();}
   }finally{verificandoGastosPanol=false;}
 }
-window.addEventListener('focus',function(){setTimeout(verificarGastosPanol,350);});
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')setTimeout(verificarGastosPanol,350);});
-setInterval(verificarGastosPanol,12000);
+// CQ 30/08/2026 — ahorro de lecturas Firebase.
+// No verificar Gastos cada 12 s ni al volver de foco: una transacción exitosa ya
+// confirma la escritura. Conservamos una única verificación al iniciar la sesión
+// para detectar inconsistencias históricas sin generar polling permanente.
 
 
 document.addEventListener('firebase-ready',function(){
@@ -5468,14 +5486,12 @@ function puntoMaterialesConsumo(mov){
   return '<span class="mat-sync-dot '+e.cls+'" title="'+e.txt.replace(/"/g,'&quot;')+'" aria-label="'+e.txt.replace(/"/g,'&quot;')+'"></span>';
 }
 function iniciarVerificacionMaterialesPanol(){
-  if(!window._dbReady||!window._onSnapshot||!window._doc||!window._db){setTimeout(iniciarVerificacionMaterialesPanol,700);
-setInterval(function(){
-  cargarCatalogoMaterialesPanol().catch(function(e){console.warn(e);});
-},30000);
-window.addEventListener('focus',function(){
-  setTimeout(function(){cargarCatalogoMaterialesPanol().catch(function(e){console.warn(e);});},350);
-});
-return;}
+  if(!window._dbReady||!window._onSnapshot||!window._doc||!window._db){
+    // Reintentar sólo hasta que Firebase esté disponible. El catálogo se carga al
+    // abrir/usar el selector y el documento principal de Materiales ya tiene listener.
+    setTimeout(iniciarVerificacionMaterialesPanol,700);
+    return;
+  }
   try{ if(unsubVerificacionMaterialesPanol) unsubVerificacionMaterialesPanol(); }catch(_e){}
   unsubVerificacionMaterialesPanol=window._onSnapshot(window._doc(window._db,'materiales','data_planilla_exacta_v4'),function(snap){
     materialesVerificacionErrorPanol=false;
@@ -5688,28 +5704,46 @@ function cqMatAplicarEventoDirecto(data,ev){
 
   var iid=String(ev.integrationId||'');
   if(!iid)return {data:data,cambio:false};
-  var idx=data.cargas.findIndex(function(c){
-    return String(c&&c.integracionId||'')===iid;
+
+  // CQ 30/08/2026 V4 — identidad lógica del vínculo Pañol → Materiales.
+  // Algunas cargas históricas pueden haber quedado con otro integrationId aunque
+  // pertenezcan al mismo movimiento de Pañol. Para modificar o borrar, quitamos
+  // TODAS las copias lógicas del movimiento y luego, si sigue activo, insertamos
+  // exactamente una con la cantidad actual.
+  var sourceMov=String(ev.sourceMovementId||'');
+  var esPanol=cqMatOrigenDirecto(ev)==='panol';
+  var indices=[];
+  data.cargas.forEach(function(c,i){
+    var mismoIid=String(c&&c.integracionId||'')===iid;
+    var mismoMov=esPanol && sourceMov
+      && String(c&&c.sourceMovementId||'')===sourceMov
+      && String(c&&c.origen||'').toLowerCase().indexOf('panol')>=0;
+    if(mismoIid||mismoMov)indices.push(i);
   });
+  var prev=indices.length?data.cargas[indices[0]]:null;
+  var matIdsRemovidos=[];
+  for(var ri=indices.length-1;ri>=0;ri--){
+    var rem=data.cargas[indices[ri]];
+    if(rem&&rem.matId!=null)matIdsRemovidos.push(rem.matId);
+    data.cargas.splice(indices[ri],1);
+  }
 
   if(ev.active===false){
-    if(idx<0)return {data:data,cambio:false};
-
-    var matIdRemovido=data.cargas[idx].matId;
-    data.cargas.splice(idx,1);
-
+    var cambio=indices.length>0;
     // Misma idea que Materiales: limpiar extras automáticos huérfanos.
-    var sigueUsado=data.cargas.some(function(c){return String(c.matId)===String(matIdRemovido);});
-    if(!sigueUsado){
-      var extra=data.extraMats.find(function(x){return String(x.id)===String(matIdRemovido);});
-      if(extra&&(extra.autoCreated===true||String(extra.comentarios||'').indexOf('Creado automáticamente desde ')===0)){
-        data.extraMats=data.extraMats.filter(function(x){return String(x.id)!==String(matIdRemovido);});
-        delete data.matCodigos[matIdRemovido];
-        delete data.matCategorias[matIdRemovido];
-        if(data.matNombres)delete data.matNombres[matIdRemovido];
+    matIdsRemovidos.forEach(function(matIdRemovido){
+      var sigueUsado=data.cargas.some(function(c){return String(c.matId)===String(matIdRemovido);});
+      if(!sigueUsado){
+        var extra=data.extraMats.find(function(x){return String(x.id)===String(matIdRemovido);});
+        if(extra&&(extra.autoCreated===true||String(extra.comentarios||'').indexOf('Creado automáticamente desde ')===0)){
+          data.extraMats=data.extraMats.filter(function(x){return String(x.id)!==String(matIdRemovido);});
+          delete data.matCodigos[matIdRemovido];
+          delete data.matCategorias[matIdRemovido];
+          if(data.matNombres)delete data.matNombres[matIdRemovido];
+        }
       }
-    }
-    return {data:data,cambio:true};
+    });
+    return {data:data,cambio:cambio};
   }
 
   var obraIdx=cqMatResolverObraDirecto(data,ev.obraName||'');
@@ -5717,7 +5751,6 @@ function cqMatAplicarEventoDirecto(data,ev){
   if(obraIdx<0||!mat)return {data:data,cambio:false};
 
   var obras=cqMatObrasDirecto(data);
-  var prev=idx>=0?data.cargas[idx]:null;
   var origen=cqMatOrigenDirecto(ev);
   var entry={
     id:prev&&prev.id!=null?prev.id:(Date.now()+Math.floor(Math.random()*1000)),
@@ -5745,9 +5778,9 @@ function cqMatAplicarEventoDirecto(data,ev){
     && String(prev.fecha||'')===String(entry.fecha||'')
     && String(prev.nota||'')===String(entry.nota||'');
 
-  if(mismo)return {data:data,cambio:false};
-  if(idx>=0)data.cargas[idx]=entry;
-  else data.cargas.push(entry);
+  // Las copias lógicas anteriores ya fueron retiradas arriba. Insertar una sola
+  // versión canónica con la cantidad actual, incluso si la anterior era idéntica.
+  data.cargas.push(entry);
 
   // Consolidación básica por integrationId para blindar duplicados.
   var vistos={};
@@ -5946,10 +5979,12 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
     materialesIntegradosPanol.add(String(iid));
     mov.materialesSyncEstado='ok';
     mov.materialesSyncError='';
+    cqPanolSetSyncEstadoActual(mov.id,'materiales','ok','');
   }else{
     materialesIntegradosPanol.delete(String(iid));
     mov.materialesSyncEstado='no';
     mov.materialesSyncError='';
+    cqPanolSetSyncEstadoActual(mov.id,'materiales','no','');
   }
   return true;
 }
@@ -6322,7 +6357,17 @@ async function editarConsumo(movId){
 
   var ahoraDebe=detalleConPrecioParaGastos(res.detalle);
 
+  // CQ 30/08/2026 V4 — recalcular la cantidad que debe quedar en Materiales
+  // según los lotes realmente consumidos después de la modificación.
+  var cantidadNoMateriales=(res.detalle||[]).reduce(function(a,d){
+    return a+(d.noCargarMaterialesSalida?Number(d.cantidad||0):0);
+  },0);
+  var cantidadMateriales=Math.max(0,parseFloat((Number(nuevaCantidad||0)-cantidadNoMateriales).toFixed(6)));
+
   mov.cantidad=nuevaCantidad;
+  mov.materialesCantidad=cantidadMateriales;
+  mov.materialesOmitidosCantidad=cantidadNoMateriales;
+  mov.materialesNoCargarPorLote=cantidadNoMateriales>0;
   mov.precio=precioProm;
   mov.usd=usd;
   mov.tipoCambioProm=tcPromDetallePanol(res.detalle)||getLastTC();
@@ -8722,7 +8767,8 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   });
 
-  cargarTCGerencia();
+  // onSnapshot(refTCGerencia, ...) ya entrega el valor actual al iniciar y
+  // mantiene el TC actualizado. Evitamos un getDoc duplicado en cada apertura.
 });
 
 // Cada vez que se abre carga masiva, aplicar el TC actual de Gerencia

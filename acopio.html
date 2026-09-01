@@ -4194,24 +4194,57 @@ function cqAplicarTombstonesMats(db){
   return {db:db,encontro:encontro};
 }
 function cqConfirmarTombstonesMatsConPayload(payload){
+  // CQ 31/08/2026 — NO liberar el tombstone del catálogo apenas una escritura
+  // confirma que el material ya no está. Otra sesión/snapshot atrasado puede
+  // publicar después una copia vieja del acopio y volver a insertar ese material.
+  // Los IDs eliminados quedan protegidos de forma persistente. Si el usuario usa
+  // Deshacer, deshacer() libera únicamente los materiales que realmente restauró.
+  try{cqGuardarTombstonesMats();}catch(e){}
+}
+
+// CQ 31/08/2026 — reparación segura del bug de reutilización de IDs en carga masiva.
+// Sólo restaura un material faltante si existe una copia EXACTA (mismo ID y mismo
+// código/nombre histórico del retiro) en alguno de los backups locales. Así no
+// inventa precios ni revive materiales distintos borrados intencionalmente.
+function cqRecuperarMatsFaltantesDesdeBackups(){
   try{
-    var db=payload&&payload.db;
-    if(!db||!Array.isArray(db.acopios))return;
-    var presentes=new Set();
-    db.acopios.forEach(function(a){
-      (a.mats||[]).forEach(function(m){
-        presentes.add(cqMatTombstoneKey(a.id,m&&m.id));
+    if(!DB||!Array.isArray(DB.acopios)||!Array.isArray(DB.backups)||!DB.backups.length)return false;
+    var cambio=false;
+    DB.acopios.forEach(function(a){
+      if(!a||!Array.isArray(a.retiros))return;
+      if(!Array.isArray(a.mats))a.mats=[];
+      var ids=new Set(a.mats.map(function(m){return String(m&&m.id);}));
+      a.retiros.forEach(function(r){
+        var mid=String(r&&r.matId);
+        if(!mid||ids.has(mid))return;
+        var tomb=cqMatTombstoneKey(a.id,mid);
+        if(!cqMatsBorradosPendientes.has(tomb))return;
+        var rn=String(r.materialName||'').trim().toLowerCase();
+        var rc=String(r.materialCode||'').trim().toLowerCase();
+        if(!rn&&!rc)return;
+        var encontrado=null;
+        for(var bi=0;bi<DB.backups.length&&!encontrado;bi++){
+          var bd=DB.backups[bi]&&DB.backups[bi].data;
+          var ba=bd&&Array.isArray(bd.acopios)?bd.acopios.find(function(x){return String(x&&x.id)===String(a.id);}):null;
+          var bm=ba&&Array.isArray(ba.mats)?ba.mats.find(function(x){
+            if(String(x&&x.id)!==mid)return false;
+            var bn=String(x.nom||'').trim().toLowerCase();
+            var bc=String(x.cod||'').trim().toLowerCase();
+            return (rc&&bc&&rc===bc)||(!rc&&rn&&bn===rn)||(rn&&bn&&rn===bn);
+          }):null;
+          if(bm)encontrado=JSON.parse(JSON.stringify(bm));
+        }
+        if(encontrado){
+          a.mats.push(encontrado);
+          ids.add(mid);
+          cqMatsBorradosPendientes.delete(tomb);
+          cambio=true;
+        }
       });
     });
-    var cambio=false;
-    Array.from(cqMatsBorradosPendientes).forEach(function(k){
-      if(!presentes.has(k)){
-        cqMatsBorradosPendientes.delete(k);
-        cambio=true;
-      }
-    });
     if(cambio)cqGuardarTombstonesMats();
-  }catch(e){}
+    return cambio;
+  }catch(e){console.warn('Acopio: no se pudo reparar materiales faltantes',e);return false;}
 }
 
 var firebaseUnsub=null;
@@ -4488,6 +4521,33 @@ function deshacer(){
   if(!undoStack.length){toast('No hay nada para deshacer');return;}
   try{
     DB=sanitizeDB(JSON.parse(undoStack.pop()));
+    // Si Deshacer restauró un retiro eliminado, liberar únicamente ese tombstone.
+    // Así el borrado normal sigue blindado contra snapshots viejos, pero Undo conserva su función.
+    try{
+      if(typeof cqRetirosBorradosPendientes!=='undefined' && cqRetirosBorradosPendientes){
+        var cambioTomb=false;
+        (DB.acopios||[]).forEach(function(ac){
+          (ac.retiros||[]).forEach(function(r){
+            var k=String(ac&&ac.id)+'::'+String(r&&r.id);
+            if(cqRetirosBorradosPendientes.delete(k))cambioTomb=true;
+          });
+        });
+        if(cambioTomb && typeof cqGuardarTombstonesRetiros==='function')cqGuardarTombstonesRetiros();
+      }
+
+      // Si Deshacer restauró un MATERIAL borrado del catálogo, liberar sólo
+      // ese tombstone. El resto de los materiales borrados sigue blindado.
+      if(typeof cqMatsBorradosPendientes!=='undefined' && cqMatsBorradosPendientes){
+        var cambioMatTomb=false;
+        (DB.acopios||[]).forEach(function(ac){
+          (ac.mats||[]).forEach(function(m){
+            var km=String(ac&&ac.id)+'::'+String(m&&m.id);
+            if(cqMatsBorradosPendientes.delete(km))cambioMatTomb=true;
+          });
+        });
+        if(cambioMatTomb && typeof cqGuardarTombstonesMats==='function')cqGuardarTombstonesMats();
+      }
+    }catch(_e){}
     cqGuardarLocalSeguro();
     scheduleFirebaseSave();
   }catch(e){toast('No se pudo deshacer');return;}
@@ -4728,6 +4788,9 @@ async function loadFromFirebase(){
       await cqBackupDiarioDesdeRemoto(snap.data().db,snap.data().updatedAt||'');
       var localBackups=(DB&&DB.backups)||[];
       DB=sanitizeDB(snap.data().db);
+      // Antes de aplicar tombstones, recuperar únicamente materiales comprobables
+      // desde backup que quedaron huérfanos por el antiguo reuso de IDs.
+      if(typeof cqRecuperarMatsFaltantesDesdeBackups==='function')cqRecuperarMatsFaltantesDesdeBackups();
       if(typeof cqAplicarTombstonesMats==='function'){
         var lm=cqAplicarTombstonesMats(DB);
         DB=lm.db;
@@ -4834,6 +4897,13 @@ function listenFirebase(){
 
       DB=remoteDB;
       if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
+      if(typeof cqRecuperarMatsFaltantesDesdeBackups==='function'){
+        var recuperoMats=cqRecuperarMatsFaltantesDesdeBackups();
+        if(recuperoMats){
+          marcarAcopioDirty();
+          scheduleFirebaseSave();
+        }
+      }
       cqGuardarLocalSeguro();
       lastSyncedAt=remoteUpdatedAt;
       guardarBaseAcopio(remoteUpdatedAt);
@@ -5372,19 +5442,33 @@ async function sincronizarRetiroConGastos(retiro,activo,obraIdAnterior){
   // Guardar siempre el vínculo exacto usado para escritura/verificación/borrado.
   retiro.gastosObraId=obraId;
 
-  // Verificación real contra el mismo documento donde acabamos de escribir.
-  // Un solo reintento ante carreras de escritura.
-  var gastoVerificado=await cqVerificarGastoRetiroReal(retiro,activo);
-  if(!gastoVerificado){
-    await new Promise(function(resolve){setTimeout(resolve,120);});
-    await upsertGastoAcopio(obraId,payload,activo===false);
-    gastoVerificado=await cqVerificarGastoRetiroReal(retiro,activo);
-  }
-  if(!gastoVerificado)throw new Error('La carga no quedó confirmada en Gastos');
+  // CQ 27/08/2026 — ahorro de lecturas Firebase.
+  // La transacción de Firestore sólo resuelve cuando la escritura fue aceptada.
+  // Evitamos releer el mismo documento inmediatamente (y volver a escribir/leer),
+  // que multiplicaba las lecturas en cargas masivas. La verificación de consistencia
+  // queda para la revisión inicial de la sesión y para pendientes reales.
 
-  retiro.gastosSyncEstado=activo===false?'omitido':'ok';
+  // CQ 27/08/2026 — igual que Pañol: saveToFirebase puede haber reemplazado
+  // el objeto DB mientras esta integración estaba en curso. En ese caso, `retiro`
+  // puede ser una referencia vieja. Marcar también el retiro ACTUAL del Acopio
+  // para que el punto verde de Gastos quede persistido sin agregar lecturas.
+  var ahoraGastos=new Date().toISOString();
+  var estadoGastos=activo===false?'omitido':'ok';
+  retiro.gastosSyncEstado=estadoGastos;
   retiro.gastosSyncError='';
-  retiro.gastosSyncAt=new Date().toISOString();
+  retiro.gastosSyncAt=ahoraGastos;
+  try{
+    var acActualGastos=getAcopio();
+    var rActualGastos=acActualGastos&&Array.isArray(acActualGastos.retiros)
+      ?acActualGastos.retiros.find(function(x){return String(x&&x.id)===String(retiro.id);})
+      :null;
+    if(rActualGastos){
+      rActualGastos.gastosSyncEstado=estadoGastos;
+      rActualGastos.gastosSyncError='';
+      rActualGastos.gastosSyncAt=ahoraGastos;
+      if(obraId)rActualGastos.gastosObraId=obraId;
+    }
+  }catch(_e){}
 
   // No bloquear Gastos por un eventual problema de localStorage:
   // persist() ya maneja la sincronización general.
@@ -5467,9 +5551,9 @@ document.addEventListener('cq-firebase-ready',function(){
     setTimeout(verificarGastosAcopio,1000);
   }).catch(function(e){console.warn('Config Gastos Acopio',e);});
 });
-window.addEventListener('focus',function(){setTimeout(verificarGastosAcopio,350);});
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')setTimeout(verificarGastosAcopio,350);});
-setInterval(verificarGastosAcopio,12000);
+// CQ 27/08/2026 — ahorro de lecturas: verificar Gastos una sola vez al iniciar.
+// Antes se releían todas las obras cada 12 segundos y también en cada focus/visibility,
+// generando miles de lecturas por dispositivo aun sin hacer cambios.
 
 function fmtFecha(iso){if(!iso)return '';var p=iso.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
 function toast(msg,kind){var t=document.getElementById('toast');t.textContent=msg;t.classList.toggle('err',kind==='err');t.classList.add('show');setTimeout(function(){t.classList.remove('show');t.classList.remove('err');},3200);}
@@ -6033,7 +6117,18 @@ function guardarCargaMasivaMateriales(){
   var agregados=[];
   var duplicados=[];
   var maxId=1;
-  (a.mats||[]).forEach(function(m){if(m.id>=maxId)maxId=m.id+1;});
+  (a.mats||[]).forEach(function(m){if(Number(m.id)>=maxId)maxId=Number(m.id)+1;});
+
+  // CQ 31/08/2026 — la carga masiva tampoco puede reutilizar IDs que quedaron
+  // protegidos por un borrado anterior. Reutilizarlos hacía que el tombstone
+  // del material viejo eliminara automáticamente el producto nuevo.
+  Array.from(cqMatsBorradosPendientes||[]).forEach(function(k){
+    var p=String(k).split('::');
+    if(String(p[0])===String(a.id)){
+      var n=Number(p[1]);
+      if(Number.isFinite(n)&&n>=maxId)maxId=n+1;
+    }
+  });
 
   parsed.forEach(function(m){
     if(m.cod && existingCodes[catKey(m.cod)]){
@@ -6575,6 +6670,29 @@ function materialAcopioConfirmadoReciente(iid){
   return true;
 }
 
+// CQ 31/08/2026 — igual que el blindaje ya usado para Gastos:
+// una espera de Firebase puede reemplazar DB y dejar `retiro` apuntando a un objeto viejo.
+// Actualizamos también el retiro ACTUAL por ID para que el punto de Materiales no quede rojo
+// aunque la carga haya sido aceptada correctamente.
+function cqSetEstadoMaterialesRetiroActual(retiro,activo,error){
+  if(!retiro)return;
+  var estado=error?'error':(activo===false?'omitido':'ok');
+  var ahora=new Date().toISOString();
+  retiro.materialesSyncEstado=estado;
+  retiro.materialesSyncError=error?String(error):'';
+  retiro.materialesSyncAt=ahora;
+  try{
+    var ac=getAcopio();
+    var actual=ac&&Array.isArray(ac.retiros)
+      ?ac.retiros.find(function(x){return String(x&&x.id)===String(retiro.id);})
+      :null;
+    if(actual){
+      actual.materialesSyncEstado=estado;
+      actual.materialesSyncError=error?String(error):'';
+      actual.materialesSyncAt=ahora;
+    }
+  }catch(_e){}
+}
 
 function cqNormVerifMat(v){
   return String(v||'').toLowerCase()
@@ -6616,31 +6734,50 @@ function cqCargaMaterialesCoincideRetiro(c,retiro,a){
   return !!(matOk && obraOk && qtyOk && fechaOk);
 }
 
+// Respaldo sólo visual para cargas históricas que Materiales ya tiene pero que perdieron
+// integrationId/sourceMovementId u obraNameOrigen en versiones anteriores.
+// Para evitar falsos verdes, sólo acepta la huella material+cantidad+fecha cuando existe
+// UNA ÚNICA carga automática de Acopio compatible en el snapshot completo.
+function cqCargaMaterialesCoincideRetiroUnico(c,retiro,a){
+  if(cqCargaMaterialesCoincideRetiro(c,retiro,a))return true;
+  if(!c||!retiro)return false;
+  var origen=cqNormVerifMat(c.origen||c.source||c.nota||'');
+  if(!(c.automatico===true || origen.indexOf('acopio')>=0))return false;
+  if(origen && origen.indexOf('acopio')<0)return false;
+
+  var m=getMat(retiro.matId);
+  var nomRet=cqNormVerifMat(retiro.materialName||(m&&m.nom)||'');
+  var codRet=cqNormVerifMat(retiro.materialCode||(m&&m.cod)||'');
+  var nomCarga=cqNormVerifMat(c.materialNameOrigen||c.matName||c.materialName||'');
+  var codCarga=cqNormVerifMat(c.codigoOrigen||c.materialCode||'');
+  var matOk=(codRet&&codCarga&&codRet===codCarga)||(nomRet&&nomCarga&&nomRet===nomCarga);
+  var qtyOk=Math.abs(Number(c.qty||0)-Number(retiro.qty||0))<0.000001;
+  var fechaOk=!c.fecha || !retiro.fecha || String(c.fecha)===String(retiro.fecha);
+  if(!(matOk&&qtyOk&&fechaOk))return false;
+
+  var compatibles=(materialesCargasSnapshotAcopio||[]).filter(function(x){
+    if(!x)return false;
+    var ox=cqNormVerifMat(x.origen||x.source||x.nota||'');
+    if(!(x.automatico===true || ox.indexOf('acopio')>=0))return false;
+    if(ox && ox.indexOf('acopio')<0)return false;
+    var nx=cqNormVerifMat(x.materialNameOrigen||x.matName||x.materialName||'');
+    var cx=cqNormVerifMat(x.codigoOrigen||x.materialCode||'');
+    var mok=(codRet&&cx&&codRet===cx)||(nomRet&&nx&&nomRet===nx);
+    var qok=Math.abs(Number(x.qty||0)-Number(retiro.qty||0))<0.000001;
+    var fok=!x.fecha || !retiro.fecha || String(x.fecha)===String(retiro.fecha);
+    return mok&&qok&&fok;
+  });
+  return compatibles.length===1 && compatibles[0]===c;
+}
 
 async function cargarIntegracionesAuditadasMaterialesAcopio(){
-  if(materialesAuditandoAcopio)return;
-  if(!window._cqFirebaseReady||!window._cqFirebase)return;
-  var f=window._cqFirebase;
-  if(!f.getDocs||!f.collection)return;
-  materialesAuditandoAcopio=true;
-  try{
-    var snap=await f.getDocs(f.collection(f.db,'materiales_integraciones'));
-    var ids=new Set();
-    snap.forEach(function(d){
-      var x=d.data()||{};
-      var iid=String(x.integrationId||d.id||'');
-      if(iid && x.active!==false)ids.add(iid);
-    });
-    materialesIntegracionesAuditadasAcopio=ids;
-    try{renderRetirarHistorial();}catch(_e){}
-  }catch(e){
-    console.warn('No se pudieron leer auditorías de Materiales',e);
-    // No convertir esto en rojo: el documento principal sigue siendo la fuente fuerte.
-    if(materialesIntegracionesAuditadasAcopio===null)materialesIntegracionesAuditadasAcopio=new Set();
-  }finally{
-    materialesAuditandoAcopio=false;
-  }
+  // CQ 27/08/2026 — desactivado en operación normal para ahorrar lecturas.
+  // Esta colección es sólo auditoría/respaldo; Materiales se confirma contra
+  // materiales/data_planilla_exacta_v4 y por el resultado de su transacción.
+  if(materialesIntegracionesAuditadasAcopio===null)materialesIntegracionesAuditadasAcopio=new Set();
+  return materialesIntegracionesAuditadasAcopio;
 }
+
 function estadoMaterialesRetiro(retiro){
   var a=getAcopio();
   if(!a||!retiro)return {cls:'err',txt:'No se pudo verificar Materiales'};
@@ -6663,7 +6800,7 @@ function estadoMaterialesRetiro(retiro){
       return {cls:'ok',txt:'Cargado OK en Materiales'};
     }
     var existeMientrasPendiente=(materialesCargasSnapshotAcopio||[]).some(function(c){
-      return cqCargaMaterialesCoincideRetiro(c,retiro,a);
+      return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a);
     });
     if(existeMientrasPendiente){
       return {cls:'ok',txt:'Cargado OK en Materiales'};
@@ -6695,7 +6832,7 @@ function estadoMaterialesRetiro(retiro){
     return {cls:'ok',txt:'Cargado OK en Materiales'};
   }
   var existePrincipal=(materialesCargasSnapshotAcopio||[]).some(function(c){
-    return cqCargaMaterialesCoincideRetiro(c,retiro,a);
+    return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a);
   });
   if(existePrincipal)return {cls:'ok',txt:'Cargado OK en Materiales'};
 
@@ -6740,7 +6877,8 @@ function iniciarVerificacionMaterialesAcopio(){
       else materialesConfirmadosRecientesAcopio.delete(iid);
     });
     materialesIntegradosAcopio=ids;
-    cargarIntegracionesAuditadasMaterialesAcopio();
+    // CQ 27/08/2026 — no releer toda la colección materiales_integraciones en cada cambio.
+    // data_planilla_exacta_v4 es la fuente principal y ya contiene los integrationId.
     try{ renderRetirarHistorial(); }catch(_e){}
   },function(err){
     console.warn('No se pudo verificar Materiales desde Acopio',err);
@@ -6751,11 +6889,9 @@ function iniciarVerificacionMaterialesAcopio(){
 }
 document.addEventListener('cq-firebase-ready',function(){
   iniciarVerificacionMaterialesAcopio();
-  setTimeout(cargarIntegracionesAuditadasMaterialesAcopio,250);
 });
 setTimeout(function(){
   iniciarVerificacionMaterialesAcopio();
-  cargarIntegracionesAuditadasMaterialesAcopio();
 },700);
 
 
@@ -7159,9 +7295,25 @@ async function sincronizarRetiroConPanol(retiro,activo){
     tx.set(ref,data);
   });
 
+  // CQ 27/08/2026 — IMPORTANTÍSIMO: saveToFirebase puede haber reemplazado
+  // el objeto DB mientras esta integración estaba en curso. En ese caso, `retiro`
+  // puede ser una referencia vieja. Marcar también el retiro ACTUAL del Acopio
+  // para que el punto verde quede persistido sin releer Firebase.
+  var ahora=new Date().toISOString();
   retiro.panolSyncEstado='ok';
   retiro.panolSyncError='';
-  retiro.panolSyncAt=new Date().toISOString();
+  retiro.panolSyncAt=ahora;
+  try{
+    var acActual=getAcopio();
+    var rActual=acActual&&Array.isArray(acActual.retiros)
+      ?acActual.retiros.find(function(x){return String(x&&x.id)===String(retiro.id);})
+      :null;
+    if(rActual){
+      rActual.panolSyncEstado='ok';
+      rActual.panolSyncError='';
+      rActual.panolSyncAt=ahora;
+    }
+  }catch(_e){}
   persist();
   try{renderRetirarHistorial();}catch(_e){}
   return true;
@@ -7586,9 +7738,7 @@ async function sincronizarRetiroConMateriales(retiro,activo){
   await auditoria;
 
   confirmarMaterialesAcopio(iid,payload.active);
-  retiro.materialesSyncEstado=activo===false?'omitido':'ok';
-  retiro.materialesSyncError='';
-  retiro.materialesSyncAt=new Date().toISOString();
+  cqSetEstadoMaterialesRetiroActual(retiro,activo,'');
   try{renderRetirarHistorial();}catch(_e){}
   return true;
 }
@@ -8082,7 +8232,12 @@ async function cqReconciliarIntegracionesRecientes(){
     var now=Date.now();
     var recientes=(a.retiros||[]).filter(function(r){
       var t=Date.parse(r.createdAt||'');
-      return t && now-t<6*60*60*1000; // sólo cargas recientes; no recrear históricos borrados adrede.
+      if(!(t && now-t<6*60*60*1000))return false;
+      // Sólo reconciliar retiros que realmente quedaron pendientes o con error.
+      // Los ya confirmados no necesitan releer Acopio + Materiales + Gastos cada 15 s.
+      var matPend=r.cargarMateriales!==false && ['pendiente','sincronizando','error'].indexOf(String(r.materialesSyncEstado||''))>=0;
+      var gasPend=r.cargarGastos!==false && ['pendiente','sincronizando','error'].indexOf(String(r.gastosSyncEstado||''))>=0;
+      return matPend||gasPend;
     });
     for(var i=0;i<recientes.length;i++){
       var r=recientes[i],key=String(a.id)+'::'+String(r.id);
@@ -8126,9 +8281,8 @@ async function cqReconciliarIntegracionesRecientes(){
   }finally{cqReconciliandoIntegraciones=false;}
 }
 document.addEventListener('cq-firebase-ready',function(){setTimeout(cqReconciliarIntegracionesRecientes,1800);});
-window.addEventListener('focus',function(){setTimeout(cqReconciliarIntegracionesRecientes,900);});
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')setTimeout(cqReconciliarIntegracionesRecientes,900);});
-setInterval(cqReconciliarIntegracionesRecientes,15000);
+// CQ 27/08/2026 — sin sondeo cada 15 s ni al volver de segundo plano.
+// La reconciliación automática queda al iniciar y únicamente revisa pendientes/errores.
 
 function dateInRange(fecha,desde,hasta){
   if(desde && fecha<desde) return false;
@@ -9125,8 +9279,14 @@ async function cqEliminarMaterialesRetiroExacto(acopioId,retiro){
         source:'acopio',
         sourceContainerId:String(acopioId),
         sourceMovementId:String(retiro.id),
+        obraName:String(retiro.obraHistorica||''),
+        materialCode:String(retiro.materialCode||''),
+        materialName:String(retiro.materialName||''),
+        qty:Number(retiro.qty)||0,
+        fecha:String(retiro.fecha||''),
         active:false,
-        deletedAt:new Date().toISOString()
+        deletedAt:new Date().toISOString(),
+        updatedAt:new Date().toISOString()
       },
       {merge:true}
     );
@@ -9408,17 +9568,11 @@ function cqAplicarTombstonesRetiros(db){
   return {db:db,encontro:encontro};
 }
 function cqConfirmarTombstonesConPayload(payload){
-  try{
-    var db=payload&&payload.db;
-    if(!db||!Array.isArray(db.acopios))return;
-    var presentes=new Set();
-    db.acopios.forEach(function(a){(a.retiros||[]).forEach(function(r){presentes.add(cqTombstoneKey(a.id,r&&r.id));});});
-    var cambio=false;
-    Array.from(cqRetirosBorradosPendientes).forEach(function(k){
-      if(!presentes.has(k)){cqRetirosBorradosPendientes.delete(k);cambio=true;}
-    });
-    if(cambio)cqGuardarTombstonesRetiros();
-  }catch(e){}
+  // CQ 31/08/2026 — no liberar el tombstone apenas una escritura confirma el borrado.
+  // Ese comportamiento permitía que un snapshot/dispositivo atrasado reinsertara el retiro
+  // segundos después. Los IDs de retiro son únicos, así que conservar el tombstone es seguro.
+  // Si el usuario usa Deshacer, deshacer() libera explícitamente sólo los retiros restaurados.
+  try{cqGuardarTombstonesRetiros();}catch(e){}
 }
 async function borrarRetiro(id){
   var idKey=String(id);
@@ -9604,8 +9758,23 @@ function renderReporte(){
     return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
   }
 
+  var obraObjs=getObrasGastosObjects();
+  function normObraRep(v){
+    return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+  }
+  function retiroCoincideObraReporte(r){
+    if(!obraFiltros.length)return true;
+    return obraFiltros.some(function(idx){
+      var obj=obraObjs[idx]||null;
+      if(obj && r.gastosObraId && String(r.gastosObraId)===String(obj.id))return true;
+      var actual=obj?(obj.label||obj.short||obj.id):(obras[idx]||'');
+      if(actual && normObraRep(retiroObraLabel(r))===normObraRep(actual))return true;
+      return !r.gastosObraId && !r.obraHistorica && Number(r.obraIdx)===Number(idx);
+    });
+  }
+
   var retiros=(a.retiros||[]).filter(function(r){
-    var obraOk=!obraFiltros.length || obraFiltros.indexOf(Number(r.obraIdx))>=0;
+    var obraOk=retiroCoincideObraReporte(r);
     var subOk=!subFiltros.length || subFiltros.indexOf(normSub(r.subrubro))>=0;
     var matOk=!matFiltros.length || matFiltros.indexOf(String(r.matId))>=0;
     return obraOk && subOk && matOk && dateInRange(r.fecha,desde,hasta);
@@ -9617,8 +9786,9 @@ function renderReporte(){
     var m=mats.find(function(mm){return String(mm.id)===String(r.matId);});
     if(!m)return;
     if(!cats[m.cat])cats[m.cat]={};
-    var key=mostrarObra?(String(m.id)+'_'+String(r.obraIdx)):String(m.id);
-    if(!cats[m.cat][key])cats[m.cat][key]={m:m,qty:0,obraIdx:Number(r.obraIdx)};
+    var obraLabelRetiro=String(retiroObraLabel(r)||'Obra').trim()||'Obra';
+    var key=mostrarObra?(String(m.id)+'_'+obraLabelRetiro):String(m.id);
+    if(!cats[m.cat][key])cats[m.cat][key]={m:m,qty:0,obraLabel:obraLabelRetiro};
     cats[m.cat][key].qty+=Number(r.qty)||0;
   });
 
@@ -9666,7 +9836,7 @@ function renderReporte(){
       items.forEach(function(x){
         var val=x.qty*(Number(x.m.precioAcord)||0);
         html+='<tr>'
-          +(mostrarObra?'<td><span class="badge cq-rep-obra-badge">'+(obras[x.obraIdx]||'Obra')+'</span></td>':'')
+          +(mostrarObra?'<td><span class="badge cq-rep-obra-badge">'+(x.obraLabel||'Obra')+'</span></td>':'')
           +'<td class="mono">'+(x.m.cod||'—')+'</td>'
           +'<td class="cq-rep-mat">'+x.m.nom+'</td>'
           +'<td class="r"><span class="qty-strong">'+fmtN(x.qty,2)+'</span><span class="qty-unit">'+(x.m.unidad||'')+'</span></td>'
@@ -9762,9 +9932,24 @@ function datosReporteMaterialesPorObra(){
 
   function normSub(v){return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');}
 
+  var obraObjs=getObrasGastosObjects();
+  function normObraRep(v){
+    return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+  }
+  function retiroCoincideObraReporte(r){
+    if(!obraFiltros.length)return true;
+    return obraFiltros.some(function(idx){
+      var obj=obraObjs[idx]||null;
+      if(obj && r.gastosObraId && String(r.gastosObraId)===String(obj.id))return true;
+      var actual=obj?(obj.label||obj.short||obj.id):(obras[idx]||'');
+      if(actual && normObraRep(retiroObraLabel(r))===normObraRep(actual))return true;
+      return !r.gastosObraId && !r.obraHistorica && Number(r.obraIdx)===Number(idx);
+    });
+  }
+
   var byMat={},totalRetiros=0;
   (a.retiros||[]).filter(function(r){
-    return (!obraFiltros.length || obraFiltros.indexOf(Number(r.obraIdx))>=0)
+    return retiroCoincideObraReporte(r)
       && (!subFiltros.length || subFiltros.indexOf(normSub(r.subrubro))>=0)
       && (!matFiltros.length || matFiltros.indexOf(String(r.matId))>=0)
       && dateInRange(r.fecha,desde,hasta);
@@ -9776,9 +9961,10 @@ function datosReporteMaterialesPorObra(){
     var val=(Number(r.qty)||0)*(Number(m.precioAcord)||0);
     byMat[m.id].totalQty+=(Number(r.qty)||0);
     byMat[m.id].totalPesos+=val;
-    if(!byMat[m.id].byObra[r.obraIdx])byMat[m.id].byObra[r.obraIdx]={qty:0,pesos:0};
-    byMat[m.id].byObra[r.obraIdx].qty+=(Number(r.qty)||0);
-    byMat[m.id].byObra[r.obraIdx].pesos+=val;
+    var obraLabelRetiro=String(retiroObraLabel(r)||'Obra').trim()||'Obra';
+    if(!byMat[m.id].byObra[obraLabelRetiro])byMat[m.id].byObra[obraLabelRetiro]={qty:0,pesos:0};
+    byMat[m.id].byObra[obraLabelRetiro].qty+=(Number(r.qty)||0);
+    byMat[m.id].byObra[obraLabelRetiro].pesos+=val;
   });
 
   var items=Object.values(byMat).sort(function(a,b){return String(a.m.nom).localeCompare(String(b.m.nom),'es',{sensitivity:'base'});});
@@ -9827,8 +10013,8 @@ function armarHTMLReporteMaterialesPDF(){
   } else {
     d.items.slice().sort(function(a,b){return b.totalPesos-a.totalPesos;}).forEach(function(it){
       var col=(typeof getCatColor==='function')?getCatColor(it.m.cat):'#1C3D35';
-      var rows=Object.keys(it.byObra).map(function(obraIdx){
-        return {obraIdx:obraIdx,obra:d.obras[obraIdx]||'Obra',qty:it.byObra[obraIdx].qty,pesos:it.byObra[obraIdx].pesos};
+      var rows=Object.keys(it.byObra).map(function(obraLabel){
+        return {obra:obraLabel||'Obra',qty:it.byObra[obraLabel].qty,pesos:it.byObra[obraLabel].pesos};
       }).sort(function(a,b){return b.qty-a.qty;});
 
       html+='<div class="pdf-mat">';
@@ -9931,8 +10117,8 @@ function generarReportePDFBlob(){
       y=headerY+11;
       doc.setTextColor(28,43,34);
       tableRow(['Obra','Cantidad','P. unit.','Total $'],[58,48,34,36],{bold:true,size:8,align:['left','right','right','right']});
-      var rows=Object.keys(it.byObra).map(function(obraIdx){
-        return {obra:d.obras[obraIdx]||'Obra',qty:it.byObra[obraIdx].qty,pesos:it.byObra[obraIdx].pesos};
+      var rows=Object.keys(it.byObra).map(function(obraLabel){
+        return {obra:obraLabel||'Obra',qty:it.byObra[obraLabel].qty,pesos:it.byObra[obraLabel].pesos};
       }).sort(function(a,b){return b.qty-a.qty;});
       rows.forEach(function(r){
         addPageIfNeeded(8);
@@ -12278,231 +12464,11 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
 
 
 
-<script id="cq-acopio-verificacion-panol-v4">
-(function(){
-  var entradas=new Set();
-  var listo=false;
-  var error=false;
-  var unsub=null;
-
-  // id -> "pendiente" | "ok" | "error"
-  var estadosConfirmacion=new Map();
-  var erroresConfirmacion=new Map();
-
-  function iid(r){
-    try{
-      var a=typeof getAcopio==='function'?getAcopio():null;
-      return a&&r?'acopio_'+String(a.id)+'_'+String(r.id):'';
-    }catch(e){return '';}
-  }
-
-  function idsDesde(data){
-    var s=new Set();
-    data=data||{};
-
-    (Array.isArray(data.movimientos)?data.movimientos:[]).forEach(function(m){
-      if(!m||m.tipo!=='entrada')return;
-      if(m.acopioEntradaId)s.add(String(m.acopioEntradaId));
-      if(m.acopioId!=null&&m.acopioRetiroId!=null){
-        s.add('acopio_'+String(m.acopioId)+'_'+String(m.acopioRetiroId));
-      }
-    });
-
-    (Array.isArray(data.lotes)?data.lotes:[]).forEach(function(l){
-      if(l&&l.acopioId!=null&&l.acopioRetiroId!=null){
-        s.add('acopio_'+String(l.acopioId)+'_'+String(l.acopioRetiroId));
-      }
-    });
-
-    return s;
-  }
-
-  async function leerIdsActuales(){
-    var f=window._cqFirebase;
-    if(!f)throw new Error('Firebase no disponible');
-    var snap=await f.getDoc(f.doc(f.db,'panol','stock_v1'));
-    return snap.exists()?idsDesde(snap.data()||{}):new Set();
-  }
-
-  function estado(r){
-    if(!r||r.cargarPanol!==true)return {cls:'off',txt:'No cargar en Pañol'};
-
-    var id=iid(r);
-    var stConfirm=id?estadosConfirmacion.get(id):null;
-
-    if(stConfirm==='ok')return {cls:'ok',txt:'Cargado y confirmado en Pañol'};
-    if(stConfirm==='pendiente')return {cls:'wait',txt:'Verificando persistencia en Pañol…'};
-    if(stConfirm==='error'){
-      return {cls:'err',txt:erroresConfirmacion.get(id)||'El ingreso no quedó persistido en Pañol'};
-    }
-
-    // Snapshot en vivo manda cuando ya respondió.
-    if(listo&&id&&entradas.has(id))return {cls:'ok',txt:'Cargado y confirmado en Pañol'};
-    if(listo&&!error&&id&&!entradas.has(id)){
-      return {cls:'err',txt:r.panolSyncError||'NO está cargado en Pañol. Verificar.'};
-    }
-
-    var st=String(r.panolSyncEstado||'pendiente');
-    return {
-      cls:st==='error'?'err':'wait',
-      txt:st==='error'
-        ?(r.panolSyncError||'No se pudo cargar en Pañol')
-        :'Verificando con Pañol…'
-    };
-  }
-
-  try{
-    estadoPanolRetiro=function(r){return estado(r);};
-    puntoPanolRetiro=function(r){
-      var e=estado(r);
-      return '<span class="panol-sync-dot '+e.cls+'" title="'+String(e.txt).replace(/"/g,'&quot;')+'"></span>';
-    };
-  }catch(e){}
-
-  async function confirmarPersistencia(r,original){
-    var id=iid(r);
-    if(!id)return true;
-
-    estadosConfirmacion.set(id,'pendiente');
-    erroresConfirmacion.delete(id);
-    try{renderRetirarHistorial();}catch(_e){}
-
-    // Dar tiempo a que cualquier snapshot concurrente termine de aplicar.
-    await new Promise(function(res){setTimeout(res,1100);});
-
-    var ids=await leerIdsActuales();
-    if(ids.has(id)){
-      estadosConfirmacion.set(id,'ok');
-      entradas.add(id);
-      try{renderRetirarHistorial();}catch(_e){}
-      return true;
-    }
-
-    // Un único reintento, idempotente: usa el mismo acopioEntradaId/lote/mov.
-    console.warn('Ingreso de Pañol no confirmado. Reintentando una vez…',id);
-    try{
-      await original(r,true);
-    }catch(eReintento){
-      var codeR=String(eReintento&&eReintento.code||'').trim();
-      var msgR=String(eReintento&&eReintento.message||eReintento||'Error desconocido').trim();
-      var detalleR='Reintento Firebase'+(codeR?' ['+codeR+']':'')+': '+msgR;
-      estadosConfirmacion.set(id,'error');
-      erroresConfirmacion.set(id,detalleR);
-      r.panolSyncEstado='error';
-      r.panolSyncError=detalleR;
-      try{persist();}catch(_e){}
-      try{renderRetirarHistorial();}catch(_e){}
-      return false;
-    }
-
-    await new Promise(function(res){setTimeout(res,1300);});
-    ids=await leerIdsActuales();
-
-    if(ids.has(id)){
-      estadosConfirmacion.set(id,'ok');
-      entradas.add(id);
-      try{renderRetirarHistorial();}catch(_e){}
-      return true;
-    }
-
-    var detallePersistencia='Firebase aceptó la escritura y el reintento, pero el ingreso no permanece en panol/stock_v1.';
-    estadosConfirmacion.set(id,'error');
-    erroresConfirmacion.set(id,detallePersistencia);
-    r.panolSyncEstado='error';
-    r.panolSyncError=detallePersistencia;
-    try{persist();}catch(_e){}
-    try{renderRetirarHistorial();}catch(_e){}
-    return false;
-  }
-
-  try{
-    var original=sincronizarRetiroConPanol;
-
-    sincronizarRetiroConPanol=async function(r,activo){
-      var id=iid(r);
-
-      if(activo===false){
-        var ret=await original(r,false);
-        if(id){
-          estadosConfirmacion.delete(id);
-          erroresConfirmacion.delete(id);
-          entradas.delete(id);
-        }
-        try{renderRetirarHistorial();}catch(_e){}
-        return ret;
-      }
-
-      if(id){
-        estadosConfirmacion.set(id,'pendiente');
-        erroresConfirmacion.delete(id);
-        try{renderRetirarHistorial();}catch(_e){}
-      }
-
-      var ok;
-      try{
-        ok=await original(r,true);
-      }catch(eFirebase){
-        var codeF=String(eFirebase&&eFirebase.code||'').trim();
-        var msgF=String(eFirebase&&eFirebase.message||eFirebase||'Error desconocido').trim();
-        var detalleF='Firebase'+(codeF?' ['+codeF+']':'')+': '+msgF;
-        estadosConfirmacion.set(id,'error');
-        erroresConfirmacion.set(id,detalleF);
-        r.panolSyncEstado='error';
-        r.panolSyncError=detalleF;
-        try{persist();}catch(_e){}
-        try{renderRetirarHistorial();}catch(_e){}
-        throw eFirebase;
-      }
-
-      // La confirmación definitiva se espera aquí.
-      var confirmado=await confirmarPersistencia(r,original);
-      if(!confirmado){
-        throw new Error(r.panolSyncError||'Pañol no confirmó el ingreso después del reintento');
-      }
-      return ok;
-    };
-  }catch(e){
-    console.warn('No se pudo instalar verificación estricta de Pañol',e);
-  }
-
-  function iniciar(){
-    var f=window._cqFirebase;
-    if(!window._cqFirebaseReady||!f||!f.onSnapshot){
-      setTimeout(iniciar,700);
-      return;
-    }
-
-    try{if(unsub)unsub();}catch(e){}
-
-    unsub=f.onSnapshot(
-      f.doc(f.db,'panol','stock_v1'),
-      function(snap){
-        error=false;
-        listo=true;
-        entradas=snap.exists()?idsDesde(snap.data()||{}):new Set();
-
-        // El snapshot confirma definitivamente los pendientes que aparecieron.
-        estadosConfirmacion.forEach(function(st,id){
-          if(st==='pendiente'&&entradas.has(id)){
-            estadosConfirmacion.set(id,'ok');
-          }
-        });
-
-        try{renderRetirarHistorial();}catch(_e){}
-      },
-      function(err){
-        console.warn('No se pudo verificar Pañol desde Acopio',err);
-        error=true;
-        listo=false;
-        try{renderRetirarHistorial();}catch(_e){}
-      }
-    );
-  }
-
-  document.addEventListener('cq-auth-ready',function(){setTimeout(iniciar,100);});
-  document.addEventListener('cq-firebase-ready',function(){setTimeout(iniciar,100);});
-  setTimeout(iniciar,800);
-})();
+<script id="cq-acopio-verificacion-panol-v4-desactivada">
+/* CQ 27/08/2026 — DESACTIVADA.
+   La transacción exitosa de sincronizarRetiroConPanol() ya deja panolSyncEstado=ok.
+   No se relee panol/stock_v1 ni se fuerza el punto a pendiente para confirmar visualmente.
+   Esto evita lecturas extra y permite que el punto quede verde al terminar la escritura. */
 </script>
 
 
@@ -14152,6 +14118,81 @@ document.addEventListener('click',function(e){
 })();
 </script>
 
+
+
+<script id="cq-panol-verificacion-inicial-una-lectura">
+/* CQ 27/08/2026 — Pañol: UNA sola lectura agrupada al abrir/entrar al acopio.
+   Recupera correctamente los estados verdes históricos sin polling periódico.
+   No se ejecuta cada 12/15 s ni al renderizar cada fila. */
+(function(){
+  'use strict';
+  var ultimaClave='';
+  var ejecutando=false;
+
+  async function verificarPanolUnaVez(){
+    if(ejecutando || !window._cqFirebaseReady || !window._cqFirebase) return;
+    var a=(typeof getAcopio==='function')?getAcopio():null;
+    if(!a || !a.id) return;
+    var clave=String(a.id);
+    if(ultimaClave===clave) return;
+
+    var retiros=(a.retiros||[]).filter(function(r){return r&&r.cargarPanol===true;});
+    if(!retiros.length){ultimaClave=clave;return;}
+
+    ejecutando=true;
+    try{
+      var f=window._cqFirebase;
+      var snap=await f.getDoc(f.doc(f.db,'panol','stock_v1'));
+      if(!snap.exists()){ultimaClave=clave;return;}
+      var d=snap.data()||{};
+      var mov=Array.isArray(d.movimientos)?d.movimientos:[];
+      var presentes=new Set();
+      mov.forEach(function(m){
+        if(m&&m.tipo==='entrada'&&m.acopioEntradaId) presentes.add(String(m.acopioEntradaId));
+      });
+
+      var cambio=false;
+      retiros.forEach(function(r){
+        var id='acopio_'+String(a.id)+'_'+String(r.id);
+        if(presentes.has(id)){
+          if(r.panolSyncEstado!=='ok' || r.panolSyncError){
+            r.panolSyncEstado='ok';
+            r.panolSyncError='';
+            cambio=true;
+          }
+        } else if(r.panolSyncEstado==='ok') {
+          // Sólo quitar un verde previo si esta lectura agrupada confirma que ya no existe.
+          r.panolSyncEstado='error';
+          if(!r.panolSyncError)r.panolSyncError='No se encontró este ingreso en Pañol durante la verificación inicial.';
+          cambio=true;
+        }
+      });
+      ultimaClave=clave;
+      if(cambio){
+        try{persist();}catch(_e){}
+      }
+      try{renderRetirarHistorial();}catch(_e){}
+    }catch(e){
+      console.warn('Verificación inicial Pañol',e);
+      // Si no se pudo leer, no cambiar estados ni volverlos rojos.
+    }finally{
+      ejecutando=false;
+    }
+  }
+
+  function programar(){setTimeout(verificarPanolUnaVez,450);}
+  document.addEventListener('cq-firebase-ready',programar);
+  document.addEventListener('firebase-ready',programar);
+  document.addEventListener('click',function(e){
+    // Al entrar/cambiar de acopio permitir una única nueva verificación para ese acopio.
+    var el=e.target&&e.target.closest?e.target.closest('.acopio-card,[data-acopio-id]'):null;
+    if(el)setTimeout(verificarPanolUnaVez,650);
+  },true);
+  setTimeout(verificarPanolUnaVez,1100);
+
+  window.cqVerificarPanolUnaVez=verificarPanolUnaVez;
+})();
+</script>
 </body>
 </html>
 

@@ -1213,9 +1213,8 @@ async function syncMaterialesCC(m,oldM){
     // colección, la carga real nunca llegaba a Materiales.
     await cqCcMaterializar(payload);
 
-    // Confirmación real por relectura del documento principal.
-    const confirmado=await cqCcConfirmarMaterializado(m);
-    if(!confirmado)throw new Error('Materiales todavía no confirmó la carga');
+    // La transacción anterior ya confirmó la escritura en Firestore.
+    // No releer el documento principal: evita una lectura extra por cada carga/modificación.
 
     // Respaldo/auditoría secundario: no puede dejar el punto rojo si la carga real ya quedó.
     try{
@@ -1226,9 +1225,11 @@ async function syncMaterialesCC(m,oldM){
 
     m.materialesSyncEstado='ok';
     m.materialesSyncError='';
+    cqCcSetCurrentSyncState(m.id,'materiales','ok','');
   }else{
     m.materialesSyncEstado='no';
     m.materialesSyncError='No se agregó a Materiales';
+    cqCcSetCurrentSyncState(m.id,'materiales','no',m.materialesSyncError);
   }
   m.materialesSyncAt=new Date().toISOString();
   save();render();
@@ -1351,6 +1352,24 @@ async function upsertGastoCC(obraId,payload,removeOnly=false){
     tx.set(ref,data);
   });
 }
+function cqCcSetCurrentSyncState(id, destino, estado, error=''){
+  try{
+    const cur=(db&&Array.isArray(db.movements))?db.movements.find(x=>String(x.id||'')===String(id||'')):null;
+    if(!cur)return false;
+    const at=new Date().toISOString();
+    if(destino==='gastos'){
+      cur.gastosSyncEstado=estado;
+      cur.gastosSyncError=error||'';
+      cur.gastosSyncAt=at;
+    }else if(destino==='materiales'){
+      cur.materialesSyncEstado=estado;
+      cur.materialesSyncError=error||'';
+      cur.materialesSyncAt=at;
+    }
+    return true;
+  }catch(e){return false;}
+}
+
 async function syncMovementCC(m,oldM=null){
   if(!m||m.type!=='gasto')return;
   const newObra=m.gastosObraId;
@@ -1362,6 +1381,7 @@ async function syncMovementCC(m,oldM=null){
   m.gastosSyncEstado='ok';
   m.gastosSyncError='';
   m.gastosSyncAt=new Date().toISOString();
+  cqCcSetCurrentSyncState(m.id,'gastos','ok','');
   save();render();
 }
 function launchSyncCC(m,oldM=null){
@@ -1373,6 +1393,7 @@ function launchSyncCC(m,oldM=null){
     m.gastosSyncEstado='error';
     m.gastosSyncError=String(e?.message||e);
     m.gastosSyncAt=new Date().toISOString();
+    cqCcSetCurrentSyncState(m.id,'gastos','error',m.gastosSyncError);
     save();render();
   });
 }
@@ -1491,10 +1512,11 @@ async function verifyMaterialesCC(){
     verifyingMaterialesCC=false;
   }
 }
-window.addEventListener('focus',()=>{setTimeout(verifyGastosCC,300);setTimeout(verifyMaterialesCC,450)});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){setTimeout(verifyGastosCC,300);setTimeout(verifyMaterialesCC,450)}});
-setInterval(verifyGastosCC,12000);
-setInterval(verifyMaterialesCC,12000);
+// CQ 27/08/2026 — Bajo consumo Firestore.
+// Verificación agrupada una sola vez al iniciar. Se eliminan polling cada 12 s
+// y verificaciones por focus/visibility. Altas, modificaciones y borrados
+// actualizan sus destinos en el momento de la acción.
+setTimeout(verifyGastosCC,1500);
 setTimeout(verifyMaterialesCC,1700);
 window.loadGastosConfigCC=loadGastosConfigCC;window.verifyGastosCC=verifyGastosCC;window.verifyMaterialesCC=verifyMaterialesCC;
 
@@ -1693,8 +1715,13 @@ function saveMovement(e){
         item.materialesSyncEstado='error';
         item.materialesSyncError=String(err&&err.message||err);
         item.materialesSyncAt=new Date().toISOString();
+        cqCcSetCurrentSyncState(item.id,'materiales','error',item.materialesSyncError);
         save();render();
       });
+    }else if(before&&before.type==='gasto'){
+      // Si una edición convierte un gasto en ingreso, quitar también sus vínculos anteriores.
+      deleteLinkedGastoCC(before).catch(err=>console.warn('Caja Chica → Gastos (quitar vínculo anterior)',err));
+      deleteLinkedMaterialesCC(before).catch(err=>console.warn('Caja Chica → Materiales (quitar vínculo anterior)',err));
     }
   });
 }
@@ -1915,6 +1942,9 @@ let baseTokenCC=localStorage.getItem(BASE_TOKEN_KEY)||"";
 let dirtyBaseCC=localStorage.getItem(DIRTY_BASE_KEY)||"";
 let suppressCCUntil=0;
 let lastTokenCC="";
+// CQ 28/08/2026 — contador de cambios locales para evitar que una escritura
+// Firebase en curso borre un movimiento creado/modificado mientras esperaba.
+let localRevisionCC=0;
 
 function cloneCC(v){
   try{return JSON.parse(JSON.stringify(v));}catch(e){return null;}
@@ -1942,6 +1972,40 @@ function movementTimeCC(m){
   }
   return 0;
 }
+function syncTimeCC(m,prefix){
+  const t=Date.parse((m&&m[prefix+'SyncAt'])||'');
+  return Number.isFinite(t)?t:0;
+}
+function mergeMovementCC(prev,next){
+  if(!prev)return cloneCC(next);
+  if(!next)return cloneCC(prev);
+
+  // Los datos funcionales del movimiento se resuelven por updatedAt/createdAt.
+  // Los estados de integración se resuelven APARTE por su propio SyncAt para
+  // que una copia vieja de Netlify no convierta puntos verdes en rojos/grises.
+  const newer=movementTimeCC(next)>=movementTimeCC(prev)
+    ?Object.assign({},prev,next)
+    :Object.assign({},next,prev);
+
+  ['gastos','materiales'].forEach(prefix=>{
+    const a=syncTimeCC(prev,prefix), b=syncTimeCC(next,prefix);
+    let src=null;
+    if(b>a)src=next;
+    else if(a>b)src=prev;
+    else{
+      // A igualdad de fecha, conservar un OK conocido antes que un estado vacío.
+      const sp=String(prev[prefix+'SyncEstado']||'');
+      const sn=String(next[prefix+'SyncEstado']||'');
+      if(sn==='ok'&&sp!=='ok')src=next;
+      else if(sp==='ok'&&sn!=='ok')src=prev;
+      else src=next;
+    }
+    newer[prefix+'SyncEstado']=src[prefix+'SyncEstado']||'';
+    newer[prefix+'SyncError']=src[prefix+'SyncError']||'';
+    newer[prefix+'SyncAt']=src[prefix+'SyncAt']||'';
+  });
+  return newer;
+}
 function mergeMigrationCC(remote,local){
   remote=normalizeCC(cloneCC(remote));
   local=normalizeCC(cloneCC(local));
@@ -1958,7 +2022,7 @@ function mergeMigrationCC(remote,local){
     const id=String(m.id||"");
     if(!id||deleted.has(id))return;
     const prev=map.get(id);
-    if(!prev || movementTimeCC(m)>=movementTimeCC(prev)) map.set(id,m);
+    map.set(id,mergeMovementCC(prev,m));
   });
 
   const works=[];
@@ -1989,6 +2053,7 @@ function setStatusCC(state,text){
 }
 function markDirtyCC(){
   if(applyingRemoteCC)return;
+  localRevisionCC++;
   if(!dirtyCC){
     dirtyBaseCC=baseTokenCC||"";
     try{localStorage.setItem(DIRTY_BASE_KEY,dirtyBaseCC);}catch(e){}
@@ -2030,20 +2095,41 @@ function refreshCC(){
 async function saveRemoteCC(){
   if(savingCC||!dirtyCC)return;
   savingCC=true;
+  let revisionGuardada=localRevisionCC;
   try{
     const fdb=await firebaseCC();
     const ref=doc(fdb,CC_COL,CC_DOC);
-    let state=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));
-    // Antes de publicar, unir con la última versión remota para no pisar
-    // movimientos creados por Caja Gerencia u otro dispositivo.
+
+    // Leer remoto para no pisar movimientos de otro dispositivo.
+    let remoteState=null;
     try{
       const latest=await getDoc(ref);
       if(latest.exists()&&latest.data()&&latest.data().state){
-        state=mergeMigrationCC(normalizeCC(latest.data().state),state);
-        window.__cqCajaChicaSetState(cloneCC(state));
+        remoteState=normalizeCC(latest.data().state);
       }
     }catch(e){console.warn("Merge previo Caja Chica",e);}
-    try{cqApplyCajaGerenciaIntegrations();state=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));}catch(e){}
+
+    // CRÍTICO: volver a tomar el estado local DESPUÉS del await anterior.
+    // Si durante esa lectura se agregó/modificó un movimiento, usar la versión nueva,
+    // no la foto vieja tomada antes de esperar Firebase.
+    let localAhora=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));
+    let state=remoteState?mergeMigrationCC(remoteState,localAhora):localAhora;
+
+    try{
+      cqApplyCajaGerenciaIntegrations();
+      localAhora=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));
+      state=remoteState?mergeMigrationCC(remoteState,localAhora):localAhora;
+    }catch(e){}
+
+    // Tomar la revisión exacta que estamos publicando.
+    revisionGuardada=localRevisionCC;
+
+    // Aplicar el merge sólo con la foto local más reciente.
+    applyingRemoteCC=true;
+    window.__cqCajaChicaSetState(cloneCC(state));
+    applyingRemoteCC=false;
+    try{saveLocalCC();}catch(e){}
+
     const token=new Date().toISOString();
     suppressCCUntil=Date.now()+1600;
     await setDoc(ref,{
@@ -2054,7 +2140,16 @@ async function saveRemoteCC(){
     },{merge:false});
     lastTokenCC=token;
     setBaseTokenCC(token);
-    clearDirtyCC();
+
+    // Sólo limpiar dirty si no hubo NINGÚN cambio local mientras esta escritura
+    // estaba viajando. Si hubo uno, conservarlo y publicar otra vez enseguida.
+    if(localRevisionCC===revisionGuardada){
+      clearDirtyCC();
+    }else{
+      dirtyCC=true;
+      try{localStorage.setItem(DIRTY_KEY,"1");}catch(e){}
+    }
+
     try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
     setStatusCC("ok","Firebase sincronizado");
   }catch(e){
@@ -2062,6 +2157,11 @@ async function saveRemoteCC(){
     setStatusCC("err","Firebase sin sincronizar");
   }finally{
     savingCC=false;
+    // Si apareció un cambio mientras guardábamos, no dejarlo colgado.
+    if(dirtyCC){
+      clearTimeout(timerCC);
+      timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},120);
+    }
   }
 }
 function scheduleCC(){
@@ -2094,13 +2194,17 @@ async function startCC(){
         clearDirtyCC();
       }
 
-      const next=dirtyCC ? mergeMigrationCC(remote,local) : (migrated?remote:mergeMigrationCC(remote,local));
+      // CQ multi-dispositivo v3: NUNCA reemplazar el estado local completo por
+      // una copia remota. Se fusionan por ID y las eliminaciones explícitas viajan
+      // en deletedMovementIds. Esto protege un movimiento recién creado si una
+      // versión vieja de Netlify publica un snapshot atrasado.
+      const next=mergeMigrationCC(remote,local);
       applyingRemoteCC=true;
       window.__cqCajaChicaSetState(next);
       refreshCC();
       applyingRemoteCC=false;
 
-      if(dirtyCC || (!migrated && JSON.stringify(next)!==JSON.stringify(remote))){
+      if(dirtyCC || JSON.stringify(next)!==JSON.stringify(remote)){
         if(!dirtyCC)markDirtyCC();
         await saveRemoteCC();
       }else{
@@ -2120,12 +2224,24 @@ async function startCC(){
       const token=String(s.data().updatedAt||"");
       if(token&&token===lastTokenCC)return;
 
+      const remote=normalizeCC(cloneCC(s.data().state));
+      const local=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));
+      const next=mergeMigrationCC(remote,local);
+
       applyingRemoteCC=true;
-      window.__cqCajaChicaSetState(normalizeCC(cloneCC(s.data().state)));
+      window.__cqCajaChicaSetState(next);
       lastTokenCC=token;
       setBaseTokenCC(token);
       refreshCC();
       applyingRemoteCC=false;
+
+      // Si el remoto que llegó era viejo y omitía movimientos/estados locales,
+      // conservar lo local y reparar Firebase una sola vez. Sin polling.
+      if(JSON.stringify(next)!==JSON.stringify(remote)){
+        markDirtyCC();
+        clearTimeout(timerCC);
+        timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},120);
+      }
       setStatusCC("ok","Firebase sincronizado");
     },e=>{
       console.warn("Caja Chica Firebase listener",e);
@@ -2433,7 +2549,7 @@ const db=getFirestore(app);
 window._cqGastosBridge={db,doc,getDoc,setDoc,runTransaction};
 document.dispatchEvent(new Event("cq-gastos-bridge-ready"));
 try{await window.loadGastosConfigCC?.();}catch(e){console.warn("Config Gastos Caja Chica",e)}
-setTimeout(()=>window.verifyGastosCC?.(),1200);
+// La verificación inicial de Gastos se ejecuta una sola vez desde el bloque principal.
 </script>
 
 
