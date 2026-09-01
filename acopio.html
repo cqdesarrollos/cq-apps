@@ -4210,6 +4210,7 @@ function cqRecuperarMatsFaltantesDesdeBackups(){
   try{
     if(!DB||!Array.isArray(DB.acopios)||!Array.isArray(DB.backups)||!DB.backups.length)return false;
     var cambio=false;
+    var recuperados=0;
     DB.acopios.forEach(function(a){
       if(!a||!Array.isArray(a.retiros))return;
       if(!Array.isArray(a.mats))a.mats=[];
@@ -4238,11 +4239,15 @@ function cqRecuperarMatsFaltantesDesdeBackups(){
           a.mats.push(encontrado);
           ids.add(mid);
           cqMatsBorradosPendientes.delete(tomb);
+          recuperados++;
           cambio=true;
         }
       });
     });
-    if(cambio)cqGuardarTombstonesMats();
+    if(cambio){
+      cqGuardarTombstonesMats();
+      console.warn('CQ Acopio: materiales recuperados de backup por tombstones antiguos:',recuperados);
+    }
     return cambio;
   }catch(e){console.warn('Acopio: no se pudo reparar materiales faltantes',e);return false;}
 }
@@ -4788,9 +4793,22 @@ async function loadFromFirebase(){
       await cqBackupDiarioDesdeRemoto(snap.data().db,snap.data().updatedAt||'');
       var localBackups=(DB&&DB.backups)||[];
       DB=sanitizeDB(snap.data().db);
-      // Antes de aplicar tombstones, recuperar únicamente materiales comprobables
-      // desde backup que quedaron huérfanos por el antiguo reuso de IDs.
-      if(typeof cqRecuperarMatsFaltantesDesdeBackups==='function')cqRecuperarMatsFaltantesDesdeBackups();
+
+      // CQ 01/09/2026 — IMPORTANTE:
+      // Firebase no transporta los backups locales. Hay que reponerlos ANTES de
+      // intentar reparar materiales. La versión anterior hacía la reparación con
+      // DB.backups vacío y recién después devolvía los backups: por eso nunca podía
+      // reconocer que un tombstone viejo estaba borrando un material válido.
+      if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
+
+      // Recuperar únicamente materiales comprobables (mismo acopio + mismo ID +
+      // mismo código/nombre histórico) desde un backup. Al recuperarlos, la propia
+      // función elimina solamente el tombstone incorrecto de ese material.
+      var reparoMats=false;
+      if(typeof cqRecuperarMatsFaltantesDesdeBackups==='function'){
+        reparoMats=!!cqRecuperarMatsFaltantesDesdeBackups();
+      }
+
       if(typeof cqAplicarTombstonesMats==='function'){
         var lm=cqAplicarTombstonesMats(DB);
         DB=lm.db;
@@ -4799,7 +4817,11 @@ async function loadFromFirebase(){
           saveRequested=true;
         }
       }
-      if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
+
+      if(reparoMats){
+        marcarAcopioDirty();
+        saveRequested=true;
+      }
       cqGuardarLocalSeguro();
       lastSyncedAt=snap.data().updatedAt||null;
       guardarBaseAcopio(lastSyncedAt);
@@ -4861,6 +4883,24 @@ function listenFirebase(){
       var localBackups=(DB&&DB.backups)||[];
       var remoteDB=sanitizeDB(snap.data().db);
 
+      // CQ 01/09/2026 — conservar backups locales antes de validar tombstones.
+      // Se usa DB temporalmente para que la reparación segura pueda comparar el
+      // remoto recibido contra los backups del dispositivo.
+      if((!remoteDB.backups||!remoteDB.backups.length) && localBackups.length){
+        remoteDB.backups=localBackups;
+      }
+      var dbAntesReparo=DB;
+      DB=remoteDB;
+      var reparoMatsListener=false;
+      try{
+        if(typeof cqRecuperarMatsFaltantesDesdeBackups==='function'){
+          reparoMatsListener=!!cqRecuperarMatsFaltantesDesdeBackups();
+          remoteDB=DB;
+        }
+      }finally{
+        DB=dbAntesReparo;
+      }
+
       // Un snapshot remoto atrasado tampoco puede borrar un ACOPIO completo recién creado.
       var teniaAcopiosNuevos=false;
       if(typeof cqReponerAcopiosNuevosEnDB==='function'){
@@ -4911,7 +4951,7 @@ function listenFirebase(){
 
       // Si el snapshot venía atrasado y todavía contenía un retiro borrado,
       // volver a publicar inmediatamente la versión correcta sin ese retiro.
-      if(teniaBorradosPendientes || teniaMatsBorrados || teniaRetirosNuevos || teniaAcopiosNuevos){
+      if(teniaBorradosPendientes || teniaMatsBorrados || teniaRetirosNuevos || teniaAcopiosNuevos || reparoMatsListener){
         marcarAcopioDirty();
         scheduleFirebaseSave();
       }
