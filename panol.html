@@ -4061,9 +4061,20 @@ function cqProductoEquivalenteIdsPanol(prodId){
     var mat=p.materialesProducto&&p.materialesProducto.id?String(p.materialesProducto.id):'';
     var cod=cqNormProductoPanol(p.codigo);
     var nom=cqNormProductoPanol(p.nombre);
-    if(baseMat&&mat&&baseMat===mat)return true;
+
+    // Identidad fuerte: mismo código o mismo nombre exacto normalizado.
+    // IMPORTANTE: no fusionar stock solo porque coincida materialesProducto.id;
+    // ese vínculo puede haber quedado viejo/reutilizado y mezclar productos distintos.
     if(baseCod&&cod&&baseCod===cod)return true;
     if(baseNom&&nom&&baseNom===nom)return true;
+
+    // Compatibilidad adicional muy conservadora: si comparten id de Materiales,
+    // exigir además que código o nombre sean compatibles (no contradictorios).
+    if(baseMat&&mat&&baseMat===mat){
+      var codCompat=(!baseCod||!cod||baseCod===cod);
+      var nomCompat=(!baseNom||!nom||baseNom===nom);
+      if(codCompat&&nomCompat)return true;
+    }
     return false;
   }).map(function(p){return String(p.id);});
 }

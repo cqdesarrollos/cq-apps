@@ -8483,7 +8483,25 @@ function getObras(){
     var g=obraGastosPorClaveMateriales(claveLoteMz(nombre));
     return g?(g.label||g.short||g.id):nombre;
   });
-  return base.concat(extras);
+  var obras=base.concat(extras);
+
+  // Completa la lista visible con las obras activas creadas en Gastos.
+  // No modifica ni guarda state.extraObras: solamente evita que una obra nueva
+  // de config/app quede fuera de Reporte/Cargar mientras todavía no tenga cargas.
+  obrasGastosActivasMateriales().forEach(function(g){
+    var nombre=g.label||g.short||g.id||'';
+    if(!nombre)return;
+    var clave=claveLoteMz(nombre);
+    var existe=obras.some(function(o){
+      if(clave){
+        return claveLoteMz(o)===clave;
+      }
+      return String(o||'').trim().toLowerCase()===String(nombre).trim().toLowerCase();
+    });
+    if(!existe)obras.push(nombre);
+  });
+
+  return obras;
 }
 function getObraOrder(){
   var obras=getObras();
