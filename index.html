@@ -1220,6 +1220,126 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
 }
 </style>
 
+
+<style id="cq-ia-historial-v1">
+.cq-ia-card{position:relative!important}
+
+.cq-ia-history-btn{
+  margin-left:auto;
+  width:40px;height:40px;min-width:40px;
+  border:1px solid rgba(255,255,255,.13);
+  border-radius:13px;
+  background:rgba(255,255,255,.055);
+  color:#dce9e4;
+  display:grid;place-items:center;
+  font-size:18px;
+  cursor:pointer;
+}
+.cq-ia-history-btn:active{transform:scale(.97)}
+
+.cq-ia-history-panel{
+  position:absolute;
+  z-index:50;
+  left:0;right:0;
+  top:73px;
+  bottom:72px;
+  display:none;
+  flex-direction:column;
+  background:linear-gradient(155deg,#071a37 0%,#0a2347 64%,#08182e 100%);
+  border-top:1px solid rgba(255,255,255,.09);
+  color:#edf5f2;
+}
+.cq-ia-history-panel.open{display:flex}
+
+.cq-ia-history-head{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 15px 11px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.cq-ia-history-head-main{flex:1;min-width:0}
+.cq-ia-history-title{font-size:16px;font-weight:900}
+.cq-ia-history-sub{font-size:9.5px;color:#91a6b8;margin-top:2px}
+.cq-ia-history-new{
+  border:1px solid rgba(78,190,139,.32);
+  background:rgba(52,178,121,.12);
+  color:#76e2ad;
+  border-radius:11px;
+  min-height:34px;
+  padding:0 10px;
+  font-size:9px;
+  font-weight:900;
+}
+.cq-ia-history-close{
+  width:34px;height:34px;
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:11px;
+  background:rgba(255,255,255,.05);
+  color:#cfe0db;
+  font-size:19px;
+}
+
+.cq-ia-history-list{
+  flex:1;min-height:0;overflow:auto;
+  padding:10px 10px 16px;
+}
+.cq-ia-history-loading,.cq-ia-history-empty{
+  padding:24px 16px;text-align:center;
+  color:#9fb1c1;font-size:11px;line-height:1.5;
+}
+.cq-ia-history-item{
+  width:100%;
+  display:block;
+  text-align:left;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.025));
+  color:#eef5f2;
+  padding:11px 12px;
+  margin-bottom:8px;
+}
+.cq-ia-history-item:active{transform:scale(.993)}
+.cq-ia-history-q{
+  font-size:11.5px;font-weight:900;
+  line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cq-ia-history-meta{
+  margin-top:5px;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  color:#8fa5b7;font-size:8.5px;
+}
+.cq-ia-history-mods{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+.cq-ia-history-viewbar{
+  display:none;
+  align-items:center;gap:8px;
+  padding:7px 10px;
+  background:rgba(32,111,162,.11);
+  border-bottom:1px solid rgba(78,147,195,.18);
+  color:#a8cce4;
+  font-size:9px;
+  font-weight:800;
+}
+.cq-ia-history-viewbar.show{display:flex}
+.cq-ia-history-viewbar button{
+  margin-left:auto;
+  border:1px solid rgba(255,255,255,.11);
+  background:rgba(255,255,255,.05);
+  color:#d7e6e1;
+  border-radius:9px;
+  padding:5px 8px;
+  font-size:8px;
+  font-weight:900;
+}
+
+@media(max-width:420px){
+  .cq-ia-history-panel{top:69px;bottom:68px}
+  .cq-ia-history-btn{width:38px;height:38px;min-width:38px}
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -1935,18 +2055,34 @@ form.addEventListener("submit",async e=>{
 
 <div id="cqIAModal" aria-hidden="true">
  <div class="cq-ia-card">
-  <div class="cq-ia-head"><div class="cq-ia-avatar">🤖</div><div><div class="cq-ia-title">IA · CQ Gerencia</div><div class="cq-ia-sub">Asistente ejecutivo · Solo lectura</div></div><button class="cq-ia-x" id="cqIACerrar">×</button></div>
+  <div class="cq-ia-head"><div class="cq-ia-avatar">🤖</div><div><div class="cq-ia-title">IA · CQ Gerencia</div><div class="cq-ia-sub">Asistente ejecutivo · Solo lectura</div></div><button class="cq-ia-history-btn" id="cqIAHistorialBtn" type="button" aria-label="Historial" title="Historial">🕘</button><button class="cq-ia-x" id="cqIACerrar">×</button></div>
+  <div class="cq-ia-history-viewbar" id="cqIAHistoryViewBar"><span>Consulta del historial</span><button type="button" id="cqIAHistoryBackLive">Volver al chat actual</button></div>
   <div class="cq-ia-body" id="cqIABody"><div class="cq-ia-msg">Hola. Puedo ayudarte a analizar la operación de CQ, comparar información y detectar desvíos. En esta etapa trabajo únicamente en modo lectura.</div>
    <div class="cq-ia-quick"><button data-q="¿Qué obras requieren atención hoy?">⚠️ Obras que requieren atención</button><button data-q="¿Hay errores de carga o sincronización?">🩺 Revisar errores de apps</button><button data-q="Comparame los gastos entre obras">💳 Comparar gastos</button><button data-q="¿Hay precios o cantidades fuera de lo normal?">🔎 Detectar anomalías</button></div>
    <div class="cq-ia-note">Etapa 1 real: Firebase solo lectura · Gastos + Flujo de Fondos + Avances</div>
   </div>
+
+  <div class="cq-ia-history-panel" id="cqIAHistoryPanel" aria-hidden="true">
+    <div class="cq-ia-history-head">
+      <div class="cq-ia-history-head-main">
+        <div class="cq-ia-history-title">Historial de IA</div>
+        <div class="cq-ia-history-sub">Últimas consultas guardadas en Firebase</div>
+      </div>
+      <button class="cq-ia-history-new" id="cqIAHistoryNew" type="button">+ Nueva</button>
+      <button class="cq-ia-history-close" id="cqIAHistoryClose" type="button">×</button>
+    </div>
+    <div class="cq-ia-history-list" id="cqIAHistoryList">
+      <div class="cq-ia-history-loading">Abrí Historial para cargar las consultas.</div>
+    </div>
+  </div>
+
   <form class="cq-ia-input" id="cqIAForm"><input id="cqIAInput" placeholder="Preguntame sobre CQ..." autocomplete="off"><button>Enviar</button></form>
  </div>
 </div>
 <script type="module" id="cq-ia-etapa1-real-js">
 import { getApps, getApp, initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
@@ -1960,6 +2096,9 @@ const app=getApps().length?getApp():initializeApp(firebaseConfig);
 const auth=getAuth(app), db=getFirestore(app);
 
 const modal=document.getElementById('cqIAModal'),btn=document.getElementById('btnIAMenu'),cerrar=document.getElementById('cqIACerrar'),form=document.getElementById('cqIAForm'),input=document.getElementById('cqIAInput'),body=document.getElementById('cqIABody');
+const historyBtn=document.getElementById('cqIAHistorialBtn'),historyPanel=document.getElementById('cqIAHistoryPanel'),historyClose=document.getElementById('cqIAHistoryClose'),historyList=document.getElementById('cqIAHistoryList'),historyNew=document.getElementById('cqIAHistoryNew'),historyViewBar=document.getElementById('cqIAHistoryViewBar'),historyBackLive=document.getElementById('cqIAHistoryBackLive');
+const INITIAL_BODY_HTML=body.innerHTML;
+let liveBodyHTML=INITIAL_BODY_HTML;
 const TTL=5*60*1000, cache=new Map();
 let busy=false;
 
@@ -2008,6 +2147,84 @@ Las obras con mayor gasto acumulado son **L12 Mz93 (Nelson)**, **L13 Mz93 (Nelso
 
 ### Lectura gerencial
 No alcanza con mirar quién gastó más: el próximo paso útil es cruzar **gasto + avance + flujo de fondos** para detectar qué obra está gastando por encima de su progreso.`;
+}
+
+
+function historyCollection(user){
+ return collection(db,'ia_historial',user.uid,'consultas');
+}
+function fmtHistoryDate(ms){
+ const d=new Date(Number(ms)||Date.now());
+ return d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function closeHistory(){
+ historyPanel.classList.remove('open');
+ historyPanel.setAttribute('aria-hidden','true');
+}
+async function openHistory(){
+ const user=auth.currentUser;
+ if(!user){msg('Necesito que estés ingresado en Gerencia para ver el historial.');return}
+ historyPanel.classList.add('open');
+ historyPanel.setAttribute('aria-hidden','false');
+ historyList.innerHTML='<div class="cq-ia-history-loading">Cargando historial…</div>';
+ try{
+   const qh=query(historyCollection(user),orderBy('createdAtMs','desc'),limit(30));
+   const snap=await getDocs(qh);
+   if(snap.empty){
+     historyList.innerHTML='<div class="cq-ia-history-empty">Todavía no hay consultas guardadas.</div>';
+     return;
+   }
+   historyList.innerHTML='';
+   snap.forEach(ds=>{
+     const d=ds.data()||{};
+     const item=document.createElement('button');
+     item.type='button';
+     item.className='cq-ia-history-item';
+     const mods=Array.isArray(d.modulos)?d.modulos.join(' · '):'';
+     item.innerHTML='<div class="cq-ia-history-q">'+cqEscapeHtml(d.pregunta||'Consulta')+'</div><div class="cq-ia-history-meta"><span>'+cqEscapeHtml(fmtHistoryDate(d.createdAtMs))+'</span><span class="cq-ia-history-mods">'+cqEscapeHtml(mods)+'</span></div>';
+     item.addEventListener('click',()=>{
+       liveBodyHTML=body.innerHTML;
+       body.innerHTML='';
+       msg(d.pregunta||'Consulta','user');
+       const ans=msg('');
+       ans.innerHTML=cqRenderAI(d.respuesta||'Sin respuesta guardada.');
+       historyViewBar.classList.add('show');
+       closeHistory();
+       body.scrollTop=0;
+     });
+     historyList.appendChild(item);
+   });
+ }catch(e){
+   console.error('CQ IA historial',e);
+   historyList.innerHTML='<div class="cq-ia-history-empty">No pude cargar el historial. La IA sigue funcionando normalmente.<br><small>'+cqEscapeHtml(e?.message||'')+'</small></div>';
+ }
+}
+async function saveHistory(user,pregunta,respuesta,modulos){
+ try{
+   await addDoc(historyCollection(user),{
+     pregunta:String(pregunta||''),
+     respuesta:String(respuesta||''),
+     modulos:Array.isArray(modulos)?modulos:[],
+     usuarioEmail:user.email||'',
+     createdAt:serverTimestamp(),
+     createdAtMs:Date.now()
+   });
+ }catch(e){
+   console.error('CQ IA: no se pudo guardar historial',e);
+ }
+}
+function newConversation(){
+ closeHistory();
+ historyViewBar.classList.remove('show');
+ body.innerHTML=INITIAL_BODY_HTML;
+ liveBodyHTML=body.innerHTML;
+ setNote('Etapa 1 real: Firebase solo lectura · Gastos + Flujo de Fondos + Avances');
+ setTimeout(()=>input.focus(),60);
+}
+function returnToLiveConversation(){
+ body.innerHTML=liveBodyHTML||INITIAL_BODY_HTML;
+ historyViewBar.classList.remove('show');
+ setTimeout(()=>{body.scrollTop=body.scrollHeight;input.focus()},40);
 }
 
 async function cached(path){const hit=cache.get(path),now=Date.now();if(hit&&now-hit.at<TTL)return hit.data;const [c,id]=path.split('/');const s=await getDoc(doc(db,c,id));const data=s.exists()?s.data():null;cache.set(path,{at:now,data});return data}
@@ -2071,7 +2288,11 @@ async function ask(q){
   const context=await buildContext(q);const token=await user.getIdToken();
   const res=await fetch('/.netlify/functions/cq-ai',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({question:q,context})});
   const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||('Error '+res.status));
-  wait.innerHTML=cqRenderAI(data.answer||'No recibí una respuesta de la IA.');setNote('Datos reales · Firebase solo lectura · '+context.modulosCargados.join(' + '));
+  const answerText=data.answer||'No recibí una respuesta de la IA.';
+  wait.innerHTML=cqRenderAI(answerText);
+  setNote('Datos reales · Firebase solo lectura · '+context.modulosCargados.join(' + '));
+  liveBodyHTML=body.innerHTML;
+  saveHistory(user,q,answerText,context.modulosCargados);
  }catch(e){console.error('CQ IA',e);wait.textContent='No pude completar la consulta: '+(e?.message||'error desconocido')+'.';setNote('No se modificó ningún dato.');}
  finally{busy=false;body.scrollTop=body.scrollHeight}
 }
@@ -2079,64 +2300,17 @@ async function ask(q){
 if(btn)btn.addEventListener('click',abrir);
 if(cerrar)cerrar.addEventListener('click',close);
 if(modal)modal.addEventListener('click',e=>{if(e.target===modal)close()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(historyPanel.classList.contains('open'))closeHistory();else close()}});
 if(form)form.addEventListener('submit',e=>{e.preventDefault();const q=input.value.trim();input.value='';ask(q)});
+if(historyBtn)historyBtn.addEventListener('click',openHistory);
+if(historyClose)historyClose.addEventListener('click',closeHistory);
+if(historyNew)historyNew.addEventListener('click',newConversation);
+if(historyBackLive)historyBackLive.addEventListener('click',returnToLiveConversation);
 const demoBtn=document.getElementById('cqIADemo');if(demoBtn)demoBtn.remove();
 document.querySelectorAll('.cq-ia-quick button[data-q]').forEach(b=>b.addEventListener('click',()=>ask(b.dataset.q)));
 </script>
 
 
-
-<script id="cq-ia-production-actions">
-(function(){
-  function cleanText(el){
-    const clone=el.cloneNode(true);
-    const a=clone.querySelector('.cq-ia-actions-real'); if(a) a.remove();
-    return (clone.innerText||'').replace(/\n{3,}/g,'\n\n').trim();
-  }
-  function addActions(answerEl){
-    if(!answerEl || answerEl.querySelector('.cq-ia-actions-real')) return;
-    const actions=document.createElement('div');
-    actions.className='cq-ia-actions cq-ia-actions-real';
-    actions.innerHTML='<button type="button" data-act="copy">▣ Copiar</button><button type="button" data-act="pdf">⇩ Descargar PDF</button><button type="button" class="wa" data-act="wa">◉ Enviar por WhatsApp</button>';
-    answerEl.appendChild(actions);
-
-    actions.querySelector('[data-act="copy"]').onclick=async function(){
-      try{
-        await navigator.clipboard.writeText(cleanText(answerEl));
-        const b=this; const old=b.textContent; b.textContent='✓ Copiado';
-        setTimeout(()=>b.textContent=old,1300);
-      }catch(e){ alert('No se pudo copiar automáticamente.'); }
-    };
-
-    actions.querySelector('[data-act="wa"]').onclick=function(){
-      window.open('https://wa.me/?text='+encodeURIComponent(cleanText(answerEl)),'_blank');
-    };
-
-    actions.querySelector('[data-act="pdf"]').onclick=function(){
-      const text=cleanText(answerEl);
-      const safe=text.replace(/[&<>]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m]});
-      const w=window.open('','_blank'); if(!w) return;
-      const parts=[
-        '<!doctype html><html><head><meta charset="utf-8"><title>CQ Gerencia</title>',
-        '<style>body{font-family:Arial,sans-serif;padding:28px;color:#17324b}pre{white-space:pre-wrap;font:14px/1.55 Arial,sans-serif}</style>',
-        '</head><body><h2>CQ Gerencia</h2><pre>', safe,
-        '</pre></body></html>'
-      ];
-      w.document.write(parts.join(''));
-      w.document.close();
-      setTimeout(()=>w.print(),250);
-    };
-  }
-
-  const body=document.getElementById('cqIABody');
-  if(!body) return;
-  const scan=()=>body.querySelectorAll('.cq-ia-answer').forEach(addActions);
-  const obs=new MutationObserver(scan);
-  obs.observe(body,{childList:true,subtree:true});
-  scan();
-})();
-</script>
 
 </body>
 </html>
