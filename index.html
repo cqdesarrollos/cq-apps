@@ -1937,7 +1937,7 @@ form.addEventListener("submit",async e=>{
  <div class="cq-ia-card">
   <div class="cq-ia-head"><div class="cq-ia-avatar">🤖</div><div><div class="cq-ia-title">IA · CQ Gerencia</div><div class="cq-ia-sub">Asistente ejecutivo · Solo lectura</div></div><button class="cq-ia-x" id="cqIACerrar">×</button></div>
   <div class="cq-ia-body" id="cqIABody"><div class="cq-ia-msg">Hola. Puedo ayudarte a analizar la operación de CQ, comparar información y detectar desvíos. En esta etapa trabajo únicamente en modo lectura.</div>
-   <div class="cq-ia-quick"><button type="button" id="cqIADemo">👁️ Ver respuesta de ejemplo</button><button data-q="¿Qué obras requieren atención hoy?">⚠️ Obras que requieren atención</button><button data-q="¿Hay errores de carga o sincronización?">🩺 Revisar errores de apps</button><button data-q="Comparame los gastos entre obras">💳 Comparar gastos</button><button data-q="¿Hay precios o cantidades fuera de lo normal?">🔎 Detectar anomalías</button></div>
+   <div class="cq-ia-quick"><button data-q="¿Qué obras requieren atención hoy?">⚠️ Obras que requieren atención</button><button data-q="¿Hay errores de carga o sincronización?">🩺 Revisar errores de apps</button><button data-q="Comparame los gastos entre obras">💳 Comparar gastos</button><button data-q="¿Hay precios o cantidades fuera de lo normal?">🔎 Detectar anomalías</button></div>
    <div class="cq-ia-note">Etapa 1 real: Firebase solo lectura · Gastos + Flujo de Fondos + Avances</div>
   </div>
   <form class="cq-ia-input" id="cqIAForm"><input id="cqIAInput" placeholder="Preguntame sobre CQ..." autocomplete="off"><button>Enviar</button></form>
@@ -2009,152 +2009,7 @@ Las obras con mayor gasto acumulado son **L12 Mz93 (Nelson)**, **L13 Mz93 (Nelso
 ### Lectura gerencial
 No alcanza con mirar quién gastó más: el próximo paso útil es cruzar **gasto + avance + flujo de fondos** para detectar qué obra está gastando por encima de su progreso.`;
 }
-function cqDemoTextoCompartir(){
- return `CQ Gerencia · Comparación de gastos entre obras
 
-Resumen ejecutivo
-Las obras con mayor gasto acumulado son L12 Mz93 (Nelson), L13 Mz93 (Nelson) y L18 Mz78 (Ramón). La diferencia entre la primera y la tercera es de aproximadamente USD 8.331.
-
-1. L12 Mz93 (Nelson): USD 132.640,56 · $194.169.382
-2. L13 Mz93 (Nelson): USD 128.224,65 · $187.661.982
-3. L18 Mz78 (Ramón): USD 124.309,66 · $178.105.775
-4. L6 Mz92 (Gabi): USD 115.578,68 · $165.486.487
-5. L5 Mz98 (Ramón): USD 114.230,28 · $165.409.287
-
-Qué revisaría
-• L12 Mz93 lidera el gasto acumulado y conviene contrastarlo con su porcentaje de avance.
-• L5 Mz98 muestra el mayor USD por unidad del ejemplo; merece revisar la composición del gasto.
-• Verificar diferencias de alcance, cambios de proyecto o adicionales entre obras con USD por unidad elevado.
-
-Sugerencias
-• Cruzar estos datos con Avances para evaluar costo por % de obra.
-• Revisar los rubros que más impactan en las 3 obras principales.`;
-}
-function cqDemoReporteHTML(){
- const now=new Date();
- const fecha=now.toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'});
- const hora=now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
- return `
- <div class="cq-ia-final-report">
-   <div class="cq-ia-report-head">
-     <div class="cq-ia-report-icon">📊</div>
-     <div class="cq-ia-report-head-main">
-       <div class="cq-ia-report-title">Comparación de gastos entre obras</div>
-       <div class="cq-ia-report-sub">Período: Total acumulado · Expresado en USD y ARS</div>
-     </div>
-     <div class="cq-ia-report-date">📅 ${fecha}<br>${hora}</div>
-   </div>
-
-   <div class="cq-ia-section summary">
-     <h3>📈 Resumen ejecutivo</h3>
-     <p>Las obras con mayor gasto acumulado son <strong>L12 Mz93 (Nelson)</strong>, <strong>L13 Mz93 (Nelson)</strong> y <strong>L18 Mz78 (Ramón)</strong>. La diferencia entre la primera y la tercera es de aproximadamente <strong>USD 8.331</strong>.</p>
-   </div>
-
-   <div class="cq-ia-final-table-wrap">
-     <table class="cq-ia-final-table">
-       <thead><tr><th>#</th><th>Obra</th><th>Total USD</th><th>Total ARS</th><th>USD por unidad</th></tr></thead>
-       <tbody>
-         <tr><td>1</td><td>L12 Mz93 (Nelson)</td><td>132.640,56</td><td>194.169.382</td><td>608,44</td></tr>
-         <tr><td>2</td><td>L13 Mz93 (Nelson)</td><td>128.224,65</td><td>187.661.982</td><td>689,38</td></tr>
-         <tr><td>3</td><td>L18 Mz78 (Ramón)</td><td>124.309,66</td><td>178.105.775</td><td>823,24</td></tr>
-         <tr><td>4</td><td>L6 Mz92 (Gabi)</td><td>115.578,68</td><td>165.486.487</td><td>745,67</td></tr>
-         <tr><td>5</td><td>L5 Mz98 (Ramón)</td><td>114.230,28</td><td>165.409.287</td><td>1.142,30</td></tr>
-       </tbody>
-     </table>
-   </div>
-
-   <div class="cq-ia-section review">
-     <h3>🎯 Qué revisaría</h3>
-     <ul class="cq-ia-list">
-       <li><strong>L12 Mz93</strong> lidera el gasto acumulado y conviene contrastarlo con su porcentaje de avance.</li>
-       <li><strong>L5 Mz98</strong> muestra el mayor USD por unidad dentro de este ejemplo; merece revisar composición del gasto.</li>
-       <li><strong>Verificar</strong> diferencias de alcance, cambios de proyecto o adicionales entre obras con USD por unidad elevado.</li>
-     </ul>
-   </div>
-
-   <div class="cq-ia-section suggest">
-     <h3>💡 Sugerencias</h3>
-     <ul class="cq-ia-list">
-       <li>Cruzar estos datos con <strong>Avances</strong> para evaluar costo por % de obra.</li>
-       <li>Revisar los rubros que más impactan en las 3 obras principales.</li>
-     </ul>
-   </div>
-
-   <div class="cq-ia-actions">
-     <button type="button" id="cqIACopiarDemo">▣ Copiar</button>
-     <button type="button" id="cqIAPdfDemo">⇩ Descargar PDF</button>
-     <button type="button" class="wa" id="cqIAWhatsAppDemo">◉ Enviar por WhatsApp</button>
-   </div>
- </div>`;
-}
-function cqMostrarDemo(){
- const old=body.querySelector('.cq-ia-demo');if(old)old.remove();
- const el=document.createElement('div');
- el.className='cq-ia-answer cq-ia-demo';
- el.innerHTML=cqDemoReporteHTML();
- body.appendChild(el);
- body.scrollTop=body.scrollHeight;
- setNote('Datos reales · Firebase · Solo lectura');
-
- const texto=cqDemoTextoCompartir();
- const copyBtn=document.getElementById('cqIACopiarDemo');
- const waBtn=document.getElementById('cqIAWhatsAppDemo');
- const pdfBtn=document.getElementById('cqIAPdfDemo');
-
- if(copyBtn)copyBtn.onclick=async()=>{
-   try{await navigator.clipboard.writeText(texto);copyBtn.textContent='✓ Copiado';setTimeout(()=>copyBtn.textContent='▣ Copiar',1300)}
-   catch(_){alert('No se pudo copiar automáticamente en este navegador.')}
- };
- if(waBtn)waBtn.onclick=()=>{
-   window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
- };
- if(pdfBtn)pdfBtn.onclick=()=>{
-   const w=window.open('','_blank');
-   if(!w)return;
-   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>CQ Gerencia</title>
-   <style>body{font-family:Arial,sans-serif;padding:26px;color:#17324b}pre{white-space:pre-wrap;font-family:Arial,sans-serif;line-height:1.5;font-size:13px}</style></head>
-   <body><h2>CQ Gerencia</h2><pre>${cqEscapeHtml(texto)}</pre><script>window.onload=()=>window.print()<\/script>
-<script id="cq-ia-production-actions">
-(function(){
-  function cleanText(el){
-    const clone=el.cloneNode(true);
-    clone.querySelector('.cq-ia-actions-real')?.remove();
-    return (clone.innerText||'').replace(/\n{3,}/g,'\n\n').trim();
-  }
-  function addActions(answerEl){
-    if(!answerEl || answerEl.querySelector('.cq-ia-actions-real')) return;
-    const actions=document.createElement('div');
-    actions.className='cq-ia-actions cq-ia-actions-real';
-    actions.innerHTML='<button type="button" data-act="copy">▣ Copiar</button><button type="button" data-act="pdf">⇩ Descargar PDF</button><button type="button" class="wa" data-act="wa">◉ Enviar por WhatsApp</button>';
-    answerEl.appendChild(actions);
-    actions.querySelector('[data-act="copy"]').onclick=async()=>{
-      try{
-        await navigator.clipboard.writeText(cleanText(answerEl));
-        const b=actions.querySelector('[data-act="copy"]');b.textContent='✓ Copiado';
-        setTimeout(()=>b.textContent='▣ Copiar',1300);
-      }catch(_){alert('No se pudo copiar automáticamente.')}
-    };
-    actions.querySelector('[data-act="wa"]').onclick=()=>{
-      window.open('https://wa.me/?text='+encodeURIComponent(cleanText(answerEl)),'_blank');
-    };
-    actions.querySelector('[data-act="pdf"]').onclick=()=>{
-      const text=cleanText(answerEl);
-      const safe=text.replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
-      const w=window.open('','_blank');if(!w)return;
-      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>CQ Gerencia</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#17324b}pre{white-space:pre-wrap;font:14px/1.55 Arial,sans-serif}</style></head><body><h2>CQ Gerencia</h2><pre>'+safe+'</pre><script>window.onload=()=>window.print()<\/script></body></html>');
-      w.document.close();
-    };
-  }
-  const body=document.getElementById('cqIABody');if(!body)return;
-  const obs=new MutationObserver(()=>body.querySelectorAll('.cq-ia-answer:not(.cq-ia-demo)').forEach(addActions));
-  obs.observe(body,{childList:true,subtree:true});
-})();
-</script>
-
-</body></html>`);
-   w.document.close();
- };
-}
 async function cached(path){const hit=cache.get(path),now=Date.now();if(hit&&now-hit.at<TTL)return hit.data;const [c,id]=path.split('/');const s=await getDoc(doc(db,c,id));const data=s.exists()?s.data():null;cache.set(path,{at:now,data});return data}
 
 function route(q){
@@ -2230,6 +2085,58 @@ const demoBtn=document.getElementById('cqIADemo');if(demoBtn)demoBtn.remove();
 document.querySelectorAll('.cq-ia-quick button[data-q]').forEach(b=>b.addEventListener('click',()=>ask(b.dataset.q)));
 </script>
 
+
+
+<script id="cq-ia-production-actions">
+(function(){
+  function cleanText(el){
+    const clone=el.cloneNode(true);
+    const a=clone.querySelector('.cq-ia-actions-real'); if(a) a.remove();
+    return (clone.innerText||'').replace(/\n{3,}/g,'\n\n').trim();
+  }
+  function addActions(answerEl){
+    if(!answerEl || answerEl.querySelector('.cq-ia-actions-real')) return;
+    const actions=document.createElement('div');
+    actions.className='cq-ia-actions cq-ia-actions-real';
+    actions.innerHTML='<button type="button" data-act="copy">▣ Copiar</button><button type="button" data-act="pdf">⇩ Descargar PDF</button><button type="button" class="wa" data-act="wa">◉ Enviar por WhatsApp</button>';
+    answerEl.appendChild(actions);
+
+    actions.querySelector('[data-act="copy"]').onclick=async function(){
+      try{
+        await navigator.clipboard.writeText(cleanText(answerEl));
+        const b=this; const old=b.textContent; b.textContent='✓ Copiado';
+        setTimeout(()=>b.textContent=old,1300);
+      }catch(e){ alert('No se pudo copiar automáticamente.'); }
+    };
+
+    actions.querySelector('[data-act="wa"]').onclick=function(){
+      window.open('https://wa.me/?text='+encodeURIComponent(cleanText(answerEl)),'_blank');
+    };
+
+    actions.querySelector('[data-act="pdf"]').onclick=function(){
+      const text=cleanText(answerEl);
+      const safe=text.replace(/[&<>]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m]});
+      const w=window.open('','_blank'); if(!w) return;
+      const parts=[
+        '<!doctype html><html><head><meta charset="utf-8"><title>CQ Gerencia</title>',
+        '<style>body{font-family:Arial,sans-serif;padding:28px;color:#17324b}pre{white-space:pre-wrap;font:14px/1.55 Arial,sans-serif}</style>',
+        '</head><body><h2>CQ Gerencia</h2><pre>', safe,
+        '</pre></body></html>'
+      ];
+      w.document.write(parts.join(''));
+      w.document.close();
+      setTimeout(()=>w.print(),250);
+    };
+  }
+
+  const body=document.getElementById('cqIABody');
+  if(!body) return;
+  const scan=()=>body.querySelectorAll('.cq-ia-answer').forEach(addActions);
+  const obs=new MutationObserver(scan);
+  obs.observe(body,{childList:true,subtree:true});
+  scan();
+})();
+</script>
 
 </body>
 </html>
