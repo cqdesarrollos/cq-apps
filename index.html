@@ -2059,7 +2059,7 @@ form.addEventListener("submit",async e=>{
   <div class="cq-ia-history-viewbar" id="cqIAHistoryViewBar"><span>Consulta del historial</span><button type="button" id="cqIAHistoryBackLive">Volver al chat actual</button></div>
   <div class="cq-ia-body" id="cqIABody"><div class="cq-ia-msg">Hola. Puedo ayudarte a analizar la operación de CQ, comparar información y detectar desvíos. En esta etapa trabajo únicamente en modo lectura.</div>
    <div class="cq-ia-quick"><button data-q="¿Qué obras requieren atención hoy?">⚠️ Obras que requieren atención</button><button data-q="¿Hay errores de carga o sincronización?">🩺 Revisar errores de apps</button><button data-q="Comparame los gastos entre obras">💳 Comparar gastos</button><button data-q="¿Hay precios o cantidades fuera de lo normal?">🔎 Detectar anomalías</button></div>
-   <div class="cq-ia-note">Etapa 1 real: Firebase solo lectura · Gastos + Flujo de Fondos + Avances</div>
+   <div class="cq-ia-note">Etapa 1.5: Firebase solo lectura · Data Layer CQ integrado</div>
   </div>
 
   <div class="cq-ia-history-panel" id="cqIAHistoryPanel" aria-hidden="true">
@@ -2218,7 +2218,7 @@ function newConversation(){
  historyViewBar.classList.remove('show');
  body.innerHTML=INITIAL_BODY_HTML;
  liveBodyHTML=body.innerHTML;
- setNote('Etapa 1 real: Firebase solo lectura · Gastos + Flujo de Fondos + Avances');
+ setNote('Etapa 1.5: Firebase solo lectura · Data Layer CQ integrado');
  setTimeout(()=>input.focus(),60);
 }
 function returnToLiveConversation(){
@@ -2230,13 +2230,30 @@ function returnToLiveConversation(){
 async function cached(path){const hit=cache.get(path),now=Date.now();if(hit&&now-hit.at<TTL)return hit.data;const [c,id]=path.split('/');const s=await getDoc(doc(db,c,id));const data=s.exists()?s.data():null;cache.set(path,{at:now,data});return data}
 
 function route(q){
- const t=norm(q);let gastos=false,flujo=false,avances=false;
- if(/gasto|pagam|pago|proveedor|subrubro|rubro|instal|plomer|electric|arquitect|lote|escriban|oficina|material/.test(t))gastos=true;
- if(/flujo|fondo|liquidez|saldo futuro|proxim|meses|ingreso|egreso|caja futura|cash/.test(t))flujo=true;
- if(/avance|atras|retras|deveng|constructor|certific|progreso|obra|terminad|ejecucion/.test(t))avances=true;
- if(/atencion|preocupa|situacion|estado general|resumen ejecutivo|como estamos|riesgo/.test(t))gastos=flujo=avances=true;
- if(!gastos&&!flujo&&!avances)gastos=flujo=avances=true;
- return {gastos,flujo,avances};
+ const t=norm(q);
+ let gastos=false,flujo=false,avances=false,cajaGerencia=false,cajaChica=false,materiales=false,acopio=false,panol=false,agenda=false,control=false,financieros=false,roeTir=false;
+ if(/gasto|pagam|pago|proveedor|subrubro|rubro|instal|plomer|electric|arquitect|lote|escriban|oficina/.test(t))gastos=true;
+ if(/flujo|saldo futuro|proxim|meses|caja futura|cash flow|proyeccion/.test(t))flujo=true;
+ if(/avance|atras|retras|deveng|constructor|certific|progreso|ejecucion/.test(t))avances=true;
+ if(/caja gerencia|fondo comun|fondo común|santander|saldo actual|disponible|liquidez actual|deuda socio|deuda socios|caja real/.test(t))cajaGerencia=true;
+ if(/caja chica|gasto menor|gastos menores|rendicion|rendición/.test(t))cajaChica=true;
+ if(/material|compra|comprado|presupuesto|codigo|código/.test(t))materiales=true;
+ if(/acopio|acopiado|retiro|retirar/.test(t))acopio=true;
+ if(/panol|pañol|stock interno|deposito|depósito/.test(t))panol=true;
+ if(/agenda|tarea|recordatorio|vencim|pendiente|asignad/.test(t))agenda=true;
+ if(/control de obra|control obra|informe diario|informe semanal|seguimiento de obra|foto obra/.test(t))control=true;
+ if(/indicador|financiero|indice cq|índice cq|stock de casas|ventas|liquidez|riesgo operativo/.test(t))financieros=true;
+ if(/roe|tir|rentabilidad|retorno|inversion|inversión/.test(t))roeTir=true;
+ if(/obra/.test(t)){avances=true;control=true}
+ if(/caja/.test(t)&&!/caja chica/.test(t)){cajaGerencia=true;if(/futur|proxim|compromis|proyeccion/.test(t))flujo=true}
+ if(/material/.test(t)&&/acopio|panol|pañol|stock|retiro/.test(t)){materiales=true;acopio=true;panol=true}
+ if(/atencion|preocupa|situacion|estado general|resumen ejecutivo|como estamos|riesgo general/.test(t)){
+   gastos=flujo=avances=cajaGerencia=cajaChica=materiales=acopio=panol=agenda=control=financieros=roeTir=true;
+ }
+ if(!gastos&&!flujo&&!avances&&!cajaGerencia&&!cajaChica&&!materiales&&!acopio&&!panol&&!agenda&&!control&&!financieros&&!roeTir){
+   gastos=flujo=avances=cajaGerencia=financieros=true;
+ }
+ return {gastos,flujo,avances,cajaGerencia,cajaChica,materiales,acopio,panol,agenda,control,financieros,roeTir};
 }
 function obraMatches(q,o){const t=norm(q),vals=[o?.id,o?.label,o?.short,o?.obraNum,o?.name].filter(Boolean).map(norm);return vals.some(v=>v&&v.length>=2&&(t.includes(v)||v.includes(t)))}
 function gastoARS(g,tcDef){const m=moneyNum(g.monto),tc=moneyNum(g.tc)||tcDef||1400;return String(g.moneda||'ars').toLowerCase()==='usd'?m*tc:m}
@@ -2279,7 +2296,86 @@ async function readAvances(q){
  return {obras:out,scope:matched.length?'obra_especifica':'todas_las_obras',nota:'avanceItemsAproxPct es un indicador simple calculado desde items guardados; no reemplaza el porcentaje ponderado exacto mostrado por Avances.'};
 }
 
-async function buildContext(q){const r=route(q),ctx={consultadoEn:new Date().toISOString(),modulosCargados:[]};if(r.gastos){ctx.gastos=await readGastos(q);ctx.modulosCargados.push('Gastos')}if(r.flujo){ctx.flujoFondos=await readFlujo();ctx.modulosCargados.push('Flujo de Fondos')}if(r.avances){ctx.avances=await readAvances(q);ctx.modulosCargados.push('Avances')}return ctx}
+
+function arr(v){return Array.isArray(v)?v:[]}
+function topBy(arrIn,keyFn,valueFn,n=15){
+ const a=arr(arrIn).map(x=>({x,v:moneyNum(valueFn(x)),k:String(keyFn(x)||'Sin dato')})).filter(z=>z.v!==0);
+ a.sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));return a.slice(0,n).map(z=>({clave:z.k,valor:z.v}));
+}
+function recentByDate(arrIn,n=25){return [...arr(arrIn)].sort((a,b)=>String(b?.fecha||b?.date||b?.createdAt||b?.updatedAt||'').localeCompare(String(a?.fecha||a?.date||a?.createdAt||a?.updatedAt||''))).slice(0,n)}
+function balanceMovs(initial,movs){let s=moneyNum(initial);arr(movs).forEach(m=>{const tipo=norm(m?.tipo||m?.type);const val=moneyNum(m?.monto??m?.amount??m?.importe);s+=/ingreso|entrada|credito|crédito/.test(tipo)?val:-val});return s}
+
+async function readCajaGerencia(){
+ const d=await cached('cq_caja/gastos_compartidos_v1')||{};const db0=d.db&&typeof d.db==='object'?d.db:{};
+ const fp=arr(db0.fondoPesosMovs),fu=arr(db0.fondoUsdMovs),sp=arr(db0.santanderMovs),su=arr(db0.santanderUsdMovs);
+ const saldoFP=balanceMovs(db0.fondoPesosSaldoInicial,fp),saldoFU=balanceMovs(db0.fondoUsdSaldoInicial,fu),saldoSP=balanceMovs(db0.santanderSaldoInicial,sp),saldoSU=balanceMovs(db0.santanderUsdSaldoInicial,su);
+ const compact=m=>({fecha:m.fecha||m.date||'',tipo:m.tipo||m.type||'',monto:moneyNum(m.monto??m.amount),obra:m.obra||'',rubro:m.rubro||'',subrubro:m.subrubro||'',descripcion:m.desc||m.descripcion||'',comentario:m.comentario||'',tc:moneyNum(m.tc),integrationId:m.integrationId||'',sourceMovementId:m.sourceMovementId||''});
+ const todos=[...fp,...fu,...sp,...su];
+ return {actualizado:d.updatedAt||'',tipoCambio:moneyNum(db0.lastTC),saldos:{fondoComunPesos:saldoFP,fondoComunUsd:saldoFU,santanderPesos:saldoSP,santanderUsd:saldoSU,totalLiquidoPesos:saldoFP+saldoSP,totalLiquidoUsd:saldoFU+saldoSU},deudaSocios:{pesos:recentByDate(db0.deudaPesos,20).map(compact),usd:recentByDate(db0.deudaUsd,20).map(compact)},movimientosRecientes:recentByDate(todos,40).map(compact),nota:'Deuda de socios se informa aparte y no forma parte de la caja disponible.'};
+}
+
+async function readCajaChica(){
+ const d=await cached('caja_chica_app/main')||{};const movs=arr(d.movements);
+ let ingresosPesos=0,gastosPesos=0,ingresosUsd=0,gastosUsd=0;
+ movs.forEach(m=>{const v=moneyNum(m.amount??m.monto),usd=String(m.currency||'ars').toLowerCase()==='usd',ing=/ingreso/.test(norm(m.type||m.tipo));if(usd){if(ing)ingresosUsd+=v;else gastosUsd+=v}else{if(ing)ingresosPesos+=v;else gastosPesos+=v}});
+ return {exchangeRate:moneyNum(d.exchangeRate),saldos:{pesos:ingresosPesos-gastosPesos,usd:ingresosUsd-gastosUsd},ingresos:{pesos:ingresosPesos,usd:ingresosUsd},gastos:{pesos:gastosPesos,usd:gastosUsd},cantidadMovimientos:movs.length,obras:arr(d.works).slice(0,80),conceptos:arr(d.concepts).slice(0,80),movimientosRecientes:recentByDate(movs,35).map(m=>({id:m.id||'',fecha:m.date||m.fecha||'',tipo:m.type||m.tipo||'',moneda:String(m.currency||'ars').toLowerCase(),monto:moneyNum(m.amount??m.monto),tc:moneyNum(m.tc)||moneyNum(d.exchangeRate),destino:m.destType||'',obra:m.work||m.obra||'',categoria:m.category||'',subrubro:m.subrubro||m.concept||'',notas:m.notes||'',origen:m.origen||m.source||'',integrationId:m.integrationId||''})),nota:'Los saldos físicos ARS y USD se mantienen separados, igual que en Caja Chica; no se mezclan equivalencias para el saldo principal.'};
+}
+
+async function readMateriales(q){
+ const d=await cached('materiales/data_planilla_exacta_v4')||{};const cargas=arr(d.cargas);const hist=d.historial&&typeof d.historial==='object'?d.historial:{};
+ const recentes=recentByDate(cargas,45).map(c=>({fecha:c.fecha||c.date||c.createdAt||'',obra:c.obra||c.obraName||'',codigo:c.matCode||c.codigo||'',material:c.mat||c.material||c.nombre||'',cantidad:moneyNum(c.cantidad??c.qty),precio:moneyNum(c.precio??c.price),subrubro:c.subrubro||c.catName||'',proveedor:c.proveedor||'',origen:c.source||c.origen||'',integrationId:c.integrationId||''}));
+ return {updatedAt:d.updatedAt||'',cantidadCargas:cargas.length,extraObras:arr(d.extraObras).slice(0,80),overridesCount:Object.keys(d.overrides||{}).length,historialKeys:Object.keys(hist).slice(0,80),cargasRecientes:recentes};
+}
+
+async function readAcopio(){
+ const d=await cached('acopio_cq/acopio_cq_compartido_v3')||{};const db0=d.db&&typeof d.db==='object'?d.db:{};const acopios=arr(db0.acopios);
+ return {updatedAt:d.updatedAt||'',cantidadAcopios:acopios.length,acopios:acopios.map(a=>({id:a.id||'',nombre:a.nombre||'',creado:a.creado||'',tc:moneyNum(a.tc),obras:arr(a.obras).slice(0,40),materiales:arr(a.mats).slice(0,80).map(m=>({id:m.id||'',codigo:m.codigo||m.code||'',material:m.mat||m.nombre||'',cantidad:moneyNum(m.cantidad??m.qty),precio:moneyNum(m.precio??m.price),subrubro:m.catName||m.subrubro||''})),pagosRecientes:recentByDate(a.pagos,15),retirosRecientes:recentByDate(a.retiros,25)}))};
+}
+
+async function readPanol(){
+ const d=await cached('panol/stock_v1')||{};const productos=arr(d.productos),lotes=arr(d.lotes),movs=arr(d.movimientos);
+ const stock=productos.map(p=>{const pls=lotes.filter(l=>String(l.prodId)===String(p.id));const cantidad=pls.reduce((s,l)=>s+moneyNum(l.cantidad),0);const valorPesos=pls.reduce((s,l)=>s+moneyNum(l.cantidad)*moneyNum(l.precio),0);return {id:p.id||'',codigo:p.codigo||'',producto:p.nombre||p.mat||'',rubro:p.rubro||p.catName||'',cantidad,valorPesos}}).sort((a,b)=>b.valorPesos-a.valorPesos).slice(0,80);
+ return {updatedAt:d.updatedAt||'',cantidadProductos:productos.length,cantidadLotes:lotes.length,cantidadMovimientos:movs.length,stockPrincipal:stock,movimientosRecientes:recentByDate(movs,35)};
+}
+
+async function readAgenda(){
+ const d=await cached('agenda_socios/shared_v1')||{};const tareas=arr(d.tareas),recs=arr(d.recordatorios);const hoy=new Date().toISOString().slice(0,10);
+ const compactT=t=>({id:t.id||'',titulo:t.titulo||t.title||t.nombre||'',fecha:t.fecha||t.date||'',socio:t.socio||t.socioId||t.asignado||'',obra:t.obra||t.obraId||'',categoria:t.categoria||'',prioridad:t.prioridad||'',estado:t.estado||'',completada:!!(t.completada||t.done),detalle:t.detalle||t.descripcion||''});
+ return {updatedAt:d.updatedAt||'',socios:arr(d.socios),obras:arr(d.obras).slice(0,80),categorias:arr(d.categorias),cantidadTareas:tareas.length,pendientes:tareas.filter(t=>!(t.completada||t.done||/complet|hech|cerrad/.test(norm(t.estado)))).sort((a,b)=>String(a.fecha||a.date||'9999').localeCompare(String(b.fecha||b.date||'9999'))).slice(0,45).map(compactT),vencidas:tareas.filter(t=>{const f=String(t.fecha||t.date||'');return f&&f<hoy&&!(t.completada||t.done)}).slice(0,30).map(compactT),recordatorios:recentByDate(recs,25)};
+}
+
+async function readControlObras(){
+ const d=await cached('control_obras_app/main')||{};const db0=d.db&&typeof d.db==='object'?d.db:{};const reports=db0.reports&&typeof db0.reports==='object'?db0.reports:{};
+ const keys=Object.keys(reports).sort().reverse().slice(0,14);const resumen=keys.map(k=>({fecha:k,registro:reports[k]}));
+ return {updatedAt:d.updatedAt||'',obras:arr(db0.works).slice(0,80),ultimosReportes:resumen,nota:'Control de Obras se lee desde su documento compartido; fotos se mantienen fuera de este contexto salvo consulta específica.'};
+}
+
+async function readFinancieros(){
+ const d=await cached('cq_gerencia_datos/financieros')||{};const data=d.data&&typeof d.data==='object'?d.data:{};
+ return {updatedAt:d.updatedAt||'',year:d.year||'',month:d.month||'',obras:arr(d.obras).slice(0,100),casas:d.casas||{},obraEstados:d.obraEstados||{},indicatorConfig:d.indicatorConfig||{},mesActual:data[String(d.month)]||data[d.month]||{},mesesDisponibles:Object.keys(data).sort()};
+}
+
+async function readRoeTir(){
+ const d=await cached('cq_gerencia_datos/roe_tir')||{};const obras=arr(d.obras||d.proyectos||d.projects);
+ return {updatedAt:d.updatedAt||'',cantidadProyectos:obras.length,proyectos:obras.slice(0,60),config:Object.fromEntries(Object.entries(d).filter(([k])=>!['obras','proyectos','projects','updatedAt','updatedBy'].includes(k)).slice(0,30))};
+}
+
+async function buildContext(q){
+ const r=route(q),ctx={consultadoEn:new Date().toISOString(),modulosCargados:[]};
+ if(r.gastos){ctx.gastos=await readGastos(q);ctx.modulosCargados.push('Gastos')}
+ if(r.flujo){ctx.flujoFondos=await readFlujo();ctx.modulosCargados.push('Flujo de Fondos')}
+ if(r.avances){ctx.avances=await readAvances(q);ctx.modulosCargados.push('Avances')}
+ if(r.cajaGerencia){ctx.cajaGerencia=await readCajaGerencia();ctx.modulosCargados.push('Caja Gerencia')}
+ if(r.cajaChica){ctx.cajaChica=await readCajaChica();ctx.modulosCargados.push('Caja Chica')}
+ if(r.materiales){ctx.materiales=await readMateriales(q);ctx.modulosCargados.push('Materiales')}
+ if(r.acopio){ctx.acopio=await readAcopio();ctx.modulosCargados.push('Acopio')}
+ if(r.panol){ctx.panol=await readPanol();ctx.modulosCargados.push('Pañol')}
+ if(r.agenda){ctx.agenda=await readAgenda();ctx.modulosCargados.push('Agenda')}
+ if(r.control){ctx.controlObras=await readControlObras();ctx.modulosCargados.push('Control de Obras')}
+ if(r.financieros){ctx.indicadoresFinancieros=await readFinancieros();ctx.modulosCargados.push('Indicadores Financieros')}
+ if(r.roeTir){ctx.roeTir=await readRoeTir();ctx.modulosCargados.push('ROE/TIR')}
+ return ctx;
+}
 
 async function ask(q){
  if(!q||busy)return;const user=auth.currentUser;if(!user){msg('Necesito que estés ingresado en Gerencia para consultar los datos.');return}
