@@ -2106,6 +2106,22 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
 }
 </style>
 
+
+<style id="cq-panol-consumo-estabilidad-v1">
+/* Salida por obra: lista completa, scrolleable y sin recortes del card. */
+.cq-consumo-card,.cq-consumo-card .card-bd{overflow:visible!important}
+#consumo-prod-panel,#consumo-codigo-panel{
+  max-height:min(52vh,420px)!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  z-index:1200!important;
+}
+@media(max-width:520px){
+  #consumo-prod-panel,#consumo-codigo-panel{max-height:48vh!important}
+}
+</style>
 </head>
 <body>
 
@@ -2531,7 +2547,8 @@ function keyByEmail(email){
     "juan@cqgerencia.com":"juan",
     "eugenia@cqoperaciones.com":"eugenia",
     "hebe@cqoperaciones.com":"hebe",
-    "maximiliano@cqoperaciones.com":"maximiliano"
+    "maximiliano@cqoperaciones.com":"maximiliano",
+    "jose@cqoperaciones.com":"jose"
   };
   return map[String(email||"").toLowerCase()]||null;
 }
@@ -3176,25 +3193,32 @@ function panolLeerBackupLocal(){
 
 var panolUltimoBackupFirebaseAt=0;
 var PANOL_BACKUP_FIREBASE_COOLDOWN=10*60*1000;
+var panolBackupFirebaseEnCurso=null;
 async function panolGuardarBackupFirebase(x,razon,forzar){
   if(!window._dbReady||!panolTieneDatos(x))return false;
   if(!forzar && Date.now()-panolUltimoBackupFirebaseAt<PANOL_BACKUP_FIREBASE_COOLDOWN)return true;
-  try{
-    await window._setDoc(
-      window._doc(window._db,PANOL_BACKUP_COL,PANOL_BACKUP_DOC),
-      {
-        state:panolClonarEstado(x),
-        savedAt:new Date().toISOString(),
-        razon:String(razon||''),
-        usuario:String(getUsuario()||'')
-      }
-    );
-    panolUltimoBackupFirebaseAt=Date.now();
-    return true;
-  }catch(e){
-    console.warn('No se pudo guardar backup Firebase de Pañol',e);
-    return false;
-  }
+  // Si ya hay un backup en curso, reutilizarlo: evita duplicar escrituras al abrir/sincronizar.
+  if(!forzar && panolBackupFirebaseEnCurso)return panolBackupFirebaseEnCurso;
+  var tarea=(async function(){
+    try{
+      await window._setDoc(
+        window._doc(window._db,PANOL_BACKUP_COL,PANOL_BACKUP_DOC),
+        {
+          state:panolClonarEstado(x),
+          savedAt:new Date().toISOString(),
+          razon:String(razon||''),
+          usuario:String(getUsuario()||'')
+        }
+      );
+      panolUltimoBackupFirebaseAt=Date.now();
+      return true;
+    }catch(e){
+      console.warn('No se pudo guardar backup Firebase de Pañol',e);
+      return false;
+    }
+  })();
+  if(!forzar)panolBackupFirebaseEnCurso=tarea;
+  try{return await tarea;}finally{if(!forzar&&panolBackupFirebaseEnCurso===tarea)panolBackupFirebaseEnCurso=null;}
 }
 
 async function panolLeerBackupFirebase(){
@@ -3483,7 +3507,8 @@ async function persist(opts){
       }
 
       if(panolTieneDatos(remotoPrev)){
-        await panolGuardarBackupFirebase(remotoPrev,'antes de sobrescribir stock_v1');
+        // El respaldo se mantiene, pero no bloquea el guardado visible del usuario.
+        panolGuardarBackupFirebase(remotoPrev,'antes de sobrescribir stock_v1').catch(function(e){console.warn(e);});
       }
 
       suppressRemoteUntil=Date.now()+1500;
@@ -3493,8 +3518,11 @@ async function persist(opts){
       );
 
       if(panolTieneDatos(state)){
-        await panolGuardarBackupFirebase(state,opts.restauracion?'restaurado':'último estado válido');
         panolGuardarBackupLocal(state,'último estado válido');
+        // Backup Firebase en segundo plano; no deja el estado en “Guardando…” innecesariamente.
+        setTimeout(function(){
+          panolGuardarBackupFirebase(state,opts.restauracion?'restaurado':'último estado válido').catch(function(e){console.warn(e);});
+        },0);
       }
 
       panolAllowEmptyWriteOnce=false;
@@ -3532,8 +3560,8 @@ async function loadFromFirebase(){
       normalizeState();
       localStorage.setItem(DB_KEY,JSON.stringify(state));
       panolGuardarBackupLocal(state,'carga desde Firebase');
-      await panolGuardarBackupFirebase(state,'carga válida desde Firebase');
       setSyncStatus('Firebase ON','ok');
+      panolGuardarBackupFirebase(state,'carga válida desde Firebase').catch(function(e){console.warn(e);});
     }else{
       var rescate=await panolRescatarMejorEstado(remoto);
       if(rescate&&panolTieneDatos(rescate.state)){
@@ -3595,10 +3623,10 @@ function startFirebase(){
       normalizeState();
       localStorage.setItem(DB_KEY,JSON.stringify(state));
       panolGuardarBackupLocal(state,'snapshot Firebase');
-      await panolGuardarBackupFirebase(state,'snapshot válido');
       cqLimpiarTechiCau29_77Panol().catch(function(e){console.warn(e);});
       setSyncStatus('Actualizado','ok');
       renderActive();
+      panolGuardarBackupFirebase(state,'snapshot válido').catch(function(e){console.warn(e);});
     },function(e){
       console.warn(e);
       setSyncStatus('🟠 Error de sync','err');
@@ -3667,7 +3695,7 @@ function filterProductosCombo(query, rubro){
     if(rubro && rubro!=='all' && p.rubro!==rubro) return false;
     var texto=((p.nombre||'')+' '+(p.codigo||'')+' '+(p.rubro||'')).toLowerCase();
     return !query || texto.indexOf(query)>=0;
-  }).sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');}).slice(0,30);
+  }).sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
 }
 function closeProductCombos(){
   ['cf-producto-combo','consumo-codigo-combo','consumo-prod-combo'].forEach(function(id){var el=document.getElementById(id); if(el) el.classList.remove('open');});
@@ -5157,7 +5185,42 @@ function cqObraHistMultiHTML(tipo,titulo,items,seleccionados){
     +'</div>'
   +'</div>';
 }
+var cqConsumoDraftsPanol={};
+function cqCapturarBorradorConsumoPanol(){
+  var det=document.getElementById('obra-detalle');
+  if(!det)return;
+  var card=det.querySelector('[data-cq-consumo-obra]');
+  if(!card)return;
+  var obraId=String(card.getAttribute('data-cq-consumo-obra')||'');
+  if(!obraId)return;
+  function val(id){var el=document.getElementById(id);return el?String(el.value||''):'';}
+  var tieneAlgo=!!(val('consumo-subrubro').trim()||val('consumo-codigo-input').trim()||val('consumo-prod-input').trim()||val('consumo-cantidad').trim()||val('consumo-comentario').trim()||cqConsumoProdIdPanol);
+  if(!tieneAlgo){delete cqConsumoDraftsPanol[obraId];return;}
+  cqConsumoDraftsPanol[obraId]={
+    subrubro:val('consumo-subrubro'),codigo:val('consumo-codigo-input'),producto:val('consumo-prod-input'),
+    cantidad:val('consumo-cantidad'),comentario:val('consumo-comentario'),prodId:String(cqConsumoProdIdPanol||''),
+    material:cqMaterialSeleccionadoPanol?JSON.parse(JSON.stringify(cqMaterialSeleccionadoPanol)):null
+  };
+}
+function cqRestaurarBorradorConsumoPanol(obraId){
+  var d=cqConsumoDraftsPanol[String(obraId||'')];
+  if(!d)return;
+  var prod=d.prodId?state.productos.find(function(p){return String(p.id)===String(d.prodId);}):null;
+  if(prod){
+    completarConsumoProducto(prod);
+  }else{
+    cqConsumoProdIdPanol='';
+    var pi=document.getElementById('consumo-prod-input');if(pi)pi.value=d.producto||'';
+    var ci=document.getElementById('consumo-codigo-input');if(ci)ci.value=d.codigo||'';
+    cqMaterialSeleccionadoPanol=d.material?JSON.parse(JSON.stringify(d.material)):null;
+  }
+  var s=document.getElementById('consumo-subrubro');if(s)s.value=d.subrubro||'';
+  var c=document.getElementById('consumo-cantidad');if(c)c.value=d.cantidad||'';
+  var o=document.getElementById('consumo-comentario');if(o)o.value=d.comentario||'';
+}
+
 function renderObraDetalle(){
+  cqCapturarBorradorConsumoPanol();
   var det=document.getElementById('obra-detalle');
   var obraObj=obraGastosPanolPorId(curObra);
   var obraNombre=obraObj?(obraObj.label||obraObj.short||obraObj.id):curObra;
@@ -5197,7 +5260,7 @@ function renderObraDetalle(){
   var html='';
 
 
-  html+='<div class="card"><div class="card-hd">Registrar consumo — '+obraNombre+'</div><div class="card-bd">';
+  html+='<div class="card cq-consumo-card" data-cq-consumo-obra="'+escHTML(curObra)+'"><div class="card-hd">Registrar consumo — '+obraNombre+'</div><div class="card-bd">';
   html+='<div class="fld"><label>Subrubro · Materiales</label><div class="panol-subrubro-combo"><input class="panol-subrubro-input" type="text" id="consumo-subrubro" placeholder="Seleccionar o escribir..." autocomplete="off" onfocus="window.abrirSubrubrosPanol()" oninput="window.renderSubrubrosPanol(this.value);window.onConsumoSubrubroInput()"><button type="button" class="panol-subrubro-btn" onclick="window.abrirSubrubrosPanol()">▾</button><div class="panol-subrubro-panel" id="consumo-subrubro-panel"></div></div></div>';
   html+='<div class="carga-row" style="margin-bottom:0"><div class="fld"><label>Código</label><div class="combo-down" id="consumo-codigo-combo"><input type="text" id="consumo-codigo-input" placeholder="Código" autocomplete="off" oninput="window.onConsumoCodigoInput()" onfocus="window.showConsumoCodigoDropdownFiltrado()"><div class="combo-panel" id="consumo-codigo-panel"></div></div></div><div class="fld"><label>Producto</label><div class="combo-down" id="consumo-prod-combo"><input type="text" id="consumo-prod-input" placeholder="Escribí producto" autocomplete="off" oninput="window.onConsumoProductoInput()" onfocus="window.showConsumoProductoDropdownFiltrado()"><div class="combo-panel" id="consumo-prod-panel"></div></div><div id="consumo-prod-help" class="combo-help">Podés escribir código o producto y elegir de la lista.</div></div></div>';
   html+='<div class="fld"><label>Cantidad a descontar</label><input type="number" id="consumo-cantidad" step="any" placeholder="0"></div>';
@@ -5267,6 +5330,7 @@ function renderObraDetalle(){
 
   det.innerHTML=html;
   renderSubrubrosPanol('');
+  cqRestaurarBorradorConsumoPanol(curObra);
 }
 
 const CQ_BASE_CATALOGO_MATERIALES_PANOL=[{"id":1,"name":"Hierro 6","code":"","category":"HIERROS"},{"id":2,"name":"Hierro 8","code":"","category":"HIERROS"},{"id":3,"name":"Hierro 10","code":"","category":"HIERROS"},{"id":4,"name":"Mallas Q188","code":"","category":"HIERROS"},{"id":5,"name":"Mallas Q100 (4mm)","code":"","category":"HIERROS"},{"id":6,"name":"Mallas Q131","code":"","category":"HIERROS"},{"id":7,"name":"Cemento","code":"","category":"CEMENTO Y HERCAL"},{"id":8,"name":"Hercal","code":"","category":"CEMENTO Y HERCAL"},{"id":9,"name":"Pallets Cemento","code":"","category":"CEMENTO Y HERCAL"},{"id":10,"name":"Pallets Hercal","code":"","category":"CEMENTO Y HERCAL"},{"id":11,"name":"Portante 12 (126u)","code":"","category":"LADRILLOS"},{"id":12,"name":"Portante 18 (90u)","code":"","category":"LADRILLOS"},{"id":13,"name":"Techo 16,5 (60u)","code":"","category":"LADRILLOS"},{"id":14,"name":"Techo 11 (80u)","code":"","category":"LADRILLOS"},{"id":15,"name":"Tabique 12 Palmar (144u)","code":"","category":"LADRILLOS"},{"id":16,"name":"Tabique 8 Palmar (198u)","code":"","category":"LADRILLOS"},{"id":17,"name":"Portante bloque 12","code":"","category":"LADRILLOS"},{"id":18,"name":"Portante bloque 18","code":"","category":"LADRILLOS"},{"id":19,"name":"Bovedillas","code":"","category":"LADRILLOS"},{"id":20,"name":"Ladrillon 18","code":"","category":"LADRILLOS"},{"id":21,"name":"Ladrillos comunes","code":"","category":"LADRILLOS"},{"id":22,"name":"Techi Cau emuls. Asf.","code":"","category":"IMPERMEABILIZANTES"},{"id":23,"name":"Hidrofugo 20 kgs","code":"","category":"IMPERMEABILIZANTES"},{"id":24,"name":"Agrotileno","code":"","category":"IMPERMEABILIZANTES"},{"id":25,"name":"Sika Latex 5 Lts","code":"","category":"IMPERMEABILIZANTES"},{"id":26,"name":"Alambre kgs","code":"","category":"ALAMBRES Y CLAVOS"},{"id":27,"name":"Clavos kgs","code":"","category":"ALAMBRES Y CLAVOS"},{"id":28,"name":"Fino interior","code":"","category":"REVOQUES Y YESO"},{"id":29,"name":"Fino exterior","code":"","category":"REVOQUES Y YESO"},{"id":30,"name":"Yeso (40 kgs)","code":"","category":"REVOQUES Y YESO"},{"id":31,"name":"Guardacanto yesero x 2m","code":"","category":"REVOQUES Y YESO"},{"id":32,"name":"Viguetas 6,5 mts","code":"","category":"VIGUETAS"},{"id":33,"name":"Viguetas 4,20 mts","code":"","category":"VIGUETAS"},{"id":34,"name":"Viguetas 4 mts","code":"","category":"VIGUETAS"},{"id":35,"name":"Viguetas 3,20 mts","code":"","category":"VIGUETAS"},{"id":36,"name":"Viguetas 3 mts","code":"","category":"VIGUETAS"},{"id":37,"name":"Viguetas 2,80 mts","code":"","category":"VIGUETAS"},{"id":38,"name":"Viguetas 2 mts","code":"","category":"VIGUETAS"},{"id":39,"name":"Viguetas 1,80 mts","code":"","category":"VIGUETAS"},{"id":40,"name":"Viguetas 1,60 mts","code":"","category":"VIGUETAS"},{"id":41,"name":"Viguetas 1,40 mts","code":"","category":"VIGUETAS"},{"id":42,"name":"Viguetas 1 mts","code":"","category":"VIGUETAS"},{"id":43,"name":"Peg. Porcelanato x25kg","code":"","category":"PEGAMENTOS Y PISOS"},{"id":44,"name":"Peg. Ceramica x25kg","code":"","category":"PEGAMENTOS Y PISOS"},{"id":45,"name":"Pastina kgs","code":"","category":"PEGAMENTOS Y PISOS"},{"id":46,"name":"Revestimiento cocina","code":"","category":"PEGAMENTOS Y PISOS"},{"id":47,"name":"Revestimiento bano 2 par.","code":"","category":"PEGAMENTOS Y PISOS"},{"id":48,"name":"Piso interior","code":"","category":"PEGAMENTOS Y PISOS"},{"id":49,"name":"Piso exterior","code":"","category":"PEGAMENTOS Y PISOS"},{"id":50,"name":"Interior blanca","code":"","category":"PINTURAS"},{"id":51,"name":"General exterior 1","code":"","category":"PINTURAS"},{"id":52,"name":"Color fuerte ext.","code":"","category":"PINTURAS"},{"id":53,"name":"Fijadores","code":"","category":"PINTURAS"},{"id":54,"name":"Fijador fondo madera","code":"","category":"PINTURAS"},{"id":55,"name":"Techos (pintura)","code":"","category":"PINTURAS"},{"id":56,"name":"Masilla Durlock","code":"","category":"PINTURAS"},{"id":57,"name":"Bolsas Telgopor","code":"","category":"VARIOS"}];
@@ -6100,6 +6164,7 @@ async function registrarConsumo(){
   };
   state.movimientos.push(mov);
   await persist();
+  delete cqConsumoDraftsPanol[String(curObra||'')];
 
   document.getElementById('consumo-cantidad').value='';
   document.getElementById('consumo-subrubro').value='';

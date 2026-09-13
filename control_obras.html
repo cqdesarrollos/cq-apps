@@ -2674,12 +2674,6 @@ async function saveWork(){
     pendiente:false
   };
   if(!item.obra)return alert("Seleccioná una obra.");
-  if(cqThursdayCertificationRequired(item.obra,reportDate.value)){
-    alert(`Antes de guardar el informe del jueves de la obra ${item.obra}, cargá al menos un avance en la solapa Certificación.`);
-    showView('certify');
-    const f=document.getElementById('certifyWorkFilter');if(f){f.value=item.obra;renderCertifyView();}
-    return;
-  }
 
   const previousRecord=records[Number(editIndex.value)]||{};
   const previousFollowup=normalizeFollowupState(previousRecord.seguimiento);
@@ -3859,7 +3853,7 @@ const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-
 const app=getApps().length?getApp():initializeApp(cfg);
 const auth=getAuth(app),db=getFirestore(app);
 const CACHE_KEY="cq_auth_profile_1h", TTL=3600000;
-const map={"emilio@cqgerencia.com": "emilio", "juan@cqgerencia.com": "juan", "eugenia@cqoperaciones.com": "eugenia", "hebe@cqoperaciones.com": "hebe", "maximiliano@cqoperaciones.com": "maximiliano"};
+const map={"emilio@cqgerencia.com": "emilio", "juan@cqgerencia.com": "juan", "eugenia@cqoperaciones.com": "eugenia", "hebe@cqoperaciones.com": "hebe", "maximiliano@cqoperaciones.com": "maximiliano", "jose@cqoperaciones.com": "jose"};
 const box=document.getElementById("cq-access-total"),msg=document.getElementById("cq-access-total-msg"),back=document.getElementById("cq-access-total-back");
 
 function readCache(){
@@ -3951,7 +3945,8 @@ const userMap={
   "juan@cqgerencia.com":"juan",
   "eugenia@cqoperaciones.com":"eugenia",
   "hebe@cqoperaciones.com":"hebe",
-  "maximiliano@cqoperaciones.com":"maximiliano"
+  "maximiliano@cqoperaciones.com":"maximiliano",
+  "jose@cqoperaciones.com":"jose"
 };
 let currentUser=null;
 let checking=false;
