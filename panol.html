@@ -4896,6 +4896,10 @@ function limpiarHistorialProductosEliminadosPanol(){
 }
 
 function renderObrasTab(){
+  // CQ 14/09/2026 — proteger lo que el usuario ya empezó a cargar.
+  // Un snapshot tardío de Firebase o una sincronización del movimiento anterior
+  // no debe borrar producto/cantidad/subrubro/comentario del siguiente consumo.
+  try{cqCapturarBorradorConsumoPanol();}catch(_e){}
   limpiarHistorialProductosEliminadosPanol();
   var chipsEl=document.getElementById('obras-chips');
   var obras=obrasGastosPanol();
@@ -5528,6 +5532,53 @@ function renderMaterialSeleccionadoPanol(){
 var materialesIntegradosPanol=null;
 var materialesVerificacionErrorPanol=false;
 var unsubVerificacionMaterialesPanol=null;
+
+// CQ 14/09/2026 — si una salida que DEBE estar en Materiales desaparece del
+// documento principal, Pañol la vuelve a materializar. El Set evita bucles.
+var cqReparandoMaterialesPanol=new Set();
+
+function cqProgramarReparacionMaterialesPanol(mov){
+  if(!mov||mov.tipo!=='salida'||mov.materialesAgregar===false)return;
+  var iid=integracionConsumoId(mov.id);
+  if(cqReparandoMaterialesPanol.has(String(iid)))return;
+
+  cqReparandoMaterialesPanol.add(String(iid));
+  mov.materialesSyncEstado='pendiente';
+  mov.materialesSyncError='Reconciliando automáticamente con Materiales…';
+
+  setTimeout(async function(){
+    try{
+      var actual=state.movimientos.find(function(x){
+        return x && String(x.id)===String(mov.id) && x.tipo==='salida';
+      })||mov;
+
+      if(actual.materialesAgregar===false)return;
+
+      var prod=state.productos.find(function(p){
+        return String(p.id)===String(actual.prodId);
+      })||{
+        codigo:actual.materialCode||'',
+        nombre:actual.materialName||''
+      };
+
+      await sincronizarConsumoConMateriales(actual,true,prod);
+      actual.materialesSyncEstado='ok';
+      actual.materialesSyncError='';
+      try{await persist();}catch(_e){}
+    }catch(e){
+      var actualErr=state.movimientos.find(function(x){
+        return x && String(x.id)===String(mov.id);
+      })||mov;
+      actualErr.materialesSyncEstado='error';
+      actualErr.materialesSyncError='No se pudo reparar Materiales: '+String(e&&e.message||e);
+      try{await persist();}catch(_e){}
+      console.warn('Reparación automática Pañol → Materiales',e);
+    }finally{
+      cqReparandoMaterialesPanol.delete(String(iid));
+      try{if(curTab==='obras')renderObrasTab();}catch(_e){}
+    }
+  },250);
+}
 function estadoMaterialesConsumo(mov){
   if(!mov)return {cls:'err',txt:'No se pudo verificar Materiales'};
   if(mov.materialesAgregar===false||mov.materialesSyncEstado==='no'){
@@ -5578,21 +5629,31 @@ function iniciarVerificacionMaterialesPanol(){
     materialesIntegradosPanol=ids;
 
     // Reconciliar también el estado guardado de cada salida.
+    // Si falta una carga que debería existir, no alcanza con marcar rojo:
+    // Pañol la reconstruye automáticamente en Materiales.
     var cambioEstado=false;
     state.movimientos.forEach(function(m){
       if(!m||m.tipo!=='salida'||m.materialesAgregar===false)return;
       var iid=integracionConsumoId(m.id);
       var existe=ids.has(String(iid));
-      var next=existe?'ok':'error';
-      var err=existe?'':'La carga vinculada ya no existe en Materiales';
-      if(m.materialesSyncEstado!==next||m.materialesSyncError!==err){
-        m.materialesSyncEstado=next;
-        m.materialesSyncError=err;
-        cambioEstado=true;
+
+      if(existe){
+        if(m.materialesSyncEstado!=='ok'||m.materialesSyncError){
+          m.materialesSyncEstado='ok';
+          m.materialesSyncError='';
+          cambioEstado=true;
+        }
+      }else{
+        if(!cqReparandoMaterialesPanol.has(String(iid))){
+          m.materialesSyncEstado='pendiente';
+          m.materialesSyncError='La carga faltaba en Materiales · reparación automática en curso';
+          cambioEstado=true;
+          cqProgramarReparacionMaterialesPanol(m);
+        }
       }
     });
     if(cambioEstado){
-      try{persist();}catch(_e){}
+      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(_e){}
     }
 
     try{ if(curTab==='obras') renderObrasTab(); }catch(_e){}
