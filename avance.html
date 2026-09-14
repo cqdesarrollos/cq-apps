@@ -5015,7 +5015,7 @@ function fromCache(c,email){
  const mods=Array.isArray(c.modulos)?c.modulos:[];
  const ger=mods.includes("gerencia");
  if(String(c.email||"").toLowerCase()!==email) return false;
- if(!((ger || mods.includes("avances")))) return false;
+ if(!((ger || mods.includes("avance") || mods.includes("avances")))) return false;
  expose({id:map[email]||c.id||"",nombre:c.nombre||"",email:email,modulos:mods,rol:ger?"gerencia":"operaciones"});
  return true;
 }
@@ -5659,7 +5659,7 @@ html.cq-employee-readonly-avances .avance-input{
   function isEmployee(){
     var p=profile(); if(!p) return false;
     var mods=Array.isArray(p.modulos)?p.modulos:[];
-    return mods.indexOf("avances")>=0 && mods.indexOf("gerencia")<0;
+    return (mods.indexOf("avance")>=0 || mods.indexOf("avances")>=0) && mods.indexOf("gerencia")<0;
   }
   var unsafe=[
     "generarCertificado","savePagoFuera","undoChange","redoChange","restoreManualPoint",
