@@ -4386,6 +4386,140 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 }
 </style>
 
+
+<style id="cq-fix-historial-filtros-cortados-v1">
+/* CQ Materiales · Historial Cargar
+   Corrige desplegables recortados y compresión excesiva en tablet/horizontal. */
+
+/* El menú de Obras/Subrubros debe poder salir fuera de la tarjeta. */
+#view-carga .premium-hist{
+  overflow:visible!important;
+  position:relative!important;
+  z-index:20!important;
+}
+
+/* Grilla estable: 2 selects + material + fechas + nota */
+#view-carga .premium-hist .hist-filters-premium{
+  display:grid!important;
+  grid-template-columns:
+    minmax(150px,1fr)
+    minmax(160px,1fr)
+    minmax(220px,1.35fr)
+    minmax(300px,1.35fr)
+    minmax(170px,.9fr)!important;
+  gap:8px!important;
+  align-items:center!important;
+  overflow:visible!important;
+}
+
+/* Cada control puede ocupar su celda sin desbordar */
+#view-carga .premium-hist .hist-filters-premium > *{
+  min-width:0!important;
+  width:100%!important;
+}
+
+/* Botones Obras/Subrubros más legibles */
+#view-carga .premium-hist .cq-multi-filter-btn{
+  min-height:38px!important;
+  height:38px!important;
+  padding:7px 11px!important;
+  font-size:10.5px!important;
+  border-radius:10px!important;
+}
+
+/* Menús desplegables: no quedar encerrados en la tarjeta */
+#view-carga .premium-hist .cq-multi-filter{
+  position:relative!important;
+  overflow:visible!important;
+}
+#view-carga .premium-hist .cq-multi-filter-menu{
+  z-index:99999!important;
+  min-width:260px!important;
+  width:max(100%,260px)!important;
+  max-width:360px!important;
+  overflow:hidden!important;
+}
+
+/* Buscadores dentro del dropdown */
+#view-carga .premium-hist .cq-multi-filter-search input{
+  min-height:34px!important;
+  height:34px!important;
+  font-size:10px!important;
+}
+
+/* Material y nota a la misma altura que el resto */
+#view-carga .premium-hist #hist-filter-mat-search,
+#view-carga .premium-hist #hist-filter-nota{
+  min-height:38px!important;
+  height:38px!important;
+  font-size:11px!important;
+  border-radius:10px!important;
+}
+
+/* Fechas: dejar de forzar 140 px por campo */
+#view-carga .premium-hist .hist-date-group{
+  display:grid!important;
+  grid-template-columns:auto minmax(105px,1fr) auto minmax(105px,1fr)!important;
+  gap:5px!important;
+  min-width:0!important;
+  width:100%!important;
+}
+#view-carga .premium-hist .cq-date-visible-wrap,
+#view-carga .premium-hist #hist-filter-desde,
+#view-carga .premium-hist #hist-filter-hasta{
+  min-width:0!important;
+  width:100%!important;
+}
+
+/* Tablet / notebook angosto: dos filas bien ordenadas */
+@media (min-width:651px) and (max-width:1150px){
+  #view-carga .premium-hist .hist-filters-premium{
+    grid-template-columns:
+      minmax(150px,1fr)
+      minmax(160px,1fr)
+      minmax(220px,1.35fr)!important;
+  }
+
+  #view-carga .premium-hist .hist-date-group{
+    grid-column:1 / span 2!important;
+  }
+
+  #view-carga .premium-hist .hist-note-search{
+    grid-column:3!important;
+  }
+
+  #view-carga .premium-hist .cq-hist-clear-all{
+    grid-column:1/-1!important;
+  }
+}
+
+/* Celular: una columna, menús en overlay grande como ya usa la app */
+@media (max-width:650px){
+  #view-carga .premium-hist{
+    overflow:visible!important;
+  }
+
+  #view-carga .premium-hist .hist-filters-premium{
+    grid-template-columns:1fr!important;
+  }
+
+  #view-carga .premium-hist .hist-date-group{
+    grid-column:auto!important;
+    grid-template-columns:auto 1fr auto 1fr!important;
+  }
+
+  #view-carga .premium-hist .cq-multi-filter-menu{
+    position:fixed!important;
+    left:10px!important;
+    right:10px!important;
+    top:24vh!important;
+    width:auto!important;
+    min-width:0!important;
+    max-width:none!important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -5434,7 +5568,7 @@ var CATS = [
     "items": [
       {
         "id": 7,
-        "mat": "Cemento",
+        "mat": "CEMENTO PORTLAND HOLCIM 25 KG",
         "prom": 782.9411765,
         "promNueva": 455.8333333,
         "data": [
@@ -7301,7 +7435,7 @@ if(!state.categoriaMemoria) state.categoriaMemoria={};
 var CODIGOS_ACOPIO_POR_ID={
   1:'2303583102', 2:'2303583103', 3:'2303583104',
   4:'2303584310', 6:'2303584309',
-  7:'4816306011', 8:'4816306120',
+  7:'4816306010', 8:'4816306120',
   11:'2203201001', 12:'2203201002',
   14:'2203201203', 15:'2203201103', 16:'2203201102',
   20:'2203201104', 21:'4816907001',
@@ -7569,6 +7703,94 @@ function cqIgnorarIntegracion(iid){
   if(!cqIntegracionIgnorada(iid))state.ignoredIntegrationIds.push(iid);
 }
 
+
+/* CQ 14/09/2026 — CEMENTO CANÓNICO PERMANENTE
+   Todo CEMENTO histórico y toda integración con código viejo/nuevo
+   se concentra en el material base ID 7. */
+var CQ_CEMENTO_CANON_ID=7;
+var CQ_CEMENTO_CANON_NOMBRE='CEMENTO PORTLAND HOLCIM 25 KG';
+var CQ_CEMENTO_CANON_CODIGO='4816306010';
+var CQ_CEMENTO_CODIGO_ANTERIOR='4816306011';
+
+function cqEsCementoCanonicoONuevo(mat){
+  if(!mat)return false;
+  var codigo=String(getMatCodigo(mat)||mat.codigo||'').trim();
+  var nombre=claveMaterialUnificar(mat.mat||'');
+  return codigo===CQ_CEMENTO_CANON_CODIGO
+    || codigo===CQ_CEMENTO_CODIGO_ANTERIOR
+    || nombre==='cemento'
+    || nombre==='cementoportlandholcim25kg';
+}
+
+function cqForzarCementoHolcimCanonico(){
+  if(!state.matNombres)state.matNombres={};
+  if(!state.matCodigos)state.matCodigos={};
+  if(!state.matCategorias)state.matCategorias={};
+  if(!state.deletedMatIds)state.deletedMatIds=[];
+
+  /* El ID histórico 7 conserva toda la serie base y pasa a ser el único cemento válido. */
+  state.deletedMatIds=state.deletedMatIds.filter(function(id){
+    return Number(id)!==CQ_CEMENTO_CANON_ID;
+  });
+  state.matNombres[CQ_CEMENTO_CANON_ID]=CQ_CEMENTO_CANON_NOMBRE;
+  state.matCodigos[CQ_CEMENTO_CANON_ID]=CQ_CEMENTO_CANON_CODIGO;
+  state.matCategorias[CQ_CEMENTO_CANON_ID]='Cemento';
+
+  var canon=getAllMats().find(function(m){
+    return Number(m.id)===CQ_CEMENTO_CANON_ID;
+  })||null;
+
+  if(canon){
+    canon.mat=CQ_CEMENTO_CANON_NOMBRE;
+    canon.codigo=CQ_CEMENTO_CANON_CODIGO;
+    canon.catName='Cemento';
+
+    CATS.forEach(function(c){
+      (c.items||[]).forEach(function(m){
+        if(Number(m.id)===CQ_CEMENTO_CANON_ID){
+          m.mat=CQ_CEMENTO_CANON_NOMBRE;
+          m.codigo=CQ_CEMENTO_CANON_CODIGO;
+          m.catName='Cemento';
+        }
+      });
+    });
+
+    /* Fusionar cualquier duplicado viejo/nuevo en el ID 7. */
+    var duplicados=getAllMats().filter(function(m){
+      return Number(m.id)!==CQ_CEMENTO_CANON_ID
+        && !isMatDeleted(m.id)
+        && cqEsCementoCanonicoONuevo(m);
+    }).slice();
+
+    duplicados.forEach(function(dup){
+      unificarDosMateriales(canon,dup,{toast:false});
+    });
+  }
+
+  /* También normalizar cargas históricas que hayan quedado con nombre/código viejo. */
+  (state.cargas||[]).forEach(function(c){
+    var cod=String(c.matCode||c.codigoOrigen||'').trim();
+    var nom=claveMaterialUnificar(c.matName||c.materialNameOrigen||'');
+    if(Number(c.matId)===CQ_CEMENTO_CANON_ID
+       || cod===CQ_CEMENTO_CANON_CODIGO
+       || cod===CQ_CEMENTO_CODIGO_ANTERIOR
+       || nom==='cemento'
+       || nom==='cementoportlandholcim25kg'){
+      c.matId=CQ_CEMENTO_CANON_ID;
+      c.matName=CQ_CEMENTO_CANON_NOMBRE;
+      c.matCode=CQ_CEMENTO_CANON_CODIGO;
+      if(c.codigoOrigen)c.codigoOrigen=CQ_CEMENTO_CANON_CODIGO;
+      if(c.materialNameOrigen)c.materialNameOrigen=CQ_CEMENTO_CANON_NOMBRE;
+    }
+  });
+
+  guardarMemoriaCategoriaMaterial(
+    canon||{id:CQ_CEMENTO_CANON_ID,mat:CQ_CEMENTO_CANON_NOMBRE,codigo:CQ_CEMENTO_CANON_CODIGO},
+    'Cemento'
+  );
+  return true;
+}
+
 function normalizeState(){
   if(!state.overrides)state.overrides={};
   if(!state.historial)state.historial={};
@@ -7606,6 +7828,10 @@ function normalizeState(){
   });
   aplicarRenombresCategorias();
   mergeExtrasIntoCats();
+  aplicarNombresMateriales();
+  aplicarCodigosMateriales();
+  aplicarCategoriasMateriales();
+  cqForzarCementoHolcimCanonico();
   aplicarNombresMateriales();
   aplicarCodigosMateriales();
   aplicarCategoriasMateriales();
@@ -7745,6 +7971,16 @@ async function completarCodigosDesdeAcopioYPanol(forzar){
       }
 
       var codigo=codigos[0];
+
+      /* El cemento canónico no puede volver al código histórico aunque Acopio/Pañol
+         todavía publiquen el dato anterior. */
+      if(Number(mat.id)===CQ_CEMENTO_CANON_ID || cqEsCementoCanonicoONuevo(mat)){
+        codigo=CQ_CEMENTO_CANON_CODIGO;
+        mat.mat=CQ_CEMENTO_CANON_NOMBRE;
+        if(!state.matNombres)state.matNombres={};
+        state.matNombres[CQ_CEMENTO_CANON_ID]=CQ_CEMENTO_CANON_NOMBRE;
+      }
+
       state.matCodigos[mat.id]=codigo;
       mat.codigo=codigo;
 
@@ -7951,6 +8187,17 @@ function buscarMaterialIntegracion(codigo,nombre,origen){
   var code=String(codigo||'').trim().toLowerCase();
   var mats=getAllMats().filter(function(mat){return !isMatDeleted(mat.id);});
   var nk=claveMaterialUnificar(nombre);
+
+  /* CEMENTO blindado: cualquier payload viejo/nuevo va siempre al ID 7. */
+  if(code===CQ_CEMENTO_CANON_CODIGO.toLowerCase()
+     || code===CQ_CEMENTO_CODIGO_ANTERIOR.toLowerCase()
+     || nk==='cemento'
+     || nk==='cementoportlandholcim25kg'){
+    cqForzarCementoHolcimCanonico();
+    return getAllMats().find(function(mat){
+      return Number(mat.id)===CQ_CEMENTO_CANON_ID && !isMatDeleted(mat.id);
+    })||null;
+  }
 
   // 1. Nombre exacto primero. Evita que un código duplicado o mal asignado
   // mande una carga de Cannes a Trípoli (o viceversa).
@@ -14733,6 +14980,100 @@ window.abrirGraficoDirecto = function(){
 })();
 </script>
 
+
+<script id="cq-catalogo-manual-permanente-v1">
+(function(){
+  function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return null;}}
+  function ensure(){
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    return state.catalogoManual;
+  }
+  function matById(id){return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;}
+  function applyOne(id,lock){
+    if(!lock||typeof lock!=='object')return false;
+    var m=matById(id); if(!m)return false;
+    if(lock.nombre!=null&&String(lock.nombre).trim()){
+      var nombre=String(lock.nombre).trim();
+      if(!state.matNombres)state.matNombres={}; state.matNombres[id]=nombre; m.mat=nombre;
+      (CATS||[]).forEach(function(c){(c.items||[]).forEach(function(x){if(Number(x.id)===Number(id))x.mat=nombre;});});
+      (state.extraMats||[]).forEach(function(x){if(Number(x.id)===Number(id))x.mat=nombre;});
+      (state.cargas||[]).forEach(function(c){if(Number(c.matId)===Number(id))c.matName=nombre;});
+    }
+    if(lock.codigo!=null){
+      var codigo=String(lock.codigo||'').trim();
+      if(!state.matCodigos)state.matCodigos={}; state.matCodigos[id]=codigo; m.codigo=codigo;
+      (CATS||[]).forEach(function(c){(c.items||[]).forEach(function(x){if(Number(x.id)===Number(id))x.codigo=codigo;});});
+      (state.extraMats||[]).forEach(function(x){if(Number(x.id)===Number(id))x.codigo=codigo;});
+      (state.cargas||[]).forEach(function(c){if(Number(c.matId)===Number(id)&&codigo)c.matCode=codigo;});
+    }
+    if(lock.categoria!=null&&String(lock.categoria).trim()){
+      var categoria=String(lock.categoria).trim();
+      try{if(typeof canon==='function'){var can=canon(categoria);if(can)categoria=can;}}catch(e){}
+      if(!state.matCategorias)state.matCategorias={}; state.matCategorias[id]=categoria;
+      if(!state.categoriaManual)state.categoriaManual={}; state.categoriaManual[id]=categoria;
+      m.catName=categoria;
+      var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(id);}); if(ex)ex.catName=categoria;
+      try{if(typeof moverMaterialACategoria==='function')moverMaterialACategoria(Number(id),categoria);}catch(e){}
+      try{if(typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(m,categoria);}catch(e){}
+    }
+    if(lock.comentarios!=null){
+      var comentarios=String(lock.comentarios||''); m.comentarios=comentarios;
+      (state.extraMats||[]).forEach(function(x){if(Number(x.id)===Number(id))x.comentarios=comentarios;});
+      (CATS||[]).forEach(function(c){(c.items||[]).forEach(function(x){if(Number(x.id)===Number(id))x.comentarios=comentarios;});});
+    }
+    return true;
+  }
+  function applyAll(){var locks=ensure();Object.keys(locks).forEach(function(id){applyOne(id,locks[id]);});return true;}
+  window.cqAplicarCatalogoManual=applyAll;
+
+  var normAnterior=(typeof normalizeState==='function')?normalizeState:null;
+  if(normAnterior){
+    normalizeState=function(){var r=normAnterior.apply(this,arguments);ensure();applyAll();return r;};
+  }
+
+  var guardarAnterior=window.guardarNombreMat||((typeof guardarNombreMat==='function')?guardarNombreMat:null);
+  if(typeof guardarAnterior==='function'){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var id=Number(selectedCargaMat);
+      var nombreEl=document.getElementById('editar-mat-nombre-input');
+      var codigoEl=document.getElementById('editar-mat-codigo');
+      var catEl=document.getElementById('editar-mat-cat');
+      var comentarioEl=document.getElementById('editar-mat-comentarios');
+      var snap={
+        nombre:nombreEl?String(nombreEl.value||'').trim():'',
+        codigo:codigoEl?String(codigoEl.value||'').trim():'',
+        categoria:catEl?String(catEl.value||'').trim():'',
+        comentarios:comentarioEl?String(comentarioEl.value||'').trim():'',
+        updatedAt:new Date().toISOString(),manual:true
+      };
+      if(id===7||snap.codigo==='4816306010'||snap.codigo==='4816306011'){
+        id=7; selectedCargaMat=7;
+        snap.nombre='CEMENTO PORTLAND HOLCIM 25 KG';
+        snap.codigo='4816306010';
+        snap.categoria='Cemento';
+        if(nombreEl)nombreEl.value=snap.nombre;
+        if(codigoEl)codigoEl.value=snap.codigo;
+        if(catEl){
+          var op=Array.from(catEl.options||[]).find(function(o){return String(o.value||'').trim().toLowerCase()==='cemento';});
+          if(op){catEl.value=op.value;snap.categoria=op.value;}
+        }
+      }
+      var r=await guardarAnterior.apply(this,arguments);
+      var locks=ensure(); locks[id]=clone(snap); applyOne(id,locks[id]);
+      try{suppressRemoteUntil=Date.now()+9000;if(typeof persist==='function')await persist();}catch(e){console.warn('No se pudo fijar edición manual de Catálogo',e);}
+      try{if(typeof renderActive==='function')renderActive();}catch(e){}
+      try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
+      return r;
+    };
+  }
+
+  ensure();
+  state.catalogoManual['7']=Object.assign({},state.catalogoManual['7']||{}, {
+    nombre:'CEMENTO PORTLAND HOLCIM 25 KG',codigo:'4816306010',categoria:'Cemento',manual:true
+  });
+  applyAll();
+})();
+</script>
 </body>
 </html>
 
