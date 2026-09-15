@@ -7465,10 +7465,21 @@ function cqMatResolverMaterialDirecto(data,ev){
     var candidatos=mats.filter(function(x){
       return cqMatCodigoDirecto(data,x).toLowerCase()===code;
     });
-    // Si el código es único, alcanza para identificar el producto.
-    if(candidatos.length===1)mat=candidatos[0];
-    else if(candidatos.length>1){
-      mat=candidatos.find(function(x){return cqMatNombreCompatibleDirecto(x.mat,nombre);})||null;
+
+    // CQ 15/09/2026 — un código nunca puede pisar un producto con nombre distinto.
+    // Esto evita que CANNES termine cargándose sobre TRIPOLI (o viceversa)
+    // cuando existe un código histórico duplicado/mal asignado en Materiales.
+    // Incluso si hay UN solo candidato por código, el nombre debe ser compatible.
+    mat=candidatos.find(function(x){
+      return cqMatNombreCompatibleDirecto(x.mat,nombre);
+    })||null;
+
+    if(!mat && candidatos.length){
+      console.warn('Código de Acopio en conflicto; se conserva el producto por nombre',{
+        codigo:ev.materialCode,
+        recibido:nombre,
+        existentes:candidatos.map(function(x){return x.mat;})
+      });
     }
   }
 
