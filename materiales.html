@@ -7383,13 +7383,63 @@ function categoriaAprendidaPara(codigo,nombre){
 
 
 function claveMaterialUnificar(nombre){return String(nombre||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'').trim();}
-function codigoMaterialUnificar(mat){return String(getMatCodigo(mat)||(mat&&mat.codigo)||'').trim().toLowerCase().replace(/\s+/g,'');}
+function cqCodigoPresentacionInvalido(v){
+  var x=String(v==null?'':v).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+  return /^\d+(?:[.,]\d+)?\s*(pallet|pallets|palet|palets|bulto|bultos|caja|cajas|bolsa|bolsas|unidad|unidades|u|un|m2|m²|mts?|metros?)$/.test(x);
+}
+function codigoMaterialUnificar(mat){
+  var raw=String(getMatCodigo(mat)||(mat&&mat.codigo)||'').trim();
+  if(cqCodigoPresentacionInvalido(raw))return '';
+  return raw.toLowerCase().replace(/\s+/g,'');
+}
 function baseEstaticaMaterial(matId,obraIdx){if(typeof CALCULATED_MATS!=='undefined'&&CALCULATED_MATS[matId])return 0;var key=matId+'-'+obraIdx;if(state.overrides&&state.overrides[key]!=null)return parseFloat(state.overrides[key])||0;var mat=ALL_MATS.find(function(m){return m.id===matId;});return mat&&mat.data&&mat.data[obraIdx]!=null?(parseFloat(mat.data[obraIdx])||0):0;}
 function elegirCanonicoMaterial(a,b){var aExtra=Number(a.id)>=10000,bExtra=Number(b.id)>=10000;if(aExtra!==bExtra)return aExtra?b:a;var aAuto=!!a.autoCreated,bAuto=!!b.autoCreated;if(aAuto!==bAuto)return aAuto?b:a;return Number(a.id)<=Number(b.id)?a:b;}
 function eliminarMaterialDuplicadoFisico(matId){state.extraMats=(state.extraMats||[]).filter(function(m){return Number(m.id)!==Number(matId);});CATS.forEach(function(c){c.items=(c.items||[]).filter(function(m){return Number(m.id)!==Number(matId);});});ALL_MATS=ALL_MATS.filter(function(m){return Number(m.id)!==Number(matId);});if(Number(matId)<10000&&(state.deletedMatIds||[]).indexOf(Number(matId))<0)state.deletedMatIds.push(Number(matId));if(state.matNombres)delete state.matNombres[matId];if(state.matCodigos)delete state.matCodigos[matId];if(state.matCategorias)delete state.matCategorias[matId];}
 function unificarDosMateriales(canonico,duplicado,opciones){if(!canonico||!duplicado||Number(canonico.id)===Number(duplicado.id))return canonico;opciones=opciones||{};var obras=getObras();obras.forEach(function(_,i){var a=baseEstaticaMaterial(canonico.id,i),b=baseEstaticaMaterial(duplicado.id,i);if(b){state.overrides[canonico.id+'-'+i]=(a||0)+b;var h1=state.historial&&state.historial[canonico.id+'-'+i],h2=state.historial&&state.historial[duplicado.id+'-'+i];if(h2&&!h1)state.historial[canonico.id+'-'+i]=h2;}if(state.overrides)delete state.overrides[duplicado.id+'-'+i];if(state.historial)delete state.historial[duplicado.id+'-'+i];});(state.cargas||[]).forEach(function(c){if(Number(c.matId)===Number(duplicado.id)){c.matId=canonico.id;c.matName=canonico.mat;}});var comentario=[getMatComentario(canonico),getMatComentario(duplicado)].filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;}).join(' · ');var codeCanon=getMatCodigo(canonico),codeDup=getMatCodigo(duplicado);if(!codeCanon&&codeDup){if(!state.matCodigos)state.matCodigos={};state.matCodigos[canonico.id]=codeDup;canonico.codigo=codeDup;}if(comentario){var ex=(state.extraMats||[]).find(function(m){return Number(m.id)===Number(canonico.id);});if(ex)ex.comentarios=comentario;canonico.comentarios=comentario;}guardarMemoriaCategoriaMaterial(canonico,obtenerCategoriaMaterial(canonico.id)||obtenerCategoriaMaterial(duplicado.id)||'VARIOS');eliminarMaterialDuplicadoFisico(duplicado.id);if(opciones.toast!==false)showToast('✓ Materiales unificados en "'+canonico.mat+'"');return canonico;}
-function buscarCoincidenciaMaterial(mat,excluirId){if(!mat)return null;var nk=claveMaterialUnificar(mat.mat),ck=codigoMaterialUnificar(mat);return getAllMats().find(function(x){if(Number(x.id)===Number(excluirId)||isMatDeleted(x.id))return false;if(ck&&codigoMaterialUnificar(x)===ck)return true;return nk&&claveMaterialUnificar(x.mat)===nk;})||null;}
-function consolidarMaterialesDuplicados(){var activos=getAllMats().filter(function(m){return m&&!isMatDeleted(m.id);}).slice();var vistosNombre={},vistosCodigo={},cambio=false;activos.forEach(function(m){if(isMatDeleted(m.id)||!ALL_MATS.some(function(x){return Number(x.id)===Number(m.id);}))return;var nk=claveMaterialUnificar(m.mat),ck=codigoMaterialUnificar(m),otro=null;if(ck&&vistosCodigo[ck])otro=vistosCodigo[ck];else if(nk&&vistosNombre[nk])otro=vistosNombre[nk];if(otro&&Number(otro.id)!==Number(m.id)){var can=elegirCanonicoMaterial(otro,m),dup=Number(can.id)===Number(otro.id)?m:otro;unificarDosMateriales(can,dup,{toast:false});cambio=true;if(nk)vistosNombre[nk]=can;if(ck)vistosCodigo[ck]=can;}else{if(nk)vistosNombre[nk]=m;if(ck)vistosCodigo[ck]=m;}});if(cambio)state._materialesUnificadosAt=new Date().toISOString();return cambio;}
+function cqMismoProductoEspecial(a,b){
+  var x=claveMaterialUnificar(a&&a.mat),y=claveMaterialUnificar(b&&b.mat);
+  var xCan=x.indexOf('cannes')>=0,yCan=y.indexOf('cannes')>=0;
+  var xTri=x.indexOf('tripoli')>=0,yTri=y.indexOf('tripoli')>=0;
+  if(!(xCan||yCan||xTri||yTri))return null;
+  return (xCan&&yCan)||(xTri&&yTri);
+}
+function buscarCoincidenciaMaterial(mat,excluirId){
+  if(!mat)return null;
+  var nk=claveMaterialUnificar(mat.mat),ck=codigoMaterialUnificar(mat);
+  return getAllMats().find(function(x){
+    if(Number(x.id)===Number(excluirId)||isMatDeleted(x.id))return false;
+    var esp=cqMismoProductoEspecial(mat,x);
+    if(esp===false)return false;
+    if(ck&&codigoMaterialUnificar(x)===ck)return true;
+    return nk&&claveMaterialUnificar(x.mat)===nk;
+  })||null;
+}
+function consolidarMaterialesDuplicados(){
+  var activos=getAllMats().filter(function(m){return m&&!isMatDeleted(m.id);}).slice();
+  var vistosNombre={},vistosCodigo={},cambio=false;
+  activos.forEach(function(m){
+    if(isMatDeleted(m.id)||!ALL_MATS.some(function(x){return Number(x.id)===Number(m.id);}))return;
+    var nk=claveMaterialUnificar(m.mat),ck=codigoMaterialUnificar(m),otro=null;
+    if(ck&&vistosCodigo[ck]){
+      var candidato=vistosCodigo[ck];
+      var esp=cqMismoProductoEspecial(m,candidato);
+      if(esp!==false)otro=candidato;
+    }
+    if(!otro&&nk&&vistosNombre[nk])otro=vistosNombre[nk];
+    if(otro&&Number(otro.id)!==Number(m.id)){
+      var can=elegirCanonicoMaterial(otro,m),dup=Number(can.id)===Number(otro.id)?m:otro;
+      unificarDosMateriales(can,dup,{toast:false});
+      cambio=true;
+      if(nk)vistosNombre[nk]=can;
+      if(ck)vistosCodigo[ck]=can;
+    }else{
+      if(nk)vistosNombre[nk]=m;
+      if(ck)vistosCodigo[ck]=m;
+    }
+  });
+  if(cambio)state._materialesUnificadosAt=new Date().toISOString();
+  return cambio;
+}
 
 function catColor(catName){
   var c=CATS.find(function(c){return c.name===catName;});
@@ -8081,6 +8131,95 @@ async function initApp(){
   updateModoUI();
   renderActive();
 }
+
+// CQ 15/09/2026 — reconciliación definitiva Materiales <- Acopio.
+// Acopio es la fuente de verdad: si un retiro ya no existe allí, su carga automática
+// no puede sobrevivir en Materiales. También elimina el material automático si queda huérfano.
+async function cqReconciliarMaterialesConAcopioActual(){
+  if(!window._dbReady||!modoFirebase)return false;
+  var cambio=false;
+  try{
+    var snapA=await window._getDoc(window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3'));
+    if(!snapA.exists())return false;
+    var raw=snapA.data()||{};
+    var dbA=(raw.db&&typeof raw.db==='object')?raw.db:raw;
+    var validos=new Set();
+    (Array.isArray(dbA.acopios)?dbA.acopios:[]).forEach(function(a){
+      (Array.isArray(a&&a.retiros)?a.retiros:[]).forEach(function(r){
+        if(a&&a.id!=null&&r&&r.id!=null)validos.add('acopio_'+String(a.id)+'_'+String(r.id));
+      });
+    });
+
+    var matIds=[];
+    state.cargas=(state.cargas||[]).filter(function(c){
+      var iid=String(c&&c.integracionId||'');
+      var origen=cqOrigenCargaNormalizado(c);
+      var esAcopio=(origen==='acopio')||iid.indexOf('acopio_')===0;
+      if(esAcopio && iid.indexOf('acopio_')===0 && !validos.has(iid)){
+        if(c&&c.matId!=null)matIds.push(c.matId);
+        cambio=true;
+        return false;
+      }
+      return true;
+    });
+
+    // "1 PALLET" y equivalentes nunca son códigos de catálogo.
+    getAllMats().forEach(function(mat){
+      if(!mat)return;
+      var id=mat.id;
+      var rawCode=String((state.matCodigos&&state.matCodigos[id])||mat.codigo||'').trim();
+      if(rawCode&&cqCodigoPresentacionInvalido(rawCode)){
+        if(state.matCodigos)delete state.matCodigos[id];
+        mat.codigo='';
+        var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(id);});
+        if(ex)ex.codigo='';
+        cambio=true;
+      }
+    });
+
+    // Limpiar comentarios que quedaron contaminados por antiguas unificaciones.
+    (state.extraMats||[]).forEach(function(mat){
+      var partes=String(mat.comentarios||'').split('·').map(function(x){return x.trim();}).filter(Boolean);
+      var nombre=claveMaterialUnificar(mat.mat);
+      var limpio=[],vistos={};
+      partes.forEach(function(p){
+        var kp=claveMaterialUnificar(p);
+        if(nombre.indexOf('tripoli')<0 && kp==='tripoli')return;
+        if(!vistos[kp]){vistos[kp]=1;limpio.push(p);}
+      });
+      var nuevo=limpio.join(' · ');
+      if(nuevo!==String(mat.comentarios||'')){mat.comentarios=nuevo;cambio=true;}
+    });
+
+    // Quitar materiales automáticos que quedaron sin ninguna carga.
+    var candidatos=[].concat(matIds);
+    (state.extraMats||[]).forEach(function(m){
+      if(m&&m.autoCreated===true)candidatos.push(m.id);
+    });
+    Array.from(new Set(candidatos.map(String))).forEach(function(mid){
+      var usado=(state.cargas||[]).some(function(c){return String(c&&c.matId)===mid;});
+      if(usado)return;
+      var ex=(state.extraMats||[]).find(function(m){return String(m&&m.id)===mid;});
+      var auto=ex&&(ex.autoCreated===true||String(ex.comentarios||'').indexOf('Creado automáticamente desde ')===0);
+      if(auto&&limpiarMaterialAutomaticoSinUso(ex.id))cambio=true;
+    });
+
+    if(cambio){
+      normalizeState();
+      localStorage.setItem(DB_KEY,JSON.stringify(state));
+      suppressRemoteUntil=Date.now()+1800;
+      await window._setDoc(
+        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
+        JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
+      );
+    }
+    return cambio;
+  }catch(e){
+    console.warn('Reconciliación Materiales/Acopio',e);
+    return false;
+  }
+}
+
 async function loadFromFirebase(){
   if(!window._dbReady||!modoFirebase)return;
   try{
@@ -8104,6 +8243,11 @@ async function loadFromFirebase(){
         }catch(err){console.warn('No se pudo persistir la unificación de obras',err);}
       }
     }
+    // Primero reconciliar contra los retiros que REALMENTE siguen existiendo en Acopio.
+    // Esto elimina residuos como Tripoli cuando el retiro ya fue borrado.
+    var limpioAcopio=await cqReconciliarMaterialesConAcopioActual();
+    if(limpioAcopio)console.info('Materiales: residuos históricos de Acopio reconciliados.');
+
     // Completar códigos faltantes usando coincidencia EXACTA de nombre con Acopio.
     // Se ejecuta después de cargar el estado compartido para que el cambio quede
     // guardado para todos los usuarios.
@@ -8168,6 +8312,13 @@ function cqNombresCompatiblesIntegracion(a,b){
   var x=cqNombreMaterialIntegracion(a),y=cqNombreMaterialIntegracion(b);
   if(!x||!y)return true;
   if(x===y)return true;
+
+  // CQ 15/09/2026 — Cannes y Tripoli son identidades excluyentes.
+  // Si cualquiera de los dos lados nombra uno de ellos, el otro debe nombrar el mismo.
+  var xCan=x.indexOf('cannes')>=0, yCan=y.indexOf('cannes')>=0;
+  var xTri=x.indexOf('tripoli')>=0, yTri=y.indexOf('tripoli')>=0;
+  if(xCan||yCan||xTri||yTri)return (xCan&&yCan)||(xTri&&yTri);
+
   if(x.length>=5&&y.indexOf(x)>=0)return true;
   if(y.length>=5&&x.indexOf(y)>=0)return true;
 

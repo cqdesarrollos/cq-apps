@@ -6244,7 +6244,12 @@ function syncMatPrecioAcord(){
 function guardarMaterial(){
   pushUndo();
   var nom=document.getElementById('mat-nombre').value.trim();
-  var cod=document.getElementById('mat-codigo').value.trim();
+  var codRaw=document.getElementById('mat-codigo').value.trim();
+  var cod=cqCodigoMaterialSeguro(codRaw);
+  if(codRaw && !cod){
+    alert('El código no puede ser una cantidad o presentación como "1 PALLET". Dejalo vacío si el producto no tiene código.');
+    return;
+  }
   var comentario=(document.getElementById('mat-comentario').value||'').trim();
   var pu=parseFloat(document.getElementById('mat-precio-unit').value)||0;
   var pa=parseFloat(document.getElementById('mat-precio-acord').value)||(pu/1.21);
@@ -6740,6 +6745,27 @@ function cqNormVerifMat(v){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^a-z0-9]/g,'');
 }
+
+// CQ 15/09/2026 — identidad estricta para productos que no pueden cruzarse.
+// Si aparece CANNES o TRIPOLI en alguno de los nombres, ambos lados deben
+// identificar explícitamente el mismo producto. El código por sí solo NO alcanza.
+function cqIdentidadCannesTripoli(nombreA,nombreB){
+  var a=cqNormVerifMat(nombreA||''), b=cqNormVerifMat(nombreB||'');
+  var aCan=a.indexOf('cannes')>=0, bCan=b.indexOf('cannes')>=0;
+  var aTri=a.indexOf('tripoli')>=0, bTri=b.indexOf('tripoli')>=0;
+  var especial=aCan||bCan||aTri||bTri;
+  if(!especial)return null;
+  return (aCan&&bCan)||(aTri&&bTri);
+}
+function cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nomCarga,codCarga){
+  var esp=cqIdentidadCannesTripoli(nomRet,nomCarga);
+  if(esp!==null)return esp;
+  return !!(
+    (codRet&&codCarga&&codRet===codCarga) ||
+    (nomRet&&nomCarga&&nomRet===nomCarga)
+  );
+}
+
 function cqCargaMaterialesCoincideRetiro(c,retiro,a){
   if(!c||!retiro||!a)return false;
 
@@ -6769,7 +6795,7 @@ function cqCargaMaterialesCoincideRetiro(c,retiro,a){
   var obraCarga=cqNormVerifMat(c.obraNameOrigen||c.obraName||'');
   var qtyOk=Math.abs(Number(c.qty||0)-Number(retiro.qty||0))<0.000001;
   var fechaOk=!c.fecha || !retiro.fecha || String(c.fecha)===String(retiro.fecha);
-  var matOk=(codRet&&codCarga&&codRet===codCarga) || (nomRet&&nomCarga&&nomRet===nomCarga);
+  var matOk=cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nomCarga,codCarga);
   var obraOk=!obraRet || !obraCarga || obraRet===obraCarga;
 
   return !!(matOk && obraOk && qtyOk && fechaOk);
@@ -6791,7 +6817,7 @@ function cqCargaMaterialesCoincideRetiroUnico(c,retiro,a){
   var codRet=cqNormVerifMat(retiro.materialCode||(m&&m.cod)||'');
   var nomCarga=cqNormVerifMat(c.materialNameOrigen||c.matName||c.materialName||'');
   var codCarga=cqNormVerifMat(c.codigoOrigen||c.materialCode||'');
-  var matOk=(codRet&&codCarga&&codRet===codCarga)||(nomRet&&nomCarga&&nomRet===nomCarga);
+  var matOk=cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nomCarga,codCarga);
   var qtyOk=Math.abs(Number(c.qty||0)-Number(retiro.qty||0))<0.000001;
   var fechaOk=!c.fecha || !retiro.fecha || String(c.fecha)===String(retiro.fecha);
   if(!(matOk&&qtyOk&&fechaOk))return false;
@@ -6803,7 +6829,7 @@ function cqCargaMaterialesCoincideRetiroUnico(c,retiro,a){
     if(ox && ox.indexOf('acopio')<0)return false;
     var nx=cqNormVerifMat(x.materialNameOrigen||x.matName||x.materialName||'');
     var cx=cqNormVerifMat(x.codigoOrigen||x.materialCode||'');
-    var mok=(codRet&&cx&&codRet===cx)||(nomRet&&nx&&nomRet===nx);
+    var mok=cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nx,cx);
     var qok=Math.abs(Number(x.qty||0)-Number(retiro.qty||0))<0.000001;
     var fok=!x.fecha || !retiro.fecha || String(x.fecha)===String(retiro.fecha);
     return mok&&qok&&fok;
@@ -7471,6 +7497,10 @@ function cqMatResolverMaterialDirecto(data,ev){
     // cuando existe un código histórico duplicado/mal asignado en Materiales.
     // Incluso si hay UN solo candidato por código, el nombre debe ser compatible.
     mat=candidatos.find(function(x){
+      var xa=cqMatNormDirecto(x.mat), xb=cqMatNormDirecto(nombre);
+      var xCan=xa.indexOf('cannes')>=0, bCan=xb.indexOf('cannes')>=0;
+      var xTri=xa.indexOf('tripoli')>=0, bTri=xb.indexOf('tripoli')>=0;
+      if(xCan||bCan||xTri||bTri)return (xCan&&bCan)||(xTri&&bTri);
       return cqMatNombreCompatibleDirecto(x.mat,nombre);
     })||null;
 
@@ -7497,7 +7527,7 @@ function cqMatResolverMaterialDirecto(data,ev){
     mat={
       id:maxId,
       mat:nombre||('Material '+String(ev.materialCode||'')),
-      codigo:String(ev.materialCode||'').trim(),
+      codigo:cqCodigoMaterialSeguro(ev.materialCode),
       prom:0,
       data:[],
       catName:cat,
@@ -7511,7 +7541,7 @@ function cqMatResolverMaterialDirecto(data,ev){
     if(mat.codigo)data.matCodigos[mat.id]=mat.codigo;
   }
 
-  var incomingCode=String(ev.materialCode||'').trim();
+  var incomingCode=cqCodigoMaterialSeguro(ev.materialCode);
   if(incomingCode&&!cqMatCodigoDirecto(data,mat)){
     data.matCodigos[mat.id]=incomingCode;
     mat.codigo=incomingCode;
@@ -7609,7 +7639,7 @@ function cqMatAplicarEventoDirecto(data,ev){
     sourceMovementId:sourceId,
     automatico:true,
     integracionId:iid,
-    codigoOrigen:ev.materialCode||'',
+    codigoOrigen:cqCodigoMaterialSeguro(ev.materialCode),
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||'',
     categoriaOrigen:cat
@@ -7723,6 +7753,19 @@ async function cqVerificarRetiroEnAcopioRemoto(acopioId,retiroId){
   return !!(a&&(a.retiros||[]).some(function(r){return String(r&&r.id)===String(retiroId);}));
 }
 
+// CQ 15/09/2026 — el código de producto nunca puede ser una presentación/cantidad.
+// Casos como "1 PALLET" pertenecen a comentario/presentación, no al código.
+function cqCodigoMaterialSeguro(v){
+  var raw=String(v==null?'':v).trim();
+  if(!raw)return '';
+  var n=raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  if(/^\d+(?:[.,]\d+)?\s*(pallet|pallets|palet|palets|bulto|bultos|caja|cajas|bolsa|bolsas|unidad|unidades|u|un|m2|m²|mts?|metros?)$/.test(n)){
+    console.warn('Código descartado por ser presentación/cantidad:',raw);
+    return '';
+  }
+  return raw;
+}
+
 async function sincronizarRetiroConMateriales(retiro,activo){
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
   var a=getAcopio();
@@ -7739,7 +7782,7 @@ async function sincronizarRetiroConMateriales(retiro,activo){
     ||''
   ).trim();
 
-  var materialCode=String(retiro.materialCode!=null?retiro.materialCode:(m&&m.cod)||'').trim();
+  var materialCode=cqCodigoMaterialSeguro(retiro.materialCode!=null?retiro.materialCode:(m&&m.cod)||'');
   var materialName=String(retiro.materialName!=null?retiro.materialName:(m&&m.nom)||'').trim();
   var materialUnidad=String(retiro.materialUnidad!=null?retiro.materialUnidad:(m&&m.unidad)||'').trim();
   var categoria=String(retiro.subrubro||'').trim()||'VARIOS';
@@ -9316,6 +9359,37 @@ async function cqEliminarMaterialesRetiroExacto(acopioId,retiro){
     cargas=cargas.filter(function(c){return !coincide(c);});
 
     data.cargas=cargas;
+
+    // CQ 15/09/2026 — al borrar un retiro, limpiar también el producto de catálogo
+    // si fue creado automáticamente desde Acopio y ya no tiene ninguna carga.
+    // Antes sólo se eliminaba la carga: por eso TRIPOLI reaparecía en Catálogo.
+    var matIdsRemovidos=[];
+    removidas.forEach(function(c){
+      if(c&&c.matId!=null && matIdsRemovidos.indexOf(String(c.matId))<0){
+        matIdsRemovidos.push(String(c.matId));
+      }
+    });
+    if(!Array.isArray(data.extraMats))data.extraMats=[];
+    matIdsRemovidos.forEach(function(mid){
+      var sigueUsado=(data.cargas||[]).some(function(c){
+        return String(c&&c.matId)===mid;
+      });
+      if(sigueUsado)return;
+
+      var extra=data.extraMats.find(function(x){return String(x&&x.id)===mid;});
+      var auto=extra && (
+        extra.autoCreated===true
+        || String(extra.source||'').toLowerCase()==='acopio'
+        || String(extra.comentarios||'').indexOf('Creado automáticamente desde Acopio')===0
+      );
+      if(!auto)return;
+
+      data.extraMats=data.extraMats.filter(function(x){return String(x&&x.id)!==mid;});
+      if(data.matCodigos)delete data.matCodigos[mid];
+      if(data.matCategorias)delete data.matCategorias[mid];
+      if(data.matNombres)delete data.matNombres[mid];
+    });
+
     data.updatedAt=new Date().toISOString();
     data.updatedByIntegration=iid;
     tx.set(ref,data);
@@ -9376,7 +9450,36 @@ async function cqEliminarMaterialesRetiroExacto(acopioId,retiro){
           }
           return true;
         });
+        var removidas2=arr2.length;
         d2.cargas=arr2;
+
+        // Segunda pasada: aplicar el mismo saneo de catálogo huérfano.
+        if(!Array.isArray(d2.extraMats))d2.extraMats=[];
+        var mids=[];
+        (Array.isArray(dataCheck.cargas)?dataCheck.cargas:[]).forEach(function(c){
+          if(c && (
+            String(c.integracionId||'')===String(iid)
+            || String(c.sourceMovementId||'')===String(retiro.id)
+          ) && c.matId!=null && mids.indexOf(String(c.matId))<0){
+            mids.push(String(c.matId));
+          }
+        });
+        mids.forEach(function(mid){
+          var usado=(d2.cargas||[]).some(function(c){return String(c&&c.matId)===mid;});
+          if(usado)return;
+          var ex=d2.extraMats.find(function(x){return String(x&&x.id)===mid;});
+          var auto=ex && (
+            ex.autoCreated===true
+            || String(ex.source||'').toLowerCase()==='acopio'
+            || String(ex.comentarios||'').indexOf('Creado automáticamente desde Acopio')===0
+          );
+          if(!auto)return;
+          d2.extraMats=d2.extraMats.filter(function(x){return String(x&&x.id)!==mid;});
+          if(d2.matCodigos)delete d2.matCodigos[mid];
+          if(d2.matCategorias)delete d2.matCategorias[mid];
+          if(d2.matNombres)delete d2.matNombres[mid];
+        });
+
         d2.updatedAt=new Date().toISOString();
         d2.updatedByIntegration=iid;
         tx.set(ref,d2);
@@ -14245,6 +14348,7 @@ document.addEventListener('click',function(e){
   window.cqVerificarPanolUnaVez=verificarPanolUnaVez;
 })();
 </script>
+
 </body>
 </html>
 
