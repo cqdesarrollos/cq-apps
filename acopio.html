@@ -1493,10 +1493,10 @@ button[onclick*="crearBackupManual"]{
 
 
 <style id="cq-carga-masiva-materiales">
-.bulk-mat-modal{max-width:760px!important}
+.bulk-mat-modal{max-width:900px!important}
 .bulk-mat-grid{
   display:grid;
-  grid-template-columns:.78fr 1.35fr .82fr;
+  grid-template-columns:.72fr 1.25fr .72fr .62fr;
   gap:10px;
 }
 .bulk-mat-col{
@@ -1535,7 +1535,7 @@ button[onclick*="crearBackupManual"]{
 @media(max-width:620px){
   .bulk-mat-modal{max-width:96vw!important}
   .bulk-mat-grid{
-    grid-template-columns:.82fr 1.3fr .82fr;
+    grid-template-columns:.72fr 1.18fr .72fr .62fr;
     gap:6px;
   }
   .bulk-mat-col{
@@ -3372,6 +3372,8 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
       </div>
       <div class="row2">
         <div class="fld"><label>Unidad</label><input type="text" id="mat-unidad" placeholder="c/u, kg, bolsa..."></div>
+        <div class="fld"><label>Control de cantidad</label><select id="mat-control-stock" onchange="cqToggleCantidadMaterial()"><option value="abierto">Abierto · sin límite</option><option value="limitado">Cantidad específica</option></select></div>
+        <div class="fld" id="mat-cantidad-wrap" style="display:none"><label>Cantidad total disponible</label><input type="number" id="mat-cantidad-total" min="0" step="0.01" placeholder="ej: 120"><div style="font-size:9px;color:#7A9E82;margin-top:3px">Cada retiro descontará unidades de este total.</div></div>
         <div class="fld"><label>Categoría</label><select id="mat-cat"></select></div>
         <div class="fld" id="mat-cat-nueva-wrap"><label>Agregar nueva categoría</label><div style="display:flex;gap:6px"><input type="text" id="mat-cat-nueva" placeholder="ej: Plomería, Gas, Aberturas..." style="flex:1"><button type="button" class="btn btn-s btn-sm" onclick="agregarCategoriaMaterialDesdeInput()">+ Agregar</button></div><div style="font-size:9px;color:#A8BFA8;margin-top:3px">Si escribís una nueva categoría y guardás el material, también se crea automáticamente.</div></div>
       </div>
@@ -3395,7 +3397,7 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
     <div class="mbody">
       <div style="font-size:11px;color:#7A9E82;line-height:1.45;margin-bottom:12px">
         Pegá cada dato en su columna y en el mismo orden: línea 1 con línea 1, línea 2 con línea 2, etc.
-        Elegí una sola regla para calcular el precio acordado.
+        En <b>Cantidad total</b>, dejá la línea vacía si el material es abierto; si cargás una cantidad, ese artículo tendrá stock controlado y las salidas se descontarán de ese total. Elegí una sola regla para calcular el precio acordado.
       </div>
       <div class="cq-bulk-rule-box">
         <label class="cq-bulk-rule"><input type="checkbox" id="bulk-regla-ferro" checked onchange="cqBulkElegirRegla('ferro')"><span><b>Ferroconos</b><small>Precio acordado = precio cargado ÷ 1,21</small></span></label>
@@ -3420,6 +3422,10 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
           <label>Precio unitario</label>
           <textarea id="bulk-mat-precios" rows="10" inputmode="decimal" enterkeyhint="next" placeholder="1250&#10;980&#10;8500"></textarea>
           <button type="button" class="bulk-next-price" onclick="bulkSiguientePrecio()">↓ Siguiente renglón</button>
+        </div>
+        <div class="bulk-mat-col">
+          <label>Cantidad total <span style="font-weight:700;color:#A8BFA8">(opcional)</span></label>
+          <textarea id="bulk-mat-cantidades" rows="10" inputmode="decimal" placeholder="120&#10;&#10;50"></textarea>
         </div>
       </div>
 
@@ -3732,6 +3738,10 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
     </div>
 
     <div class="sec-ttl cq-ret-hist-title" style="margin-top:16px">Historial de retiros — <span id="retirar-obra-label"></span></div>
+    <button type="button" id="cq-reparar-materiales-btn" class="btn btn-s btn-full" onclick="cqRepararMaterialesPendientes()" style="margin:0 0 8px">
+      🔧 Reparar retiros pendientes en Materiales
+    </button>
+    <div id="cq-reparar-materiales-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#F7F6F3;font-size:11px;color:#567065;line-height:1.35"></div>
     <button type="button" id="cq-ret-filtros-toggle" class="cq-ret-filtros-toggle" onclick="cqToggleHistFiltros()">
       <span>⚙ Filtros</span><span id="cq-ret-filtros-resumen">Todos los retiros</span><span class="cq-ret-filtros-arrow">⌄</span>
     </button>
@@ -5987,6 +5997,20 @@ function ordenarMaterialesAlfabeticamente(lista){
     return String(a.nom||'').localeCompare(String(b.nom||''),'es',{sensitivity:'base',numeric:true});
   });
 }
+function cqMaterialRetiradoTotal(matId){
+  var a=getAcopio();
+  return (a&&a.retiros||[]).filter(function(r){return Number(r.matId)===Number(matId);}).reduce(function(t,r){return t+(Number(r.qty)||0);},0);
+}
+function cqMaterialSaldoCantidad(m){
+  if(!m || m.controlStock!=='limitado')return null;
+  return Math.max(0,(Number(m.cantidadTotal)||0)-cqMaterialRetiradoTotal(m.id));
+}
+function cqToggleCantidadMaterial(){
+  var sel=document.getElementById('mat-control-stock');
+  var wrap=document.getElementById('mat-cantidad-wrap');
+  if(wrap)wrap.style.display=(sel&&sel.value==='limitado')?'block':'none';
+}
+
 function renderMateriales(){
   renderKPIs();
   var q=normalizarBusquedaMaterial(document.getElementById('mat-search').value||'');
@@ -6006,12 +6030,13 @@ function renderMateriales(){
     var col=getCatColor(cat);
     html+='<div class="card" style="border-top:3px solid '+col+'">';
     html+='<div class="card-hd"><span class="card-ttl" style="color:'+col+'">'+cat+'</span></div>';
-    html+='<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="r">P. Unitario $</th><th class="r">P. Acordado $</th><th></th></tr></thead><tbody>';
+    html+='<div class="tbl-wrap"><table><thead><tr><th>Material</th><th class="r">Disponible</th><th class="r">P. Unitario $</th><th class="r">P. Acordado $</th><th></th></tr></thead><tbody>';
     cats[cat].forEach(function(m){
       html+='<tr>'
         +'<td><div style="font-weight:600;font-size:12px">'+m.nom+'</div>'
         +(m.cod?'<div style="font-size:9px;color:#A8BFA8;margin-top:2px">'+m.cod+'</div>':'')
         +(m.comentario?'<div style="font-size:9px;color:#8A6725;background:#FFF7E7;border:1px solid #F1E2BE;border-radius:7px;padding:3px 6px;margin-top:4px;display:inline-block">'+String(m.comentario).replace(/</g,'&lt;')+'</div>':'')+'</td>'
+        +'<td class="mono r">'+(m.controlStock==='limitado'?('<span class="qty-strong">'+fmtN(cqMaterialSaldoCantidad(m),2)+'</span> <span class="qty-unit">'+(m.unidad||'u.')+'</span><div style="font-size:8px;color:#A8BFA8;margin-top:2px">de '+fmtN(Number(m.cantidadTotal)||0,2)+'</div>'):'<span style="color:#A8BFA8;font-size:10px">ABIERTO</span>')+'</td>'
         +'<td class="mono r">'+fmtP(m.precioUnit)+'</td>'
         +'<td class="mono r" style="color:var(--green);font-weight:700">'+fmtP(m.precioAcord)+'</td>'
         +'<td class="r"><button class="btn btn-s btn-sm" onclick="openEditMaterial('+m.id+')" style="padding:4px 10px;font-size:10px">✎</button></td>'
@@ -6075,6 +6100,7 @@ function openCargaMasivaMateriales(){
   document.getElementById('bulk-mat-codigos').value='';
   document.getElementById('bulk-mat-articulos').value='';
   document.getElementById('bulk-mat-precios').value='';
+  document.getElementById('bulk-mat-cantidades').value='';
   document.getElementById('bulk-mat-preview').textContent='';
   cqBulkElegirRegla('ferro');
   var d=document.getElementById('bulk-regla-dividir'),m=document.getElementById('bulk-regla-multiplicar');
@@ -6115,10 +6141,11 @@ function guardarCargaMasivaMateriales(){
   var codigos=(document.getElementById('bulk-mat-codigos').value||'').split(/\r?\n/);
   var articulos=(document.getElementById('bulk-mat-articulos').value||'').split(/\r?\n/);
   var precios=(document.getElementById('bulk-mat-precios').value||'').split(/\r?\n/);
+  var cantidades=(document.getElementById('bulk-mat-cantidades').value||'').split(/\r?\n/);
 
   if(!cat){alert('Elegí una categoría.');return;}
 
-  var maxLen=Math.max(codigos.length,articulos.length,precios.length);
+  var maxLen=Math.max(codigos.length,articulos.length,precios.length,cantidades.length);
   var parsed=[];
   var invalidas=[];
 
@@ -6126,11 +6153,13 @@ function guardarCargaMasivaMateriales(){
     var cod=String(codigos[i]||'').trim();
     var nom=String(articulos[i]||'').trim();
     var pu=parsePrecioMasivo(precios[i]||'');
+    var cantRaw=String(cantidades[i]||'').trim();
+    var cant=cantRaw?parsePrecioMasivo(cantRaw):null;
 
-    var emptyRow=!cod && !nom && !String(precios[i]||'').trim();
+    var emptyRow=!cod && !nom && !String(precios[i]||'').trim() && !cantRaw;
     if(emptyRow)continue;
 
-    if(!nom || pu<=0){
+    if(!nom || pu<=0 || (cantRaw && cant<=0)){
       invalidas.push(i+1);
       continue;
     }
@@ -6140,12 +6169,14 @@ function guardarCargaMasivaMateriales(){
       nom:nom,
       precioUnit:pu,
       precioAcord:cqBulkPrecioAcordado(pu),
-      unidad:'c/u'
+      unidad:'c/u',
+      controlStock:cantRaw?'limitado':'abierto',
+      cantidadTotal:cantRaw?cant:null
     });
   }
 
   if(!parsed.length){
-    alert('No se encontraron filas válidas. Completá artículo y precio unitario en la misma línea.');
+    alert('No se encontraron filas válidas. Completá artículo y precio unitario; si indicás cantidad total, debe ser mayor que 0.');
     return;
   }
 
@@ -6196,7 +6227,9 @@ function guardarCargaMasivaMateriales(){
   closeModal('modal-carga-masiva-mat');
   renderMateriales();
 
+  var controlados=agregados.filter(function(m){return m.controlStock==='limitado';}).length;
   var msg='✓ '+agregados.length+' materiales agregados en '+cat;
+  if(controlados)msg+=' · '+controlados+' con cantidad específica';
   if(duplicados.length)msg+=' · '+duplicados.length+' códigos repetidos omitidos';
   if(invalidas.length)msg+=' · '+invalidas.length+' líneas incompletas';
   toast(msg);
@@ -6211,6 +6244,9 @@ function openNuevoMaterial(){
   document.getElementById('mat-precio-unit').value='';
   document.getElementById('mat-precio-acord').value='';
   document.getElementById('mat-unidad').value='';
+  document.getElementById('mat-control-stock').value='abierto';
+  document.getElementById('mat-cantidad-total').value='';
+  cqToggleCantidadMaterial();
   document.getElementById('mat-cat-nueva').value='';
   document.getElementById('mat-delete-btn').style.display='none';
   var catSel=document.getElementById('mat-cat');
@@ -6230,6 +6266,9 @@ function openEditMaterial(id){
   document.getElementById('mat-precio-unit').value=m.precioUnit;
   document.getElementById('mat-precio-acord').value=m.precioAcord;
   document.getElementById('mat-unidad').value=m.unidad;
+  document.getElementById('mat-control-stock').value=m.controlStock==='limitado'?'limitado':'abierto';
+  document.getElementById('mat-cantidad-total').value=m.controlStock==='limitado'?(Number(m.cantidadTotal)||0):'';
+  cqToggleCantidadMaterial();
   document.getElementById('mat-cat-nueva').value='';
   document.getElementById('mat-delete-btn').style.display='inline-block';
   var catSel=document.getElementById('mat-cat');
@@ -6254,15 +6293,19 @@ function guardarMaterial(){
   var pu=parseFloat(document.getElementById('mat-precio-unit').value)||0;
   var pa=parseFloat(document.getElementById('mat-precio-acord').value)||(pu/1.21);
   var unidad=document.getElementById('mat-unidad').value.trim()||'c/u';
+  var controlStock=document.getElementById('mat-control-stock').value==='limitado'?'limitado':'abierto';
+  var cantidadTotal=controlStock==='limitado'?(parseFloat(document.getElementById('mat-cantidad-total').value)||0):null;
   var catNueva=(document.getElementById('mat-cat-nueva').value||'').trim();
   var cat=catNueva || document.getElementById('mat-cat').value;
   if(!nom){alert('Ingresá un nombre');return;}
   if(!cat){alert('Elegí o ingresá una categoría');return;}
+  if(controlStock==='limitado' && cantidadTotal<=0){alert('Ingresá la cantidad total disponible para este material.');return;}
+  if(editMatId && controlStock==='limitado' && cantidadTotal<cqMaterialRetiradoTotal(editMatId)){alert('La cantidad total no puede ser menor a lo ya retirado ('+fmtN(cqMaterialRetiradoTotal(editMatId),2)+' '+unidad+').');return;}
   cat=ensureCat(cat);
   setLastMatCat(cat);
   var a=getAcopio();
   if(editMatId){
-    a.mats=a.mats.map(function(m){return m.id===editMatId?Object.assign({},m,{nom:nom,cod:cod,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat}):m;});
+    a.mats=a.mats.map(function(m){return m.id===editMatId?Object.assign({},m,{nom:nom,cod:cod,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal}):m;});
     toast('✓ Material actualizado');
   } else {
     var maxId=1;
@@ -6276,7 +6319,7 @@ function guardarMaterial(){
       }
     });
     cqQuitarTombstoneMat(a.id,maxId);
-    a.mats.push({id:maxId,cod:cod,nom:nom,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat});
+    a.mats.push({id:maxId,cod:cod,nom:nom,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal});
     toast('✓ Material "'+nom+'" agregado en '+cat);
   }
   persist();closeModal('modal-mat');renderMateriales();
@@ -6528,8 +6571,9 @@ function filterRetirarMatCombo(){
   } else {
     dd.innerHTML=matches.map(function(m){
       var codigo=m.cod?'<div style="font-size:9px;color:#A8BFA8;margin-top:2px">'+m.cod+'</div>':'';
+      var stock=m.controlStock==='limitado'?'<div style="font-size:9px;color:'+(cqMaterialSaldoCantidad(m)<=0?'#C0392B':'#2E7D5E')+';font-weight:800;margin-top:2px">Disponible: '+fmtN(cqMaterialSaldoCantidad(m),2)+' '+(m.unidad||'')+'</div>':'';
       return '<div class="combo-item" onmousedown="event.preventDefault();selectRetirarMatCombo(\''+String(m.id).replace(/'/g,"\\'")+'\')">'
-        +'<div>'+m.nom+'</div>'+codigo+'</div>';
+        +'<div>'+m.nom+'</div>'+codigo+stock+'</div>';
     }).join('');
   }
   dd.style.display='block';
@@ -8215,6 +8259,10 @@ async function guardarRetiro(){
   if(!a.retiros)a.retiros=[];
   var matSeleccionado=getMat(matId);
   if(!matSeleccionado){alert('No se pudo identificar el material seleccionado. Volvé a elegirlo.');return;}
+  if(matSeleccionado.controlStock==='limitado'){
+    var saldoCantidad=cqMaterialSaldoCantidad(matSeleccionado);
+    if(qty>saldoCantidad+0.000001){alert('Stock insuficiente. Disponible: '+fmtN(saldoCantidad,2)+' '+(matSeleccionado.unidad||'')+'.');return;}
+  }
 
   var obraConfirmar=obraSel.label||obraSel.short||obraSel.id||getObras()[curRetirarObra]||'';
   var confirmado=await cqConfirmarRetiroBonito({
@@ -9090,6 +9138,83 @@ async function openEditRetiro(id){
   cqAplicarBloqueosPorPanol('retiro');
   openModal('modal-retiro');
 }
+
+// CQ 17/09/2026 — reparación segura de retiros que deberían existir en Materiales.
+// NO crea ni modifica retiros de Acopio. NO toca Gastos ni Pañol.
+// Verifica primero el documento real de Materiales y sólo reintenta los faltantes.
+async function cqRepararMaterialesPendientes(){
+  var btn=document.getElementById('cq-reparar-materiales-btn');
+  var info=document.getElementById('cq-reparar-materiales-info');
+  if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no está listo','err');return;}
+  var acopios=(DB&&Array.isArray(DB.acopios))?DB.acopios:[];
+  var candidatos=[];
+  acopios.forEach(function(ac){
+    (Array.isArray(ac.retiros)?ac.retiros:[]).forEach(function(r){
+      if(r&&r.cargarMateriales===true)candidatos.push({acopio:ac,retiro:r});
+    });
+  });
+  if(!candidatos.length){toast('No hay retiros marcados para Materiales');return;}
+
+  btn.disabled=true;btn.textContent='Verificando Materiales…';
+  if(info){info.style.display='block';info.textContent='Comparando los retiros de Acopio con Materiales. No se vuelve a descontar stock.';}
+
+  var f=window._cqFirebase, ref=f.doc(f.db,'materiales','data_planilla_exacta_v4');
+  try{
+    var snap=await f.getDoc(ref), data=snap.exists()?(snap.data()||{}):{}, cargas=Array.isArray(data.cargas)?data.cargas:[];
+    var faltantes=candidatos.filter(function(x){
+      var iid=integracionRetiroId(x.acopio.id,x.retiro.id);
+      // Primero ID canónico; luego huella segura ya existente en esta app para históricos.
+      if(cargas.some(function(c){return String(c&&c.integracionId||'')===String(iid);})){return false;}
+      try{
+        return !cargas.some(function(c){return cqCargaMaterialesCoincideRetiroUnico(c,x.retiro,x.acopio);});
+      }catch(_e){return true;}
+    });
+
+    if(!faltantes.length){
+      if(info)info.textContent='✓ Todos los retiros marcados para Materiales ya tienen correspondencia.';
+      toast('✓ Materiales está completo');
+      return;
+    }
+
+    var ok=0, errores=[];
+    btn.textContent='Reparando 0 / '+faltantes.length+'…';
+    for(var i=0;i<faltantes.length;i++){
+      var x=faltantes[i];
+      // sincronizarRetiroConMateriales usa getAcopio(); cambiar sólo el contexto activo
+      // temporalmente sería riesgoso. La reparación está destinada al acopio actualmente abierto.
+      if(!getAcopio() || String(getAcopio().id)!==String(x.acopio.id)){
+        continue;
+      }
+      try{
+        await sincronizarRetiroConMateriales(x.retiro,true);
+        x.retiro.materialesSyncEstado='ok';
+        x.retiro.materialesSyncError='';
+        x.retiro.materialesSyncAt=new Date().toISOString();
+        ok++;
+      }catch(e){
+        x.retiro.materialesSyncEstado='error';
+        x.retiro.materialesSyncError=String(e&&e.message||e);
+        errores.push((x.retiro.materialName||'Material')+': '+String(e&&e.message||e));
+      }
+      btn.textContent='Reparando '+(i+1)+' / '+faltantes.length+'…';
+    }
+    persist();
+    try{renderRetirarHistorial();}catch(_e){}
+    var omitidos=faltantes.length-ok-errores.length;
+    if(info)info.textContent='Resultado: '+ok+' reparado(s)'+(errores.length?' · '+errores.length+' con error':'')+(omitidos?' · '+omitidos+' pertenecen a otro acopio; abrilo para repararlos':'')+'.';
+    if(errores.length)toast('⚠️ Reparados '+ok+'; '+errores.length+' siguen con error','err');
+    else if(omitidos)toast('✓ Reparados '+ok+'. Abrí los otros acopios para continuar.');
+    else toast('✓ '+ok+' retiro(s) reparado(s) en Materiales');
+  }catch(e){
+    console.error('Reparar Materiales',e);
+    if(info)info.textContent='No se pudo completar: '+String(e&&e.message||e);
+    toast('No se pudo reparar Materiales','err');
+  }finally{
+    btn.disabled=false;btn.textContent='🔧 Reparar retiros pendientes en Materiales';
+  }
+}
+window.cqRepararMaterialesPendientes=cqRepararMaterialesPendientes;
+
 async function guardarEditRetiro(){
   pushUndo();
   var qty=parseFloat(document.getElementById('retiro-qty').value);
