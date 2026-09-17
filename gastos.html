@@ -2688,6 +2688,11 @@ function cqDetalleCajaChicaHTML(g){
     comentario=nota;
   }
 
+  // Evitar duplicación visual también en Caja Chica: si detalle y observación
+  // contienen el mismo texto, mostramos una sola copia. No modifica datos/Firebase.
+  const normCajaChica=v=>String(v||'').trim().replace(/\s+/g,' ').toLocaleLowerCase('es');
+  if(detalle && comentario && normCajaChica(detalle)===normCajaChica(comentario)) comentario='';
+
   if(!detalle && !comentario) return '';
 
   return `${detalle?`<span class="gasto-caja-material">${cqEscHtml(detalle)}</span>`:''}${comentario?`<span class="gasto-caja-comentario">${cqEscHtml(comentario)}</span>`:''}`;
