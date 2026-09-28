@@ -2274,6 +2274,22 @@ html.cq-gerencia-recordada #cq-gerencia-auth{display:flex!important}
   </div>
 </div>
 
+<!-- Watchdog independiente de Firebase: evita que la pantalla quede congelada
+     si el módulo/CDN no llega a iniciar en algún navegador. -->
+<script>
+(function(){
+  window.__cqGerenciaAuthModuleStarted=false;
+  setTimeout(function(){
+    if(window.__cqGerenciaAuthModuleStarted) return;
+    var checking=document.getElementById("cq-auth-checking");
+    var form=document.getElementById("cq-auth-form");
+    var msg=document.getElementById("cq-auth-msg");
+    if(checking) checking.style.display="none";
+    if(form) form.style.display="block";
+    if(msg) msg.textContent="No se pudo iniciar Firebase. Recargá la página; si continúa, revisaremos la conexión con Firebase.";
+  },7000);
+})();
+</script>
 
 <script type="module">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -2282,6 +2298,8 @@ import {
   setPersistence, browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+window.__cqGerenciaAuthModuleStarted=true;
 
 const firebaseConfig = {
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
@@ -2297,9 +2315,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 // Compatibilidad: algunos navegadores/tablets pueden rechazar IndexedDB/local persistence.
 // Eso no debe frenar todo el login de Gerencia.
-// No bloquear el arranque esperando la persistencia: en algunos navegadores/tablets
-// IndexedDB puede tardar o quedar pendiente. Firebase Auth puede verificar la sesión
-// en paralelo y, si la persistencia falla, el login manual sigue disponible.
 setPersistence(auth, browserLocalPersistence).catch(e=>{
   console.warn("Gerencia persistence no disponible; continúo con la sesión posible:",e);
 });
