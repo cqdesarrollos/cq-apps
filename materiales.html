@@ -189,6 +189,8 @@ html,body{background:var(--cq-bg);}
 .card-hd,.tbl th{background:#F1F6F8!important;}
 .toast{background:var(--cq-blue)!important;}
 
+.cq-comment-clickable{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:rgba(30,125,90,.14)}
+#cq-report-comment-modal{z-index:99999!important}
 </style>
 
 <script type="module">
@@ -4521,9 +4523,13 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 </style>
 
 <style id="cq-reporte-comentarios-definitivo">
-#modal-reporte .cq-report-number-cell{position:relative;cursor:pointer}
-#modal-reporte .cq-report-number-cell.cq-has-comment{background:#FFF0B8!important;color:#714B00!important;font-weight:900!important;box-shadow:inset 0 0 0 2px #E0B54A!important}
-#modal-reporte .cq-comment-dot{position:absolute;right:5px;top:3px;width:7px;height:7px;background:#D58D00;border-radius:50%}
+#modal-reporte .cq-report-number-cell,
+#view-obras #obras-content .cq-report-number-cell{position:relative;cursor:pointer}
+#modal-reporte .cq-report-number-cell.cq-has-comment,
+#view-obras #obras-content .cq-report-number-cell.cq-has-comment{background:inherit!important;color:inherit!important;font-weight:inherit!important;box-shadow:none!important}
+#modal-reporte .cq-comment-dot,
+#view-obras #obras-content .cq-comment-dot{position:absolute;right:3px;top:3px;width:5px;height:5px;background:#D58D00;border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.9);pointer-events:none}
+#view-obras #obras-content .cq-report-number-cell.cq-has-comment::after{content:none!important}
 #cq-report-comment-modal{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(12,33,27,.40)}
 #cq-report-comment-modal.open{display:flex}.cq-report-comment-card{width:min(430px,100%);background:#fff;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.32);overflow:hidden}
 .cq-report-comment-hd{padding:16px 17px 12px;border-bottom:1px solid #E3EAE6;display:flex;justify-content:space-between;gap:12px}.cq-report-comment-hd b{display:block;font-size:16px;color:#173E32}.cq-report-comment-hd small{display:block;color:#71847C;margin-top:5px;font-size:11px}
@@ -7876,6 +7882,7 @@ function normalizeState(){
   if(!state.catRenames)state.catRenames={};
   if(!state.categoriaMemoria)state.categoriaMemoria={};
   if(!state.ignoredIntegrationIds)state.ignoredIntegrationIds=[];
+  if(!state.reporteComentarios)state.reporteComentarios={};
 
   // Normaliza el origen de cargas automáticas viejas y nuevas.
   // Esto hace que cualquier filtro por origen reconozca siempre Acopio/Pañol,
@@ -9527,7 +9534,7 @@ function renderReporteCompartido(){
       var key=cqReporteComentarioKey(x.mat.id,obraNom);
       var tiene=!!String((state.reporteComentarios||{})[key]||'').trim();
       return v!=null
-        ?'<td class="mono r cq-report-number-cell '+(tiene?'cq-has-comment':'')+'" onclick="cqAbrirComentarioReporte(event,'+JSON.stringify(String(x.mat.id))+','+JSON.stringify(String(obraNom))+','+JSON.stringify(String(x.mat.mat))+','+JSON.stringify(String(fmtN(v)))+')">'+fmtN(v)+(tiene?'<span class="cq-comment-dot"></span>':'')+'</td>'
+        ?'<td class="mono r cq-report-number-cell cq-comment-clickable '+(tiene?'cq-has-comment':'')+'" data-cq-comment="1" data-mat-id="'+encodeURIComponent(String(x.mat.id))+'" data-obra="'+encodeURIComponent(String(obraNom))+'" data-material="'+encodeURIComponent(String(x.mat.mat))+'" data-valor="'+encodeURIComponent(String(fmtN(v)))+'">'+fmtN(v)+(tiene?'<span class="cq-comment-dot"></span>':'')+'</td>'
         :'<td class="mono r" style="color:#C4D4C4">-</td>';
     }).join('');
 
@@ -9566,17 +9573,83 @@ function cqAbrirComentarioReporte(ev,matId,obraNom,material,valor){
  setTimeout(function(){try{txt.focus();}catch(e){}},40);
 }
 function cqCerrarComentarioReporte(){document.getElementById('cq-report-comment-modal')?.classList.remove('open');cqReporteComentarioActual=null;}
+async function cqPersistirComentariosReporte(){
+  // El comentario forma parte del mismo estado de Materiales, pero no dejamos que
+  // un error de localStorage bloquee el guardado en Firebase ni la interfaz.
+  normalizeState();
+  try{ localStorage.setItem(DB_KEY,JSON.stringify(state)); }
+  catch(e){ console.warn('No se pudo guardar comentario en localStorage',e); }
+
+  if(window._dbReady&&modoFirebase){
+    try{
+      setSyncStatus('Firebase: guardando...');
+      suppressRemoteUntil=Date.now()+1200;
+      await window._setDoc(
+        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
+        JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()}))
+      );
+      try{await updateLastSync('guardó comentario de reporte');}catch(e){}
+      setSyncStatus('Firebase: guardado','ok');
+      return true;
+    }catch(e){
+      console.error('Firebase comentario reporte',e);
+      setSyncStatus('Firebase: error','err');
+      throw e;
+    }
+  }
+  return true;
+}
 async function cqGuardarComentarioReporte(){
- if(!cqReporteComentarioActual)return;if(!state.reporteComentarios)state.reporteComentarios={};
- var t=String(document.getElementById('cq-report-comment-text')?.value||'').trim();
- if(t)state.reporteComentarios[cqReporteComentarioActual.key]=t;else delete state.reporteComentarios[cqReporteComentarioActual.key];
- await persist();cqCerrarComentarioReporte();renderReporteCompartido();
+  if(!cqReporteComentarioActual)return;
+  if(!state.reporteComentarios)state.reporteComentarios={};
+  var key=cqReporteComentarioActual.key;
+  var el=document.getElementById('cq-report-comment-text');
+  var t=String(el?el.value:'').trim();
+  if(t)state.reporteComentarios[key]=t;else delete state.reporteComentarios[key];
+
+  // Respuesta visual inmediata: el botón siempre actúa.
+  cqCerrarComentarioReporte();
+  renderReporteCompartido();
+  try{
+    await cqPersistirComentariosReporte();
+    if(typeof showToast==='function')showToast('✓ Comentario guardado');
+  }catch(e){
+    alert('El comentario quedó en pantalla, pero Firebase no pudo guardarlo. Revisá la conexión.');
+  }
 }
 async function cqEliminarComentarioReporte(){
- if(!cqReporteComentarioActual)return;if(!state.reporteComentarios)state.reporteComentarios={};
- delete state.reporteComentarios[cqReporteComentarioActual.key];await persist();cqCerrarComentarioReporte();renderReporteCompartido();
+  if(!cqReporteComentarioActual)return;
+  if(!state.reporteComentarios)state.reporteComentarios={};
+  delete state.reporteComentarios[cqReporteComentarioActual.key];
+  cqCerrarComentarioReporte();
+  renderReporteCompartido();
+  try{await cqPersistirComentariosReporte();if(typeof showToast==='function')showToast('✓ Comentario eliminado');}
+  catch(e){alert('Se eliminó en pantalla, pero Firebase no pudo guardar el cambio.');}
 }
 document.addEventListener('click',function(e){var m=document.getElementById('cq-report-comment-modal');if(m&&e.target===m)cqCerrarComentarioReporte();});
+// Exponer handlers del comentario al HTML generado (el script principal es module).
+window.cqAbrirComentarioReporte=cqAbrirComentarioReporte;
+window.cqCerrarComentarioReporte=cqCerrarComentarioReporte;
+window.cqGuardarComentarioReporte=cqGuardarComentarioReporte;
+window.cqEliminarComentarioReporte=cqEliminarComentarioReporte;
+// Click delegado: evita depender de onclick inline en las celdas creadas dinámicamente.
+document.addEventListener('click',function(ev){
+  var cell=ev.target && ev.target.closest ? ev.target.closest('[data-cq-comment="1"]') : null;
+  if(!cell) return;
+  ev.preventDefault(); ev.stopPropagation();
+  try{
+    cqAbrirComentarioReporte(
+      ev,
+      decodeURIComponent(cell.getAttribute('data-mat-id')||''),
+      decodeURIComponent(cell.getAttribute('data-obra')||''),
+      decodeURIComponent(cell.getAttribute('data-material')||''),
+      decodeURIComponent(cell.getAttribute('data-valor')||'')
+    );
+  }catch(err){
+    console.error('CQ comentario reporte:',err);
+    alert('No se pudo abrir el comentario. '+(err&&err.message?err.message:''));
+  }
+},true);
 
 function cerrarReporteObras(){
   document.getElementById('modal-reporte').classList.remove('open');
@@ -10062,7 +10135,10 @@ function renderCompareObras(){
       var isMin=defined.length>1&&v===minV&&minV!==maxV;
       var isMax=defined.length>1&&v===maxV&&minV!==maxV;
       var style=isMin?'color:#0A6E3A;font-weight:700':isMax?'color:#C0392B;font-weight:700':'';
-      return '<td class="mono r edit" style="'+style+'" onclick="window.openEdit('+x.mat.id+','+obraIdx+',\''+x.mat.mat+'\',\''+obras[obraIdx]+'\')">' +fmtN(v)+'</td>';
+      var obraNom=obras[obraIdx]||'';
+      var key=cqReporteComentarioKey(x.mat.id,obraNom);
+      var tiene=!!String((state.reporteComentarios||{})[key]||'').trim();
+      return '<td class="mono r cq-report-number-cell cq-comment-clickable '+(tiene?'cq-has-comment':'')+'" style="'+style+'" data-cq-comment="1" data-mat-id="'+encodeURIComponent(String(x.mat.id))+'" data-obra="'+encodeURIComponent(String(obraNom))+'" data-material="'+encodeURIComponent(String(x.mat.mat))+'" data-valor="'+encodeURIComponent(String(fmtN(v)))+'">'+fmtN(v)+(tiene?'<span class="cq-comment-dot"></span>':'')+'</td>';
     }).join('');
     // Promedio correcto: suma de valores definidos / cantidad de valores definidos
     var sum=0; defined.forEach(function(v){sum+=v;});

@@ -2626,6 +2626,14 @@ form.addEventListener("submit",async e=>{
   });
   document.querySelectorAll('[data-close-modal]').forEach(b=>b.addEventListener('click',()=>cerrar(b.dataset.closeModal)));
   document.addEventListener('keydown',e=>{if(e.key==='Escape')grupos.forEach(x=>cerrar(x[1]));});
+
+  // Permite volver desde un módulo directamente al selector de Obras.
+  try{
+    const p=new URLSearchParams(window.location.search);
+    if(p.get('abrir')==='obras'){
+      setTimeout(()=>abrir('obrasModal'),0);
+    }
+  }catch(e){}
 })();
 </script>
 
@@ -3192,6 +3200,8 @@ function route(q){
  if(/obra/.test(t)){flags.avances=true;flags.control=true}
  if(/caja/.test(t)&&!/caja chica/.test(t)){flags.cajaGerencia=true;if(/futur|proxim|compromis|proyeccion/.test(t))flags.flujo=true}
  if(/material/.test(t)&&/acopio|panol|pañol|stock|retiro/.test(t)){flags.materiales=true;flags.acopio=true;flags.panol=true}
+ if(/pedido|solicitud/.test(t)&&/material|obra|pendiente|entregad/.test(t)){flags.solicitudPedidos=true}
+ if(/post obra|postobra|postventa|post venta|reclamo|garantia|garantía|reparacion|reparación/.test(t)){flags.postobra=true}
  if(/atencion|preocupa|situacion|estado general|resumen ejecutivo|como estamos|riesgo general/.test(t)){
    CQ_MODULE_REGISTRY.filter(m=>m.ai&&m.reader).forEach(m=>{flags[m.id]=true});
  }
@@ -3402,6 +3412,52 @@ async function readRoeTir(){
  return {updatedAt:d.updatedAt||'',cantidadProyectos:obras.length,proyectos:obras.slice(0,60),config:Object.fromEntries(Object.entries(d).filter(([k])=>!['obras','proyectos','projects','updatedAt','updatedBy'].includes(k)).slice(0,30))};
 }
 
+
+async function readPostObra(){
+ const d=await cached('post_obra/estado_v1')||{};
+ const issues=arr(d.issues);
+ const works=arr(d.works).map(w=>typeof w==='string'?{name:w,delivery:''}:w);
+ const abiertos=issues.filter(i=>String(i.status||'Pendiente')!=='Resuelto');
+ const resueltos=issues.filter(i=>String(i.status||'')==='Resuelto');
+ const criticos=abiertos.filter(i=>String(i.priority||'')==='Crítica');
+ const costos=issues.reduce((sum,i)=>sum+moneyNum(i.cost),0);
+ const compact=i=>({
+   id:i.id||'',obra:i.work||'',rubro:i.cat||'',subrubro:i.subcat||'',reclamo:i.claim||'',
+   descripcion:i.desc||'',prioridad:i.priority||'',estado:i.status||'',responsable:i.responsible||'',
+   contratista:i.contractor||'',primeraVisita:i.firstVisit||'',diagnostico:i.diagnosis||'',accion:i.action||'',
+   resolucion:i.resolvedDate||i.resolved||'',costo:moneyNum(i.cost),imputabilidad:i.fault||'',
+   reincidente:i.repeat||'',notas:i.notes||''
+ });
+ return {
+   updatedAt:d.updatedAt||'',cantidadReclamos:issues.length,abiertos:abiertos.length,resueltos:resueltos.length,
+   criticos:criticos.length,costoTotal:costos,obras:works.slice(0,100),rubros:arr(d.cats),subrubros:arr(d.subcats),
+   reclamosAbiertos:recentByDate(abiertos,60).map(compact),ultimosReclamos:recentByDate(issues,80).map(compact),
+   nota:'Post Obra se lee desde post_obra/estado_v1, el documento compartido que usa la aplicación.'
+ };
+}
+
+async function readSolicitudPedidos(){
+ const d=await cached('solicitud_pedidos/data')||{};
+ const pedidos=arr(d.pedidos);
+ const compact=p=>({
+   id:p.id||'',obra:p.obra||'',fecha:p.fecha||p.createdAt||'',estado:p.estado||'Pendiente',
+   prioridad:p.prioridad||'',archivado:!!p.archivado,fechaEntregado:p.fechaEntregado||'',
+   items:arr(p.items).slice(0,80).map(x=>({
+     material:x.material||x.nombre||x.producto||x.mat||'',codigo:x.codigo||x.code||'',
+     cantidad:moneyNum(x.cantidad??x.qty),unidad:x.unidad||'',prioridad:x.prioridad||p.prioridad||'',
+     estado:x.estado||''
+   }))
+ });
+ const activos=pedidos.filter(p=>!p.archivado);
+ const estadoCount=estado=>activos.filter(p=>String(p.estado||'Pendiente')===estado).length;
+ return {
+   updatedAt:d.updatedAt||'',cantidadSolicitudes:pedidos.length,activas:activos.length,
+   pendientes:estadoCount('Pendiente'),pedidas:estadoCount('Pedido'),entregadas:estadoCount('Entregado'),
+   solicitudes:recentByDate(activos,80).map(compact),
+   nota:'Solicitud de Pedidos se lee desde solicitud_pedidos/data, el documento compartido de la aplicación.'
+ };
+}
+
 /* ==========================================================
    REGISTRO CENTRAL DE MÓDULOS CQ
    Fuente única para IA + cobertura. Para sumar un módulo nuevo:
@@ -3421,7 +3477,8 @@ const CQ_MODULE_REGISTRY=[
  {id:'control',nombre:'Control de Obras',contextKey:'controlObras',reader:()=>readControlObras(),firebase:['control_obras_app/main'],keywords:/control de obra|control obra|informe diario|informe semanal|seguimiento de obra|foto obra/,ai:true,cobertura:true,defaultIA:false,regla:'Integridad / disponibilidad',estadoRegla:'activa'},
  {id:'financieros',nombre:'Indicadores',contextKey:'indicadoresFinancieros',reader:()=>readFinancieros(),firebase:['cq_gerencia_datos/financieros'],keywords:/indicador|financiero|indice cq|índice cq|stock de casas|ventas|liquidez|riesgo operativo/,ai:true,cobertura:true,defaultIA:true,regla:'Integridad / disponibilidad',estadoRegla:'activa'},
  {id:'roeTir',nombre:'ROE / TIR',contextKey:'roeTir',reader:()=>readRoeTir(),firebase:['cq_gerencia_datos/roe_tir'],keywords:/roe|tir|rentabilidad|retorno|inversion|inversión/,ai:true,cobertura:true,defaultIA:false,regla:'Integridad / disponibilidad',estadoRegla:'activa'},
- {id:'postobra',nombre:'Post Obra',contextKey:'postObra',reader:null,firebase:[],keywords:/post obra|postobra|reparacion|reparación|garantia|garantía/,ai:false,cobertura:true,defaultIA:false,regla:'Pendiente',estadoRegla:'faltante',detalle:'No integrado: falta incorporar la última versión real de Post Obra.'}
+ {id:'solicitudPedidos',nombre:'Solicitud de Pedidos',contextKey:'solicitudPedidos',reader:()=>readSolicitudPedidos(),firebase:['solicitud_pedidos/data'],keywords:/solicitud(?:es)? de pedido|pedido(?:s)? de material|pedido(?:s)? de obra|material(?:es)? pendiente(?:s)?|pedido(?:s)? pendiente(?:s)?|pedido(?:s)? entregado(?:s)?/,ai:true,cobertura:true,defaultIA:false,regla:'Integridad / disponibilidad',estadoRegla:'activa'},
+ {id:'postobra',nombre:'Post Obra',contextKey:'postObra',reader:()=>readPostObra(),firebase:['post_obra/estado_v1'],keywords:/post obra|postobra|reclamo|reparacion|reparación|garantia|garantía|postventa|post venta|reincidencia/,ai:true,cobertura:true,defaultIA:false,regla:'Reclamos / críticos / pendientes',estadoRegla:'activa'}
 ];
 window.CQ_MODULE_REGISTRY=CQ_MODULE_REGISTRY.map(m=>({id:m.id,nombre:m.nombre,firebase:m.firebase,ai:m.ai,cobertura:m.cobertura,regla:m.regla,estadoRegla:m.estadoRegla,acciones:m.acciones||[]}));
 
