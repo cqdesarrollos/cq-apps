@@ -2295,7 +2295,13 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-await setPersistence(auth, browserLocalPersistence);
+// Compatibilidad: algunos navegadores/tablets pueden rechazar IndexedDB/local persistence.
+// Eso no debe frenar todo el login de Gerencia.
+try{
+  await setPersistence(auth, browserLocalPersistence);
+}catch(e){
+  console.warn("Gerencia persistence no disponible; continúo con la sesión posible:",e);
+}
 
 const overlay=document.getElementById("cq-gerencia-auth");
 const checking=document.getElementById("cq-auth-checking");
@@ -2371,19 +2377,43 @@ function grant(profile){
     }catch(e){}
   }
 }
+// Evita que la pantalla quede eternamente en “Verificando acceso…” si Firebase
+// tarda o el navegador de la tablet no consigue restaurar la sesión.
+let cqAuthVerificacionTerminada=false;
+const cqAuthTimeout=setTimeout(()=>{
+  if(cqAuthVerificacionTerminada) return;
+  cqAuthVerificacionTerminada=true;
+  console.warn("Gerencia auth: timeout de verificación");
+  showLogin("No se pudo restaurar la sesión automáticamente. Ingresá nuevamente.");
+},7000);
+
 onAuthStateChanged(auth, async user=>{
-  if(!user){ showLogin(); return; }
+  if(cqAuthVerificacionTerminada) return;
+  if(!user){
+    cqAuthVerificacionTerminada=true;
+    clearTimeout(cqAuthTimeout);
+    showLogin();
+    return;
+  }
   try{
     const profile=await gerenciaProfile(user);
+    if(cqAuthVerificacionTerminada) return;
     if(!profile){
       await signOut(auth);
+      cqAuthVerificacionTerminada=true;
+      clearTimeout(cqAuthTimeout);
       showLogin("Este usuario no tiene acceso a Gerencia.");
       return;
     }
+    cqAuthVerificacionTerminada=true;
+    clearTimeout(cqAuthTimeout);
     grant(profile);
   }catch(e){
+    if(cqAuthVerificacionTerminada) return;
+    cqAuthVerificacionTerminada=true;
+    clearTimeout(cqAuthTimeout);
     console.warn("Gerencia auth:",e);
-    showLogin("No se pudo verificar el acceso.");
+    showLogin("No se pudo verificar el acceso. Ingresá nuevamente.");
   }
 });
 
