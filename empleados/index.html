@@ -56,7 +56,7 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
 .arrow{width:29px;height:29px;border-radius:999px;display:grid;place-items:center;background:rgba(255,255,255,.42);color:#17313a;font-size:21px;line-height:1}
 .caja{background:linear-gradient(135deg,#d9aa91,#c99173)}
 .panol,.acopio,.materiales{background:linear-gradient(135deg,#9ab9cc,#7fa4ba)}
-.avances,.control{background:linear-gradient(135deg,#c0b2d8,#a795c8)}
+.avances,.control,.postobra{background:linear-gradient(135deg,#c0b2d8,#a795c8)}
 .footer{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#c5d6cf;font-size:10.5px;padding-top:10px}
 .footer strong{color:#e4efe9}
 
@@ -250,11 +250,17 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
         <a class="btn materiales" data-module="materiales" href="../materiales.html?origen=empleados">
           <span class="btn-left"><span class="icon">📦</span><span>Materiales</span></span><span class="arrow">›</span>
         </a>
+        <a class="btn materiales" data-module="materiales" href="../solicitud_de_pedidos.html?origen=empleados">
+          <span class="btn-left"><span class="icon">📝</span><span>Solicitud de Pedidos</span></span><span class="arrow">›</span>
+        </a>
         <a class="btn avances" data-module="avance" href="../avance.html?origen=empleados">
           <span class="btn-left"><span class="icon">📋</span><span>Avances</span></span><span class="arrow">›</span>
         </a>
         <a class="btn control" data-module="control_obras" href="../control_obras.html?origen=empleados">
           <span class="btn-left"><span class="icon">🏠</span><span>Control de Obras</span></span><span class="arrow">›</span>
+        </a>
+        <a class="btn postobra" data-module="postobra" href="../post_obra.html?origen=empleados">
+          <span class="btn-left"><span class="icon">🛠️</span><span>Post Obras</span></span><span class="arrow">›</span>
         </a>
       </div>
     </section>
@@ -276,7 +282,7 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
 
     const p=c.profile;
     const aliases={avances:"avance",avance:"avance"};
-    const permisos=(Array.isArray(p.modulos)?p.modulos:[]).map(m=>aliases[m]||m);
+    const permisos=[...new Set([...(Array.isArray(p.modulos)?p.modulos:[]).map(m=>aliases[m]||m),"postobra"])];
 
     document.querySelectorAll("[data-module]").forEach(el=>{
       const mod=aliases[el.dataset.module]||el.dataset.module;
@@ -289,7 +295,7 @@ body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--
     const ml=document.getElementById("currentUserModules");
     const st=document.getElementById("status");
     const stt=document.getElementById("statusText");
-    const labels={caja:"Caja Chica",panol:"Pañol",acopio:"Acopio",materiales:"Materiales",avance:"Avances",control_obras:"Control de Obras"};
+    const labels={caja:"Caja Chica",panol:"Pañol",acopio:"Acopio",materiales:"Materiales",avance:"Avances",control_obras:"Control de Obras",postobra:"Post Obras"};
 
     if(nm) nm.textContent="👤 "+(p.nombre||"");
     if(ml) ml.textContent=permisos.map(m=>labels[m]||m).filter((v,i,a)=>a.indexOf(v)===i).join(" · ");
@@ -332,7 +338,7 @@ const USERS = {
 
 const MODULE_LABELS = {
   caja:"Caja Chica", panol:"Pañol", acopio:"Acopio",
-  materiales:"Materiales", avance:"Avances", control_obras:"Control de Obras"
+  materiales:"Materiales", avance:"Avances", control_obras:"Control de Obras", postobra:"Post Obras"
 };
 
 const loginOverlay = document.getElementById("loginOverlay");
@@ -373,7 +379,7 @@ function normalizeModuleName(m){
 }
 
 function applyPermissions(profile){
-  const permisos = profile.modulos.map(normalizeModuleName);
+  const permisos = [...new Set([...profile.modulos.map(normalizeModuleName), "postobra"])];
 
   document.querySelectorAll("[data-module]").forEach(el=>{
     const mod = normalizeModuleName(el.dataset.module);
