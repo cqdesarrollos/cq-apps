@@ -936,11 +936,14 @@ button[onclick="createRestorePoint()"]{display:none!important}
       if(window._dbReady || window._firebaseLoading) return;
       window._firebaseLoading = true;
       try{
-        const [{ initializeApp }, fs] = await Promise.all([
+        const [appMod, fs, authMod] = await Promise.all([
           import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"),
-          import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js")
+          import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"),
+          import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js")
         ]);
+        const { initializeApp, getApps, getApp } = appMod;
         const { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, orderBy, limit, deleteDoc } = fs;
+        const { getAuth, onAuthStateChanged } = authMod;
         const firebaseConfig = {
           apiKey: "AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
           authDomain: "cq-mano-de-obra.firebaseapp.com",
@@ -949,9 +952,11 @@ button[onclick="createRestorePoint()"]{display:none!important}
           messagingSenderId: "502127540211",
           appId: "1:502127540211:web:8daefc75bdaafad412c486"
         };
-        const app = initializeApp(firebaseConfig);
+        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
         window._db = db;
+        window._auth = auth;
         window._doc = doc;
         window._setDoc = setDoc;
         window._getDoc = getDoc;
@@ -961,10 +966,29 @@ button[onclick="createRestorePoint()"]{display:none!important}
         window._orderBy = orderBy;
         window._limit = limit;
         window._deleteDoc = deleteDoc;
+
+        // Espera a que Firebase Auth recupere la sesión iniciada desde CQ
+        // antes de leer/escribir Firestore. Evita el "Sync error" por
+        // intentar acceder a Firestore antes de que la sesión esté lista.
+        await new Promise((resolve) => {
+          let done = false;
+          const finish = () => { if(!done){ done = true; resolve(); } };
+          const unsub = onAuthStateChanged(auth, (user) => {
+            window._cqFirebaseUser = user || null;
+            try{ unsub(); }catch(_){}
+            finish();
+          }, (err) => {
+            console.warn('Firebase auth state error', err);
+            finish();
+          });
+          setTimeout(finish, 5000);
+        });
+
         window._dbReady = true;
+        window._firebaseLoading = false;
         document.dispatchEvent(new Event('firebase-ready'));
       }catch(e){
-        console.warn('Firebase lazy load error', e);
+        console.warn('Firebase lazy load error', e && (e.code || e.message) ? (e.code || e.message) : e);
         window._firebaseLoading = false;
         if(typeof markError === 'function') markError();
       }
