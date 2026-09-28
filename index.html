@@ -381,14 +381,13 @@ body{
 <script>
 (function(){
   try{
-    if(localStorage.getItem("cq_gerencia_recordada")==="1"){
-      document.documentElement.classList.add("cq-gerencia-recordada");
-    }
+    /* La marca recordada NO reemplaza la sesión Firebase.
+       El acceso se libera recién cuando onAuthStateChanged confirma usuario. */
   }catch(e){}
 })();
 </script>
 <style id="cq-gerencia-retorno-css">
-html.cq-gerencia-recordada #cq-gerencia-auth{display:none!important}
+html.cq-gerencia-recordada #cq-gerencia-auth{display:flex!important}
 </style>
 
 
@@ -2402,8 +2401,9 @@ document.querySelectorAll('a.btn[href], .indicadores-option[href]').forEach(func
 });
 
 window.addEventListener("pageshow",function(){
+  /* No ocultar el login solo por localStorage: primero debe existir sesión Firebase real. */
   try{
-    if(localStorage.getItem("cq_gerencia_recordada")==="1"){
+    if(auth.currentUser && window._cqGerenciaProfile){
       overlay.classList.add("hidden");
       checking.style.display="block";
       form.style.display="none";
@@ -2984,7 +2984,7 @@ form.addEventListener("submit",async e=>{
 </div>
 <script type="module" id="cq-ia-etapa1-real-js">
 import { getApps, getApp, initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, runTransaction, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig={
@@ -2997,6 +2997,17 @@ const firebaseConfig={
 };
 const app=getApps().length?getApp():initializeApp(firebaseConfig);
 const auth=getAuth(app), db=getFirestore(app);
+// Espera a que Firebase restaure la sesión persistida antes de leer documentos protegidos.
+let cqAuthReadyUser=auth.currentUser||null;
+const cqAuthReady=new Promise(resolve=>{
+  if(cqAuthReadyUser){resolve(cqAuthReadyUser);return;}
+  const off=onAuthStateChanged(auth,u=>{cqAuthReadyUser=u||null;off();resolve(cqAuthReadyUser);});
+});
+async function cqRequireAuth(){
+  const u=auth.currentUser || await cqAuthReady;
+  if(!u) throw new Error('Sesión Firebase no disponible. Volvé a ingresar a Gerencia.');
+  return u;
+}
 
 const modal=document.getElementById('cqIAModal'),btn=document.getElementById('btnIAMenu'),cerrar=document.getElementById('cqIACerrar'),form=document.getElementById('cqIAForm'),input=document.getElementById('cqIAInput'),body=document.getElementById('cqIABody');
 const historyBtn=document.getElementById('cqIAHistorialBtn'),historyPanel=document.getElementById('cqIAHistoryPanel'),historyClose=document.getElementById('cqIAHistoryClose'),historyList=document.getElementById('cqIAHistoryList'),historyNew=document.getElementById('cqIAHistoryNew'),historyViewBar=document.getElementById('cqIAHistoryViewBar'),historyBackLive=document.getElementById('cqIAHistoryBackLive');
@@ -3578,8 +3589,8 @@ function cqAlertFingerprint(a){
  return 'a_'+(h>>>0).toString(36);
 }
 function cqAlertStateRef(){
- const u=auth.currentUser;
- if(!u)throw new Error('Sesión no disponible');
+ const u=auth.currentUser||cqAuthReadyUser;
+ if(!u)throw new Error('Sesión Firebase no disponible. Volvé a ingresar a Gerencia.');
  return doc(db,'cq_alertas_estado',u.uid);
 }
 let cqAlertasEstadoCache=null;
@@ -3618,6 +3629,7 @@ async function cqFiltrarAlertasCerradas(alertas){
 }
 
 async function cqConstruirAlertas(forzar=false){
+ await cqRequireAuth();
  const now=Date.now();
  if(!forzar && cqAlertasCache.alertas.length && now-cqAlertasCache.at<CQ_ALERTAS_TTL)return cqAlertasCache.alertas;
 
@@ -4901,7 +4913,7 @@ setTimeout(function(){
  }
 },0);
 async function ask(q){
- if(!q||busy)return;const user=auth.currentUser;if(!user){msg('Necesito que estés ingresado en Gerencia para consultar los datos.');return}
+ if(!q||busy)return;let user;try{user=await cqRequireAuth()}catch(e){msg('Necesito que estés ingresado en Gerencia para consultar los datos.');return}
 
  // Etapa 3A: si parece una instrucción operativa, primero preparar vista previa.
  const accion=await cqPrepararAccion(q);
