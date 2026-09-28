@@ -4520,6 +4520,18 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 }
 </style>
 
+<style id="cq-reporte-comentarios-definitivo">
+#modal-reporte .cq-report-number-cell{position:relative;cursor:pointer}
+#modal-reporte .cq-report-number-cell.cq-has-comment{background:#FFF0B8!important;color:#714B00!important;font-weight:900!important;box-shadow:inset 0 0 0 2px #E0B54A!important}
+#modal-reporte .cq-comment-dot{position:absolute;right:5px;top:3px;width:7px;height:7px;background:#D58D00;border-radius:50%}
+#cq-report-comment-modal{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(12,33,27,.40)}
+#cq-report-comment-modal.open{display:flex}.cq-report-comment-card{width:min(430px,100%);background:#fff;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.32);overflow:hidden}
+.cq-report-comment-hd{padding:16px 17px 12px;border-bottom:1px solid #E3EAE6;display:flex;justify-content:space-between;gap:12px}.cq-report-comment-hd b{display:block;font-size:16px;color:#173E32}.cq-report-comment-hd small{display:block;color:#71847C;margin-top:5px;font-size:11px}
+.cq-report-comment-close{border:0;background:#EEF3F0;border-radius:8px;width:32px;height:32px;font-size:20px;color:#173E32}
+#cq-report-comment-text{display:block;width:calc(100% - 32px);height:125px;margin:16px;padding:12px;border:1px solid #CCD9D2;border-radius:10px;box-sizing:border-box;font:600 13px Arial;resize:vertical;color:#173E32}
+.cq-report-comment-actions{display:flex;gap:8px;padding:0 16px 16px}.cq-report-comment-actions button{border:0;border-radius:9px;padding:10px 13px;font-weight:800}
+.cq-report-comment-delete{background:#FBE7E5;color:#A53C34}.cq-report-comment-cancel{margin-left:auto;background:#EDF2EF;color:#4E685F}.cq-report-comment-save{background:#1F7A5B;color:#fff}
+</style>
 </head>
 <body>
 
@@ -4940,6 +4952,11 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 
 <div class="toast" id="toast"></div>
 
+<div id="cq-report-comment-modal" aria-hidden="true"><div class="cq-report-comment-card">
+<div class="cq-report-comment-hd"><div><b>Comentario del reporte</b><small id="cq-report-comment-meta"></small></div><button type="button" class="cq-report-comment-close" onclick="cqCerrarComentarioReporte()">×</button></div>
+<textarea id="cq-report-comment-text" placeholder="Escribí un comentario..."></textarea>
+<div class="cq-report-comment-actions"><button type="button" class="cq-report-comment-delete" onclick="cqEliminarComentarioReporte()">Eliminar</button><button type="button" class="cq-report-comment-cancel" onclick="cqCerrarComentarioReporte()">Cancelar</button><button type="button" class="cq-report-comment-save" onclick="cqGuardarComentarioReporte()">Guardar</button></div>
+</div></div>
 <div class="modal-bg" id="modal-reporte">
   <div class="modal-xl">
     <div class="modal-hd">
@@ -9505,9 +9522,12 @@ function renderReporteCompartido(){
     var sum=defined.reduce(function(a,b){return a+(Number(b)||0);},0);
     var prom=sum/defined.length;
 
-    var cells=vals.map(function(v){
+    var cells=vals.map(function(v,pos){
+      var obraIdx=sel[pos], obraNom=obras[obraIdx]||'';
+      var key=cqReporteComentarioKey(x.mat.id,obraNom);
+      var tiene=!!String((state.reporteComentarios||{})[key]||'').trim();
       return v!=null
-        ?'<td class="mono r">'+fmtN(v)+'</td>'
+        ?'<td class="mono r cq-report-number-cell '+(tiene?'cq-has-comment':'')+'" onclick="cqAbrirComentarioReporte(event,'+JSON.stringify(String(x.mat.id))+','+JSON.stringify(String(obraNom))+','+JSON.stringify(String(x.mat.mat))+','+JSON.stringify(String(fmtN(v)))+')">'+fmtN(v)+(tiene?'<span class="cq-comment-dot"></span>':'')+'</td>'
         :'<td class="mono r" style="color:#C4D4C4">-</td>';
     }).join('');
 
@@ -9531,6 +9551,32 @@ function renderReporteCompartido(){
   // Tabla y gráfico quedan siempre sincronizados.
   dibujarGrafico();
 }
+
+
+var cqReporteComentarioActual=null;
+function cqReporteComentarioKey(matId,obraNom){return String(matId)+'|||'+String(obraNom||'').trim();}
+function cqAbrirComentarioReporte(ev,matId,obraNom,material,valor){
+ if(ev){ev.preventDefault();ev.stopPropagation();}
+ if(!state.reporteComentarios)state.reporteComentarios={};
+ var key=cqReporteComentarioKey(matId,obraNom);cqReporteComentarioActual={key:key};
+ var meta=document.getElementById('cq-report-comment-meta'),txt=document.getElementById('cq-report-comment-text');
+ if(meta)meta.textContent=String(material||'')+' · Obra '+String(obraNom||'')+' · '+String(valor||'');
+ if(txt)txt.value=String(state.reporteComentarios[key]||'');
+ document.getElementById('cq-report-comment-modal')?.classList.add('open');
+ setTimeout(function(){try{txt.focus();}catch(e){}},40);
+}
+function cqCerrarComentarioReporte(){document.getElementById('cq-report-comment-modal')?.classList.remove('open');cqReporteComentarioActual=null;}
+async function cqGuardarComentarioReporte(){
+ if(!cqReporteComentarioActual)return;if(!state.reporteComentarios)state.reporteComentarios={};
+ var t=String(document.getElementById('cq-report-comment-text')?.value||'').trim();
+ if(t)state.reporteComentarios[cqReporteComentarioActual.key]=t;else delete state.reporteComentarios[cqReporteComentarioActual.key];
+ await persist();cqCerrarComentarioReporte();renderReporteCompartido();
+}
+async function cqEliminarComentarioReporte(){
+ if(!cqReporteComentarioActual)return;if(!state.reporteComentarios)state.reporteComentarios={};
+ delete state.reporteComentarios[cqReporteComentarioActual.key];await persist();cqCerrarComentarioReporte();renderReporteCompartido();
+}
+document.addEventListener('click',function(e){var m=document.getElementById('cq-report-comment-modal');if(m&&e.target===m)cqCerrarComentarioReporte();});
 
 function cerrarReporteObras(){
   document.getElementById('modal-reporte').classList.remove('open');

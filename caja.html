@@ -365,7 +365,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
 <main class="wrap">
 <section class="view active" id="movimientos">
 <div class="kpis kpis-currency"><div class="kpi kpi-ars"><small>Saldo · Pesos</small><strong class="green" id="kSaldo">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Saldo · Dólares</small><strong class="green" id="kSaldoUsd">USD 0</strong><span class="kpi-sub">USD</span></div><div class="kpi kpi-ars"><small>Ingresos · Pesos</small><strong class="blue" id="kIngresos">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Ingresos · Dólares</small><strong class="blue" id="kIngresosUsd">USD 0</strong><span class="kpi-sub">USD</span></div><div class="kpi kpi-ars"><small>Salidas · Pesos</small><strong class="red" id="kGastos">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Salidas · Dólares</small><strong class="red" id="kGastosUsd">USD 0</strong><span class="kpi-sub">USD</span></div></div>
-<div class="toolbar"><button class="btn btn-primary" onclick="openMovement('gasto')"><span class="btn-icon">🧾</span>Registrar salida</button><button class="btn btn-blue" onclick="openMovement('ingreso')"><span class="btn-icon">💰</span>Registrar ingreso</button></div>
+<div class="toolbar"><button class="btn btn-primary" onclick="openMovement('gasto')"><span class="btn-icon">🧾</span>Registrar salida</button><button class="btn btn-blue" onclick="openMovement('ingreso')"><span class="btn-icon">💰</span>Registrar ingreso</button><input class="filter" id="movementDay" type="date" onchange="render()" title="Filtrar movimientos por día"/><button class="btn btn-light" id="clearMovementDay" onclick="document.getElementById('movementDay').value='';render()"><span class="btn-icon">🧹</span>Todos los días</button></div>
 <div class="card"><div class="card-title"><span>Historial de movimientos</span><span><span id="resultCount">0 registros</span> </span></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Destino</th><th>Subrubro / comentario</th><th style="text-align:right">Importe</th></tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Todavía no hay movimientos cargados.</div></div></div>
 </section>
 <section class="view" id="reportes">
@@ -380,6 +380,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
 <select class="filter" id="filterType" onchange="renderReports()"><option value="all">Todos los tipos</option><option value="gasto">Salidas</option><option value="ingreso">Ingresos</option></select>
 <select class="filter" id="filterDest" onchange="renderReports()"><option value="all">Todos los destinos</option><option value="oficina">Oficina</option><option value="obra">Obras</option></select>
 <input class="filter" id="filterMonth" onchange="renderReports()" type="month"/>
+<input class="filter" id="filterDay" onchange="renderReports()" type="date" title="Filtrar reporte por día"/>
 <button class="btn btn-light" onclick="clearFilters()"><span class="btn-icon">🧹</span>Limpiar filtros</button>
 </div>
 </div>
@@ -1792,6 +1793,7 @@ function filtered(){
   const t=document.getElementById('filterType').value;
   const d=document.getElementById('filterDest').value;
   const mo=document.getElementById('filterMonth').value;
+  const day=document.getElementById('filterDay')?.value||'';
   return db.movements.filter(x=>
     (currency==='all'||currencyCC(x)===currency)&&
     (work==='all'||String(x.work||'')===work)&&
@@ -1800,6 +1802,7 @@ function filtered(){
     (t==='all'||x.type===t)&&
     (d==='all'||x.destType===d)&&
     (!mo||x.date.startsWith(mo))&&
+    (!day||x.date===day)&&
     (!q||[x.category,x.subrubro,x.concept,x.work,x.notes].join(' ').toLowerCase().includes(q))
   ).sort((a,b)=>b.date.localeCompare(a.date)||b.updatedAt.localeCompare(a.updatedAt))
 }
@@ -1824,7 +1827,8 @@ function render(){
   document.getElementById('kIngresosUsd').textContent=usd(incomeUsd);
   document.getElementById('kGastos').textContent=money(expensesArs);
   document.getElementById('kGastosUsd').textContent=usd(expensesUsd);
-  const list=db.movements.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.updatedAt.localeCompare(a.updatedAt));
+  const movementDay=document.getElementById('movementDay')?.value||'';
+  const list=db.movements.filter(x=>!movementDay||x.date===movementDay).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.updatedAt.localeCompare(a.updatedAt));
   document.getElementById('resultCount').textContent=`${list.length} registros`;
   document.getElementById('empty').style.display=list.length?'none':'block';
   document.getElementById('rows').innerHTML=list.map(x=>`<tr>
@@ -1846,7 +1850,7 @@ function render(){
   </tr>`).join('');
   renderReports()
 }
-function clearFilters(){document.getElementById('search').value='';['filterCurrency','filterWork','filterCategory','filterSubrubro','filterType','filterDest'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='all'});document.getElementById('filterMonth').value='';renderReports()}
+function clearFilters(){document.getElementById('search').value='';['filterCurrency','filterWork','filterCategory','filterSubrubro','filterType','filterDest'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='all'});document.getElementById('filterMonth').value='';const fd=document.getElementById('filterDay');if(fd)fd.value='';renderReports()}
 function renderReports(){
   populateReportFiltersCC();
   const rate=Number(db.exchangeRate)||1;
@@ -2273,8 +2277,16 @@ function cqApplyCajaGerenciaIntegrations(){
     const iid=String(it.integrationId);
     const sourceId=String(it.sourceMovementId||"");
 
-    // Si el usuario lo eliminó en Caja Chica, no recrearlo aunque una
-    // integración vieja todavía figure activa en Firebase.
+    // Si Caja Gerencia confirma que la integración está ACTIVA y no está
+    // marcada como eliminada desde Caja Chica, quitar una baja histórica.
+    // Así el movimiento puede recrearse y Caja Gerencia recibe el estado correcto.
+    if(it.active!==false && !it.deletedFromCajaChica && deleted.has(iid)){
+      state.deletedMovementIds=state.deletedMovementIds.filter(x=>String(x)!==iid);
+      deleted.delete(iid);
+      changed=true;
+    }
+
+    // Una eliminación vigente hecha desde Caja Chica sí se respeta.
     if(deleted.has(iid))return;
 
     const existingIndex=state.movements.findIndex(m=>

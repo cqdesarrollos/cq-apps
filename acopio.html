@@ -3742,6 +3742,16 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
       🔧 Reparar retiros pendientes en Materiales
     </button>
     <div id="cq-reparar-materiales-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#F7F6F3;font-size:11px;color:#567065;line-height:1.35"></div>
+
+    <button type="button" id="cq-reparar-gastos-btn" class="btn btn-s btn-full" onclick="cqRepararGastosPendientes()" style="margin:0 0 8px">
+      💰 Reparar retiros pendientes en Gastos
+    </button>
+    <div id="cq-reparar-gastos-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#F7F6F3;font-size:11px;color:#567065;line-height:1.35"></div>
+
+    <button type="button" id="cq-reparar-panol-btn" class="btn btn-s btn-full" onclick="cqRepararPanolPendientes()" style="margin:0 0 8px">
+      🧰 Reparar retiros pendientes en Pañol
+    </button>
+    <div id="cq-reparar-panol-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#F7F6F3;font-size:11px;color:#567065;line-height:1.35"></div>
     <button type="button" id="cq-ret-filtros-toggle" class="cq-ret-filtros-toggle" onclick="cqToggleHistFiltros()">
       <span>⚙ Filtros</span><span id="cq-ret-filtros-resumen">Todos los retiros</span><span class="cq-ret-filtros-arrow">⌄</span>
     </button>
@@ -9213,7 +9223,173 @@ async function cqRepararMaterialesPendientes(){
     btn.disabled=false;btn.textContent='🔧 Reparar retiros pendientes en Materiales';
   }
 }
+
 window.cqRepararMaterialesPendientes=cqRepararMaterialesPendientes;
+
+// CQ 17/09/2026 — reparación segura de Gastos.
+// Verifica el destino real antes de escribir. El upsert usa un ID determinístico,
+// por lo que aun ante una carrera no duplica el gasto.
+async function cqRepararGastosPendientes(){
+  var btn=document.getElementById('cq-reparar-gastos-btn');
+  var info=document.getElementById('cq-reparar-gastos-info');
+  if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no está listo','err');return;}
+  var a=getAcopio();
+  if(!a){toast('Abrí un acopio primero','err');return;}
+
+  var candidatos=(a.retiros||[]).filter(function(r){return r&&r.cargarGastos===true;});
+  if(!candidatos.length){toast('No hay retiros marcados para Gastos');return;}
+
+  btn.disabled=true;
+  btn.textContent='Verificando Gastos…';
+  if(info){
+    info.style.display='block';
+    info.textContent='Comparando los retiros de este Acopio con Gastos. Sólo se reparan los faltantes; no se duplican.';
+  }
+
+  var f=window._cqFirebase, ok=0, ya=0, errores=[];
+  try{
+    await cargarConfigGastosAcopio();
+
+    for(var i=0;i<candidatos.length;i++){
+      var r=candidatos[i];
+      btn.textContent='Verificando '+(i+1)+' / '+candidatos.length+'…';
+      try{
+        var obraId=String(r.gastosObraId||'').trim();
+        if(!obraId){
+          var of=obraGastosActualPorIdx(r.obraIdx);
+          obraId=String(of&&of.id||'').trim();
+          if(obraId)r.gastosObraId=obraId;
+        }
+        if(!obraId)throw new Error('No se pudo identificar la obra de Gastos');
+
+        var snap=await f.getDoc(f.doc(f.db,'gastos',obraId));
+        var gastos=snap.exists()&&Array.isArray((snap.data()||{}).gastos)?snap.data().gastos:[];
+        var gid=gastoAcopioId(a.id,r.id);
+        var existe=gastos.some(function(g){
+          return String(g&&g.id||'')===String(gid) ||
+            (String(g&&g.acopioId||'')===String(a.id) &&
+             String(g&&g.acopioRetiroId||'')===String(r.id));
+        });
+
+        if(existe){
+          r.gastosSyncEstado='ok';
+          r.gastosSyncError='';
+          r.gastosSyncAt=new Date().toISOString();
+          ya++;
+          continue;
+        }
+
+        btn.textContent='Reparando '+(i+1)+' / '+candidatos.length+'…';
+        await sincronizarRetiroConGastos(r,true);
+        r.gastosSyncEstado='ok';
+        r.gastosSyncError='';
+        r.gastosSyncAt=new Date().toISOString();
+        ok++;
+      }catch(e){
+        r.gastosSyncEstado='error';
+        r.gastosSyncError=String(e&&e.message||e);
+        errores.push((r.materialName||'Material')+': '+String(e&&e.message||e));
+      }
+    }
+
+    persist();
+    try{renderRetirarHistorial();}catch(_e){}
+    if(info)info.textContent='Resultado: '+ok+' reparado(s) · '+ya+' ya estaban OK'+(errores.length?' · '+errores.length+' con error':'')+'.';
+    if(errores.length)toast('⚠️ Gastos: '+ok+' reparados; '+errores.length+' con error','err');
+    else toast('✓ Gastos verificado sin duplicar');
+  }catch(e){
+    console.error('Reparar Gastos',e);
+    if(info)info.textContent='No se pudo completar: '+String(e&&e.message||e);
+    toast('No se pudo reparar Gastos','err');
+  }finally{
+    btn.disabled=false;
+    btn.textContent='💰 Reparar retiros pendientes en Gastos';
+  }
+}
+window.cqRepararGastosPendientes=cqRepararGastosPendientes;
+
+// CQ 17/09/2026 — reparación segura de Pañol.
+// Lee una sola vez panol/stock_v1, detecta entradas existentes por sus IDs de Acopio
+// y sólo llama al sincronizador para las realmente faltantes.
+async function cqRepararPanolPendientes(){
+  var btn=document.getElementById('cq-reparar-panol-btn');
+  var info=document.getElementById('cq-reparar-panol-info');
+  if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no está listo','err');return;}
+  var a=getAcopio();
+  if(!a){toast('Abrí un acopio primero','err');return;}
+
+  var candidatos=(a.retiros||[]).filter(function(r){return r&&r.cargarPanol===true;});
+  if(!candidatos.length){toast('No hay retiros marcados para Pañol');return;}
+
+  btn.disabled=true;
+  btn.textContent='Verificando Pañol…';
+  if(info){
+    info.style.display='block';
+    info.textContent='Comparando los retiros de este Acopio con Pañol. Sólo se reparan los faltantes; no se duplican.';
+  }
+
+  var f=window._cqFirebase, ok=0, ya=0, errores=[];
+  try{
+    var ref=f.doc(f.db,'panol','stock_v1');
+    var snap=await f.getDoc(ref);
+    var data=snap.exists()?(snap.data()||{}):{};
+    var movs=Array.isArray(data.movimientos)?data.movimientos:[];
+    var existentes=new Set();
+
+    movs.forEach(function(m){
+      if(!m||m.tipo!=='entrada')return;
+      if(String(m.acopioId||'')===String(a.id) && m.acopioRetiroId!=null){
+        existentes.add(String(m.acopioRetiroId));
+      }
+    });
+
+    for(var i=0;i<candidatos.length;i++){
+      var r=candidatos[i];
+      btn.textContent='Verificando '+(i+1)+' / '+candidatos.length+'…';
+      try{
+        var existe=existentes.has(String(r.id)) || movs.some(function(m){
+          return m&&m.tipo==='entrada'&&
+            String(m.acopioEntradaId||'')===String(idEntradaPanol(r));
+        });
+
+        if(existe){
+          r.panolSyncEstado='ok';
+          r.panolSyncError='';
+          r.panolSyncAt=new Date().toISOString();
+          ya++;
+          continue;
+        }
+
+        btn.textContent='Reparando '+(i+1)+' / '+candidatos.length+'…';
+        await sincronizarRetiroConPanol(r,true);
+        r.panolSyncEstado='ok';
+        r.panolSyncError='';
+        r.panolSyncAt=new Date().toISOString();
+        existentes.add(String(r.id));
+        ok++;
+      }catch(e){
+        r.panolSyncEstado='error';
+        r.panolSyncError=String(e&&e.message||e);
+        errores.push((r.materialName||'Material')+': '+String(e&&e.message||e));
+      }
+    }
+
+    persist();
+    try{renderRetirarHistorial();}catch(_e){}
+    if(info)info.textContent='Resultado: '+ok+' reparado(s) · '+ya+' ya estaban OK'+(errores.length?' · '+errores.length+' con error':'')+'.';
+    if(errores.length)toast('⚠️ Pañol: '+ok+' reparados; '+errores.length+' con error','err');
+    else toast('✓ Pañol verificado sin duplicar');
+  }catch(e){
+    console.error('Reparar Pañol',e);
+    if(info)info.textContent='No se pudo completar: '+String(e&&e.message||e);
+    toast('No se pudo reparar Pañol','err');
+  }finally{
+    btn.disabled=false;
+    btn.textContent='🧰 Reparar retiros pendientes en Pañol';
+  }
+}
+window.cqRepararPanolPendientes=cqRepararPanolPendientes;
+
 
 async function guardarEditRetiro(){
   pushUndo();
@@ -10028,7 +10204,7 @@ function renderReporte(){
   var obraSel=document.getElementById('reporte-obra-filter');
   var subSel=document.getElementById('reporte-subrubro-filter');
   var matSel=document.getElementById('reporte-mat-filter');
-  var obraFiltros=obraSel?Array.from(obraSel.selectedOptions||[]).map(function(o){return Number(o.value);}):[];
+  var obraFiltros=obraSel?Array.from(obraSel.selectedOptions||[]).map(function(o){return String(o.value);}):[];
   var subFiltros=subSel?Array.from(subSel.selectedOptions||[]).map(function(o){return String(o.value);}):[];
   var matFiltros=matSel?Array.from(matSel.selectedOptions||[]).map(function(o){return String(o.value);}):[];
   var desde=document.getElementById('reporte-fdesde')?document.getElementById('reporte-fdesde').value:'';
@@ -10044,12 +10220,31 @@ function renderReporte(){
   }
   function retiroCoincideObraReporte(r){
     if(!obraFiltros.length)return true;
-    return obraFiltros.some(function(idx){
-      var obj=obraObjs[idx]||null;
+    var retiroKey=cqRepNorm(retiroObraLabel(r));
+    return obraFiltros.some(function(key){
+      key=String(key||'');
+      if(key.indexOf('obra:')===0){
+        var buscada='';
+        try{buscada=decodeURIComponent(key.slice(5));}catch(e){buscada=key.slice(5);}
+        return retiroKey===buscada;
+      }
+
+      // Compatibilidad con valores de versiones anteriores.
+      var obj=null,idx=-1;
+      if(key.indexOf('id:')===0){
+        var oid=key.slice(3);
+        obj=obraObjs.find(function(x){return String(x&&x.id||'')===String(oid);})||null;
+        idx=obj?obraObjs.indexOf(obj):-1;
+      }else if(key.indexOf('idx:')===0){
+        idx=Number(key.slice(4));
+        obj=obraObjs[idx]||null;
+      }else{
+        idx=Number(key);
+        obj=obraObjs[idx]||null;
+      }
       if(obj && r.gastosObraId && String(r.gastosObraId)===String(obj.id))return true;
-      var actual=obj?(obj.label||obj.short||obj.id):(obras[idx]||'');
-      if(actual && normObraRep(retiroObraLabel(r))===normObraRep(actual))return true;
-      return !r.gastosObraId && !r.obraHistorica && Number(r.obraIdx)===Number(idx);
+      var actual=obj?(obj.label||obj.short||obj.id):(idx>=0?(obras[idx]||''):'');
+      return !!actual && retiroKey===cqRepNorm(actual);
     });
   }
 
@@ -10083,8 +10278,10 @@ function renderReporte(){
   });
 
   var obraLabel='Todas las obras';
-  if(obraFiltros.length===1)obraLabel=obras[obraFiltros[0]]||'Obra';
-  else if(obraFiltros.length>1)obraLabel=obraFiltros.length+' obras';
+  if(obraFiltros.length===1){
+    var optObraUnica=obraSel&&Array.from(obraSel.selectedOptions||[])[0];
+    obraLabel=optObraUnica?optObraUnica.textContent:'Obra';
+  }else if(obraFiltros.length>1)obraLabel=obraFiltros.length+' obras';
 
   var unidadTxt='';
   if(matFiltros.length===1){
@@ -12255,7 +12452,21 @@ function cqPrepararFiltrosReporte(){
   });
 
   var so=document.getElementById('reporte-obra-filter');
-  if(so)so.innerHTML=obras.map(function(o,i){return '<option value="'+i+'">'+String(o).replace(/</g,'&lt;')+'</option>';}).join('');
+  if(so){
+    var repObrasMap={};
+    (a.retiros||[]).forEach(function(r){
+      var lbl=String(retiroObraLabel(r)||'').trim();
+      if(!lbl)return;
+      var key=cqRepNorm(lbl);
+      if(!key)return;
+      if(!repObrasMap[key])repObrasMap[key]={key:key,label:lbl};
+    });
+    var repObras=Object.keys(repObrasMap).map(function(k){return repObrasMap[k];});
+    repObras.sort(function(x,y){return String(x.label).localeCompare(String(y.label),'es',{numeric:true});});
+    so.innerHTML=repObras.map(function(x){
+      return '<option value="obra:'+encodeURIComponent(x.key)+'">'+String(x.label).replace(/</g,'&lt;')+'</option>';
+    }).join('');
+  }
 
   var subs=[];
   (a.retiros||[]).forEach(function(r){

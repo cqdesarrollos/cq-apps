@@ -2326,6 +2326,45 @@ html.cq-fast-1h-avance #cq-access-total{display:none!important}
 }
 </style>
 
+
+<style id="cq-tablet-horizontal-grande">
+/* TABLET HORIZONTAL — ampliación visible de navegación de obras y Finanzas */
+@media (min-width:900px) and (max-width:1800px){
+  .obra-switch{padding:14px 22px!important;gap:12px!important;min-height:76px!important;}
+  .obra-switch .obra-btn{font-size:18px!important;line-height:1.15!important;padding:15px 20px!important;min-height:54px!important;border-radius:11px!important;border-width:2px!important;}
+  .obra-switch .obra-switch-label{font-size:15px!important;}
+
+  #view-finanzas .main-content{padding:28px 24px 42px!important;}
+  #view-finanzas .section-title{font-size:18px!important;line-height:1.2!important;letter-spacing:.06em!important;margin-bottom:14px!important;}
+  #view-finanzas .section-title[style*="margin-top:20px"]{margin-top:28px!important;}
+  #view-finanzas .btn-sm{font-size:16px!important;line-height:1!important;padding:12px 17px!important;min-height:46px!important;border-radius:10px!important;}
+
+  #view-finanzas .fuera-section{border-radius:14px!important;margin-bottom:22px!important;}
+  #view-finanzas .fuera-header{padding:20px 22px!important;}
+  #view-finanzas .fuera-title{font-size:19px!important;}
+  #view-finanzas .fuera-subtitle{font-size:15px!important;line-height:1.4!important;margin-top:5px!important;}
+  #view-finanzas .fuera-saldo{font-size:21px!important;}
+  #view-finanzas .fuera-header div[style*="font-size:10px"]{font-size:13px!important;}
+
+  #view-finanzas .fin-grid{grid-template-columns:1fr 1fr!important;gap:18px!important;}
+  #view-finanzas .fin-card{padding:24px!important;border-radius:14px!important;}
+  #view-finanzas .fin-card-title{font-size:16px!important;margin-bottom:17px!important;}
+  #view-finanzas .fin-row{padding:13px 0!important;gap:16px!important;}
+  #view-finanzas .fin-row-label{font-size:17px!important;line-height:1.25!important;}
+  #view-finanzas .fin-row-val{font-size:18px!important;line-height:1.2!important;}
+  #view-finanzas .fin-row.total .fin-row-val{font-size:24px!important;}
+  #view-finanzas .fin-row.saldo .fin-row-val{font-size:22px!important;}
+
+  #view-finanzas .pagos-table{font-size:16px!important;}
+  #view-finanzas .pagos-table th{font-size:14px!important;padding:13px 15px!important;}
+  #view-finanzas .pagos-table td{font-size:16px!important;padding:14px 15px!important;line-height:1.25!important;}
+  #view-finanzas .pagos-table td.mono{font-size:16px!important;}
+  #view-finanzas .tag-af,#view-finanzas .tag-ec,#view-finanzas .pago-badge{font-size:13px!important;padding:5px 9px!important;}
+  #view-finanzas .btn-mini-edit,#view-finanzas .btn-danger-sm{font-size:14px!important;padding:9px 12px!important;min-height:40px!important;}
+
+  #view-finanzas input,#view-finanzas select,#view-finanzas textarea{font-size:16px!important;min-height:44px!important;}
+}
+</style>
 </head>
 <body>
 
@@ -2469,6 +2508,7 @@ html.cq-fast-1h-avance #cq-access-total{display:none!important}
       <div class="home-card-meta" id="constructor-meta"></div>
     </div>
     <div class="constructor-actions-premium">
+      <button class="btn constructor-back-premium" type="button" onclick="showHome()" title="Volver a constructores">← Volver</button>
       <button class="btn btn-primary nueva-obra-premium" onclick="openNuevaObra()">
         <span class="nueva-obra-plus">＋</span>
         <span>Nueva obra</span>
@@ -5546,83 +5586,7 @@ setTimeout(() => { if(!appInitialized){ updateFirebaseModeUI(); renderObraSwitch
 
 
 
-<script type="module" id="cq-access-total-script">
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-de-obra.firebaseapp.com",projectId:"cq-mano-de-obra",storageBucket:"cq-mano-de-obra.firebasestorage.app",messagingSenderId:"502127540211",appId:"1:502127540211:web:8daefc75bdaafad412c486"};
-const app=getApps().length?getApp():initializeApp(cfg);
-const auth=getAuth(app),db=getFirestore(app);
-const CACHE_KEY="cq_auth_profile_1h", TTL=3600000;
-const map={"emilio@cqgerencia.com": "emilio", "juan@cqgerencia.com": "juan", "eugenia@cqoperaciones.com": "eugenia", "hebe@cqoperaciones.com": "hebe", "maximiliano@cqoperaciones.com": "maximiliano", "jose@cqoperaciones.com": "jose"};
-const box=document.getElementById("cq-access-total"),msg=document.getElementById("cq-access-total-msg"),back=document.getElementById("cq-access-total-back");
-
-function readCache(){
- try{
-   const c=JSON.parse(localStorage.getItem(CACHE_KEY)||"null");
-   if(!c) return null;
-   const age=Date.now()-(Number(c.validadoEn)||0);
-   if(age<0 || age>TTL) return null;
-   return c;
- }catch(e){return null}
-}
-function clearCache(){
- try{localStorage.removeItem(CACHE_KEY)}catch(e){}
- document.documentElement.classList.remove("cq-fast-1h-avance");
-}
-function deny(t){
- clearCache();
- if(box){box.classList.remove("ok");box.classList.remove("hidden");box.style.display="flex"}
- if(msg)msg.textContent=t;
- if(back)back.style.display="inline-block";
-}
-function expose(profile){
- window._cqAuthProfile=profile;
- window._cqUsuarioActual=profile.nombre;
- try{localStorage.setItem("cq_usuario_actual",profile.nombre)}catch(e){}
- document.documentElement.classList.add("cq-fast-1h-avance");
- if(box){box.classList.add("ok");box.classList.add("hidden");box.style.display="none"}
- document.dispatchEvent(new CustomEvent("cq-auth-ready",{detail:profile}));
-}
-function fromCache(c,email){
- const mods=Array.isArray(c.modulos)?c.modulos:[];
- const ger=mods.includes("gerencia");
- if(String(c.email||"").toLowerCase()!==email) return false;
- if(!((ger || mods.includes("avance") || mods.includes("avances")))) return false;
- expose({id:map[email]||c.id||"",nombre:c.nombre||"",email:email,modulos:mods,rol:ger?"gerencia":"operaciones"});
- return true;
-}
-function saveAndExpose(d,user,key){
- const mods=Array.isArray(d.modulos)?d.modulos:[];
- const ger=mods.includes("gerencia");
- const profile={id:key,nombre:d.nombre||key,email:user.email,modulos:mods,rol:ger?"gerencia":"operaciones"};
- try{localStorage.setItem(CACHE_KEY,JSON.stringify({id:key,nombre:profile.nombre,email:String(user.email||"").toLowerCase(),modulos:mods,rol:profile.rol,validadoEn:Date.now()}))}catch(e){}
- expose(profile);
-}
-
-onAuthStateChanged(auth,async user=>{
- if(!user){deny("No hay una sesi\u00f3n iniciada. Entr\u00e1 primero desde CQ Gerencia o CQ Operaciones.");return}
- try{
-   const email=String(user.email||"").toLowerCase(), key=map[email];
-   if(!key){deny("Este usuario no est\u00e1 habilitado para las aplicaciones CQ.");return}
-
-   const cached=readCache();
-   if(cached && fromCache(cached,email)) return;
-
-   const snap=await getDoc(doc(db,"cq_operaciones_usuarios",key));
-   if(!snap.exists()){deny("No se encontr\u00f3 la configuraci\u00f3n de permisos del usuario.");return}
-   const d=snap.data()||{}, mods=Array.isArray(d.modulos)?d.modulos:[];
-   const ger=mods.includes("gerencia");
-   if(String(d.email||"").toLowerCase()!==email){deny("La identidad del usuario no coincide con su configuración.");return}
-   if(!((ger || mods.includes("avances")))){deny("Tu usuario no tiene permiso para ingresar a este m\u00f3dulo.");return}
-   saveAndExpose(d,user,key);
- }catch(e){
-   console.warn("CQ auth",e);
-   deny("No se pudo verificar el acceso.");
- }
-});
-</script>
 
 
 <script type="module" id="cq-audit-firebase-writer">
@@ -9106,6 +9070,114 @@ body.cq-constructor-mode #tab-reporte{
   }
 }
 </style>
+
+<style id="cq-horizontal-final-override-v2">
+/* FINAL: tablet horizontal. Ubicado al final para ganar a los estilos cq-obra-mode posteriores. */
+@media (orientation: landscape) and (min-width: 800px) and (max-width: 1900px){
+  /* BARRA DE OBRAS */
+  body.cq-obra-mode .obra-switch,
+  .obra-switch{
+    padding:10px 12px!important;
+    gap:9px!important;
+    min-height:62px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    flex-wrap:nowrap!important;
+  }
+  body.cq-obra-mode .obra-switch .obra-btn,
+  .obra-switch .obra-btn{
+    flex:0 0 auto!important;
+    width:auto!important;
+    max-width:none!important;
+    height:44px!important;
+    min-height:44px!important;
+    padding:9px 14px!important;
+    border-radius:9px!important;
+    border-width:1.5px!important;
+    font-size:14px!important;
+    line-height:1.1!important;
+    letter-spacing:0!important;
+    overflow:visible!important;
+    text-overflow:clip!important;
+    white-space:nowrap!important;
+  }
+
+  /* FINANZAS: agrandar también el contenido normal, no sólo los totales */
+  #view-finanzas .main-content{padding:24px 18px 38px!important;}
+  #view-finanzas .section-title,
+  #view-finanzas .section-title span{font-size:18px!important;line-height:1.25!important;}
+  #view-finanzas .btn-sm{font-size:15px!important;min-height:42px!important;padding:10px 15px!important;}
+
+  #view-finanzas .fuera-header{padding:18px 20px!important;}
+  #view-finanzas .fuera-title{font-size:18px!important;}
+  #view-finanzas .fuera-subtitle{font-size:15px!important;line-height:1.35!important;}
+  #view-finanzas .fuera-saldo{font-size:21px!important;}
+  #view-finanzas .fuera-header div[style*="font-size:10px"]{font-size:13px!important;}
+
+  #view-finanzas .fin-card{padding:22px!important;}
+  #view-finanzas .fin-card-title{font-size:15px!important;line-height:1.25!important;}
+  #view-finanzas .fin-row{padding:11px 0!important;}
+  #view-finanzas .fin-row-label{font-size:16px!important;line-height:1.25!important;}
+  #view-finanzas .fin-row-val{font-size:17px!important;line-height:1.2!important;}
+  #view-finanzas .fin-row.total .fin-row-val{font-size:23px!important;}
+  #view-finanzas .fin-row.saldo .fin-row-val{font-size:21px!important;}
+
+  /* DETALLE POR SEMANA + PAGOS POR FUERA */
+  #view-finanzas table.pagos-table,
+  #view-finanzas #pagos-table{font-size:16px!important;}
+  #view-finanzas table.pagos-table thead th,
+  #view-finanzas #pagos-table th{
+    font-size:13px!important;
+    line-height:1.2!important;
+    padding:11px 12px!important;
+  }
+  #view-finanzas table.pagos-table tbody td,
+  #view-finanzas #pagos-table td{
+    font-size:15px!important;
+    line-height:1.25!important;
+    padding:11px 12px!important;
+  }
+  #view-finanzas #pagos-table td.mono,
+  #view-finanzas .pagos-table td.mono{font-size:15px!important;}
+  #view-finanzas #pagos-table .progress-text,
+  #view-finanzas #pagos-table .avance-pct,
+  #view-finanzas #pagos-table small{font-size:13px!important;}
+  #view-finanzas #pagos-table .progress-bar{height:7px!important;}
+
+  #view-finanzas .tag-af,
+  #view-finanzas .tag-ec,
+  #view-finanzas .pago-badge{font-size:13px!important;padding:5px 9px!important;}
+  #view-finanzas .btn-mini-edit,
+  #view-finanzas .btn-danger-sm{font-size:13px!important;min-height:36px!important;padding:8px 10px!important;}
+}
+</style>
+
+<style id="cq-tablet-horizontal-header-v4">
+/* Tablet horizontal: controles superiores más grandes. Volver vive SOLO en pantalla de constructor. */
+@media (orientation: landscape) and (min-width:700px) and (max-width:1600px){
+  body:not(.cq-obra-mode) .header-right{gap:10px!important;align-items:center!important;}
+  body:not(.cq-obra-mode) .header-right .history-btn,
+  body:not(.cq-obra-mode) .header-right .hist-icon,
+  body:not(.cq-obra-mode) .header-right #firebase-status{
+    min-height:44px!important;height:44px!important;padding:0 15px!important;border-radius:12px!important;
+    font-size:14px!important;line-height:1!important;font-weight:800!important;display:inline-flex!important;
+    align-items:center!important;justify-content:center!important;box-sizing:border-box!important;
+  }
+  body:not(.cq-obra-mode) .header-right .hist-icon{width:46px!important;min-width:46px!important;padding:0!important;font-size:19px!important;}
+  body:not(.cq-obra-mode) .header-right #firebase-status{min-width:82px!important;padding-left:27px!important;font-size:11px!important;}
+  body:not(.cq-obra-mode) .header-right #firebase-status::before{left:10px!important;width:9px!important;height:9px!important;}
+
+  #view-constructor .constructor-actions-premium{gap:10px!important;align-items:center!important;}
+  #view-constructor .constructor-back-premium{
+    min-height:44px!important;height:44px!important;padding:0 18px!important;border-radius:12px!important;
+    border:1px solid rgba(28,61,53,.20)!important;background:#fff!important;color:#173f35!important;
+    font-size:14px!important;font-weight:900!important;box-shadow:0 6px 14px rgba(28,61,53,.10)!important;
+  }
+  #view-constructor .nueva-obra-premium{min-height:44px!important;height:44px!important;font-size:14px!important;padding:5px 16px 5px 7px!important;}
+  #view-constructor .nueva-obra-plus{width:31px!important;height:31px!important;flex-basis:31px!important;font-size:20px!important;}
+}
+</style>
+
 </body>
 </html>
 
