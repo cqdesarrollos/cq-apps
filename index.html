@@ -2297,11 +2297,12 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 // Compatibilidad: algunos navegadores/tablets pueden rechazar IndexedDB/local persistence.
 // Eso no debe frenar todo el login de Gerencia.
-try{
-  await setPersistence(auth, browserLocalPersistence);
-}catch(e){
+// No bloquear el arranque esperando la persistencia: en algunos navegadores/tablets
+// IndexedDB puede tardar o quedar pendiente. Firebase Auth puede verificar la sesión
+// en paralelo y, si la persistencia falla, el login manual sigue disponible.
+setPersistence(auth, browserLocalPersistence).catch(e=>{
   console.warn("Gerencia persistence no disponible; continúo con la sesión posible:",e);
-}
+});
 
 const overlay=document.getElementById("cq-gerencia-auth");
 const checking=document.getElementById("cq-auth-checking");
@@ -2377,40 +2378,36 @@ function grant(profile){
     }catch(e){}
   }
 }
-// Evita que la pantalla quede eternamente en “Verificando acceso…” si Firebase
-// tarda o el navegador de la tablet no consigue restaurar la sesión.
-let cqAuthVerificacionTerminada=false;
+// Fallback visual: si Firebase tarda, mostrar el login, pero NO bloquear
+// futuros eventos de onAuthStateChanged. Así el ingreso manual sigue funcionando.
+let cqAuthResuelta=false;
 const cqAuthTimeout=setTimeout(()=>{
-  if(cqAuthVerificacionTerminada) return;
-  cqAuthVerificacionTerminada=true;
+  if(cqAuthResuelta) return;
   console.warn("Gerencia auth: timeout de verificación");
-  showLogin("No se pudo restaurar la sesión automáticamente. Ingresá nuevamente.");
+  showLogin("La sesión tardó en restaurarse. Podés ingresar nuevamente.");
 },7000);
 
 onAuthStateChanged(auth, async user=>{
-  if(cqAuthVerificacionTerminada) return;
   if(!user){
-    cqAuthVerificacionTerminada=true;
+    cqAuthResuelta=true;
     clearTimeout(cqAuthTimeout);
     showLogin();
     return;
   }
   try{
     const profile=await gerenciaProfile(user);
-    if(cqAuthVerificacionTerminada) return;
     if(!profile){
       await signOut(auth);
-      cqAuthVerificacionTerminada=true;
+      cqAuthResuelta=true;
       clearTimeout(cqAuthTimeout);
       showLogin("Este usuario no tiene acceso a Gerencia.");
       return;
     }
-    cqAuthVerificacionTerminada=true;
+    cqAuthResuelta=true;
     clearTimeout(cqAuthTimeout);
     grant(profile);
   }catch(e){
-    if(cqAuthVerificacionTerminada) return;
-    cqAuthVerificacionTerminada=true;
+    cqAuthResuelta=true;
     clearTimeout(cqAuthTimeout);
     console.warn("Gerencia auth:",e);
     showLogin("No se pudo verificar el acceso. Ingresá nuevamente.");
