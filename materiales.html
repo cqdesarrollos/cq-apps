@@ -195,7 +195,7 @@ html,body{background:var(--cq-bg);}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, query, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, query, orderBy, limit, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const app = initializeApp({
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
   authDomain:"cq-mano-de-obra.firebaseapp.com",
@@ -205,7 +205,7 @@ const app = initializeApp({
   appId:"1:502127540211:web:8daefc75bdaafad412c486"
 });
 const db = getFirestore(app);
-window._db=db; window._doc=doc; window._setDoc=setDoc; window._getDoc=getDoc; window._onSnapshot=onSnapshot; window._collection=collection; window._getDocs=getDocs; window._query=query; window._orderBy=orderBy; window._limit=limit; window._deleteDoc=deleteDoc; window._dbReady=true;
+window._db=db; window._doc=doc; window._setDoc=setDoc; window._getDoc=getDoc; window._onSnapshot=onSnapshot; window._collection=collection; window._getDocs=getDocs; window._query=query; window._orderBy=orderBy; window._limit=limit; window._deleteDoc=deleteDoc; window._runTransaction=runTransaction; window._dbReady=true;
 document.dispatchEvent(new Event('firebase-ready'));
 </script>
 
@@ -8113,6 +8113,51 @@ document.addEventListener('visibilitychange',function(){
 window.completarCodigosDesdeAcopioYPanol=completarCodigosDesdeAcopioYPanol;
 window.completarCodigosDesdeAcopio=completarCodigosDesdeAcopioYPanol;
 
+// CQ 28/09/2026 — guardado seguro del documento principal.
+// Materiales antes hacía setDoc del estado completo. Si Pañol escribía una integración
+// entre la lectura local y ese setDoc, Materiales podía pisarla. Esta transacción toma
+// siempre las integraciones automáticas más nuevas que YA existen en Firebase antes de guardar.
+async function cqGuardarMaterialesSeguro(extra){
+  if(!window._dbReady||!window._runTransaction)throw new Error('Firebase transaccional no disponible');
+  normalizeState();
+  var ref=window._doc(window._db,'materiales','data_planilla_exacta_v4');
+  var local=JSON.parse(JSON.stringify(state));
+  extra=extra||{};
+  await window._runTransaction(window._db,async function(tx){
+    var snap=await tx.get(ref);
+    var remoto=snap.exists()?(snap.data()||{}):{};
+    var remCargas=Array.isArray(remoto.cargas)?remoto.cargas:[];
+    var locCargas=Array.isArray(local.cargas)?local.cargas:[];
+    function esAuto(c){
+      if(!c)return false;
+      if(c.automatico===true||c.integracionId)return true;
+      var o=String(c.origen||c.source||'').toLowerCase();
+      return o==='acopio'||o==='panol'||o==='caja_chica'||o==='cq_caja_gerencia'||o==='caja_gerencia';
+    }
+    // Las cargas manuales pertenecen a Materiales. Las automáticas se fusionan por ID,
+    // dando prioridad a la versión que ya está en Firebase para no borrar altas externas.
+    var manuales=locCargas.filter(function(c){return !esAuto(c);});
+    var mapa={};
+    locCargas.filter(esAuto).forEach(function(c){
+      var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
+    });
+    remCargas.filter(esAuto).forEach(function(c){
+      var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
+    });
+    local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
+    Object.keys(extra).forEach(function(k){local[k]=extra[k];});
+    local.updatedAt=new Date().toISOString();
+    tx.set(ref,local);
+  });
+  // Adoptar también localmente la fusión que quedó confirmada en Firebase.
+  var ver=await window._getDoc(ref);
+  if(ver.exists()){
+    var d=ver.data()||{}; delete d.updatedAt; state=d; normalizeState();
+    localStorage.setItem(DB_KEY,JSON.stringify(state));
+  }
+  return true;
+}
+
 async function persist(){
   normalizeState();
   localStorage.setItem(DB_KEY,JSON.stringify(state));
@@ -8120,7 +8165,7 @@ async function persist(){
     try{
       setSyncStatus('Firebase: guardando...');
       suppressRemoteUntil=Date.now()+1200;
-      await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()})));
+      await cqGuardarMaterialesSeguro();
       await updateLastSync('guardó cambios');
       setSyncStatus('Firebase: guardado','ok');
 

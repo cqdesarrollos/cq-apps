@@ -5019,6 +5019,11 @@ function renderTodasObrasPanol(){
   html+='<div class="resumen-card alt"><div class="rc-lbl">Cantidad total</div><div class="rc-val">'+fmtN(cantidadTotal)+'</div></div>';
   html+='</div>';
 
+  html+='<div class="cq-sync-manual-row">'
+    +'<button type="button" id="cq-sync-materiales-btn" class="cq-sync-manual-btn mat" onclick="window.actualizarMaterialesObraPanol()">↻ Actualizar Materiales · Todas</button>'
+    +'<button type="button" id="cq-sync-gastos-btn" class="cq-sync-manual-btn gas" onclick="window.actualizarGastosObraPanol()">↻ Actualizar Gastos · Todas</button>'
+    +'</div>';
+
   html+='<div class="card"><div class="card-hd">Historial de todas las obras <span>'+fmtMoney(totalGastado)+'</span></div><div>';
 
   if(!movs.length){
@@ -5304,7 +5309,7 @@ async function cqSyncBtnPanol(id,texto,fn){
   var original=b?b.innerHTML:'';
   if(b){b.dataset.busy='1';b.disabled=true;b.textContent='Actualizando…';}
   try{
-    await cqPanolConTimeout(Promise.resolve().then(fn),30000,texto);
+    await cqPanolConTimeout(Promise.resolve().then(fn),180000,texto);
     showToast('✓ '+texto+' actualizado');
   }catch(e){
     console.warn(texto,e);
@@ -5318,31 +5323,42 @@ async function cqSyncBtnPanol(id,texto,fn){
 async function actualizarMaterialesObraPanol(){
   var obraId=curObra;
   return cqSyncBtnPanol('cq-sync-materiales-btn','Materiales',async function(){
-    if(!obraId||obraId==='__all__')throw new Error('Elegí una obra');
+    if(!obraId)throw new Error('Elegí una obra o Todas');
     if(!window._dbReady)throw new Error('Firebase no está disponible');
+
+    // Una sola lectura del documento real. Reparamos únicamente los faltantes:
+    // evita reescribir decenas de consumos que ya están verdes.
+    var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+    var d=snap.exists()?(snap.data()||{}):{};
+    var existentes=new Set((Array.isArray(d.cargas)?d.cargas:[]).map(function(c){return String(c&&c.integracionId||'');}).filter(Boolean));
     var movs=state.movimientos.filter(function(m){
-      return m&&m.tipo==='salida'&&m.gastosObraId===obraId&&m.materialesAgregar!==false;
+      if(!m||m.tipo!=='salida'||m.materialesAgregar===false)return false;
+      if(obraId!=='__all__'&&m.gastosObraId!==obraId)return false;
+      return !existentes.has(String(integracionConsumoId(m.id)));
     });
+    if(!movs.length){
+      materialesIntegradosPanol=existentes;
+      return;
+    }
     var errores=[];
     for(var i=0;i<movs.length;i++){
       try{
         var prod=state.productos.find(function(p){return String(p.id)===String(movs[i].prodId);});
-        await cqPanolConTimeout(sincronizarConsumoConMateriales(movs[i],true,prod),12000,'Materiales');
+        await cqPanolConTimeout(sincronizarConsumoConMateriales(movs[i],true,prod),15000,'Materiales');
       }catch(e){errores.push(String(e&&e.message||e));}
     }
     await persist();
     if(errores.length)throw new Error(errores.length+' consumo(s) no pudieron sincronizarse');
   });
 }
-
 async function actualizarGastosObraPanol(){
   var obraId=curObra;
   return cqSyncBtnPanol('cq-sync-gastos-btn','Gastos',async function(){
-    if(!obraId||obraId==='__all__')throw new Error('Elegí una obra');
+    if(!obraId)throw new Error('Elegí una obra o Todas');
     if(!window._dbReady)throw new Error('Firebase no está disponible');
     await cargarConfigGastosPanol();
     var movs=state.movimientos.filter(function(m){
-      return m&&m.tipo==='salida'&&m.gastosObraId===obraId&&m.gastosDebeCargar!==false;
+      return m&&m.tipo==='salida'&&(obraId==='__all__'||m.gastosObraId===obraId)&&m.gastosDebeCargar!==false&&m.gastosSyncEstado!=='ok';
     });
     var errores=[];
     for(var i=0;i<movs.length;i++){
