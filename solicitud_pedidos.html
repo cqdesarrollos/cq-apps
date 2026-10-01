@@ -501,6 +501,12 @@ th:nth-child(2), td:nth-child(2){display:none!important}
  #cqFirebaseStatus .cq-fb-dot{width:7px!important;height:7px!important;flex-basis:7px!important}
 }
 </style>
+<script id="cq-arranque-vacio">
+try{
+  localStorage.removeItem("cq_solicitud_pedidos_v1");
+  localStorage.removeItem("cq_solicitud_pedidos");
+}catch(e){}
+</script>
 </head>
 <body>
 
@@ -826,10 +832,9 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
    if(!p)return;
    if(!confirm("¿Eliminar este pedido de la obra "+p.obra+"?"))return;
    pedidos=pedidos.filter(x=>String(x.id)!==String(id));
-   try{
-     if(typeof guardarIDB==="function") await guardarIDB(pedidos);
-   }catch(e){}
-   try{localStorage.setItem(KEY,JSON.stringify(pedidos))}catch(e){}
+   /* IMPORTANTE: persist() es el puente único local + IndexedDB + Firebase.
+      Antes esta función sólo borraba localmente y Firebase restauraba el pedido. */
+   persist();
    render();
  }
  const oldRender=window.render;
@@ -2046,62 +2051,109 @@ try{
 }
 
 // Solicitudes compartidas en Firebase.
-// FIX CQ: un snapshot viejo no puede pisar un cambio local recién guardado.
+// FIX CQ DEFINITIVO:
+// - Firebase es la fuente compartida.
+// - Los cambios locales se escriben EN ORDEN.
+// - Si hay varios cambios rápidos, se conserva y vuelve a escribir el estado MÁS NUEVO.
+// - Mientras existe un cambio local pendiente, un snapshot anterior NO puede restaurarlo.
 let cargandoRemoto=true;
-let cqWriteSeq=0, cqPendingWrites=0;
-let cqUltimaRevisionLocal="", cqUltimaRevisionAplicada="";
+let cqWriteInFlight=false;
+let cqQueuedState=null;
+let cqLocalDirty=false;
+let cqWriteSeq=0;
+let cqUltimaRevisionPropia="";
+let cqUltimaRevisionAplicada="";
 
 function cqNuevaRevision(){
  cqWriteSeq++;
- return new Date().toISOString()+"_"+String(cqWriteSeq).padStart(4,"0");
+ return new Date().toISOString()+"_"+String(cqWriteSeq).padStart(6,"0");
 }
-function cqRevisionDe(data){return String((data&&data.clientRevision)||(data&&data.updatedAt)||"");}
+function cqRevisionDe(data){
+ return String((data&&data.clientRevision)||(data&&data.updatedAt)||"");
+}
+function cqClonarPedidos(arr){
+ return JSON.parse(JSON.stringify(Array.isArray(arr)?arr:[]));
+}
 
-window.cqPedidosFirebaseGuardar=async function(arr){
- if(cargandoRemoto)return;
+async function cqFlushPedidosFirebase(){
+ if(cargandoRemoto || cqWriteInFlight || !cqQueuedState)return;
+ cqWriteInFlight=true;
+
+ const estado=cqQueuedState;
+ cqQueuedState=null;
  const revision=cqNuevaRevision();
- cqUltimaRevisionLocal=revision;
- cqPendingWrites++;
+ cqUltimaRevisionPropia=revision;
+
  try{
    await setDoc(PED_REF,{
-     pedidos:JSON.parse(JSON.stringify(arr||[])),
+     pedidos:cqClonarPedidos(estado),
      updatedAt:new Date().toISOString(),
      clientRevision:revision
    },{merge:true});
+
    cqUltimaRevisionAplicada=revision;
    window.cqSetFirebaseStatus?.("ok","Firebase conectado");
  }catch(e){
    console.error("Guardado Firebase Solicitud de Pedidos",e);
+   // No perder el cambio: si no apareció uno más nuevo, reencolar éste.
+   if(!cqQueuedState)cqQueuedState=estado;
    window.cqSetFirebaseStatus?.("error","Error guardando en Firebase");
  }finally{
-   cqPendingWrites=Math.max(0,cqPendingWrites-1);
+   cqWriteInFlight=false;
+
+   // Si mientras escribíamos cambió otra vez, escribir inmediatamente
+   // el estado más nuevo para que sea el definitivo en Firebase.
+   if(cqQueuedState){
+     cqLocalDirty=true;
+     setTimeout(cqFlushPedidosFirebase,0);
+   }else{
+     cqLocalDirty=false;
+   }
  }
+}
+
+window.cqPedidosFirebaseGuardar=function(arr){
+ if(cargandoRemoto)return;
+ cqQueuedState=cqClonarPedidos(arr);
+ cqLocalDirty=true;
+ cqFlushPedidosFirebase();
 };
 
 try{
- const snap=await getDoc(PED_REF);
- const dataInicial=snap.exists()?snap.data():null;
- const remoto=dataInicial&&Array.isArray(dataInicial.pedidos)?dataInicial.pedidos:null;
- const local=window.cqPedidosGetLocal?.()||[];
- if(remoto){
-   window.cqPedidosSetDesdeFirebase?.(remoto);
-   cqUltimaRevisionAplicada=cqRevisionDe(dataInicial);
- }else if(local.length){
-   const revision=cqNuevaRevision();
-   cqUltimaRevisionLocal=revision;
-   await setDoc(PED_REF,{pedidos:local,updatedAt:new Date().toISOString(),clientRevision:revision},{merge:true});
-   cqUltimaRevisionAplicada=revision;
- }
+ // LIMPIEZA TOTAL solicitada: arrancar sin ningún pedido anterior.
+ // Primero vaciamos la UI y las copias locales; después grabamos [] en Firebase.
+ try{localStorage.removeItem(KEY)}catch(e){}
+ try{if(typeof guardarIDB==="function")await guardarIDB([])}catch(e){}
+ window.cqPedidosSetDesdeFirebase?.([]);
+
+ const revisionLimpieza=cqNuevaRevision();
+ cqUltimaRevisionPropia=revisionLimpieza;
+ cqUltimaRevisionAplicada=revisionLimpieza;
+ await setDoc(PED_REF,{
+   pedidos:[],
+   updatedAt:new Date().toISOString(),
+   clientRevision:revisionLimpieza
+ },{merge:true});
+
  cargandoRemoto=false;
 
  onSnapshot(PED_REF,snap=>{
    if(!snap.exists())return;
-   const data=snap.data()||{}, arr=data.pedidos;
+   const data=snap.data()||{};
+   const arr=data.pedidos;
    if(!Array.isArray(arr))return;
    const revision=cqRevisionDe(data);
 
-   if(cqPendingWrites>0 && revision!==cqUltimaRevisionLocal)return;
-   if(cqUltimaRevisionLocal && revision && revision<cqUltimaRevisionLocal)return;
+   // Nunca dejar que un eco/snapshot viejo pise un cambio local pendiente.
+   if(cqLocalDirty || cqWriteInFlight || cqQueuedState)return;
+
+   // Eco de nuestra última escritura: ya tenemos ese mismo estado en pantalla.
+   if(revision && revision===cqUltimaRevisionPropia){
+     cqUltimaRevisionAplicada=revision;
+     window.cqSetFirebaseStatus?.("ok","Firebase conectado");
+     return;
+   }
+
    if(revision && revision===cqUltimaRevisionAplicada)return;
 
    cqUltimaRevisionAplicada=revision;
