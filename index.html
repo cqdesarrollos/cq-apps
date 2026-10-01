@@ -3213,6 +3213,7 @@ function route(q){
  if(/material/.test(t)&&/acopio|panol|pañol|stock|retiro/.test(t)){flags.materiales=true;flags.acopio=true;flags.panol=true}
  if(/pedido|solicitud/.test(t)&&/material|obra|pendiente|entregad/.test(t)){flags.solicitudPedidos=true}
  if(/post obra|postobra|postventa|post venta|reclamo|garantia|garantía|reparacion|reparación/.test(t)){flags.postobra=true}
+ if(/arquitectura|tramite|trámite|municipalidad|colegio|plano|hermeticidad|cloacal|pluvial|ficha tecnica|ficha técnica/.test(t)){flags.arquitectura=true}
  if(/atencion|preocupa|situacion|estado general|resumen ejecutivo|como estamos|riesgo general/.test(t)){
    CQ_MODULE_REGISTRY.filter(m=>m.ai&&m.reader).forEach(m=>{flags[m.id]=true});
  }
@@ -3469,6 +3470,64 @@ async function readSolicitudPedidos(){
  };
 }
 
+
+async function readArquitectura(q){
+ const appCfg=await cached('config/app')||{};
+ const arqCfg=await cached('config/arquitectura')||{};
+ const obrasBase=arr(appCfg.obras).filter(o=>o&&o.id);
+ const cfgObras=(arqCfg.obras&&typeof arqCfg.obras==='object')?arqCfg.obras:{};
+ const ocultas=new Set(arr(cfgObras.ocultas).map(String));
+ const propias=arr(cfgObras.propias).filter(o=>o&&o.id);
+ const mapa=new Map();
+ obrasBase.forEach(o=>{if(!ocultas.has(String(o.id)))mapa.set(String(o.id),o)});
+ propias.forEach(o=>mapa.set(String(o.id),o));
+ const obras=[...mapa.values()];
+ const matched=obras.filter(o=>obraMatches(q,o));
+ const scope=matched.length?matched:obras;
+
+ const estadoPct=(v,okVals)=>okVals.includes(String(v||''))?100:(/proceso|tramite|trámite|presentado/i.test(String(v||''))?50:0);
+ const resumen=[];
+ for(const o of scope){
+   const d=await cached('arquitectura_obras/'+o.id)||{};
+   const tramites=d.tramites&&typeof d.tramites==='object'?d.tramites:{};
+   const servicios=d.servicios&&typeof d.servicios==='object'?d.servicios:{};
+   const planos=d.planos&&typeof d.planos==='object'?d.planos:{};
+   const herm=d.hermeticidad&&typeof d.hermeticidad==='object'?d.hermeticidad:{};
+   const hermFechas=d.hermeticidadFechas&&typeof d.hermeticidadFechas==='object'?d.hermeticidadFechas:{};
+   const tasks=arr(d.tasks);
+   const tvals=Object.entries(tramites).map(([k,t])=>({
+     tramite:k,estado:t?.estado||'No iniciado',avance:moneyNum(t?.avance),
+     pagado:t?.pagado||'',presentado:t?.presentado||'',aprobado:t?.aprobado||'',observaciones:t?.obs||''
+   }));
+   const serv=Object.entries(servicios).map(([k,v])=>({servicio:k,estado:v||'No iniciado'}));
+   const pls=Object.entries(planos).map(([k,v])=>({plano:k,estado:v||'No iniciado'}));
+   const hs=['cloacal','pluvial','agua','gas'].map(k=>{
+     const v=Array.isArray(herm[k])?herm[k]:[false,false], f=Array.isArray(hermFechas[k])?hermFechas[k]:['',''];
+     return {tipo:k,antes:!!v[0],fechaAntes:f[0]||'',despues:!!v[1],fechaDespues:f[1]||''};
+   });
+   const pendientes=tasks.filter(t=>!t.done).map(t=>({
+     id:t.id||'',tipo:t.tipo||'',fecha:t.fecha||'',titulo:t.titulo||'',detalle:t.detalle||''
+   })).sort((a,b)=>String(a.fecha||'9999').localeCompare(String(b.fecha||'9999'))).slice(0,50);
+   const tramPct=tvals.length?Math.round(tvals.reduce((a,t)=>a+(moneyNum(t.avance)||estadoPct(t.estado,['Aprobado','Finalizado'])),0)/tvals.length):0;
+   const servPct=serv.length?Math.round(serv.filter(x=>x.estado==='Habilitado').length/serv.length*100):0;
+   const planoPct=pls.length?Math.round(pls.filter(x=>x.estado==='Finalizado').length/pls.length*100):0;
+   const hermHechas=hs.reduce((a,x)=>a+(x.antes?1:0)+(x.despues?1:0),0);
+   const hermPct=hs.length?Math.round(hermHechas/(hs.length*2)*100):0;
+   resumen.push({
+     obra:{id:o.id,nombre:o.label||o.nombre||o.name||o.id,corto:o.short||''},
+     updatedAt:d.updatedAt||'',avance:{tramites:tramPct,servicios:servPct,planos:planoPct,hermeticidad:hermPct},
+     tramites:tvals,servicios:serv,planos:pls,hermeticidad:hs,
+     pendientes,cantidadPendientes:pendientes.length,
+     ficha:d.ficha||{}
+   });
+ }
+ return {
+   taskTypes:arr(arqCfg.taskTypes),cantidadObras:resumen.length,obras:resumen,
+   scope:matched.length?'obra_especifica':'todas_las_obras',
+   nota:'Arquitectura se lee desde config/arquitectura y arquitectura_obras/{obraId}, las mismas rutas que usa la aplicación.'
+ };
+}
+
 /* ==========================================================
    REGISTRO CENTRAL DE MÓDULOS CQ
    Fuente única para IA + cobertura. Para sumar un módulo nuevo:
@@ -3489,7 +3548,8 @@ const CQ_MODULE_REGISTRY=[
  {id:'financieros',nombre:'Indicadores',contextKey:'indicadoresFinancieros',reader:()=>readFinancieros(),firebase:['cq_gerencia_datos/financieros'],keywords:/indicador|financiero|indice cq|índice cq|stock de casas|ventas|liquidez|riesgo operativo/,ai:true,cobertura:true,defaultIA:true,regla:'Integridad / disponibilidad',estadoRegla:'activa'},
  {id:'roeTir',nombre:'ROE / TIR',contextKey:'roeTir',reader:()=>readRoeTir(),firebase:['cq_gerencia_datos/roe_tir'],keywords:/roe|tir|rentabilidad|retorno|inversion|inversión/,ai:true,cobertura:true,defaultIA:false,regla:'Integridad / disponibilidad',estadoRegla:'activa'},
  {id:'solicitudPedidos',nombre:'Solicitud de Pedidos',contextKey:'solicitudPedidos',reader:()=>readSolicitudPedidos(),firebase:['solicitud_pedidos/data'],keywords:/solicitud(?:es)? de pedido|pedido(?:s)? de material|pedido(?:s)? de obra|material(?:es)? pendiente(?:s)?|pedido(?:s)? pendiente(?:s)?|pedido(?:s)? entregado(?:s)?/,ai:true,cobertura:true,defaultIA:false,regla:'Integridad / disponibilidad',estadoRegla:'activa'},
- {id:'postobra',nombre:'Post Obra',contextKey:'postObra',reader:()=>readPostObra(),firebase:['post_obra/estado_v1'],keywords:/post obra|postobra|reclamo|reparacion|reparación|garantia|garantía|postventa|post venta|reincidencia/,ai:true,cobertura:true,defaultIA:false,regla:'Reclamos / críticos / pendientes',estadoRegla:'activa'}
+ {id:'postobra',nombre:'Post Obra',contextKey:'postObra',reader:()=>readPostObra(),firebase:['post_obra/estado_v1'],keywords:/post obra|postobra|reclamo|reparacion|reparación|garantia|garantía|postventa|post venta|reincidencia/,ai:true,cobertura:true,defaultIA:false,regla:'Reclamos / críticos / pendientes',estadoRegla:'activa'},
+ {id:'arquitectura',nombre:'Arquitectura',contextKey:'arquitectura',reader:q=>readArquitectura(q),firebase:['config/arquitectura','arquitectura_obras/{obraId}'],keywords:/arquitectura|tramite|trámite|municipalidad|colegio|caja|servicio|agua|luz|gas|plano|hermeticidad|cloacal|pluvial|pendiente de arquitectura|ficha tecnica|ficha técnica/,ai:true,cobertura:true,defaultIA:false,regla:'Trámites / servicios / planos / hermeticidad / pendientes',estadoRegla:'activa'}
 ];
 window.CQ_MODULE_REGISTRY=CQ_MODULE_REGISTRY.map(m=>({id:m.id,nombre:m.nombre,firebase:m.firebase,ai:m.ai,cobertura:m.cobertura,regla:m.regla,estadoRegla:m.estadoRegla,acciones:m.acciones||[]}));
 
