@@ -724,6 +724,9 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
     });
   }
 
+  window.cqGuardarPedidosIDB=guardarIDB;
+  window.cqLeerPedidosIDB=leerIDB;
+
   window.guardar=async function(){
     const obra=document.getElementById("obra")?.value?.trim()||"";
     if(!obra){alert("Seleccioná la obra.");return;}
@@ -742,6 +745,8 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
       await guardarIDB(pedidos);
       /* Si hay espacio, mantenemos también una copia compatible. Si no, no bloquea el guardado. */
       try{ localStorage.setItem(KEY,JSON.stringify(pedidos)); }catch(_){}
+      /* Unificar el guardado: además de local/IDB, escribir el estado completo en Firebase. */
+      persist();
       cerrar();
       render();
     }catch(e){
@@ -826,10 +831,9 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
    if(!p)return;
    if(!confirm("¿Eliminar este pedido de la obra "+p.obra+"?"))return;
    pedidos=pedidos.filter(x=>String(x.id)!==String(id));
-   try{
-     if(typeof guardarIDB==="function") await guardarIDB(pedidos);
-   }catch(e){}
-   try{localStorage.setItem(KEY,JSON.stringify(pedidos))}catch(e){}
+   /* IMPORTANTE: persist() es el puente único local + IndexedDB + Firebase.
+      Antes esta función sólo borraba localmente y Firebase restauraba el pedido. */
+   persist();
    render();
  }
  const oldRender=window.render;
@@ -1913,7 +1917,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
     pedidos=JSON.parse(JSON.stringify(arr));
     try{localStorage.setItem(KEY,JSON.stringify(pedidos));}catch(e){}
     try{
-      if(typeof guardarIDB==="function")guardarIDB(pedidos).catch(function(){});
+      if(typeof window.cqGuardarPedidosIDB==="function")window.cqGuardarPedidosIDB(pedidos).catch(function(){});
     }catch(e){}
     try{render();}catch(e){}
   };
@@ -1924,7 +1928,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
       try{localStorage.setItem(KEY,JSON.stringify(pedidos));}catch(_){}
     }
     try{
-      if(typeof guardarIDB==="function")guardarIDB(pedidos).catch(function(){});
+      if(typeof window.cqGuardarPedidosIDB==="function")window.cqGuardarPedidosIDB(pedidos).catch(function(){});
     }catch(e){}
     try{
       if(typeof window.cqPedidosFirebaseGuardar==="function"){
@@ -2046,32 +2050,109 @@ try{
 }
 
 // Solicitudes compartidas en Firebase.
+// CQ: una sola fuente de verdad para cambios compartidos.
 let cargandoRemoto=true;
-window.cqPedidosFirebaseGuardar=async function(arr){
- if(cargandoRemoto)return;
+let escrituraEnCurso=false;
+let estadoPendiente=null;
+let revisionLocal="";
+let aplicandoRemoto=false;
+const RESET_TOKEN="cq-reset-2026-10-01-v3";
+
+function clonarPedidos(arr){
+ return JSON.parse(JSON.stringify(Array.isArray(arr)?arr:[]));
+}
+function nuevaRevision(){
+ return new Date().toISOString()+"_"+Math.random().toString(36).slice(2,8);
+}
+
+async function escribirEstadoFirebase(arr){
+ estadoPendiente=clonarPedidos(arr);
+ if(escrituraEnCurso)return;
+ escrituraEnCurso=true;
+
  try{
-   await setDoc(PED_REF,{pedidos:arr,updatedAt:new Date().toISOString()},{merge:true});
- }catch(e){console.error("Guardado Firebase Solicitud de Pedidos",e);}
+   while(estadoPendiente){
+     const estado=estadoPendiente;
+     estadoPendiente=null;
+     const rev=nuevaRevision();
+     revisionLocal=rev;
+
+     window.cqSetFirebaseStatus?.("wait","Guardando en Firebase…");
+     await setDoc(PED_REF,{
+       pedidos:estado,
+       updatedAt:new Date().toISOString(),
+       clientRevision:rev,
+       resetToken:RESET_TOKEN
+     },{merge:true});
+
+     window.cqSetFirebaseStatus?.("ok","Firebase conectado");
+   }
+ }catch(e){
+   console.error("ERROR ESCRIBIENDO SOLICITUDES EN FIREBASE",e);
+   window.cqSetFirebaseStatus?.("error","No se pudo guardar Solicitud de Pedidos");
+   alert("No se pudo guardar el cambio en Firebase. El cambio NO se confirmó. Revisá la conexión/permisos.");
+ }finally{
+   escrituraEnCurso=false;
+   if(estadoPendiente)escribirEstadoFirebase(estadoPendiente);
+ }
+}
+
+window.cqPedidosFirebaseGuardar=function(arr){
+ if(cargandoRemoto || aplicandoRemoto)return;
+ escribirEstadoFirebase(arr);
 };
 
 try{
- const snap=await getDoc(PED_REF);
- const remoto=snap.exists()&&Array.isArray(snap.data()?.pedidos)?snap.data().pedidos:null;
- const local=window.cqPedidosGetLocal?.()||[];
- if(remoto){
-   window.cqPedidosSetDesdeFirebase?.(remoto);
- }else if(local.length){
-   await setDoc(PED_REF,{pedidos:local,updatedAt:new Date().toISOString()},{merge:true});
+ let snap=await getDoc(PED_REF);
+ let data=snap.exists()?snap.data():{};
+
+ // Limpieza ÚNICA pedida por el usuario. Queda marcada en Firebase para no repetirse.
+ if(data.resetToken!==RESET_TOKEN){
+   const rev=nuevaRevision();
+   revisionLocal=rev;
+   await setDoc(PED_REF,{
+     pedidos:[],
+     updatedAt:new Date().toISOString(),
+     clientRevision:rev,
+     resetToken:RESET_TOKEN
+   },{merge:true});
+   data={...data,pedidos:[],clientRevision:rev,resetToken:RESET_TOKEN};
+   try{localStorage.setItem(KEY,"[]")}catch(e){}
+   try{await window.cqGuardarPedidosIDB?.([])}catch(e){}
  }
+
+ const remoto=Array.isArray(data.pedidos)?data.pedidos:[];
+ aplicandoRemoto=true;
+ window.cqPedidosSetDesdeFirebase?.(remoto);
+ aplicandoRemoto=false;
  cargandoRemoto=false;
+ window.cqSetFirebaseStatus?.("ok","Firebase conectado");
+
  onSnapshot(PED_REF,snap=>{
    if(!snap.exists())return;
-   const arr=snap.data()?.pedidos;
-   if(Array.isArray(arr))window.cqPedidosSetDesdeFirebase?.(arr);
- },e=>console.warn("Lectura Firebase Solicitud de Pedidos",e));
+   const data=snap.data()||{};
+   const arr=Array.isArray(data.pedidos)?data.pedidos:[];
+   const rev=String(data.clientRevision||"");
+
+   // Nuestro propio eco no debe reconstruir la pantalla.
+   if(rev && rev===revisionLocal)return;
+
+   // Si estamos escribiendo un estado más nuevo, no aceptar un snapshot anterior.
+   if(escrituraEnCurso || estadoPendiente)return;
+
+   aplicandoRemoto=true;
+   window.cqPedidosSetDesdeFirebase?.(arr);
+   aplicandoRemoto=false;
+   window.cqSetFirebaseStatus?.("ok","Firebase conectado");
+ },e=>{
+   console.error("ERROR LEYENDO SOLICITUDES FIREBASE",e);
+   window.cqSetFirebaseStatus?.("error","Error leyendo Solicitud de Pedidos");
+ });
 }catch(e){
  cargandoRemoto=false;
- console.error("Inicio Firebase Solicitud de Pedidos",e);
+ console.error("ERROR INICIAL SOLICITUDES FIREBASE",e);
+ window.cqSetFirebaseStatus?.("error","Error Firebase");
+ alert("Solicitud de Pedidos no pudo conectarse correctamente con Firebase.");
 }
 </script>
 
