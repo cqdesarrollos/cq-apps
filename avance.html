@@ -1671,7 +1671,8 @@ button[onclick="createRestorePoint()"]{display:none!important}
     if(age<0 || age>3600000) return;
     var mods=Array.isArray(c.modulos)?c.modulos:[];
     var ger=mods.indexOf("gerencia")>=0;
-    if(!((ger || mods.indexOf("avances")>=0))) return;
+    var permisoAvance=mods.indexOf("avance")>=0 || mods.indexOf("avances")>=0 || mods.indexOf("control")>=0;
+    if(!(ger || permisoAvance)) return;
     document.documentElement.classList.add("cq-fast-1h-avance");
     window.__cqFast1h=c;
   }catch(e){}
@@ -1680,6 +1681,28 @@ button[onclick="createRestorePoint()"]{display:none!important}
 <style id="cq-fast-1h-style-avance">
 html.cq-fast-1h-avance #cq-access-total{display:none!important}
 </style>
+
+<script id="cq-local-operaciones-avance-fix">
+(function(){
+  var esLocal = location.hostname==="127.0.0.1" || location.hostname==="localhost";
+  if(!esLocal) return;
+
+  function abrirLocal(){
+    document.documentElement.classList.add("cq-fast-1h-avance");
+    var box=document.getElementById("cq-access-total");
+    if(box){ box.classList.add("ok"); box.style.display="none"; }
+  }
+
+  /* En local, el index de Operaciones y avance.html pueden quedar en orígenes/puertos
+     distintos y por eso NO comparten localStorage. No usamos ese cache como condición
+     para mostrar la app. Firebase conserva su propia inicialización y sincronización. */
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded",abrirLocal,{once:true});
+  }else{
+    abrirLocal();
+  }
+})();
+</script>
 
 
 <style id="cq-inicio-encabezado-original">
