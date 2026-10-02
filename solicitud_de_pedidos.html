@@ -911,30 +911,22 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
    const nombre=String(item.material||item.nombre||"este producto");
    if(!confirm("¿Eliminar "+nombre+" de la obra "+p.obra+"?"))return;
 
-   if(p.items.length===1){
-     pedidos=pedidos.filter(x=>String(x.id)!==String(id));
-   }else{
-     p.items.splice(itemIndex,1);
-   }
-
-   [...selected].forEach(key=>{
-     if(String(key).startsWith(String(id)+"|")) selected.delete(key);
-   });
-
-   // Guardar primero en todas las capas locales para que ningún recovery lo reponga.
-   try{localStorage.setItem(KEY,JSON.stringify(pedidos));}catch(e){}
-   try{await window.cqGuardarPedidosIDB?.(JSON.parse(JSON.stringify(pedidos)));}catch(e){}
-
-   // Confirmar el nuevo estado en Firebase antes de dar por terminado el borrado.
    try{
-     if(typeof window.cqPedidosFirebaseGuardar==="function"){
-       await window.cqPedidosFirebaseGuardar(JSON.parse(JSON.stringify(pedidos)));
+     if(typeof window.cqEliminarItemFirebase==="function"){
+       await window.cqEliminarItemFirebase(id,itemIndex);
+       return;
      }
+
+     // Respaldo solo si Firebase todavía no terminó de inicializar.
+     if(p.items.length===1) pedidos=pedidos.filter(x=>String(x.id)!==String(id));
+     else p.items.splice(itemIndex,1);
+     try{localStorage.setItem(KEY,JSON.stringify(pedidos));}catch(e){}
+     try{await window.cqGuardarPedidosIDB?.(pedidos);}catch(e){}
+     render();
    }catch(e){
-     console.error("No se pudo confirmar la eliminación en Firebase",e);
-     alert("No se pudo confirmar la eliminación en Firebase. Revisá la conexión.");
+     console.error("Eliminar producto",e);
+     alert("No se pudo eliminar el producto. Revisá la conexión con Firebase.");
    }
-   render();
  };
 window.eliminarPedido=async function(id){
    const p=pedidos.find(x=>String(x.id)===String(id));
@@ -954,7 +946,7 @@ window.eliminarPedido=async function(id){
    if(!rows.length){alert("Marcá al menos un ítem.");return}
 
    try{
-     const W=1080, rowH=104, headerH=190, tableHeadH=58, footerH=70;
+     const W=1080, rowH=112, headerH=190, tableHeadH=58, footerH=70;
      let cambios=0, ant=null;
      rows.forEach(r=>{const o=String(r.p?.obra||"");if(ant!==null&&o!==ant)cambios++;ant=o});
      const H=headerH+tableHeadH+(rows.length*rowH)+(cambios*16)+footerH;
@@ -1027,7 +1019,7 @@ window.eliminarPedido=async function(id){
        const prodLines=wrapCanvas(producto,455,2);
        prodLines.forEach((ln,j)=>ctx.fillText(ln,245,y+31+j*23));
        if(comentario){
-         ctx.fillStyle="#53675e";ctx.font="italic bold 20px Arial";
+         ctx.fillStyle="#53675e";ctx.font="italic bold 25px Arial";
          let com="Obs.: "+comentario;
          if(ctx.measureText(com).width>455){while(com.length>3&&ctx.measureText(com+"…").width>455)com=com.slice(0,-1);com+="…"}
          ctx.fillText(com,245,y+78);
@@ -1383,7 +1375,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
     pdf.setFont("helvetica","normal");pdf.setFontSize(7.6);pdf.text(lines,margin+38,y+6.5);
     if(commentLines.length){
       const cy=y+6.5+(lines.length*4.2)+1;
-      pdf.setTextColor(...muted);pdf.setFont("helvetica","bolditalic");pdf.setFontSize(8.2);
+      pdf.setTextColor(...muted);pdf.setFont("helvetica","bolditalic");pdf.setFontSize(10);
       pdf.text(commentLines,margin+38,cy);
       pdf.setTextColor(...dark);pdf.setFontSize(8.5);
     }
@@ -2258,6 +2250,52 @@ async function escribirEstadoFirebase(arr){
 window.cqPedidosFirebaseGuardar=function(arr){
  if(cargandoRemoto || aplicandoRemoto)return Promise.resolve();
  return escribirEstadoFirebase(arr);
+};
+
+/* V16: el borrado se hace sobre el estado ACTUAL de Firebase.
+   Así un snapshot viejo/local no puede volver a agregar el producto borrado. */
+window.cqEliminarItemFirebase=async function(id,itemIndex){
+  window.cqSetFirebaseStatus?.("wait","Eliminando en Firebase…");
+
+  const snapActual=await getDoc(PED_REF);
+  const dataActual=snapActual.exists()?snapActual.data():{};
+  const arr=clonarPedidos(Array.isArray(dataActual.pedidos)?dataActual.pedidos:[]);
+  const pos=arr.findIndex(p=>String(p.id)===String(id));
+
+  if(pos<0){
+    // Ya no existe remotamente: sincronizar el estado actual.
+    aplicandoRemoto=true;
+    window.cqPedidosSetDesdeFirebase?.(arr);
+    aplicandoRemoto=false;
+    window.cqSetFirebaseStatus?.("ok","Firebase conectado");
+    return;
+  }
+
+  const pedido=arr[pos];
+  if(!Array.isArray(pedido.items) || !pedido.items[itemIndex])return;
+
+  if(pedido.items.length===1) arr.splice(pos,1);
+  else pedido.items.splice(itemIndex,1);
+
+  const rev=nuevaRevision();
+  revisionLocal=rev;
+  escrituraEnCurso=true;
+  try{
+    await setDoc(PED_REF,{
+      pedidos:arr,
+      updatedAt:new Date().toISOString(),
+      clientRevision:rev,
+      resetToken:RESET_TOKEN
+    },{merge:true});
+
+    // Aplicar exactamente el estado que Firebase acaba de confirmar.
+    aplicandoRemoto=true;
+    window.cqPedidosSetDesdeFirebase?.(arr);
+    aplicandoRemoto=false;
+    window.cqSetFirebaseStatus?.("ok","Firebase conectado");
+  }finally{
+    escrituraEnCurso=false;
+  }
 };
 
 try{
