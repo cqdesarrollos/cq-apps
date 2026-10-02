@@ -770,5 +770,26 @@ onAuthStateChanged(auth,user=>{
 })();
 </script>
 
+
+<script>
+(function(){
+  function syncFichaTodosReal(){
+    const ficha=[...document.querySelectorAll('.tab')].find(x=>/ficha/i.test(x.textContent||''));
+    const fichaActiva=!!ficha?.classList.contains('active');
+    const zona=document.getElementById('obraPills') || document.querySelector('.obra-pills') || document.body;
+    [...zona.querySelectorAll('button')].forEach(btn=>{
+      if((btn.textContent||'').trim().toLowerCase()==='todos'){
+        btn.style.display=fichaActiva?'none':'';
+      }
+    });
+  }
+  document.addEventListener('DOMContentLoaded',()=>{
+    syncFichaTodosReal();
+    document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setTimeout(syncFichaTodosReal,20)));
+    new MutationObserver(syncFichaTodosReal).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+  });
+})();
+</script>
+
 </body>
 </html>
