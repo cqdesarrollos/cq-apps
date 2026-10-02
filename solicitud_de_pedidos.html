@@ -542,7 +542,7 @@ th:nth-child(2), td:nth-child(2){display:none!important}
 }
 </style>
 <style id="cq-comentarios-producto-v9">
-.cq-item-comment{display:block!important;color:#53675e!important;font-size:7.8px!important;font-style:italic!important;margin-top:3px!important;line-height:1.25!important;white-space:normal!important}
+.cq-item-comment{display:block!important;color:#53675e!important;font-size:7.8px!important;font-style:italic!important;font-weight:800!important;margin-top:3px!important;line-height:1.25!important;white-space:normal!important}
 </style>
 <style id="cq-observacion-item-v11">
 .selrow input[placeholder="Observación del producto"]{min-width:0!important}
@@ -911,18 +911,29 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
    const nombre=String(item.material||item.nombre||"este producto");
    if(!confirm("¿Eliminar "+nombre+" de la obra "+p.obra+"?"))return;
 
-   // Si es el último producto, se elimina la solicitud completa.
    if(p.items.length===1){
      pedidos=pedidos.filter(x=>String(x.id)!==String(id));
    }else{
      p.items.splice(itemIndex,1);
    }
 
-   // Limpiar selección visual para ese pedido y guardar el cambio.
    [...selected].forEach(key=>{
      if(String(key).startsWith(String(id)+"|")) selected.delete(key);
    });
-   persist();
+
+   // Guardar primero en todas las capas locales para que ningún recovery lo reponga.
+   try{localStorage.setItem(KEY,JSON.stringify(pedidos));}catch(e){}
+   try{await window.cqGuardarPedidosIDB?.(JSON.parse(JSON.stringify(pedidos)));}catch(e){}
+
+   // Confirmar el nuevo estado en Firebase antes de dar por terminado el borrado.
+   try{
+     if(typeof window.cqPedidosFirebaseGuardar==="function"){
+       await window.cqPedidosFirebaseGuardar(JSON.parse(JSON.stringify(pedidos)));
+     }
+   }catch(e){
+     console.error("No se pudo confirmar la eliminación en Firebase",e);
+     alert("No se pudo confirmar la eliminación en Firebase. Revisá la conexión.");
+   }
    render();
  };
 window.eliminarPedido=async function(id){
@@ -1016,7 +1027,7 @@ window.eliminarPedido=async function(id){
        const prodLines=wrapCanvas(producto,455,2);
        prodLines.forEach((ln,j)=>ctx.fillText(ln,245,y+31+j*23));
        if(comentario){
-         ctx.fillStyle="#53675e";ctx.font="italic 20px Arial";
+         ctx.fillStyle="#53675e";ctx.font="italic bold 20px Arial";
          let com="Obs.: "+comentario;
          if(ctx.measureText(com).width>455){while(com.length>3&&ctx.measureText(com+"…").width>455)com=com.slice(0,-1);com+="…"}
          ctx.fillText(com,245,y+78);
@@ -1372,7 +1383,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
     pdf.setFont("helvetica","normal");pdf.setFontSize(7.6);pdf.text(lines,margin+38,y+6.5);
     if(commentLines.length){
       const cy=y+6.5+(lines.length*4.2)+1;
-      pdf.setTextColor(...muted);pdf.setFont("helvetica","italic");pdf.setFontSize(8.2);
+      pdf.setTextColor(...muted);pdf.setFont("helvetica","bolditalic");pdf.setFontSize(8.2);
       pdf.text(commentLines,margin+38,cy);
       pdf.setTextColor(...dark);pdf.setFontSize(8.5);
     }
@@ -2078,7 +2089,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
     }catch(e){}
     try{
       if(typeof window.cqPedidosFirebaseGuardar==="function"){
-        window.cqPedidosFirebaseGuardar(JSON.parse(JSON.stringify(pedidos)));
+        return window.cqPedidosFirebaseGuardar(JSON.parse(JSON.stringify(pedidos)));
       }
     }catch(e){console.warn("Firebase pedidos",e);}
   };
@@ -2245,8 +2256,8 @@ async function escribirEstadoFirebase(arr){
 }
 
 window.cqPedidosFirebaseGuardar=function(arr){
- if(cargandoRemoto || aplicandoRemoto)return;
- escribirEstadoFirebase(arr);
+ if(cargandoRemoto || aplicandoRemoto)return Promise.resolve();
+ return escribirEstadoFirebase(arr);
 };
 
 try{
