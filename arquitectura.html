@@ -549,7 +549,40 @@ async function saveFicha(){const prev=obraData.ficha||{},customFields=Array.isAr
 function renderHistory(){if(curObra==='__all__'){timeline.innerHTML=obras.map(o=>{const d=allData[o.id]||normalize(emptyData()),h=d.history[0];return `<div class="timeline-item"><span class="tl-dot"></span><div><strong>${esc(obraLabel(o))}</strong><p>${h?esc(h.text):'Sin movimientos'}</p></div></div>`}).join('');return}timeline.innerHTML=obraData.history.map(h=>`<div class="timeline-item"><span class="tl-dot"></span><div><strong>${esc(h.text)}</strong><p>${esc(h.user||'Usuario')}</p></div><time>${new Date(h.at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</time></div>`).join('')||'<div class="empty">Todavía no hay movimientos.</div>'}
 
 function closeModal(id){document.getElementById(id).classList.remove('open')}function bgClose(e,id){if(e.target.id===id)closeModal(id)}
-async function persist(){if(!curObra||!dbApi||curObra==='__all__')return;obraData.updatedAt=new Date().toISOString();allData[curObra]=JSON.parse(JSON.stringify(obraData));renderAll();setSync('Guardando…');try{await dbApi.save(curObra,obraData);allData[curObra]=JSON.parse(JSON.stringify(obraData));setSync(CQ_LOCAL_MODE?'Local':'Online',true)}catch(e){console.warn(e);setSync('Error',false);toastMsg('No se pudo guardar',true)}}
+async function persist(){
+  if(!curObra||!dbApi||curObra==='__all__')return;
+  const stamp=new Date().toISOString();
+  obraData.updatedAt=stamp;
+  allData[curObra]=JSON.parse(JSON.stringify(obraData));
+  renderAll();
+  setSync('Guardando…');
+  try{
+    await dbApi.save(curObra,obraData);
+    allData[curObra]=JSON.parse(JSON.stringify(obraData));
+    setSync(CQ_LOCAL_MODE?'Local':'Online',true);
+    return true;
+  }catch(e){
+    console.warn('Arquitectura Firebase escritura:',e);
+    // Antes de mostrar un error, comprobamos si Firestore efectivamente guardó.
+    // Esto evita el falso "No se pudo guardar" cuando la escritura ya quedó persistida.
+    try{
+      await new Promise(r=>setTimeout(r,350));
+      const saved=await dbApi.get(curObra);
+      if(saved && saved.updatedAt===stamp){
+        obraData=normalize(saved);
+        allData[curObra]=JSON.parse(JSON.stringify(obraData));
+        setSync('Online',true);
+        return true;
+      }
+    }catch(checkErr){
+      console.warn('Arquitectura verificación de escritura:',checkErr);
+    }
+    setSync('Error',false);
+    const code=e?.code||'error';
+    toastMsg('No se pudo guardar · '+code,true);
+    return false;
+  }
+}
 async function loadAllObras(){if(!dbApi)return;setSync('Leyendo…');const pairs=await Promise.all(obras.map(async o=>[o.id,normalize((await dbApi.get(o.id))||emptyData())]));allData=Object.fromEntries(pairs)}
 async function subscribeCurrent(){
   if(unsubObra){try{unsubObra()}catch(_e){}unsubObra=null}
@@ -613,7 +646,7 @@ dbApi={
   listen:(id,cb)=>onSnapshot(
     obraRef(id),
     snap=>cb(snap.exists()?snap.data():null),
-    e=>{console.warn('Arquitectura Firebase:',e);setSync('Error',false);toastMsg('Firebase: '+(e.code||'error de lectura'),true)}
+    e=>{console.warn('Arquitectura Firebase listener:',e)}
   ),
   saveObrasConfig:(cfg)=>updateArqConfig({obras:cfg}),
   saveTaskTypes:(types)=>updateArqConfig({taskTypes:types}),
