@@ -109,8 +109,6 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}a{text-decoratio
 .state-color[data-state-tone="green"]{background:#eaf8ef!important;border-color:#b9e2c6!important;color:#16743a!important}
 
 
-/* En Ficha no corresponde la vista global "Todos": la ficha siempre es por obra. */
-body.ficha-activa #obraPills .pill[data-id="__all__"]{display:none!important}
 
 </style>
 </head>
@@ -382,7 +380,16 @@ async function crearObraArquitectura(){
   try{await saveArquitecturaObrasCfg()}catch(e){console.warn(e);toastMsg('No se pudo crear la obra',true);return}
   mergeObras();inp.value='';renderObras();renderObrasManager();toastMsg('Obra creada');
 }
-function renderObras(){obraStrip.innerHTML=`<button class="obra-chip ${curObra==='__all__'?'active':''}" onclick="selectObra('__all__')">Todos</button>`+obras.map(o=>`<button class="obra-chip ${o.id===curObra?'active':''}" onclick="selectObra('${esc(o.id)}')">${esc(obraLabel(o))}</button>`).join('')}
+function renderObras(){
+  const fichaActiva=document.getElementById('view-ficha')?.classList.contains('active');
+  if(fichaActiva && curObra==='__all__' && obras.length){
+    curObra=obras[0].id;
+    localStorage.setItem('cq_arquitectura_obra',curObra);
+    setTimeout(()=>subscribeCurrent(),0);
+  }
+  const todos=fichaActiva?'':`<button class="obra-chip ${curObra==='__all__'?'active':''}" onclick="selectObra('__all__')">Todos</button>`;
+  obraStrip.innerHTML=todos+obras.map(o=>`<button class="obra-chip ${o.id===curObra?'active':''}" onclick="selectObra('${esc(o.id)}')">${esc(obraLabel(o))}</button>`).join('');
+}
 async function selectObra(id){if(id===curObra&&((id==='__all__')||unsubObra))return;curObra=id;localStorage.setItem('cq_arquitectura_obra',id);renderObras();if(id==='__all__'){if(unsubObra){unsubObra();unsubObra=null}await loadAllObras();renderAll();setSync('Online',true)}else subscribeCurrent()}
 function renderAll(){renderObras();renderResumen();renderTramites();renderServicios();renderPlanos();renderHermeticidad();renderTasks();renderFicha();renderHistory()}
 
@@ -756,40 +763,6 @@ onAuthStateChanged(auth,user=>{
 })();
 </script>
 
-
-<script>
-(function(){
-  function syncFichaTodos(){
-    const ficha=document.querySelector('.tab[data-tab="ficha"]');
-    document.body.classList.toggle('ficha-activa',!!ficha?.classList.contains('active'));
-  }
-  document.addEventListener('DOMContentLoaded',()=>{
-    syncFichaTodos();
-    document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setTimeout(syncFichaTodos,0)));
-  });
-})();
-</script>
-
-
-<script>
-(function(){
-  function syncFichaTodosReal(){
-    const ficha=[...document.querySelectorAll('.tab')].find(x=>/ficha/i.test(x.textContent||''));
-    const fichaActiva=!!ficha?.classList.contains('active');
-    const zona=document.getElementById('obraPills') || document.querySelector('.obra-pills') || document.body;
-    [...zona.querySelectorAll('button')].forEach(btn=>{
-      if((btn.textContent||'').trim().toLowerCase()==='todos'){
-        btn.style.display=fichaActiva?'none':'';
-      }
-    });
-  }
-  document.addEventListener('DOMContentLoaded',()=>{
-    syncFichaTodosReal();
-    document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setTimeout(syncFichaTodosReal,20)));
-    new MutationObserver(syncFichaTodosReal).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
-  });
-})();
-</script>
 
 </body>
 </html>
