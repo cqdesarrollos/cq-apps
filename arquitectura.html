@@ -269,7 +269,7 @@ const DEFAULT_STATUS_OPTIONS={tramites:['No iniciado','Preparación','Presentado
 const FINAL_STATUS={tramites:'Finalizado',servicios:{agua:'Habilitado',luz:'Habilitado',gas:'Habilitado'},planos:'Finalizado'};
 let statusOptions=JSON.parse(JSON.stringify(DEFAULT_STATUS_OPTIONS)),statusManagerModule='tramites',statusManagerScope='';
 let taskTypes=[...DEFAULT_TASK_TYPES];
-let obras=[],gastosObras=[],arquitecturaObrasCfg={ocultas:[],propias:[],orden:[]},curObra='',obraData={},allData={},dbApi=null,storageApi=null,unsubObra=null;
+let obras=[],arquitecturaObrasCfg={propias:[],orden:[]},curObra='',obraData={},allData={},dbApi=null,storageApi=null,unsubObra=null;
 const emptyData=()=>({tramites:{caja:{estado:'No iniciado',avance:0},colegio:{estado:'No iniciado',avance:0},municipalidad:{estado:'No iniciado',avance:0}},servicios:{agua:'No iniciado',luz:'No iniciado',gas:'No iniciado'},serviciosFechas:{agua:{inicio:'',fin:''},luz:{inicio:'',fin:''},gas:{inicio:'',fin:''}},planos:{},planosFechas:{},planosEliminados:[],files:[],pagos:[],hermeticidad:{cloacal:[false,false],pluvial:[false,false],agua:[false,false],gas:[false,false]},hermeticidadFechas:{cloacal:['',''],pluvial:['',''],agua:['',''],gas:['','']},tasks:[],ficha:{},history:[],updatedAt:''});
 function normalize(d){d=d||emptyData();d.tramites=d.tramites||{};Object.keys(TYPES).forEach(k=>d.tramites[k]=Object.assign({estado:'No iniciado',avance:0,exp:'',vto:'',presentado:'',aprobado:'',pagado:'No',obs:''},d.tramites[k]||{}));d.servicios=Object.assign({agua:'No iniciado',luz:'No iniciado',gas:'No iniciado'},d.servicios||{});d.serviciosFechas=d.serviciosFechas||{};['agua','luz','gas'].forEach(k=>d.serviciosFechas[k]=Object.assign({inicio:'',fin:''},d.serviciosFechas[k]||{}));d.planos=d.planos||{};d.planosFechas=d.planosFechas||{};d.planosEliminados=Array.isArray(d.planosEliminados)?d.planosEliminados:[];PLANO_TYPES.forEach(k=>{if(!d.planosEliminados.includes(k)&&!d.planos[k])d.planos[k]='No iniciado'});d.planosEliminados.forEach(k=>delete d.planos[k]);d.files=Array.isArray(d.files)?d.files:[];d.pagos=Array.isArray(d.pagos)?d.pagos:[];d.hermeticidad=d.hermeticidad||{};d.hermeticidadFechas=d.hermeticidadFechas||{};['cloacal','pluvial','agua','gas'].forEach(k=>{let v=d.hermeticidad[k];if(!Array.isArray(v))v=[false,false];d.hermeticidad[k]=[!!v[0],!!v[1]];let f=d.hermeticidadFechas[k];if(!Array.isArray(f))f=['',''];d.hermeticidadFechas[k]=[f[0]||'',f[1]||'']});d.tasks=Array.isArray(d.tasks)?d.tasks:[];d.ficha=d.ficha||{};d.history=Array.isArray(d.history)?d.history:[];return d}
 function uid(p='id'){return p+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8)}
@@ -302,15 +302,12 @@ function okCheck(ok){return ok?'<span class="done-check" title="Finalizado">✓<
 function miniClass(v,ok=false){if(ok||v==='Finalizado')return'ok';if(v==='No iniciado')return'notstarted';if(v==='Preparación')return'prep';if(v==='Presentado')return'presented';if(v==='Observado')return'observed';if(v==='En corrección')return'correction';if(v==='Aprobado')return'approved';if(v==='No pagado')return'bad';return'mid'}
 function showView(v){document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));document.getElementById('view-'+v).classList.add('active');document.getElementById('tab-'+v).classList.add('active');renderAll()}
 function mergeObras(){
-  const ocultas=new Set(arquitecturaObrasCfg.ocultas||[]), propias=Array.isArray(arquitecturaObrasCfg.propias)?arquitecturaObrasCfg.propias:[];
-  const base=gastosObras.filter(o=>!ocultas.has(o.id));
-  const ids=new Set(base.map(o=>o.id));
-  const disponibles=base.concat(propias.filter(o=>o&&o.id&&!ids.has(o.id)));
-  let orden=Array.isArray(arquitecturaObrasCfg.orden)?arquitecturaObrasCfg.orden.filter(id=>disponibles.some(o=>o.id===id)):[];
-  disponibles.forEach(o=>{if(!orden.includes(o.id))orden.push(o.id)});
+  const propias=Array.isArray(arquitecturaObrasCfg.propias)?arquitecturaObrasCfg.propias.filter(o=>o&&o.id):[];
+  let orden=Array.isArray(arquitecturaObrasCfg.orden)?arquitecturaObrasCfg.orden.filter(id=>propias.some(o=>o.id===id)):[];
+  propias.forEach(o=>{if(!orden.includes(o.id))orden.push(o.id)});
   arquitecturaObrasCfg.orden=orden;
   const pos=new Map(orden.map((id,i)=>[id,i]));
-  obras=disponibles.slice().sort((a,b)=>(pos.get(a.id)??9999)-(pos.get(b.id)??9999));
+  obras=propias.slice().sort((a,b)=>(pos.get(a.id)??9999)-(pos.get(b.id)??9999));
 }
 async function saveArquitecturaObrasCfg(){
   if(!dbApi?.saveObrasConfig) throw new Error('Firebase todavía no está listo');
@@ -326,7 +323,7 @@ function openObrasManager(){
     bg.innerHTML=`<div class="modal" style="max-width:560px">
       <div class="modal-head"><h3>Obras de Arquitectura</h3><button class="modal-x" onclick="closeObrasManager()">×</button></div>
       <div class="modal-body">
-        <p style="font-size:11px;color:#718078;margin:0 0 12px">Se cargan por defecto desde Gastos. Acá podés eliminar obras solo de Arquitectura o crear obras nuevas.</p>
+        <p style="font-size:11px;color:#718078;margin:0 0 12px">Las obras de Arquitectura se administran acá de forma independiente. Podés crear, eliminar y ordenar las obras manualmente.</p>
         <div id="obrasManagerList"></div>
         <div style="display:flex;gap:7px;margin-top:14px;align-items:center">
           <input id="nuevaObraNombre" placeholder="Nombre de nueva obra" style="flex:1;min-width:0;border:1px solid var(--line);background:#fafbfa;border-radius:10px;padding:10px;font-size:11px;outline:none">
@@ -342,8 +339,7 @@ function openObrasManager(){
 function closeObrasManager(){document.getElementById('obrasManagerModal')?.classList.remove('open')}
 function renderObrasManager(){
   const el=document.getElementById('obrasManagerList');if(!el)return;
-  const propias=new Set((arquitecturaObrasCfg.propias||[]).map(o=>o.id));
-  el.innerHTML=obras.map((o,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)"><div><strong style="font-size:12px">${esc(obraLabel(o))}</strong><div style="font-size:9px;color:#89958f">${propias.has(o.id)?'Creada en Arquitectura':'Desde Gastos'}</div></div><div style="display:flex;gap:5px;align-items:center"><button class="icon-btn" title="Subir" ${i===0?'disabled style="opacity:.3"':''} onclick="moverObra('${esc(o.id)}',-1)">↑</button><button class="icon-btn" title="Bajar" ${i===obras.length-1?'disabled style="opacity:.3"':''} onclick="moverObra('${esc(o.id)}',1)">↓</button><button class="btn btn-danger btn-sm" onclick="quitarObraArquitectura('${esc(o.id)}')">Eliminar</button></div></div>`).join('')||'<div class="empty">No hay obras visibles.</div>';
+  el.innerHTML=obras.map((o,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)"><div><strong style="font-size:12px">${esc(obraLabel(o))}</strong><div style="font-size:9px;color:#89958f">Arquitectura</div></div><div style="display:flex;gap:5px;align-items:center"><button class="icon-btn" title="Subir" ${i===0?'disabled style="opacity:.3"':''} onclick="moverObra('${esc(o.id)}',-1)">↑</button><button class="icon-btn" title="Bajar" ${i===obras.length-1?'disabled style="opacity:.3"':''} onclick="moverObra('${esc(o.id)}',1)">↓</button><button class="btn btn-danger btn-sm" onclick="quitarObraArquitectura('${esc(o.id)}')">Eliminar</button></div></div>`).join('')||'<div class="empty">No hay obras cargadas. Creá la primera obra abajo.</div>';
 }
 async function moverObra(id,dir){
   const orden=obras.map(o=>o.id),i=orden.indexOf(id),j=i+dir;if(i<0||j<0||j>=orden.length)return;
@@ -354,7 +350,8 @@ async function moverObra(id,dir){
 async function quitarObraArquitectura(id){
   if(!confirm('¿Eliminar esta obra de Arquitectura?'))return;
   const i=(arquitecturaObrasCfg.propias||[]).findIndex(o=>o.id===id);
-  if(i>=0)arquitecturaObrasCfg.propias.splice(i,1);else if(!(arquitecturaObrasCfg.ocultas||[]).includes(id))(arquitecturaObrasCfg.ocultas||(arquitecturaObrasCfg.ocultas=[])).push(id);
+  if(i>=0)arquitecturaObrasCfg.propias.splice(i,1);
+  arquitecturaObrasCfg.orden=(arquitecturaObrasCfg.orden||[]).filter(x=>x!==id);
   try{await saveArquitecturaObrasCfg()}catch(e){console.warn(e);toastMsg('No se pudo eliminar la obra',true);return}
   mergeObras();
   if(curObra!=='__all__'&&!obras.some(o=>o.id===curObra)){curObra=obras[0]?.id||'__all__';localStorage.setItem('cq_arquitectura_obra',curObra);if(curObra==='__all__'){if(unsubObra){unsubObra();unsubObra=null}await loadAllObras();renderAll()}else subscribeCurrent()}else renderAll();
@@ -582,8 +579,8 @@ const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-
 const app=getApps().length?getApp():initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),storage=getStorage(app);
 const access=document.getElementById('access'),msg=document.getElementById('accessMsg');
 
-// Arquitectura usa el MISMO documento Firestore que Gastos: config/app.
-// Sus datos quedan aislados dentro del campo `arquitectura`, sin tocar obras, subrubros ni otros datos de Gastos.
+// Arquitectura guarda su configuración en config/app dentro del campo `arquitectura`.
+// Su maestro de obras es propio e independiente: no lee ni sincroniza la lista de obras de Gastos.
 const arqRef=doc(db,'config','app');
 async function readArqConfig(){
   const snap=await getDoc(arqRef);
@@ -628,18 +625,15 @@ storageApi={
 async function start(user){
   try{
     window._cqUsuarioActual=(localStorage.getItem('cq_usuario_actual')||user.email||'Usuario');
-    // Las obras se toman de la misma configuración que utiliza Gastos.
-    const [conf,arqConf]=await Promise.all([getDoc(doc(db,'config','app')),getDoc(arqRef)]);
-    const d=conf.exists()?conf.data():{};
-    gastosObras=Array.isArray(d.obras)?d.obras.filter(o=>o&&o.id):[];
+    // Las obras se administran exclusivamente desde Arquitectura.
+    const arqConf=await getDoc(arqRef);
     const rootCfg=arqConf.exists()?arqConf.data():{};
     const ac=(rootCfg.arquitectura&&typeof rootCfg.arquitectura==='object')?rootCfg.arquitectura:{};
     taskTypes=Array.isArray(ac.taskTypes)&&ac.taskTypes.length?ac.taskTypes.filter(x=>typeof x==='string'&&x.trim()):[...DEFAULT_TASK_TYPES];
     const legacyServ=Array.isArray(ac.statusOptions?.servicios)?ac.statusOptions.servicios:null, savedServ=ac.statusOptions?.servicios;
     statusOptions={tramites:Array.isArray(ac.statusOptions?.tramites)&&ac.statusOptions.tramites.length?ac.statusOptions.tramites:[...DEFAULT_STATUS_OPTIONS.tramites],servicios:{agua:Array.isArray(savedServ?.agua)&&savedServ.agua.length?savedServ.agua:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.agua)],luz:Array.isArray(savedServ?.luz)&&savedServ.luz.length?savedServ.luz:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.luz)],gas:Array.isArray(savedServ?.gas)&&savedServ.gas.length?savedServ.gas:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.gas)]},planos:Array.isArray(ac.statusOptions?.planos)&&ac.statusOptions.planos.length?ac.statusOptions.planos:[...DEFAULT_STATUS_OPTIONS.planos]};
     if(ac.finalStatus&&typeof ac.finalStatus==='object'){if(typeof ac.finalStatus.servicios==='string')FINAL_STATUS.servicios={agua:ac.finalStatus.servicios,luz:ac.finalStatus.servicios,gas:ac.finalStatus.servicios};else Object.assign(FINAL_STATUS,ac.finalStatus)}
-    arquitecturaObrasCfg=(ac.obras&&typeof ac.obras==='object')?ac.obras:{ocultas:[],propias:[],orden:[]};
-    if(!Array.isArray(arquitecturaObrasCfg.ocultas))arquitecturaObrasCfg.ocultas=[];
+    arquitecturaObrasCfg=(ac.obras&&typeof ac.obras==='object')?ac.obras:{propias:[],orden:[]};
     if(!Array.isArray(arquitecturaObrasCfg.propias))arquitecturaObrasCfg.propias=[];
     if(!Array.isArray(arquitecturaObrasCfg.orden))arquitecturaObrasCfg.orden=[];
     mergeObras();

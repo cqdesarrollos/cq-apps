@@ -503,8 +503,8 @@ th:nth-child(2), td:nth-child(2){display:none!important}
 </style>
 
 <style id="cq-peso-camion-v1">
-.cq-peso-total{display:inline-flex;margin-left:8px;padding:4px 8px;border-radius:999px;background:#e7f3ff;color:#174f8a;font-size:9px;font-weight:900;white-space:nowrap}
-@media(max-width:560px){.cq-peso-total{display:flex;width:max-content;margin:4px 0 0;font-size:8px}.header-config-btn{width:30px;height:30px;font-size:14px;margin-left:0}}
+.cq-peso-total{display:inline-flex;margin-left:8px;padding:6px 11px;border-radius:999px;background:#e7f3ff;color:#174f8a;font-size:12px;font-weight:900;white-space:nowrap}
+@media(max-width:560px){.cq-peso-total{display:flex;width:max-content;margin:5px 0 0;font-size:11px;padding:6px 10px}.header-config-btn{width:30px;height:30px;font-size:14px;margin-left:0}}
 </style>
 </head>
 <body>
@@ -852,7 +852,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
      const W=1080, rowH=76, headerH=190, tableHeadH=58, footerH=70;
      let cambios=0, ant=null;
      rows.forEach(r=>{const o=String(r.p?.obra||"");if(ant!==null&&o!==ant)cambios++;ant=o});
-     const H=headerH+tableHeadH+(rows.length*rowH)+(cambios*12)+footerH;
+     const H=headerH+tableHeadH+(rows.length*rowH)+(cambios*16)+footerH;
      const c=document.createElement("canvas"); c.width=W; c.height=H;
      const ctx=c.getContext("2d");
      const esc=v=>String(v??"");
@@ -885,22 +885,27 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
      let y=215;
      ctx.fillStyle="#eff7f3";ctx.fillRect(45,y,W-90,tableHeadH);
      ctx.fillStyle="#687b73";ctx.font="700 19px Arial";
-     ctx.fillText("OBRA",65,y+36);ctx.fillText("PRODUCTO",195,y+36);ctx.fillText("CANTIDAD",750,y+36);ctx.fillText("PRIORIDAD",885,y+36);
+     ctx.fillText("OBRA",65,y+36);ctx.fillText("PRODUCTO",245,y+36);ctx.fillText("CANTIDAD",750,y+36);ctx.fillText("PRIORIDAD",885,y+36);
      y+=tableHeadH;
 
      let obraAnt=null;
      for(const r of rows){
        const obra=esc(r.p?.obra), producto=esc(r.x?.material||r.x?.nombre||""), cantidad=esc(qty(r.x)), prioridad=pri(r.p);
        if(obraAnt!==null && obra!==obraAnt){
-         ctx.fillStyle="#18b979";ctx.fillRect(45,y+3,W-90,5);y+=12;
+         ctx.strokeStyle="#9aa7a1";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(45,y+7);ctx.lineTo(W-45,y+7);ctx.stroke();y+=14;
        }
        obraAnt=obra;
        ctx.strokeStyle="#dce7e2";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(45,y+rowH);ctx.lineTo(W-45,y+rowH);ctx.stroke();
-       ctx.fillStyle="#18352d";ctx.font="700 23px Arial";ctx.fillText(obra,65,y+47);
+       ctx.fillStyle="#18352d";
+       // La columna Obra tiene ancho propio: reducimos solo su tipografía si el nombre es largo.
+       // Así nunca invade la columna Producto y se conserva el nombre completo.
+       let obraFont=23;
+       do{ctx.font="700 "+obraFont+"px Arial";if(ctx.measureText(obra).width<=160)break;obraFont--}while(obraFont>14);
+       ctx.fillText(obra,65,y+47);
        ctx.font="23px Arial";
        let prod=producto;
-       if(ctx.measureText(prod).width>500){while(prod.length>3&&ctx.measureText(prod+"…").width>500)prod=prod.slice(0,-1);prod+="…"}
-       ctx.fillText(prod,195,y+47);
+       if(ctx.measureText(prod).width>455){while(prod.length>3&&ctx.measureText(prod+"…").width>455)prod=prod.slice(0,-1);prod+="…"}
+       ctx.fillText(prod,245,y+47);
        ctx.font="700 23px Arial";ctx.fillText(cantidad,765,y+47);
 
        ctx.fillStyle=prioridad==="Urgente"?"#ffe7e4":"#fff4d7";roundRect(ctx,875,y+18,140,40,20);ctx.fill();
@@ -1214,7 +1219,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
   function tableHead(y){
     pdf.setFillColor(...soft);pdf.rect(margin,y,tableW,9,"F");
     pdf.setTextColor(...muted);pdf.setFont("helvetica","bold");pdf.setFontSize(7.5);
-    pdf.text("OBRA",margin+4,y+5.8);pdf.text("PRODUCTO",margin+28,y+5.8);
+    pdf.text("OBRA",margin+4,y+5.8);pdf.text("PRODUCTO",margin+38,y+5.8);
     pdf.text("CANTIDAD",margin+130,y+5.8);pdf.text("PRIORIDAD",margin+154,y+5.8);
     return y+9;
   }
@@ -1229,20 +1234,20 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
     if(obraActual!==obraAnterior){
       if(obraAnterior!==null){
         y+=2;
-        pdf.setDrawColor(210,218,214);pdf.setLineWidth(.22);pdf.line(margin,y,margin+tableW,y);y+=3;
+        pdf.setDrawColor(222,226,224);pdf.setLineWidth(.12);pdf.line(margin,y,margin+tableW,y);y+=3;
       }
       obraAnterior=obraActual;
     }
     const product=String(x.material||x.nombre||"");
     // Ajustar ambas columnas para que una obra larga nunca invada Producto.
-    const obraLines=pdf.splitTextToSize(obraActual,21);
-    const lines=pdf.splitTextToSize(product,96);
+    const obraLines=pdf.splitTextToSize(obraActual,31);
+    const lines=pdf.splitTextToSize(product,86);
     const h=Math.max(10,obraLines.length*4.2+5,lines.length*4.2+5);
     if(y+h>282){pdf.addPage();header();y=50;y=tableHead(y)}
     pdf.setDrawColor(...line);pdf.line(margin,y+h,margin+tableW,y+h);
     pdf.setTextColor(...dark);pdf.setFont("helvetica","bold");pdf.setFontSize(8.5);
     pdf.text(obraLines,margin+4,y+6.5);
-    pdf.setFont("helvetica","normal");pdf.text(lines,margin+28,y+6.5);
+    pdf.setFont("helvetica","normal");pdf.text(lines,margin+38,y+6.5);
     pdf.setFont("helvetica","bold");pdf.text(String(Q(x)),margin+130,y+6.5);
     const urgente=P(p)==="Urgente";
     pdf.setFillColor(...(urgente?[255,231,228]:[255,244,215]));
