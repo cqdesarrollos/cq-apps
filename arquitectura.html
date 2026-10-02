@@ -94,6 +94,20 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}a{text-decoratio
 #tramiteModal .modal-body>.fld:focus-within,#tramiteModal .modal-body>.row2>.fld:focus-within{border-color:#9cc7b4;box-shadow:0 5px 15px rgba(44,119,95,.10)}
 #tramiteModal .modal-body>.row2{gap:10px}
 #tramiteModal .modal-body>.row2>.fld{margin-bottom:10px}
+
+/* Color visual según estado - Servicios y Planos */
+.state-color{
+  transition:background-color .18s ease,border-color .18s ease,color .18s ease;
+  font-weight:700;
+}
+.state-color[data-state-tone="gray"]{background:#f1f3f2!important;border-color:#d6ddda!important;color:#607069!important}
+.state-color[data-state-tone="yellow"]{background:#fff8e7!important;border-color:#ecd99d!important;color:#8a6410!important}
+.state-color[data-state-tone="blue"]{background:#eaf2ff!important;border-color:#bfd2f2!important;color:#3568a8!important}
+.state-color[data-state-tone="orange"]{background:#fff0e6!important;border-color:#efc49d!important;color:#b85d18!important}
+.state-color[data-state-tone="violet"]{background:#f3edff!important;border-color:#d4c1f0!important;color:#7656a4!important}
+.state-color[data-state-tone="cyan"]{background:#e7f4f7!important;border-color:#b9dce3!important;color:#287485!important}
+.state-color[data-state-tone="green"]{background:#eaf8ef!important;border-color:#b9e2c6!important;color:#16743a!important}
+
 </style>
 </head>
 <body>
@@ -698,5 +712,45 @@ onAuthStateChanged(auth,user=>{
   home.href = origen === 'empleados' ? 'empleados/index.html' : 'index.html';
 })();
 </script>
+
+<script>
+(function(){
+  function normState(v){
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  }
+  function toneFor(select){
+    const v=normState(select.value);
+    const opts=[...select.options].map(o=>normState(o.value||o.textContent));
+    const idx=Math.max(0,opts.indexOf(v));
+    if(/final|termin|complet|habilitad|aprobad|listo/.test(v)) return 'green';
+    if(/observ|rechaz|error/.test(v)) return 'orange';
+    if(/corre|revision/.test(v)) return 'violet';
+    if(/present|tramite|proceso|curso/.test(v)) return 'blue';
+    if(/prepar|pend/.test(v)) return 'yellow';
+    if(/no iniciado|sin iniciar/.test(v)) return 'gray';
+    return ['gray','yellow','blue','orange','violet','cyan','green'][Math.min(idx,6)];
+  }
+  function paint(){
+    document.querySelectorAll('#serviciosGrid select, #planosGrid select').forEach(sel=>{
+      // Sólo el selector de ESTADO: excluye cualquier otro select que pudiera agregarse.
+      const label=sel.closest('.fld')?.querySelector('label')?.textContent||'';
+      if(!/estado/i.test(label)) return;
+      sel.classList.add('state-color');
+      sel.dataset.stateTone=toneFor(sel);
+      if(!sel.dataset.stateColorBound){
+        sel.dataset.stateColorBound='1';
+        sel.addEventListener('change',()=>{sel.dataset.stateTone=toneFor(sel)});
+      }
+    });
+  }
+  const obs=new MutationObserver(paint);
+  document.addEventListener('DOMContentLoaded',()=>{
+    paint();
+    obs.observe(document.body,{childList:true,subtree:true});
+  });
+  setTimeout(paint,300);
+})();
+</script>
+
 </body>
 </html>
