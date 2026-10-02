@@ -108,6 +108,10 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}a{text-decoratio
 .state-color[data-state-tone="cyan"]{background:#e7f4f7!important;border-color:#b9dce3!important;color:#287485!important}
 .state-color[data-state-tone="green"]{background:#eaf8ef!important;border-color:#b9e2c6!important;color:#16743a!important}
 
+
+/* En Ficha no corresponde la vista global "Todos": la ficha siempre es por obra. */
+body.ficha-activa #obraPills .pill[data-id="__all__"]{display:none!important}
+
 </style>
 </head>
 <body>
@@ -749,6 +753,20 @@ onAuthStateChanged(auth,user=>{
     obs.observe(document.body,{childList:true,subtree:true});
   });
   setTimeout(paint,300);
+})();
+</script>
+
+
+<script>
+(function(){
+  function syncFichaTodos(){
+    const ficha=document.querySelector('.tab[data-tab="ficha"]');
+    document.body.classList.toggle('ficha-activa',!!ficha?.classList.contains('active'));
+  }
+  document.addEventListener('DOMContentLoaded',()=>{
+    syncFichaTodos();
+    document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setTimeout(syncFichaTodos,0)));
+  });
 })();
 </script>
 
