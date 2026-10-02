@@ -582,19 +582,24 @@ const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-
 const app=getApps().length?getApp():initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),storage=getStorage(app);
 const access=document.getElementById('access'),msg=document.getElementById('accessMsg');
 
-// Toda Arquitectura trabaja dentro de config/arquitectura.
-// Así usa la misma ruta de configuración que la app ya puede leer con la sesión CQ,
-// evitando depender de permisos adicionales para una colección arquitectura_obras.
-const arqRef=doc(db,'config','arquitectura');
+// Arquitectura usa el MISMO documento Firestore que Gastos: config/app.
+// Sus datos quedan aislados dentro del campo `arquitectura`, sin tocar obras, subrubros ni otros datos de Gastos.
+const arqRef=doc(db,'config','app');
 async function readArqConfig(){
   const snap=await getDoc(arqRef);
-  return snap.exists()?snap.data():{};
+  const root=snap.exists()?snap.data():{};
+  return (root.arquitectura&&typeof root.arquitectura==='object')?root.arquitectura:{};
+}
+async function updateArqConfig(partial){
+  const current=await readArqConfig();
+  const next={...current,...JSON.parse(JSON.stringify(partial))};
+  await setDoc(arqRef,{arquitectura:next},{merge:true});
 }
 async function saveObraInConfig(id,data){
   const current=await readArqConfig();
-  const dataByObra=(current.dataByObra&&typeof current.dataByObra==='object')?current.dataByObra:{};
+  const dataByObra=(current.dataByObra&&typeof current.dataByObra==='object')?{...current.dataByObra}:{};
   dataByObra[id]=JSON.parse(JSON.stringify(data));
-  await setDoc(arqRef,{dataByObra},{merge:true});
+  await updateArqConfig({dataByObra});
 }
 dbApi={
   get:async(id)=>{
@@ -603,16 +608,17 @@ dbApi={
   },
   save:(id,data)=>saveObraInConfig(id,data),
   listen:(id,cb)=>onSnapshot(arqRef,s=>{
-    const d=s.exists()?s.data():{};
+    const root=s.exists()?s.data():{};
+    const d=(root.arquitectura&&typeof root.arquitectura==='object')?root.arquitectura:{};
     cb(d.dataByObra?.[id]||null);
   },e=>{
     console.warn('Arquitectura Firebase:',e);
     setSync('Error',false);
     toastMsg('Firebase: '+(e.code||'error de lectura'),true);
   }),
-  saveObrasConfig:(cfg)=>setDoc(arqRef,{obras:JSON.parse(JSON.stringify(cfg))},{merge:true}),
-  saveTaskTypes:(types)=>setDoc(arqRef,{taskTypes:JSON.parse(JSON.stringify(types))},{merge:true}),
-  saveStatusOptions:(opts)=>setDoc(arqRef,{statusOptions:JSON.parse(JSON.stringify(opts)),finalStatus:JSON.parse(JSON.stringify(FINAL_STATUS))},{merge:true})
+  saveObrasConfig:(cfg)=>updateArqConfig({obras:cfg}),
+  saveTaskTypes:(types)=>updateArqConfig({taskTypes:types}),
+  saveStatusOptions:(opts)=>updateArqConfig({statusOptions:opts,finalStatus:FINAL_STATUS})
 };
 storageApi={
   upload:async(id,cat,file)=>{const safe=(file.name||'archivo').replace(/[^\w.\-]+/g,'_');const path=`arquitectura/${id}/${cat}/${Date.now()}_${safe}`;const r=ref(storage,path);await uploadBytes(r,file);return{path,url:await getDownloadURL(r)}},
@@ -626,7 +632,8 @@ async function start(user){
     const [conf,arqConf]=await Promise.all([getDoc(doc(db,'config','app')),getDoc(arqRef)]);
     const d=conf.exists()?conf.data():{};
     gastosObras=Array.isArray(d.obras)?d.obras.filter(o=>o&&o.id):[];
-    const ac=arqConf.exists()?arqConf.data():{};
+    const rootCfg=arqConf.exists()?arqConf.data():{};
+    const ac=(rootCfg.arquitectura&&typeof rootCfg.arquitectura==='object')?rootCfg.arquitectura:{};
     taskTypes=Array.isArray(ac.taskTypes)&&ac.taskTypes.length?ac.taskTypes.filter(x=>typeof x==='string'&&x.trim()):[...DEFAULT_TASK_TYPES];
     const legacyServ=Array.isArray(ac.statusOptions?.servicios)?ac.statusOptions.servicios:null, savedServ=ac.statusOptions?.servicios;
     statusOptions={tramites:Array.isArray(ac.statusOptions?.tramites)&&ac.statusOptions.tramites.length?ac.statusOptions.tramites:[...DEFAULT_STATUS_OPTIONS.tramites],servicios:{agua:Array.isArray(savedServ?.agua)&&savedServ.agua.length?savedServ.agua:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.agua)],luz:Array.isArray(savedServ?.luz)&&savedServ.luz.length?savedServ.luz:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.luz)],gas:Array.isArray(savedServ?.gas)&&savedServ.gas.length?savedServ.gas:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.gas)]},planos:Array.isArray(ac.statusOptions?.planos)&&ac.statusOptions.planos.length?ac.statusOptions.planos:[...DEFAULT_STATUS_OPTIONS.planos]};

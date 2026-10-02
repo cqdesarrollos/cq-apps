@@ -1229,17 +1229,19 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
     if(obraActual!==obraAnterior){
       if(obraAnterior!==null){
         y+=2;
-        pdf.setDrawColor(...green);pdf.setLineWidth(.65);pdf.line(margin,y,margin+tableW,y);y+=3;
+        pdf.setDrawColor(210,218,214);pdf.setLineWidth(.22);pdf.line(margin,y,margin+tableW,y);y+=3;
       }
       obraAnterior=obraActual;
     }
     const product=String(x.material||x.nombre||"");
-    const lines=pdf.splitTextToSize(product,94);
-    const h=Math.max(10,lines.length*4.2+5);
+    // Ajustar ambas columnas para que una obra larga nunca invada Producto.
+    const obraLines=pdf.splitTextToSize(obraActual,21);
+    const lines=pdf.splitTextToSize(product,96);
+    const h=Math.max(10,obraLines.length*4.2+5,lines.length*4.2+5);
     if(y+h>282){pdf.addPage();header();y=50;y=tableHead(y)}
     pdf.setDrawColor(...line);pdf.line(margin,y+h,margin+tableW,y+h);
     pdf.setTextColor(...dark);pdf.setFont("helvetica","bold");pdf.setFontSize(8.5);
-    pdf.text(obraActual,margin+4,y+6.5);
+    pdf.text(obraLines,margin+4,y+6.5);
     pdf.setFont("helvetica","normal");pdf.text(lines,margin+28,y+6.5);
     pdf.setFont("helvetica","bold");pdf.text(String(Q(x)),margin+130,y+6.5);
     const urgente=P(p)==="Urgente";
