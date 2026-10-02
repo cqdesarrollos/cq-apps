@@ -590,7 +590,10 @@ const access=document.getElementById('access'),msg=document.getElementById('acce
 // Firebase exclusivo de Arquitectura.
 // Configuración general en arquitectura/app y datos de cada obra en arquitectura_obras/{id}.
 const arqRef=doc(db,'arquitectura','app');
-const obraRef=id=>doc(db,'arquitectura_obras',String(id));
+// Los nombres de obra contienen "/" (ej. 12/93). Firestore no admite "/" dentro
+// del ID de un documento; lo codificamos para obtener un ID válido y estable.
+const obraDocId=id=>encodeURIComponent(String(id));
+const obraRef=id=>doc(db,'arquitectura_obras',obraDocId(id));
 async function readArqConfig(){
   const snap=await getDoc(arqRef);
   return snap.exists()?snap.data():{};
