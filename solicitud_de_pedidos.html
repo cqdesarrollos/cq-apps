@@ -506,6 +506,41 @@ th:nth-child(2), td:nth-child(2){display:none!important}
 .cq-peso-total{display:inline-flex;margin-left:8px;padding:6px 11px;border-radius:999px;background:#e7f3ff;color:#174f8a;font-size:12px;font-weight:900;white-space:nowrap}
 @media(max-width:560px){.cq-peso-total{display:flex;width:max-content;margin:5px 0 0;font-size:11px;padding:6px 10px}.header-config-btn{width:30px;height:30px;font-size:14px;margin-left:0}}
 </style>
+
+<style id="cq-todos-global-v6">
+.cq-list-actions{display:grid!important;grid-template-columns:auto 1fr!important;grid-template-areas:"info actions" "todos actions"!important;align-items:center!important;column-gap:12px!important;row-gap:4px!important;padding:8px 12px!important}
+.cq-list-actions>small{grid-area:info!important;display:block!important;margin:0!important}
+.cq-peso-total{margin-left:0!important;margin-top:5px!important}
+.cq-select-all-global{grid-area:todos!important;margin:0!important;display:inline-flex!important;align-items:center!important;gap:7px!important;font-weight:800!important;color:#52665f!important;white-space:nowrap!important;width:max-content!important}
+.cq-select-all-global input{width:20px!important;height:20px!important;accent-color:#19a974!important}
+.cq-flow-actions{grid-area:actions!important;margin:0!important;align-self:end!important;justify-self:end!important;width:auto!important}
+@media(max-width:700px){
+ .cq-list-actions{grid-template-columns:auto 1fr!important;grid-template-areas:"info actions" "todos actions"!important;column-gap:8px!important;row-gap:3px!important;padding:7px 8px!important}
+ .cq-flow-actions{width:auto!important;max-width:none!important;justify-content:flex-end!important}
+ .cq-select-all-global{margin:0!important}
+}
+</style>
+
+<style id="cq-v8-peso-arriba-compacto">
+/* Peso total junto al filtro de obras */
+#pedidos .filters{grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important}
+#pedidos .filters #fObra{display:none!important}
+.cq-peso-arriba{display:flex;align-items:center;justify-content:flex-end;min-width:0}
+.cq-peso-arriba .cq-peso-total{margin:0!important;font-size:13px!important;padding:7px 12px!important}
+/* Franja de selección más baja: todo en una sola línea */
+.cq-list-actions{display:flex!important;align-items:center!important;gap:8px!important;padding:6px 8px!important;flex-wrap:nowrap!important}
+.cq-list-actions>small{margin:0!important;white-space:nowrap!important}
+.cq-select-all-global{margin:0!important;white-space:nowrap!important}
+.cq-flow-actions{margin-left:auto!important;display:flex!important;align-items:center!important;gap:6px!important;flex-wrap:nowrap!important;width:auto!important}
+@media(max-width:700px){
+ #pedidos .filters{grid-template-columns:minmax(0,1fr) auto!important;padding:7px 8px!important}
+ .cq-peso-arriba .cq-peso-total{font-size:12px!important;padding:7px 10px!important}
+ .cq-list-actions{padding:5px 8px!important;gap:6px!important}
+ .cq-list-actions>small{display:none!important}
+ .cq-select-all-global input{width:19px!important;height:19px!important}
+ .cq-flow-actions{margin-left:auto!important;gap:5px!important}
+}
+</style>
 </head>
 <body>
 
@@ -520,7 +555,7 @@ th:nth-child(2), td:nth-child(2){display:none!important}
 <div class="cq-obras-filter">
   <button type="button" id="cqObrasBtn" class="cq-obras-btn" onclick="cqToggleObrasMenu()">Todas las obras ▾</button>
   <div id="cqObrasMenu" class="cq-obras-menu" style="display:none"></div>
-</div><select id="fEstado" onchange="render()"><option value="">Todos los estados</option><option>Pendiente</option><option>Pedido</option><option>Entregado</option></select><select id="fSemana" onchange="render()"><option value="">Todas las semanas</option></select></div><div id="cqFiltroEntregado" class="cq-filtro-entregado" style="display:none">
+</div><div class="cq-peso-arriba"><b id="cqPesoTotalTop" class="cq-peso-total">⚖ 0 kg</b></div><select id="fEstado" onchange="render()"><option value="">Todos los estados</option><option>Pendiente</option><option>Pedido</option><option>Entregado</option></select><select id="fSemana" onchange="render()"><option value="">Todas las semanas</option></select></div><div id="cqFiltroEntregado" class="cq-filtro-entregado" style="display:none">
   <label>Fecha entregado <input id="cqFechaEntregado" type="date" onchange="render()"></label>
   <button type="button" onclick="document.getElementById('cqFechaEntregado').value='';render()">Todas</button>
 </div>
@@ -1174,26 +1209,16 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
 
  function k(pid,i){return String(pid)+"::"+i}
  window.cqToggleItem=(pid,i,on)=>{on?selected.add(k(pid,i)):selected.delete(k(pid,i));window.render()};
- window.cqToggleObra=(obra,on)=>{
-   const obraTxt=String(obra);
-   const keys=[];
+ window.cqToggleTodos=function(on){
+   // Marca/desmarca todos los ítems actualmente visibles en la solapa activa.
+   const fechaEnt=document.getElementById("cqFechaEntregado")?.value||"";
    pedidos.forEach(p=>{
-     if(!p.archivado && String(p.obra)===obraTxt){
-       (p.items||[]).forEach((_,i)=>keys.push(k(p.id,i)));
-     }
+     if(p.archivado)return;
+     if((p.estado||"Pendiente")!==cqEstadoActivo)return;
+     if(cqEstadoActivo==="Entregado" && fechaEnt && (p.fechaEntregado||p.fecha)!==fechaEnt)return;
+     (p.items||[]).forEach((_,i)=>{const key=k(p.id,i);on?selected.add(key):selected.delete(key)});
    });
-   keys.forEach(key=>on?selected.add(key):selected.delete(key));
-
-   // Actualización visual inmediata de todos los checks de esa obra.
-   document.querySelectorAll('.obra-group').forEach(sec=>{
-     const titulo=sec.querySelector('.obra-head strong');
-     if(titulo && titulo.textContent.trim()==='Obra '+obraTxt){
-       sec.querySelectorAll('.cq-item-check').forEach(ch=>ch.checked=!!on);
-       sec.querySelectorAll('.pedido-row-v35').forEach(row=>row.classList.toggle('selected',!!on));
-     }
-   });
-   // Recalcular contador/botón después del evento actual.
-   setTimeout(()=>window.render(),0);
+   window.render();
  };
  function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>{if(selected.has(k(p.id,i)))out.push({p,x})}));return out}
  function pesoFila(x){const pu=Number(pesos[itemKey(x)]);const q=Number(Q(x));return Number.isFinite(pu)&&Number.isFinite(q)?pu*q:0}
@@ -1282,7 +1307,9 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
   const visibles=new Set();arr.forEach(p=>(p.items||[]).forEach((_,i)=>visibles.add(k(p.id,i))));
   [...selected].forEach(z=>{if(!visibles.has(z))selected.delete(z)});
   const n=selected.size,destino=cqEstadoActivo==="Pendiente"?"Pedido":cqEstadoActivo==="Pedido"?"Entregado":"";
-  wrap.innerHTML='<div class="cq-list-actions"><small>Marcá los ítems <b class="cq-peso-total">⚖ '+fmtKg(pesoSeleccionado())+'</b></small><div class="cq-flow-actions">'+
+  const todosVisibles=[...visibles].length>0 && [...visibles].every(z=>selected.has(z));
+  const pesoTop=document.getElementById("cqPesoTotalTop");if(pesoTop)pesoTop.textContent="⚖ "+fmtKg(pesoSeleccionado());
+  wrap.innerHTML='<div class="cq-list-actions"><small>Marcá los ítems</small><label class="cq-select-all cq-select-all-global"><input type="checkbox" '+(todosVisibles?'checked':'')+' onchange="cqToggleTodos(this.checked)"> Todos</label><div class="cq-flow-actions">'+
     (cqEstadoActivo==="Pendiente"?'<button type="button" class="cq-send-selected show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqEnviarSeleccionados()">↗ WhatsApp <span class="count">'+n+'</span></button>':'')+
     (destino?'<button type="button" class="cq-move-selected '+(destino==="Pedido"?'a-pedido':'a-entregado')+' show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqMoverSeleccion(\''+destino+'\')">→ Enviar a '+destino+' <span class="count">'+n+'</span></button>':'')+
     (cqEstadoActivo==="Pedido"?'<div class="cq-fecha-entrega-bulk"><input type="date" id="cqFechaEntregaBulk" aria-label="Fecha de entrega"><button type="button" class="cq-fecha-entrega-btn '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqAsignarFechaEntregaSeleccion()">📅 Fecha entrega <span class="count">'+n+'</span></button></div>':'')+
@@ -1291,8 +1318,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
    const partes=String(gkey).split("|||");
    const fechaGrupo=cqEstadoActivo==="Entregado"?partes[0]:"";
    const obra=String(ps?.[0]?.obra|| (cqEstadoActivo==="Entregado"?partes.slice(1).join("|||"):gkey) || "");
-   const ks=[];ps.forEach(p=>(p.items||[]).forEach((_,i)=>ks.push(k(p.id,i))));const all=ks.length&&ks.every(z=>selected.has(z));
-   return '<section class="obra-group cq-obra-color" data-obra-color="'+E(obra)+'"><div class="obra-head"><strong>Obra <span class="cq-obra-num">'+E(obra)+'</span></strong><label class="cq-select-all"><input type="checkbox" '+(all?'checked':'')+' onchange="cqToggleObra(this.dataset.obra,this.checked)" data-obra="'+E(obra)+'"> Todos</label></div><div class="pedido-head-v37"><div></div><div>Fecha</div><div>Producto</div><div>Cant.</div><div>Prioridad</div><div>Acciones</div></div>'+
+   return '<section class="obra-group cq-obra-color" data-obra-color="'+E(obra)+'"><div class="obra-head"><strong>Obra <span class="cq-obra-num">'+E(obra)+'</span></strong></div><div class="pedido-head-v37"><div></div><div>Fecha</div><div>Producto</div><div>Cant.</div><div>Prioridad</div><div>Acciones</div></div>'+
    ps.map(p=>(p.items||[]).map((x,i)=>{const on=selected.has(k(p.id,i)),pr=P(p),pk=itemKey(x),peso=pesos[pk];return '<div class="pedido-row-v37 '+(on?'selected':'')+'"><div><input class="cq-item-check" type="checkbox" '+(on?'checked':'')+' onchange="cqToggleItem('+JSON.stringify(p.id)+','+i+',this.checked)"></div><div class="pedido-date">'+FC(p.fecha)+(cqEstadoActivo==="Pedido"&&p.fechaEntrega?'<small class="cq-fecha-entrega-row">Entrega '+FC(p.fechaEntrega)+'</small>':'')+'</div><div class="pedido-material"><b>'+E(x.material||x.nombre||"")+'</b>'+(peso!=null?'<small>'+E(peso)+' kg/u · <b>'+E(fmtKg(pesoFila(x)))+'</b></small>':'')+'</div><div class="pedido-cant">'+E(Q(x)||"-")+'</div><div class="prio '+pr.toLowerCase()+'">'+pr+'</div><div class="icon-actions">'+(cqEstadoActivo==="Pendiente"?'<button class="icon-btn icon-edit" onclick="editarPedido('+JSON.stringify(p.id)+')">✎</button>':'')+'<button class="icon-btn icon-delete" onclick="eliminarPedido('+JSON.stringify(p.id)+')">×</button></div></div>'}).join("")).join("")+'</section>'
   }).join("")+'</div>';
   document.querySelectorAll(".obra-group").forEach(sec=>{

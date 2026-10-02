@@ -561,6 +561,14 @@ async function subscribeCurrent(){
     allData[curObra]=JSON.parse(JSON.stringify(obraData));
     renderAll();
     setSync('Online',true);
+    if(dbApi.listen){
+      unsubObra=dbApi.listen(curObra,d2=>{
+        obraData=normalize(d2||emptyData());
+        allData[curObra]=JSON.parse(JSON.stringify(obraData));
+        renderAll();
+        setSync('Online',true);
+      });
+    }
   }catch(e){
     console.warn('Arquitectura Firebase lectura:',e);
     setSync('Error',false);
@@ -579,8 +587,10 @@ const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-
 const app=getApps().length?getApp():initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),storage=getStorage(app);
 const access=document.getElementById('access'),msg=document.getElementById('accessMsg');
 
-// Firebase exclusivo de Arquitectura: no usa config/app ni datos de Gastos.
+// Firebase exclusivo de Arquitectura.
+// Configuración general en arquitectura/app y datos de cada obra en arquitectura_obras/{id}.
 const arqRef=doc(db,'arquitectura','app');
+const obraRef=id=>doc(db,'arquitectura_obras',String(id));
 async function readArqConfig(){
   const snap=await getDoc(arqRef);
   return snap.exists()?snap.data():{};
@@ -588,16 +598,20 @@ async function readArqConfig(){
 async function updateArqConfig(partial){
   await setDoc(arqRef,JSON.parse(JSON.stringify(partial)),{merge:true});
 }
-async function saveObraInConfig(id,data){
-  const current=await readArqConfig();
-  const dataByObra=(current.dataByObra&&typeof current.dataByObra==='object')?{...current.dataByObra}:{};
-  dataByObra[id]=JSON.parse(JSON.stringify(data));
-  await setDoc(arqRef,{dataByObra},{merge:true});
-}
 dbApi={
-  get:async(id)=>{const d=await readArqConfig();return d.dataByObra?.[id]||null},
-  save:(id,data)=>saveObraInConfig(id,data),
-  listen:(id,cb)=>onSnapshot(arqRef,snap=>{const d=snap.exists()?snap.data():{};cb(d.dataByObra?.[id]||null)},e=>{console.warn('Arquitectura Firebase:',e);setSync('Error',false);toastMsg('Firebase: '+(e.code||'error de lectura'),true)}),
+  get:async(id)=>{
+    const snap=await getDoc(obraRef(id));
+    return snap.exists()?snap.data():null;
+  },
+  save:async(id,data)=>{
+    const clean=JSON.parse(JSON.stringify(data));
+    await setDoc(obraRef(id),clean,{merge:false});
+  },
+  listen:(id,cb)=>onSnapshot(
+    obraRef(id),
+    snap=>cb(snap.exists()?snap.data():null),
+    e=>{console.warn('Arquitectura Firebase:',e);setSync('Error',false);toastMsg('Firebase: '+(e.code||'error de lectura'),true)}
+  ),
   saveObrasConfig:(cfg)=>updateArqConfig({obras:cfg}),
   saveTaskTypes:(types)=>updateArqConfig({taskTypes:types}),
   saveStatusOptions:(opts)=>updateArqConfig({statusOptions:opts,finalStatus:FINAL_STATUS})
