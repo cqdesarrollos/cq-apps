@@ -567,13 +567,37 @@ const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-
 const app=getApps().length?getApp():initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),storage=getStorage(app);
 const access=document.getElementById('access'),msg=document.getElementById('accessMsg');
 
+// Toda Arquitectura trabaja dentro de config/arquitectura.
+// Así usa la misma ruta de configuración que la app ya puede leer con la sesión CQ,
+// evitando depender de permisos adicionales para una colección arquitectura_obras.
+const arqRef=doc(db,'config','arquitectura');
+async function readArqConfig(){
+  const snap=await getDoc(arqRef);
+  return snap.exists()?snap.data():{};
+}
+async function saveObraInConfig(id,data){
+  const current=await readArqConfig();
+  const dataByObra=(current.dataByObra&&typeof current.dataByObra==='object')?current.dataByObra:{};
+  dataByObra[id]=JSON.parse(JSON.stringify(data));
+  await setDoc(arqRef,{dataByObra},{merge:true});
+}
 dbApi={
-  get:async(id)=>{const s=await getDoc(doc(db,'arquitectura_obras',id));return s.exists()?s.data():null},
-  save:(id,data)=>setDoc(doc(db,'arquitectura_obras',id),JSON.parse(JSON.stringify(data))),
-  listen:(id,cb)=>onSnapshot(doc(db,'arquitectura_obras',id),s=>cb(s.exists()?s.data():null),e=>{console.warn(e);setSync('Error',false)}),
-  saveObrasConfig:(cfg)=>setDoc(doc(db,'config','arquitectura'),{obras:JSON.parse(JSON.stringify(cfg))},{merge:true}),
-  saveTaskTypes:(types)=>setDoc(doc(db,'config','arquitectura'),{taskTypes:JSON.parse(JSON.stringify(types))},{merge:true}),
-  saveStatusOptions:(opts)=>setDoc(doc(db,'config','arquitectura'),{statusOptions:JSON.parse(JSON.stringify(opts)),finalStatus:JSON.parse(JSON.stringify(FINAL_STATUS))},{merge:true})
+  get:async(id)=>{
+    const d=await readArqConfig();
+    return d.dataByObra?.[id]||null;
+  },
+  save:(id,data)=>saveObraInConfig(id,data),
+  listen:(id,cb)=>onSnapshot(arqRef,s=>{
+    const d=s.exists()?s.data():{};
+    cb(d.dataByObra?.[id]||null);
+  },e=>{
+    console.warn('Arquitectura Firebase:',e);
+    setSync('Error',false);
+    toastMsg('Firebase: '+(e.code||'error de lectura'),true);
+  }),
+  saveObrasConfig:(cfg)=>setDoc(arqRef,{obras:JSON.parse(JSON.stringify(cfg))},{merge:true}),
+  saveTaskTypes:(types)=>setDoc(arqRef,{taskTypes:JSON.parse(JSON.stringify(types))},{merge:true}),
+  saveStatusOptions:(opts)=>setDoc(arqRef,{statusOptions:JSON.parse(JSON.stringify(opts)),finalStatus:JSON.parse(JSON.stringify(FINAL_STATUS))},{merge:true})
 };
 storageApi={
   upload:async(id,cat,file)=>{const safe=(file.name||'archivo').replace(/[^\w.\-]+/g,'_');const path=`arquitectura/${id}/${cat}/${Date.now()}_${safe}`;const r=ref(storage,path);await uploadBytes(r,file);return{path,url:await getDownloadURL(r)}},
@@ -585,7 +609,7 @@ async function start(user){
     window._cqUsuarioActual=(localStorage.getItem('cq_usuario_actual')||user.email||'Usuario');
     document.getElementById('userPill').textContent=window._cqUsuarioActual;
     // Las obras se toman de la misma configuración que utiliza Gastos.
-    const [conf,arqConf]=await Promise.all([getDoc(doc(db,'config','app')),getDoc(doc(db,'config','arquitectura'))]);
+    const [conf,arqConf]=await Promise.all([getDoc(doc(db,'config','app')),getDoc(arqRef)]);
     const d=conf.exists()?conf.data():{};
     gastosObras=Array.isArray(d.obras)?d.obras.filter(o=>o&&o.id):[];
     const ac=arqConf.exists()?arqConf.data():{};
