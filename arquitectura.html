@@ -323,7 +323,7 @@ function openObrasManager(){
     bg.innerHTML=`<div class="modal" style="max-width:560px">
       <div class="modal-head"><h3>Obras de Arquitectura</h3><button class="modal-x" onclick="closeObrasManager()">×</button></div>
       <div class="modal-body">
-        <p style="font-size:11px;color:#718078;margin:0 0 12px">Las obras de Arquitectura se administran acá de forma independiente. Podés crear, eliminar y ordenar las obras manualmente.</p>
+        <p style="font-size:11px;color:#718078;margin:0 0 12px">Las obras se administran manualmente dentro de Arquitectura. No se sincronizan con Gastos.</p>
         <div id="obrasManagerList"></div>
         <div style="display:flex;gap:7px;margin-top:14px;align-items:center">
           <input id="nuevaObraNombre" placeholder="Nombre de nueva obra" style="flex:1;min-width:0;border:1px solid var(--line);background:#fafbfa;border-radius:10px;padding:10px;font-size:11px;outline:none">
@@ -339,7 +339,7 @@ function openObrasManager(){
 function closeObrasManager(){document.getElementById('obrasManagerModal')?.classList.remove('open')}
 function renderObrasManager(){
   const el=document.getElementById('obrasManagerList');if(!el)return;
-  el.innerHTML=obras.map((o,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)"><div><strong style="font-size:12px">${esc(obraLabel(o))}</strong><div style="font-size:9px;color:#89958f">Arquitectura</div></div><div style="display:flex;gap:5px;align-items:center"><button class="icon-btn" title="Subir" ${i===0?'disabled style="opacity:.3"':''} onclick="moverObra('${esc(o.id)}',-1)">↑</button><button class="icon-btn" title="Bajar" ${i===obras.length-1?'disabled style="opacity:.3"':''} onclick="moverObra('${esc(o.id)}',1)">↓</button><button class="btn btn-danger btn-sm" onclick="quitarObraArquitectura('${esc(o.id)}')">Eliminar</button></div></div>`).join('')||'<div class="empty">No hay obras cargadas. Creá la primera obra abajo.</div>';
+  el.innerHTML=obras.map((o,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)"><div><strong style="font-size:12px">${esc(obraLabel(o))}</strong><div style="font-size:9px;color:#89958f">Arquitectura</div></div><div style="display:flex;gap:5px;align-items:center"><button class="icon-btn" title="Subir" ${i===0?'disabled style="opacity:.3"':''} onclick="moverObra('${esc(o.id)}',-1)">↑</button><button class="icon-btn" title="Bajar" ${i===obras.length-1?'disabled style="opacity:.3"':''} onclick="moverObra('${esc(o.id)}',1)">↓</button><button class="btn btn-danger btn-sm" onclick="quitarObraArquitectura('${esc(o.id)}')">Eliminar</button></div></div>`).join('')||'<div class="empty">No hay obras visibles.</div>';
 }
 async function moverObra(id,dir){
   const orden=obras.map(o=>o.id),i=orden.indexOf(id),j=i+dir;if(i<0||j<0||j>=orden.length)return;
@@ -579,40 +579,25 @@ const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-
 const app=getApps().length?getApp():initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),storage=getStorage(app);
 const access=document.getElementById('access'),msg=document.getElementById('accessMsg');
 
-// Arquitectura guarda su configuración en config/app dentro del campo `arquitectura`.
-// Su maestro de obras es propio e independiente: no lee ni sincroniza la lista de obras de Gastos.
-const arqRef=doc(db,'config','app');
+// Firebase exclusivo de Arquitectura: no usa config/app ni datos de Gastos.
+const arqRef=doc(db,'arquitectura','app');
 async function readArqConfig(){
   const snap=await getDoc(arqRef);
-  const root=snap.exists()?snap.data():{};
-  return (root.arquitectura&&typeof root.arquitectura==='object')?root.arquitectura:{};
+  return snap.exists()?snap.data():{};
 }
 async function updateArqConfig(partial){
-  const current=await readArqConfig();
-  const next={...current,...JSON.parse(JSON.stringify(partial))};
-  await setDoc(arqRef,{arquitectura:next},{merge:true});
+  await setDoc(arqRef,JSON.parse(JSON.stringify(partial)),{merge:true});
 }
 async function saveObraInConfig(id,data){
   const current=await readArqConfig();
   const dataByObra=(current.dataByObra&&typeof current.dataByObra==='object')?{...current.dataByObra}:{};
   dataByObra[id]=JSON.parse(JSON.stringify(data));
-  await updateArqConfig({dataByObra});
+  await setDoc(arqRef,{dataByObra},{merge:true});
 }
 dbApi={
-  get:async(id)=>{
-    const d=await readArqConfig();
-    return d.dataByObra?.[id]||null;
-  },
+  get:async(id)=>{const d=await readArqConfig();return d.dataByObra?.[id]||null},
   save:(id,data)=>saveObraInConfig(id,data),
-  listen:(id,cb)=>onSnapshot(arqRef,s=>{
-    const root=s.exists()?s.data():{};
-    const d=(root.arquitectura&&typeof root.arquitectura==='object')?root.arquitectura:{};
-    cb(d.dataByObra?.[id]||null);
-  },e=>{
-    console.warn('Arquitectura Firebase:',e);
-    setSync('Error',false);
-    toastMsg('Firebase: '+(e.code||'error de lectura'),true);
-  }),
+  listen:(id,cb)=>onSnapshot(arqRef,snap=>{const d=snap.exists()?snap.data():{};cb(d.dataByObra?.[id]||null)},e=>{console.warn('Arquitectura Firebase:',e);setSync('Error',false);toastMsg('Firebase: '+(e.code||'error de lectura'),true)}),
   saveObrasConfig:(cfg)=>updateArqConfig({obras:cfg}),
   saveTaskTypes:(types)=>updateArqConfig({taskTypes:types}),
   saveStatusOptions:(opts)=>updateArqConfig({statusOptions:opts,finalStatus:FINAL_STATUS})
@@ -625,10 +610,8 @@ storageApi={
 async function start(user){
   try{
     window._cqUsuarioActual=(localStorage.getItem('cq_usuario_actual')||user.email||'Usuario');
-    // Las obras se administran exclusivamente desde Arquitectura.
-    const arqConf=await getDoc(arqRef);
-    const rootCfg=arqConf.exists()?arqConf.data():{};
-    const ac=(rootCfg.arquitectura&&typeof rootCfg.arquitectura==='object')?rootCfg.arquitectura:{};
+    const snap=await getDoc(arqRef);
+    const ac=snap.exists()?snap.data():{};
     taskTypes=Array.isArray(ac.taskTypes)&&ac.taskTypes.length?ac.taskTypes.filter(x=>typeof x==='string'&&x.trim()):[...DEFAULT_TASK_TYPES];
     const legacyServ=Array.isArray(ac.statusOptions?.servicios)?ac.statusOptions.servicios:null, savedServ=ac.statusOptions?.servicios;
     statusOptions={tramites:Array.isArray(ac.statusOptions?.tramites)&&ac.statusOptions.tramites.length?ac.statusOptions.tramites:[...DEFAULT_STATUS_OPTIONS.tramites],servicios:{agua:Array.isArray(savedServ?.agua)&&savedServ.agua.length?savedServ.agua:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.agua)],luz:Array.isArray(savedServ?.luz)&&savedServ.luz.length?savedServ.luz:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.luz)],gas:Array.isArray(savedServ?.gas)&&savedServ.gas.length?savedServ.gas:[...(legacyServ?.length?legacyServ:DEFAULT_STATUS_OPTIONS.servicios.gas)]},planos:Array.isArray(ac.statusOptions?.planos)&&ac.statusOptions.planos.length?ac.statusOptions.planos:[...DEFAULT_STATUS_OPTIONS.planos]};
@@ -637,11 +620,11 @@ async function start(user){
     if(!Array.isArray(arquitecturaObrasCfg.propias))arquitecturaObrasCfg.propias=[];
     if(!Array.isArray(arquitecturaObrasCfg.orden))arquitecturaObrasCfg.orden=[];
     mergeObras();
-    if(!obras.length){curObra='__all__'}else{const saved=localStorage.getItem('cq_arquitectura_obra');curObra=(saved==='__all__'||obras.some(o=>o.id===saved))?saved:obras[0].id;}
-    access.classList.add('ok');renderAll();await subscribeCurrent()
+    if(!obras.length)curObra='__all__';
+    else{const saved=localStorage.getItem('cq_arquitectura_obra');curObra=(saved==='__all__'||obras.some(o=>o.id===saved))?saved:obras[0].id}
+    access.classList.add('ok');setSync('Online',true);renderAll();await subscribeCurrent()
   }catch(e){console.warn(e);msg.textContent='No se pudo iniciar Gestión de Arquitectura.';setSync('Error',false);toastMsg('Firebase: '+(e.code||e.message||'error de inicio'),true)}
 }
-
 
 // VERSIÓN PRODUCTIVA: Firebase + autenticación real.
 const CQ_LOCAL_MODE = false;

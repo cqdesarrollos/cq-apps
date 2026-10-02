@@ -2036,19 +2036,9 @@ function obrasMateriales(d){
 
 function aplicarMateriales(d){
  const cat=materialCatalog(d||{});
- const obras=obrasMateriales(d||{});
  window.CQ_CATALOGO_MATERIALES=cat;
  window.CQ_CATALOGO_ACOPIO=cat; // compatibilidad interna de la interfaz
  window.cqCatalogoEstado=cat.length+" materiales desde MATERIALES · Firebase"; const fuente=document.getElementById("cqFuenteMateriales");if(fuente){fuente.textContent=cat.length+" materiales · MATERIALES · Firebase";fuente.style.color="#177b57";}
- window.cqSetCatalogoObrasFiltro?.(obras);
- window.cqPintarObrasCorrectas?.(obras);
- const sel=document.getElementById("obra");
- if(sel){
-   sel.dataset.origen="MATERIALES · Firebase";
-   const actual=sel.value;
-   sel.innerHTML='<option value="">Seleccionar obra</option>'+obras.map(o=>'<option value="'+o.replace(/"/g,'&quot;')+'">'+o+'</option>').join("");
-   if(obras.includes(actual))sel.value=actual;
- }
  try{renderCatalog();}catch(e){console.warn("Render catálogo Materiales",e)}
  window.renderCatalogV22?.();
  window.renderConfigPesos?.();
@@ -2239,31 +2229,36 @@ try{
   var busc=document.getElementById('buscar');if(busc)busc.oninput=window.renderCatalogV22;
 })();
 </script>
-<script type="module" id="cq-pedidos-v68-obras-exactas-materiales">
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-const app=getApp(); const db=getFirestore(app);
-const BASE=["14/66","26/59","10/15","17/55","8/54","20/89","19/83","3/85","11/93","8/86","4/86","25/100","19/99","4/100","25/85","5/94","25/82","12/93","13/93","7/100","6/92","18/78","5/98","27/99","2/99"];
-const DESDE=BASE.indexOf('12/93');
-const norm=v=>String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-function clave(v){let m=String(v||'').match(/(?:lote|l)?\s*(\d+)\s*(?:\/|[- ]*mz|[- ]*manzana)\s*(\d+)/i);if(!m)m=String(v||'').match(/\b(\d+)\s*\/\s*(\d+)\b/);return m?(+m[1])+'/'+(+m[2]):''}
-function nombreGasto(g){return String(g?.label||g?.short||g?.id||'').trim()}
-try{
-  const [ms,cs]=await Promise.all([getDoc(doc(db,'materiales','data_planilla_exacta_v4')),getDoc(doc(db,'config','app'))]);
-  const d=ms.exists()?ms.data()||{}:{}; const cfg=cs.exists()?cs.data()||{}:{};
-  const activas=Array.isArray(cfg.obras)?cfg.obras.filter(o=>o&&o.id&&o.id!=='oficina'):[];
-  const porClave=k=>activas.find(o=>[o.label,o.short,o.id].some(v=>clave(v)===k));
-  let obras=BASE.map((o,i)=>{
-    if(i<DESDE)return String(d?.obraNombres?.[i]||o).trim();
-    const g=porClave(clave(o));return g?nombreGasto(g):String(d?.obraNombres?.[i]||o).trim();
-  });
-  (d.extraObras||[]).forEach(o=>{const g=porClave(clave(o));obras.push(g?nombreGasto(g):String(o||'').trim())});
-  activas.forEach(g=>{const n=nombreGasto(g),k=clave(n);if(n&&!obras.some(o=>k?clave(o)===k:norm(o)===norm(n)))obras.push(n)});
-  const seen=new Set();obras=obras.filter(o=>{const k=norm(o);if(!k||seen.has(k))return false;seen.add(k);return true});
+<script type="module" id="cq-pedidos-v69-obras-desde-gastos">
+import { getFirestore, doc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+const db=getFirestore(getApp());
+const CFG_REF=doc(db,'config','app');
+const norm=v=>String(v||'').trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+function nombreObra(o){return String(o?.label||o?.short||o?.id||'').trim()}
+function aplicarObrasGastos(data){
+  let obras=(Array.isArray(data?.obras)?data.obras:[])
+    .filter(o=>o&&o.id&&o.id!=='oficina')
+    .map(nombreObra).filter(Boolean);
+  const seen=new Set(); obras=obras.filter(o=>{const k=norm(o);if(!k||seen.has(k))return false;seen.add(k);return true});
+  window.CQ_OBRAS_GASTOS=obras;
   window.cqSetCatalogoObrasFiltro?.(obras);
+  window.cqPintarObrasCorrectas?.(obras);
   const sel=document.getElementById('obra');
-  if(sel){const actual=sel.value;sel.innerHTML='<option value="">Seleccionar obra</option>'+obras.map(o=>'<option></option>').join('');[...sel.options].slice(1).forEach((op,i)=>{op.value=obras[i];op.textContent=obras[i]});if(obras.includes(actual))sel.value=actual;sel.dataset.origen='MATERIALES + config/app · Firebase'}
-}catch(e){console.warn('Obras exactas de Materiales',e)}
+  if(sel){
+    const actual=sel.value;
+    sel.innerHTML='<option value="">Seleccionar obra</option>'+obras.map(o=>'<option></option>').join('');
+    [...sel.options].slice(1).forEach((op,i)=>{op.value=obras[i];op.textContent=obras[i]});
+    if(obras.includes(actual))sel.value=actual;
+    sel.dataset.origen='GASTOS · config/app · Firebase';
+  }
+}
+try{
+  const snap=await getDoc(CFG_REF);
+  if(!snap.exists())throw new Error('No existe config/app');
+  aplicarObrasGastos(snap.data()||{});
+  onSnapshot(CFG_REF,s=>{if(s.exists())aplicarObrasGastos(s.data()||{})},e=>console.warn('Obras desde Gastos',e));
+}catch(e){console.warn('No se pudieron cargar las obras desde Gastos',e)}
 </script>
 
 </body></html>
