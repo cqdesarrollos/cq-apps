@@ -903,7 +903,29 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
    const lineas=(p.items||[]).map(x=>"• "+(x.material||x.nombre||"")+" — "+(x.cantidad||x.qty||"")+(x.nota?"\n  Comentario: "+x.nota:"")).join("\n");
    alert("Obra: "+p.obra+"\nFecha: "+fechaCorta(p.fecha)+"\nPrioridad: "+(p.prioridad||"Normal")+(p.obs?"\nObservación: "+p.obs:"")+"\n\n"+lineas);
  }
- window.eliminarPedido=async function(id){
+ 
+ window.cqEliminarItem=async function(id,itemIndex){
+   const p=pedidos.find(x=>String(x.id)===String(id));
+   if(!p || !Array.isArray(p.items) || !p.items[itemIndex])return;
+   const item=p.items[itemIndex];
+   const nombre=String(item.material||item.nombre||"este producto");
+   if(!confirm("¿Eliminar "+nombre+" de la obra "+p.obra+"?"))return;
+
+   // Si es el último producto, se elimina la solicitud completa.
+   if(p.items.length===1){
+     pedidos=pedidos.filter(x=>String(x.id)!==String(id));
+   }else{
+     p.items.splice(itemIndex,1);
+   }
+
+   // Limpiar selección visual para ese pedido y guardar el cambio.
+   [...selected].forEach(key=>{
+     if(String(key).startsWith(String(id)+"|")) selected.delete(key);
+   });
+   persist();
+   render();
+ };
+window.eliminarPedido=async function(id){
    const p=pedidos.find(x=>String(x.id)===String(id));
    if(!p)return;
    if(!confirm("¿Eliminar este pedido de la obra "+p.obra+"?"))return;
@@ -994,7 +1016,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
        const prodLines=wrapCanvas(producto,455,2);
        prodLines.forEach((ln,j)=>ctx.fillText(ln,245,y+31+j*23));
        if(comentario){
-         ctx.fillStyle="#61746b";ctx.font="italic 16px Arial";
+         ctx.fillStyle="#53675e";ctx.font="italic 20px Arial";
          let com="Obs.: "+comentario;
          if(ctx.measureText(com).width>455){while(com.length>3&&ctx.measureText(com+"…").width>455)com=com.slice(0,-1);com+="…"}
          ctx.fillText(com,245,y+78);
@@ -1350,7 +1372,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
     pdf.setFont("helvetica","normal");pdf.setFontSize(7.6);pdf.text(lines,margin+38,y+6.5);
     if(commentLines.length){
       const cy=y+6.5+(lines.length*4.2)+1;
-      pdf.setTextColor(...muted);pdf.setFont("helvetica","italic");pdf.setFontSize(6.8);
+      pdf.setTextColor(...muted);pdf.setFont("helvetica","italic");pdf.setFontSize(8.2);
       pdf.text(commentLines,margin+38,cy);
       pdf.setTextColor(...dark);pdf.setFontSize(8.5);
     }
@@ -1400,7 +1422,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
    const fechaGrupo=cqEstadoActivo==="Entregado"?partes[0]:"";
    const obra=String(ps?.[0]?.obra|| (cqEstadoActivo==="Entregado"?partes.slice(1).join("|||"):gkey) || "");
    return '<section class="obra-group cq-obra-color" data-obra-color="'+E(obra)+'"><div class="obra-head"><strong>Obra <span class="cq-obra-num">'+E(obra)+'</span></strong></div><div class="pedido-head-v37"><div></div><div>Fecha</div><div>Producto</div><div>Cant.</div><div>Prioridad</div><div>Acciones</div></div>'+
-   ps.map(p=>(p.items||[]).map((x,i)=>{const on=selected.has(k(p.id,i)),pr=P(p),pk=itemKey(x),peso=pesos[pk];return '<div class="pedido-row-v37 '+(on?'selected':'')+'"><div><input class="cq-item-check" type="checkbox" '+(on?'checked':'')+' onchange="cqToggleItem('+JSON.stringify(p.id)+','+i+',this.checked)"></div><div class="pedido-date">'+FC(p.fecha)+(cqEstadoActivo==="Pedido"&&p.fechaEntrega?'<small class="cq-fecha-entrega-row">Entrega '+FC(p.fechaEntrega)+'</small>':'')+'</div><div class="pedido-material"><b>'+E(x.material||x.nombre||"")+'</b>'+(x.nota?'<small class="cq-item-comment">💬 '+E(x.nota)+'</small>':'')+(peso!=null?'<small>'+E(peso)+' kg/u · <b>'+E(fmtKg(pesoFila(x)))+'</b></small>':'')+'</div><div class="pedido-cant">'+E(Q(x)||"-")+'</div><div class="prio '+pr.toLowerCase()+'">'+pr+'</div><div class="icon-actions">'+(cqEstadoActivo==="Pendiente"?'<button class="icon-btn icon-edit" onclick="editarPedido('+JSON.stringify(p.id)+')">✎</button>':'')+'<button class="icon-btn icon-delete" onclick="eliminarPedido('+JSON.stringify(p.id)+')">×</button></div></div>'}).join("")).join("")+'</section>'
+   ps.map(p=>(p.items||[]).map((x,i)=>{const on=selected.has(k(p.id,i)),pr=P(p),pk=itemKey(x),peso=pesos[pk];return '<div class="pedido-row-v37 '+(on?'selected':'')+'"><div><input class="cq-item-check" type="checkbox" '+(on?'checked':'')+' onchange="cqToggleItem('+JSON.stringify(p.id)+','+i+',this.checked)"></div><div class="pedido-date">'+FC(p.fecha)+(cqEstadoActivo==="Pedido"&&p.fechaEntrega?'<small class="cq-fecha-entrega-row">Entrega '+FC(p.fechaEntrega)+'</small>':'')+'</div><div class="pedido-material"><b>'+E(x.material||x.nombre||"")+'</b>'+(x.nota?'<small class="cq-item-comment">💬 '+E(x.nota)+'</small>':'')+(peso!=null?'<small>'+E(peso)+' kg/u · <b>'+E(fmtKg(pesoFila(x)))+'</b></small>':'')+'</div><div class="pedido-cant">'+E(Q(x)||"-")+'</div><div class="prio '+pr.toLowerCase()+'">'+pr+'</div><div class="icon-actions">'+(cqEstadoActivo==="Pendiente"?'<button class="icon-btn icon-edit" onclick="editarPedido('+JSON.stringify(p.id)+')">✎</button>':'')+'<button class="icon-btn icon-delete" onclick="cqEliminarItem('+JSON.stringify(p.id)+','+i+')">×</button></div></div>'}).join("")).join("")+'</section>'
   }).join("")+'</div>';
   document.querySelectorAll(".obra-group").forEach(sec=>{
     const obra=sec.getAttribute("data-obra-color")||sec.querySelector(".obra-head strong")?.textContent||"";
