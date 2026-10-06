@@ -2497,7 +2497,7 @@ const norm=v=>String(v||'').trim().toLocaleLowerCase('es').normalize('NFD').repl
 function nombreObra(o){return String(o?.label||o?.short||o?.id||'').trim()}
 function aplicarObrasGastos(data){
   let obras=(Array.isArray(data?.obras)?data.obras:[])
-    .filter(o=>o&&o.id&&o.id!=='oficina')
+    .filter(o=>o&&o.id)
     .map(nombreObra).filter(Boolean);
   const seen=new Set(); obras=obras.filter(o=>{const k=norm(o);if(!k||seen.has(k))return false;seen.add(k);return true});
   window.CQ_OBRAS_GASTOS=obras;
