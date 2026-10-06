@@ -8638,6 +8638,43 @@ function aplicarIntegracion(ev){
 
   if(obraIdx<0||!mat) return false;
 
+  // CQ 06/10/2026 — RUBRO DE ORIGEN (Acopio/Pañol)
+  // Si el material automático quedó sin clasificación o en VARIOS, adoptar el
+  // subrubro que viene en la integración. Una edición manual del Catálogo gana
+  // siempre y nunca es sobrescrita por Acopio/Pañol.
+  (function(){
+    var origen=cqOrigenCargaNormalizado({origen:ev.source,sourceLabel:ev.sourceLabel,integrationId:ev.integrationId});
+    if(origen!=='acopio'&&origen!=='panol')return;
+
+    var manual=(state.categoriaManual&&state.categoriaManual[mat.id])
+      ||(state.catalogoManual&&state.catalogoManual[mat.id]&&state.catalogoManual[mat.id].manual!==false
+        ?state.catalogoManual[mat.id].categoria:'');
+    if(String(manual||'').trim())return;
+
+    var entrante=String(ev.materialCategory||ev.category||'').trim();
+    if(!entrante||/^varios$/i.test(entrante))return;
+
+    // Usar exclusivamente un subrubro que ya exista en Materiales/Gastos.
+    var destino=(CATS||[]).find(function(c){
+      return c&&!isCatDeleted(c.name)&&normalizarClaveIntegracion(c.name)===normalizarClaveIntegracion(entrante);
+    });
+    if(!destino)return;
+
+    var actual=String((state.matCategorias&&state.matCategorias[mat.id])||mat.catName||obtenerCategoriaMaterial(mat.id)||'').trim();
+    var sinClasificar=!actual||/^varios$/i.test(actual)||/sin subrubro/i.test(actual);
+    if(!sinClasificar)return;
+
+    if(!state.matCategorias)state.matCategorias={};
+    state.matCategorias[mat.id]=destino.name;
+    mat.catName=destino.name;
+    var extra=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
+    if(extra)extra.catName=destino.name;
+    var nuevo=(state.materialesNuevos||[]).find(function(x){return Number(x.id)===Number(mat.id);});
+    if(nuevo)nuevo.catName=destino.name;
+    try{moverMaterialACategoria(mat.id,destino.name);}catch(e){}
+    try{guardarMemoriaCategoriaMaterial(mat,destino.name);}catch(e){}
+  })();
+
   // Si se unificó por nombre y el catálogo todavía no tenía código,
   // copiar inmediatamente el código que viene de Acopio/Pañol/Caja.
   var codigoIntegracion=String(ev.materialCode||'').trim();
@@ -15392,6 +15429,163 @@ window.abrirGraficoDirecto = function(){
   applyAll();
 })();
 </script>
+
+<script id="cq-fix-nombres-rubros-origen-v2">
+(function(){
+  if(window.__cqFixNombresRubrosOrigenV2)return;
+  window.__cqFixNombresRubrosOrigenV2=true;
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  }
+  function origenValido(ev){
+    try{
+      var o=(typeof cqOrigenCargaNormalizado==='function')
+        ?cqOrigenCargaNormalizado({origen:ev.source,sourceLabel:ev.sourceLabel,integrationId:ev.integrationId})
+        :String(ev.source||ev.sourceLabel||'').toLowerCase();
+      return o==='acopio'||o==='panol';
+    }catch(e){ return false; }
+  }
+  function matById(id){
+    return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;
+  }
+  function categoriaCanonica(nombre){
+    var n=norm(nombre);
+    if(!n||n==='varios')return '';
+    var c=(CATS||[]).find(function(x){
+      return x && !isCatDeleted(x.name) && norm(x.name)===n;
+    });
+    return c?c.name:'';
+  }
+  function fijarNombreOrigen(mat,nombre){
+    nombre=String(nombre||'').trim();
+    if(!mat||!nombre)return false;
+    var id=Number(mat.id);
+
+    // Sólo una edición MANUAL REAL del nombre bloquea el nombre de origen.
+    if(state.nombreManualConfirmado && state.nombreManualConfirmado[id]===true)return false;
+
+    if(!state.matNombres)state.matNombres={};
+    state.matNombres[id]=nombre;
+    mat.mat=nombre;
+
+    (CATS||[]).forEach(function(c){
+      (c.items||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
+    });
+    (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
+    (state.cargas||[]).forEach(function(c){if(Number(c.matId)===id)c.matName=nombre;});
+
+    // Evita que catalogoManual viejo restaure un nombre obsoleto en normalizeState().
+    if(state.catalogoManual && state.catalogoManual[id]){
+      state.catalogoManual[id].nombre=nombre;
+    }
+    return true;
+  }
+  function fijarRubroOrigen(mat,rubro){
+    if(!mat)return false;
+    var id=Number(mat.id);
+    var destino=categoriaCanonica(rubro);
+    if(!destino)return false;
+
+    // La categoría elegida manualmente en Materiales sigue teniendo prioridad.
+    var manual=String((state.categoriaManual&&state.categoriaManual[id])||'').trim();
+    if(manual)return false;
+
+    if(!state.matCategorias)state.matCategorias={};
+    state.matCategorias[id]=destino;
+    mat.catName=destino;
+
+    (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.catName=destino;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x.id)===id)x.catName=destino;});
+
+    // Si había un lock antiguo creado automáticamente, actualizarlo para que
+    // no vuelva a mandar el material a VARIOS.
+    if(state.catalogoManual && state.catalogoManual[id] && !state.categoriaManual?.[id]){
+      state.catalogoManual[id].categoria=destino;
+    }
+
+    try{if(typeof moverMaterialACategoria==='function')moverMaterialACategoria(id,destino);}catch(e){}
+    try{if(typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(mat,destino);}catch(e){}
+    return true;
+  }
+
+  // Registrar como manual el NOMBRE sólo cuando el usuario realmente lo cambia.
+  var guardarPrev=window.guardarNombreMat || (typeof guardarNombreMat==='function'?guardarNombreMat:null);
+  if(typeof guardarPrev==='function'){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var id=Number(selectedCargaMat);
+      var mAntes=matById(id);
+      var nombreAntes=mAntes?String(mAntes.mat||'').trim():'';
+      var nombreEl=document.getElementById('editar-mat-nombre-input');
+      var nombreNuevo=nombreEl?String(nombreEl.value||'').trim():'';
+      var cambioNombre=!!nombreNuevo && norm(nombreNuevo)!==norm(nombreAntes);
+
+      var r=await guardarPrev.apply(this,arguments);
+
+      if(cambioNombre){
+        if(!state.nombreManualConfirmado)state.nombreManualConfirmado={};
+        state.nombreManualConfirmado[id]=true;
+        if(!state.catalogoManual)state.catalogoManual={};
+        state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{},{
+          nombre:nombreNuevo,manual:true
+        });
+        var m=matById(id);
+        if(m){
+          if(!state.matNombres)state.matNombres={};
+          state.matNombres[id]=nombreNuevo;
+          m.mat=nombreNuevo;
+          (state.cargas||[]).forEach(function(c){if(Number(c.matId)===id)c.matName=nombreNuevo;});
+        }
+        try{if(typeof persist==='function')await persist();}catch(e){console.warn(e);}
+      }
+      return r;
+    };
+  }
+
+  // Después de la integración original, imponer únicamente los dos datos maestros
+  // que vienen de Acopio/Pañol: descripción exacta y rubro válido.
+  var aplicarPrev=window.aplicarIntegracion || (typeof aplicarIntegracion==='function'?aplicarIntegracion:null);
+  if(typeof aplicarPrev==='function'){
+    window.aplicarIntegracion=aplicarIntegracion=function(ev){
+      var r=aplicarPrev.apply(this,arguments);
+      if(!ev || ev.active===false || !origenValido(ev))return r;
+
+      var carga=(state.cargas||[]).find(function(c){
+        return String(c.integracionId||'')===String(ev.integrationId||'');
+      });
+      var mat=carga?matById(carga.matId):null;
+
+      // Respaldo: resolver por código si todavía no encontramos la carga.
+      if(!mat && ev.materialCode){
+        var cod=String(ev.materialCode||'').trim().toLowerCase();
+        mat=(ALL_MATS||[]).find(function(m){
+          return !isMatDeleted(m.id) && String(getMatCodigo(m)||'').trim().toLowerCase()===cod;
+        })||null;
+      }
+      if(!mat)return r;
+
+      var cambio=false;
+      if(String(ev.materialName||'').trim()){
+        cambio=fijarNombreOrigen(mat,ev.materialName)||cambio;
+      }
+      var rubro=String(ev.materialCategory||ev.category||'').trim();
+      if(rubro && !/^varios$/i.test(rubro)){
+        cambio=fijarRubroOrigen(mat,rubro)||cambio;
+      }
+
+      // Asegurar que la carga que acaba de entrar muestre el nombre maestro resultante.
+      if(carga)carga.matName=mat.mat;
+
+      return r||cambio;
+    };
+  }
+
+  console.log('CQ fix nombres/rubros origen v2 activo');
+})();
+</script>
+
 </body>
 </html>
 
