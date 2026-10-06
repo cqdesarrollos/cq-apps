@@ -8597,45 +8597,6 @@ function aplicarIntegracion(ev){
   var obraIdx=buscarObraIntegracion(ev.obraName);
   var mat=buscarMaterialIntegracion(ev.materialCode,ev.materialName,ev.sourceLabel||ev.source);
 
-  // CQ FIX 2026-10-06 — prioridad de rubro:
-  // 1) una categoría elegida manualmente en Materiales gana siempre;
-  // 2) si el material automático nació en VARIOS, aceptar el rubro que llega
-  //    desde Acopio/Pañol solamente cuando coincide con una categoría existente;
-  // 3) una integración nunca pisa una selección manual.
-  if(mat){
-    var manualCat=(state.categoriaManual&&state.categoriaManual[mat.id])
-      ||(state.catalogoManual&&state.catalogoManual[mat.id]&&state.catalogoManual[mat.id].categoria)
-      ||'';
-    if(manualCat){
-      if(!state.matCategorias)state.matCategorias={};
-      state.matCategorias[mat.id]=manualCat;
-      mat.catName=manualCat;
-      var exManual=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
-      if(exManual)exManual.catName=manualCat;
-      try{moverMaterialACategoria(mat.id,manualCat);}catch(e){}
-      try{guardarMemoriaCategoriaMaterial(mat,manualCat);}catch(e){}
-    }else{
-      var catEntrante=String(ev.category||ev.materialCategory||'').trim();
-      var actualCat=String((state.matCategorias&&state.matCategorias[mat.id])||mat.catName||'').trim();
-      var catValida=null;
-      if(catEntrante){
-        var kCat=normalizarClaveIntegracion(catEntrante);
-        catValida=(CATS||[]).find(function(c){
-          return c&&!isCatDeleted(c.name)&&normalizarClaveIntegracion(c.name)===kCat;
-        })||null;
-      }
-      if(catValida && (!actualCat || normalizarClaveIntegracion(actualCat)==='varios')){
-        if(!state.matCategorias)state.matCategorias={};
-        state.matCategorias[mat.id]=catValida.name;
-        mat.catName=catValida.name;
-        var exAuto=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
-        if(exAuto)exAuto.catName=catValida.name;
-        try{moverMaterialACategoria(mat.id,catValida.name);}catch(e){}
-        try{guardarMemoriaCategoriaMaterial(mat,catValida.name);}catch(e){}
-      }
-    }
-  }
-
   // Si no pudo resolverlo con la lógica histórica:
   // 1) buscar por código exacto;
   // 2) buscar por nombre exacto normalizado;
@@ -15416,16 +15377,7 @@ window.abrirGraficoDirecto = function(){
         }
       }
       var r=await guardarAnterior.apply(this,arguments);
-      // guardarAnterior puede unificar dos materiales y cambiar selectedCargaMat.
-      // Fijar el bloqueo manual sobre el ID canónico final, no sobre un duplicado eliminado.
-      var finalId=Number(selectedCargaMat)||id;
-      var locks=ensure();
-      if(finalId!==id && locks[id])delete locks[id];
-      locks[finalId]=clone(snap);
-      if(!state.categoriaManual)state.categoriaManual={};
-      if(finalId!==id && state.categoriaManual[id])delete state.categoriaManual[id];
-      state.categoriaManual[finalId]=snap.categoria;
-      applyOne(finalId,locks[finalId]);
+      var locks=ensure(); locks[id]=clone(snap); applyOne(id,locks[id]);
       try{suppressRemoteUntil=Date.now()+9000;if(typeof persist==='function')await persist();}catch(e){console.warn('No se pudo fijar edición manual de Catálogo',e);}
       try{if(typeof renderActive==='function')renderActive();}catch(e){}
       try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
