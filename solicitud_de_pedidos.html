@@ -2439,4 +2439,52 @@ try{
 }catch(e){console.warn('No se pudieron cargar las obras desde Gastos',e)}
 </script>
 
+<script id="cq-pedidos-v70-agregar-materiales-edicion">
+(function(){
+  // Permite agregar productos al modificar una solicitud existente.
+  // La versión anterior cargaba los ítems antes de abrir el modal; abrir() los vaciaba.
+  function cqModoModalEdicion(esEdicion){
+    var modal=document.getElementById('modal');
+    if(!modal)return;
+    var titulo=modal.querySelector('.mhd b');
+    if(titulo)titulo.textContent=esEdicion?'Modificar solicitud':'Nueva solicitud';
+    var guardarBtn=modal.querySelector('.mfoot .btn-green');
+    if(guardarBtn)guardarBtn.textContent=esEdicion?'Guardar cambios':'Guardar solicitud';
+  }
+
+  window.editarPedido=function(id){
+    var p=pedidos.find(function(x){return String(x.id)===String(id)});
+    if(!p)return;
+
+    // Primero abrir: abrir() prepara el modal y vacía la selección.
+    abrir();
+
+    // Después restaurar los ítems de la solicitud para poder modificar, borrar Y agregar.
+    seleccion.splice(0,seleccion.length,...JSON.parse(JSON.stringify(p.items||[])));
+    window._cqEditId=id;
+
+    var obra=document.getElementById('obra');
+    var fecha=document.getElementById('fecha');
+    var prioridad=document.getElementById('prioridad');
+    var buscar=document.getElementById('buscar');
+    if(obra)obra.value=p.obra||'';
+    if(fecha)fecha.value=p.fecha||isoToday();
+    if(prioridad)prioridad.value=P(p);
+    if(buscar)buscar.value='';
+
+    cqModoModalEdicion(true);
+    if(typeof window.renderCatalogV22==='function')window.renderCatalogV22();
+    else if(typeof renderCatalog==='function')renderCatalog();
+    if(typeof renderSelected==='function')renderSelected();
+  };
+
+  // Al cerrar, dejar el modal listo para una solicitud nueva.
+  var cerrarV70=window.cerrar;
+  window.cerrar=function(){
+    cqModoModalEdicion(false);
+    return cerrarV70.apply(this,arguments);
+  };
+})();
+</script>
+
 </body></html>
