@@ -2298,6 +2298,86 @@ window.cqEliminarItemFirebase=async function(id,itemIndex){
   }
 };
 
+
+/* V71: edición y borrado de pedidos completos con Firebase como fuente de verdad.
+   Evita que un snapshot anterior restaure el pedido original. */
+async function cqEsperarEscriturasPedidos(){
+  let vueltas=0;
+  while((escrituraEnCurso || estadoPendiente) && vueltas<200){
+    await new Promise(r=>setTimeout(r,25));
+    vueltas++;
+  }
+  if(escrituraEnCurso || estadoPendiente){
+    throw new Error("Firebase sigue ocupado guardando otro cambio");
+  }
+}
+
+async function cqConfirmarPedidosFirebase(arr,mensaje){
+  const rev=nuevaRevision();
+  revisionLocal=rev;
+  escrituraEnCurso=true;
+  try{
+    window.cqSetFirebaseStatus?.("wait",mensaje||"Guardando en Firebase…");
+    await setDoc(PED_REF,{
+      pedidos:clonarPedidos(arr),
+      updatedAt:new Date().toISOString(),
+      clientRevision:rev,
+      resetToken:RESET_TOKEN
+    },{merge:true});
+
+    aplicandoRemoto=true;
+    window.cqPedidosSetDesdeFirebase?.(arr);
+    aplicandoRemoto=false;
+    window.cqSetFirebaseStatus?.("ok","Firebase conectado");
+    return clonarPedidos(arr);
+  }catch(e){
+    window.cqSetFirebaseStatus?.("error","No se pudo guardar Solicitud de Pedidos");
+    throw e;
+  }finally{
+    aplicandoRemoto=false;
+    escrituraEnCurso=false;
+  }
+}
+
+window.cqEliminarPedidoFirebase=async function(id){
+  await cqEsperarEscriturasPedidos();
+  const snapActual=await getDoc(PED_REF);
+  const dataActual=snapActual.exists()?snapActual.data():{};
+  const arr=clonarPedidos(Array.isArray(dataActual.pedidos)?dataActual.pedidos:[]);
+  const pos=arr.findIndex(p=>String(p.id)===String(id));
+
+  if(pos<0){
+    aplicandoRemoto=true;
+    window.cqPedidosSetDesdeFirebase?.(arr);
+    aplicandoRemoto=false;
+    window.cqSetFirebaseStatus?.("ok","Firebase conectado");
+    return arr;
+  }
+
+  arr.splice(pos,1);
+  return cqConfirmarPedidosFirebase(arr,"Eliminando pedido en Firebase…");
+};
+
+window.cqActualizarPedidoFirebase=async function(id,cambios){
+  await cqEsperarEscriturasPedidos();
+  const snapActual=await getDoc(PED_REF);
+  const dataActual=snapActual.exists()?snapActual.data():{};
+  const arr=clonarPedidos(Array.isArray(dataActual.pedidos)?dataActual.pedidos:[]);
+  const pos=arr.findIndex(p=>String(p.id)===String(id));
+
+  if(pos<0)throw new Error("El pedido ya no existe en Firebase");
+
+  const anterior=arr[pos]||{};
+  const nuevo={...anterior,...clonarPedidos([cambios||{}])[0]};
+  // El id y los datos de flujo que no se editan deben conservarse.
+  nuevo.id=anterior.id;
+  if(!Object.prototype.hasOwnProperty.call(cambios||{},"estado"))nuevo.estado=anterior.estado;
+  if(!Object.prototype.hasOwnProperty.call(cambios||{},"archivado"))nuevo.archivado=anterior.archivado;
+  arr[pos]=nuevo;
+
+  return cqConfirmarPedidosFirebase(arr,"Actualizando pedido en Firebase…");
+};
+
 try{
  let snap=await getDoc(PED_REF);
  let data=snap.exists()?snap.data():{};
@@ -2483,6 +2563,72 @@ try{
   window.cerrar=function(){
     cqModoModalEdicion(false);
     return cerrarV70.apply(this,arguments);
+  };
+})();
+</script>
+
+
+
+<script id="cq-pedidos-v71-firebase-editar-borrar-consistente">
+(function(){
+  // Guardamos la función vigente: se usa sin cambios para solicitudes nuevas.
+  var guardarAnteriorV71=window.guardar;
+
+  window.eliminarPedido=async function(id){
+    var p=(pedidos||[]).find(function(x){return String(x.id)===String(id)});
+    if(!p)return;
+    if(!confirm("¿Eliminar este pedido de la obra "+p.obra+"?"))return;
+
+    if(typeof window.cqEliminarPedidoFirebase!=="function"){
+      alert("Firebase todavía se está sincronizando. Esperá a que el indicador esté en ON y volvé a intentar.");
+      return;
+    }
+
+    try{
+      await window.cqEliminarPedidoFirebase(id);
+      if(typeof window.render==="function")window.render();
+    }catch(e){
+      console.error("Eliminar pedido Firebase",e);
+      alert("No se pudo eliminar el pedido en Firebase. No se confirmó el cambio.");
+    }
+  };
+
+  window.guardar=async function(){
+    if(window._cqEditId==null){
+      return guardarAnteriorV71.apply(this,arguments);
+    }
+
+    var id=window._cqEditId;
+    var p=(pedidos||[]).find(function(x){return String(x.id)===String(id)});
+    if(!p)return;
+
+    var obra=(document.getElementById("obra")?.value||"").trim();
+    if(!obra)return alert("Seleccioná la obra.");
+    if(!Array.isArray(seleccion)||!seleccion.length)return alert("Agregá al menos un material.");
+    if(typeof window.cqActualizarPedidoFirebase!=="function"){
+      alert("Firebase todavía se está sincronizando. Esperá a que el indicador esté en ON y volvé a intentar.");
+      return;
+    }
+
+    var fecha=document.getElementById("fecha")?.value||isoToday();
+    var cambios={
+      obra:obra,
+      fecha:fecha,
+      semana:weekOf(fecha),
+      prioridad:document.getElementById("prioridad")?.value||"Normal",
+      obs:"",
+      items:JSON.parse(JSON.stringify(seleccion))
+    };
+
+    try{
+      await window.cqActualizarPedidoFirebase(id,cambios);
+      window._cqEditId=null;
+      cerrar();
+      if(typeof window.render==="function")window.render();
+    }catch(e){
+      console.error("Actualizar pedido Firebase",e);
+      alert("No se pudo guardar la modificación en Firebase. El pedido conserva la versión anterior.");
+    }
   };
 })();
 </script>
