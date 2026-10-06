@@ -5367,6 +5367,7 @@ function cqFfCloseDiag(){document.getElementById('cqFfDiagBackdrop')?.classList.
 function cqFfClean(v){return JSON.parse(JSON.stringify(v))}
 function cqFfSnapshot(){return cqFfClean({state,flowState,projectsState:(typeof projectsState!=='undefined'?projectsState:null),updatedAt:new Date().toISOString(),updatedBy:String(window._cqUsuarioActual||'Gerencia')})}
 async function cqFfSaveRemote(){
+ if(window.__cqDraftActive)return;
  if(cqFfRemoteApplying||!cqFfRemoteReady)return;
  const fb=window.__cqFfFirebase;if(!fb||!fb.ready)return;
  const user=fb.auth&&fb.auth.currentUser;
@@ -5379,6 +5380,7 @@ async function cqFfSaveRemote(){
  finally{setTimeout(()=>cqFfWriting=false,120)}
 }
 function cqFfQueueRemoteSave(){
+ if(window.__cqDraftActive)return;
  if(!cqFfRemoteReady||cqFfRemoteApplying)return;
  clearTimeout(cqFfSaveTimer);cqFfSaveTimer=setTimeout(cqFfSaveRemote,180);
 }
@@ -7245,21 +7247,81 @@ async function startAuto(){
 setTimeout(startAuto,700);
 </script>
 
-<script id="cq-borrador-v1">
+<script id="cq-borrador-v2">
 (function(){
-var active=false, ops=[], patched=false, orig={}, KEY='cq_flujo_draft_ops_v1';
-function pathOf(r){try{return String(r.toString()).replace(/^https?:\/\/[^/]+\/?/,'').replace(/\.json(?:\?.*)?$/,'').replace(/^\/+/,'')}catch(e){return''}}
+const KEY='cq_flujo_draft_snapshot_v2';
+let active=false;
+let snapshot=null;
+window.__cqDraftActive=false;
+
 function clone(v){try{return JSON.parse(JSON.stringify(v))}catch(e){return v}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(ops))}catch(e){}}
-function ui(){var s=document.getElementById('cqDraftStatus'),a=document.getElementById('cqDraftApply'),d=document.getElementById('cqDraftDiscard'),st=document.getElementById('cqDraftStart');if(!s)return;s.classList.toggle('on',active);s.textContent=active?'● BORRADOR · '+ops.length+' cambios':'● Planilla original';document.body.classList.toggle('cq-draft',active);a.style.display=d.style.display=active?'':'none';st.textContent=active?'📝 Borrador activo':'📝 Abrir borrador'}
-function cap(k,r,v){ops.push({k:k,p:pathOf(r),v:clone(v)});save();ui();return Promise.resolve()}
-function patch(){if(patched||!window.firebase||!firebase.database)return false;try{var p=Object.getPrototypeOf(firebase.database().ref('__cq_probe__'));['set','update','remove'].forEach(function(k){orig[k]=p[k]});if(!orig.set||!orig.update||!orig.remove)return false;p.set=function(v){return active?cap('set',this,v):orig.set.call(this,v)};p.update=function(v){return active?cap('update',this,v):orig.update.call(this,v)};p.remove=function(){return active?cap('remove',this,null):orig.remove.call(this)};patched=true;return true}catch(e){return false}}
-function wait(n){if(patch())return;if(n<100)setTimeout(function(){wait(n+1)},100)}
-async function apply(){var db=firebase.database();for(var i=0;i<ops.length;i++){var o=ops[i],r=db.ref(o.p);if(o.k==='set')await orig.set.call(r,o.v);else if(o.k==='update')await orig.update.call(r,o.v);else await orig.remove.call(r)}}
-document.addEventListener('DOMContentLoaded',function(){try{ops=JSON.parse(localStorage.getItem(KEY)||'[]')||[]}catch(e){ops=[]}wait(0);ui();
-document.getElementById('cqDraftStart').onclick=function(){active=true;ui()};
-document.getElementById('cqDraftApply').onclick=async function(){if(!confirm('¿Aplicar el borrador a la planilla original?'))return;this.disabled=true;try{await apply();localStorage.removeItem(KEY);alert('Borrador aplicado.');location.reload()}catch(e){alert('No se pudo aplicar. El borrador se conserva.');this.disabled=false}};
-document.getElementById('cqDraftDiscard').onclick=function(){if(confirm('¿Descartar el borrador?')){localStorage.removeItem(KEY);ops=[];active=false;location.reload()}};
+function capture(){
+  return {
+    state:(typeof state!=='undefined'?clone(state):null),
+    flowState:(typeof flowState!=='undefined'?clone(flowState):null),
+    projectsState:(typeof projectsState!=='undefined'?clone(projectsState):null),
+    flowOpenMonths:(typeof flowOpenMonths!=='undefined'?clone(flowOpenMonths):null),
+    capturedAt:new Date().toISOString()
+  };
+}
+function store(){try{localStorage.setItem(KEY,JSON.stringify(snapshot))}catch(e){}}
+function clear(){try{localStorage.removeItem(KEY)}catch(e){}}
+function ui(){
+  const st=document.getElementById('cqDraftStatus'),ap=document.getElementById('cqDraftApply'),di=document.getElementById('cqDraftDiscard'),bt=document.getElementById('cqDraftStart');
+  if(!st)return;
+  st.classList.toggle('on',active);
+  st.textContent=active?'● BORRADOR ACTIVO · cambios no guardados':'● Planilla original';
+  document.body.classList.toggle('cq-draft',active);
+  if(ap)ap.style.display=active?'':'none';
+  if(di)di.style.display=active?'':'none';
+  if(bt){bt.textContent=active?'📝 Borrador activo':'📝 Abrir borrador';bt.disabled=active;}
+}
+function restore(snap){
+  if(!snap)return;
+  if(snap.state!==null&&typeof state!=='undefined'){
+    state=clone(snap.state);localStorage.setItem((typeof KEY!=='undefined'?KEY:'cq_costos_obra_v4'),JSON.stringify(state));
+    try{render();updateHeaderForActivePage()}catch(e){}
+  }
+  if(snap.flowState!==null&&typeof flowState!=='undefined'){
+    flowState=clone(snap.flowState);localStorage.setItem(FLOW_KEY,JSON.stringify(flowState));
+  }
+  if(snap.projectsState!==null&&typeof projectsState!=='undefined'){
+    projectsState=clone(snap.projectsState);localStorage.setItem(PROJECTS_KEY,JSON.stringify(projectsState));
+  }
+  if(snap.flowOpenMonths!==null&&typeof flowOpenMonths!=='undefined'){
+    flowOpenMonths=clone(snap.flowOpenMonths);localStorage.setItem(FLOW_KEY+'_open',JSON.stringify(flowOpenMonths));
+  }
+  try{flowRender()}catch(e){}
+  try{dashboardRender()}catch(e){}
+  try{projectsRender()}catch(e){}
+  try{updateHeaderForActivePage()}catch(e){}
+}
+function startDraft(){
+  if(active)return;
+  snapshot=capture();store();active=true;window.__cqDraftActive=true;ui();
+  if(typeof toast==='function')toast('Borrador activo · los cambios NO se guardarán en Firebase');
+}
+async function applyDraft(){
+  if(!active)return;
+  if(!confirm('¿Aplicar estos cambios a la planilla original?'))return;
+  active=false;window.__cqDraftActive=false;clear();ui();
+  try{
+    if(typeof cqFfSaveRemote==='function')await cqFfSaveRemote();
+    if(typeof toast==='function')toast('Borrador aplicado a la planilla original');
+  }catch(e){console.warn(e);alert('Los cambios quedaron locales, pero no se pudieron guardar en Firebase.');}
+}
+function discardDraft(){
+  if(!active)return;
+  if(!confirm('¿Descartar TODOS los cambios hechos en el borrador?'))return;
+  restore(snapshot);active=false;window.__cqDraftActive=false;snapshot=null;clear();ui();
+  if(typeof toast==='function')toast('Borrador descartado · original restaurado');
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+  /* Un borrador abandonado de una sesión anterior nunca se aplica solo. */
+  clear();active=false;window.__cqDraftActive=false;ui();
+  const a=document.getElementById('cqDraftStart'),b=document.getElementById('cqDraftApply'),c=document.getElementById('cqDraftDiscard');
+  if(a)a.onclick=startDraft;if(b)b.onclick=applyDraft;if(c)c.onclick=discardDraft;
 });
 })();
 </script>
