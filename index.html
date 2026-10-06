@@ -2081,6 +2081,13 @@ html.cq-layout-empleado .cq-secundarios:empty{display:none!important}
   html.cq-layout-empleado .grid{grid-auto-rows:minmax(170px,1fr)!important}
 }
 </style>
+
+<style id="cq-no-flash-perfil-v1">
+/* No mostrar el panel base antes de conocer el rol real del usuario.
+   Evita que un empleado vea fugazmente la vista/perfil de Gerencia al volver. */
+html:not(.cq-profile-ready) .app{visibility:hidden!important}
+html.cq-profile-ready .app{visibility:visible!important}
+</style>
 </head>
 <body>
 <div class="app">
@@ -2351,6 +2358,7 @@ function keyFromEmail(email){
   return Object.keys(GERENCIA_USERS).find(k=>GERENCIA_USERS[k].toLowerCase()===target) || null;
 }
 function showLogin(text=""){
+  document.documentElement.classList.remove("cq-profile-ready");
   try{
     localStorage.removeItem("cq_unificado_demo_recordada");
     document.documentElement.classList.remove("cq-gerencia-recordada");
@@ -2419,6 +2427,7 @@ function applyUnifiedPermissions(profile){
 }
 function grant(profile){
   window._cqGerenciaProfile=profile;
+  document.documentElement.classList.add("cq-profile-ready");
   try{
     localStorage.setItem("cq_unificado_demo_recordada","1");
     document.documentElement.classList.add("cq-gerencia-recordada");
