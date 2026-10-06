@@ -8638,43 +8638,6 @@ function aplicarIntegracion(ev){
 
   if(obraIdx<0||!mat) return false;
 
-  // CQ 06/10/2026 — RUBRO DE ORIGEN (Acopio/Pañol)
-  // Si el material automático quedó sin clasificación o en VARIOS, adoptar el
-  // subrubro que viene en la integración. Una edición manual del Catálogo gana
-  // siempre y nunca es sobrescrita por Acopio/Pañol.
-  (function(){
-    var origen=cqOrigenCargaNormalizado({origen:ev.source,sourceLabel:ev.sourceLabel,integrationId:ev.integrationId});
-    if(origen!=='acopio'&&origen!=='panol')return;
-
-    var manual=(state.categoriaManual&&state.categoriaManual[mat.id])
-      ||(state.catalogoManual&&state.catalogoManual[mat.id]&&state.catalogoManual[mat.id].manual!==false
-        ?state.catalogoManual[mat.id].categoria:'');
-    if(String(manual||'').trim())return;
-
-    var entrante=String(ev.materialCategory||ev.category||'').trim();
-    if(!entrante||/^varios$/i.test(entrante))return;
-
-    // Usar exclusivamente un subrubro que ya exista en Materiales/Gastos.
-    var destino=(CATS||[]).find(function(c){
-      return c&&!isCatDeleted(c.name)&&normalizarClaveIntegracion(c.name)===normalizarClaveIntegracion(entrante);
-    });
-    if(!destino)return;
-
-    var actual=String((state.matCategorias&&state.matCategorias[mat.id])||mat.catName||obtenerCategoriaMaterial(mat.id)||'').trim();
-    var sinClasificar=!actual||/^varios$/i.test(actual)||/sin subrubro/i.test(actual);
-    if(!sinClasificar)return;
-
-    if(!state.matCategorias)state.matCategorias={};
-    state.matCategorias[mat.id]=destino.name;
-    mat.catName=destino.name;
-    var extra=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
-    if(extra)extra.catName=destino.name;
-    var nuevo=(state.materialesNuevos||[]).find(function(x){return Number(x.id)===Number(mat.id);});
-    if(nuevo)nuevo.catName=destino.name;
-    try{moverMaterialACategoria(mat.id,destino.name);}catch(e){}
-    try{guardarMemoriaCategoriaMaterial(mat,destino.name);}catch(e){}
-  })();
-
   // Si se unificó por nombre y el catálogo todavía no tenía código,
   // copiar inmediatamente el código que viene de Acopio/Pañol/Caja.
   var codigoIntegracion=String(ev.materialCode||'').trim();
