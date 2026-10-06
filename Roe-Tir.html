@@ -1761,6 +1761,36 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
 }
 </style>
 
+
+<style id="cq-resultados-costos-fijos-v1">
+.cq-fixed-costs-box{margin:0 14px 14px;padding:14px;border:1px solid rgba(16,45,37,.12);border-radius:20px;background:linear-gradient(180deg,#fff,#f7f2e8);box-shadow:0 8px 22px rgba(16,45,37,.06)}
+.cq-fixed-costs-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
+.cq-fixed-costs-title span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;color:#6d7b73}
+.cq-fixed-costs-title b{display:block;font-size:15px;color:#173b32;margin-top:2px}
+.cq-fixed-costs-title small{max-width:180px;text-align:right;font-size:9px;color:#7a877f;line-height:1.3}
+.cq-fixed-costs-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.cq-fixed-costs-grid label{display:block;background:#fff;border:1px solid rgba(16,45,37,.09);border-radius:15px;padding:10px}
+.cq-fixed-costs-grid label>span{display:block;font-size:11px;font-weight:900;color:#173b32}
+.cq-fixed-costs-grid label>small{display:block;min-height:25px;font-size:8.5px;color:#78877f;line-height:1.25;margin:3px 0 7px}
+.cq-fixed-costs-grid input{width:100%;min-height:39px;border:1px solid rgba(16,45,37,.12);border-radius:11px;padding:8px;font:800 13px 'JetBrains Mono',monospace;color:#173b32;background:#faf7f0}
+.cq-fixed-result-lines{margin-top:11px;border-top:1px dashed rgba(16,45,37,.16);padding-top:8px}
+.cq-fixed-result-lines>div{display:flex;justify-content:space-between;gap:10px;padding:5px 2px;font-size:11px;color:#65756d}
+.cq-fixed-result-lines b{font-family:'JetBrains Mono',monospace;color:#173b32}
+.cq-fixed-result-lines .net{margin-top:4px;padding:10px;border-radius:13px;background:#e6f5ec;color:#15573f;font-size:12px;font-weight:900}
+.cq-fixed-result-lines .net b{font-size:15px;color:#15573f}
+.cq-fixed-result-lines .net.neg{background:#fce8e5;color:#a53f37}.cq-fixed-result-lines .net.neg b{color:#a53f37}
+@media(max-width:430px){.cq-fixed-costs-grid{grid-template-columns:1fr}.cq-fixed-costs-title{display:block}.cq-fixed-costs-title small{display:block;max-width:none;text-align:left;margin-top:4px}}
+</style>
+
+<style id="cq-resultados-tab-label-fix">
+.tabs .tab-btn[data-tab="comparar"]::after{content:"Resultados"!important}
+</style>
+
+<style id="cq-resultados-filtro-anio-v1">
+.cq-year-filter-box{margin:0 0 12px;padding:12px 13px;border-radius:18px;background:linear-gradient(180deg,#fff,#f6f1e7);border:1px solid rgba(16,45,37,.11);box-shadow:0 7px 18px rgba(16,45,37,.055)}
+.cq-year-filter-box label{display:block;margin-bottom:6px;font-size:9.5px;font-weight:900;letter-spacing:.075em;text-transform:uppercase;color:#6d7b73}
+.cq-year-filter-box select{width:100%;min-height:42px;padding:9px 11px;border-radius:13px;border:1px solid rgba(16,45,37,.13);background:#fff;color:#173b32;font:800 13px 'JetBrains Mono',monospace}
+</style>
 </head>
 <body>
 
@@ -1815,7 +1845,7 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
   <nav class="tabs">
     <button type="button" class="tab-btn active" data-tab="calc" onclick="cqRoeAbrirTab('calc')">Calcular</button>
     <button type="button" class="tab-btn" data-tab="obras" onclick="cqRoeAbrirTab('obras')">Proyectos</button>
-    <button type="button" class="tab-btn" data-tab="comparar" onclick="cqRoeAbrirTab('comparar')">Comparar</button>
+    <button type="button" class="tab-btn" data-tab="comparar" onclick="cqRoeAbrirTab('comparar')">Resultados</button>
   </nav>
 
   <main>
@@ -1832,6 +1862,11 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
         <div class="field">
           <label>Costo total proyecto ($)</label>
           <input type="number" id="f-costoTotal" placeholder="">
+        </div>
+        <div class="field">
+          <label>Año de venta</label>
+          <input type="number" id="f-anioVenta" min="2000" max="2100" step="1" placeholder="2026">
+          <div class="hint">Año en que se vendió el proyecto.</div>
         </div>
       </div>
 
@@ -1871,8 +1906,14 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
     <!-- ===================== TAB COMPARAR ===================== -->
     <section id="tab-comparar" class="tab-content">
       <div class="card">
-        <h2>Elegí las obras a comparar</h2>
-        <div class="compare-pick" id="compare-pick"></div>
+        <h2>Elegí uno o más proyectos</h2>
+        <div class="cq-year-filter-box">
+  <label for="cq-result-year">Filtrar resultados por año</label>
+  <select id="cq-result-year" onchange="cqRoeSetResultYear(this.value)">
+    <option value="todos">Todos los años</option>
+  </select>
+</div>
+<div class="compare-pick" id="compare-pick"></div>
       </div>
       <div id="compare-result"></div>
     </section>
@@ -1963,6 +2004,7 @@ try{
 function migrarObras(){
   let changed = false;
   obras.forEach(o=>{
+    if(o.anioVenta===undefined){ o.anioVenta=null; changed=true; }
     if(!o.costos){
       o.costos = repartoParejo(o.costoTotal, o.mes0).map(c=>({...c,manual:true}));
       changed = true;
@@ -2032,6 +2074,52 @@ function migrarObras(){
 }
 let editingId = null;
 let comparePicked = [];
+let cqRoeResultYear='todos';
+
+function cqRoeYearsDisponibles(){
+  return [...new Set(obras.map(o=>Number(o.anioVenta)).filter(y=>Number.isFinite(y)&&y>0))].sort((a,b)=>b-a);
+}
+function cqRoeObrasResultado(){
+  if(cqRoeResultYear==='todos') return obras;
+  const y=Number(cqRoeResultYear);
+  return obras.filter(o=>Number(o.anioVenta)===y);
+}
+function cqRoeRenderYearFilter(){
+  const sel=document.getElementById('cq-result-year');
+  if(!sel)return;
+  const years=cqRoeYearsDisponibles();
+  if(cqRoeResultYear!=='todos'&&!years.includes(Number(cqRoeResultYear)))cqRoeResultYear='todos';
+  sel.innerHTML='<option value="todos">Todos los años</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  sel.value=String(cqRoeResultYear);
+}
+function cqRoeSetResultYear(v){
+  cqRoeResultYear=(v==='todos')?'todos':String(Number(v));
+  const permitidas=new Set(cqRoeObrasResultado().map(o=>String(o.id)));
+  comparePicked=comparePicked.filter(id=>permitidas.has(String(id)));
+  renderComparar();
+}
+
+const CQ_ROE_FIJOS_KEY='cq_roetir_costos_fijos_v1';
+let cqRoeCostosFijos={estructura:0,impuestos:0};
+try{
+  const _cf=JSON.parse(localStorage.getItem(CQ_ROE_FIJOS_KEY)||'null');
+  if(_cf&&typeof _cf==='object'){
+    cqRoeCostosFijos.estructura=Number(_cf.estructura)||0;
+    cqRoeCostosFijos.impuestos=Number(_cf.impuestos)||0;
+  }
+}catch(e){}
+function cqGuardarCostosFijosLocal(){
+  localStorage.setItem(CQ_ROE_FIJOS_KEY,JSON.stringify(cqRoeCostosFijos));
+}
+function cqSetCostoFijo(k,v){
+  if(!['estructura','impuestos'].includes(k))return;
+  cqRoeCostosFijos[k]=Math.max(0,Number(v)||0);
+  cqGuardarCostosFijosLocal();
+  if(!__cqRoeApplyingRemote && typeof window.__cqRoeFirebaseSave==='function'){
+    window.__cqRoeFirebaseSave(cqRoeSnapshot()).catch(e=>console.warn('ROE/TIR costos fijos',e));
+  }
+  renderCompareResult();
+}
 
 function unidadDefault(){
   return {
@@ -2045,7 +2133,7 @@ function unidadDefault(){
 }
 
 let draft = {
-  nombre:'', costoTotal:0, costos:[{mes:0, monto:0, manual:false}],
+  nombre:'', anioVenta:new Date().getFullYear(), costoTotal:0, costos:[{mes:0, monto:0, manual:false}],
   unidades:[ unidadDefault(), unidadDefault() ]
 };
 
@@ -2063,7 +2151,8 @@ let __cqRoeApplyingRemote=false;
 function cqRoeSnapshot(){
   return {
     obras:JSON.parse(JSON.stringify(obras||[])),
-    indicadoresConfig:cqRoeCloneCfg(cqRoeIndicadoresConfig)
+    indicadoresConfig:cqRoeCloneCfg(cqRoeIndicadoresConfig),
+    costosFijos:JSON.parse(JSON.stringify(cqRoeCostosFijos||{estructura:0,impuestos:0}))
   };
 }
 function saveStorage(){
@@ -2100,6 +2189,13 @@ window.__cqRoeApplyRemote=function(data){
         cqRoeIndicadoresConfig=remoteCfg;
         localStorage.setItem(CQ_ROE_CFG_KEY,JSON.stringify(cqRoeIndicadoresConfig));
       }
+    }
+    if(data.costosFijos&&typeof data.costosFijos==='object'){
+      cqRoeCostosFijos={
+        estructura:Number(data.costosFijos.estructura)||0,
+        impuestos:Number(data.costosFijos.impuestos)||0
+      };
+      cqGuardarCostosFijosLocal();
     }
 
     migrarObras();
@@ -2854,11 +2950,15 @@ function renderFlujoTable(flujo){
 /* ============================ GUARDAR / CARGAR / LIMPIAR ============================ */
 function syncFormToDraft(){
   draft.nombre = document.getElementById('f-nombre').value.trim();
+  draft.anioVenta = Number(document.getElementById('f-anioVenta').value)||new Date().getFullYear();
   draft.costoTotal = Number(document.getElementById('f-costoTotal').value)||0;
 }
 document.getElementById('f-nombre').addEventListener('input', ()=>{
   syncFormToDraft();
   recalc();
+});
+document.getElementById('f-anioVenta').addEventListener('input', ()=>{
+  syncFormToDraft();
 });
 document.getElementById('f-costoTotal').addEventListener('input', ()=>{
   syncFormToDraft();
@@ -2885,8 +2985,9 @@ function guardarObra(){
 
 function limpiarForm(){
   editingId = null;
-  draft = { nombre:'', costoTotal:0, costos:[{mes:0, monto:0, manual:false}], unidades:[ unidadDefault(), unidadDefault() ] };
+  draft = { nombre:'', anioVenta:new Date().getFullYear(), costoTotal:0, costos:[{mes:0, monto:0, manual:false}], unidades:[ unidadDefault(), unidadDefault() ] };
   document.getElementById('f-nombre').value='';
+  document.getElementById('f-anioVenta').value=new Date().getFullYear();
   document.getElementById('f-costoTotal').value='';
   flujoVisible=false;
   renderCostos(); renderUnidad(0); renderUnidad(1); recalc();
@@ -2903,6 +3004,7 @@ function cargarObra(id){
   });
   cqRepartirCostosAutomatico();
   document.getElementById('f-nombre').value = draft.nombre;
+  document.getElementById('f-anioVenta').value = draft.anioVenta || new Date().getFullYear();
   document.getElementById('f-costoTotal').value = draft.costoTotal || '';
   renderCostos(); renderUnidad(0); renderUnidad(1); recalc();
   document.querySelector('.tab-btn[data-tab="calc"]').click();
@@ -3114,6 +3216,7 @@ function renderObras(){
               ${cqCompareProjectTag(o)}
             </div>
             <div class="cq-proyecto-mini">
+              <span>Venta <b>${o.anioVenta||'—'}</b></span>
               <span>Ganancia <b>${fmtMoney(r.ganancia)}</b></span>
               <span>ROE <b>${fmtPct(r.roe)}</b></span>
             </div>
@@ -3297,7 +3400,7 @@ function cqCompareProjectTag(o){
 
 
 function cqCompararElegirTodas(){
-  comparePicked = obras.map(o=>o.id);
+  comparePicked = cqRoeObrasResultado().map(o=>o.id);
   renderComparar();
 }
 
@@ -3307,13 +3410,21 @@ function cqCompararBorrarSeleccion(){
 }
 function renderComparar(){
   const pickWrap = document.getElementById('compare-pick');
+  cqRoeRenderYearFilter();
+  const obrasResultado=cqRoeObrasResultado();
   if(!obras.length){
-    pickWrap.innerHTML = `<div class="empty-state" style="padding:20px;"><p>Guardá al menos 2 proyectos para comparar.</p></div>`;
+    pickWrap.innerHTML = `<div class="empty-state" style="padding:20px;"><p>Guardá al menos un proyecto para ver resultados.</p></div>`;
     document.getElementById('compare-result').innerHTML='';
     return;
   }
 
-  const ordenadas=cqCompareOrdenadas(obras);
+  if(!obrasResultado.length){
+    pickWrap.innerHTML=`<div class="empty-state" style="padding:20px;"><p>No hay proyectos vendidos en ${cqRoeResultYear}.</p></div>`;
+    document.getElementById('compare-result').innerHTML='';
+    return;
+  }
+
+  const ordenadas=cqCompareOrdenadas(obrasResultado);
 
   pickWrap.innerHTML = `
     <div class="cq-compare-selector-head">
@@ -3383,8 +3494,8 @@ function cqInvertirOrdenGrafico(){
 
 function renderCompareResult(){
   const wrap = document.getElementById('compare-result');
-  const picked = cqCompareOrdenadas(obras.filter(o=>comparePicked.includes(o.id)));
-  if(picked.length<2){ wrap.innerHTML=''; return; }
+  const picked = cqCompareOrdenadas(cqRoeObrasResultado().filter(o=>comparePicked.includes(o.id)));
+  if(picked.length<1){ wrap.innerHTML=''; return; }
 
   const datos = picked.map(o=>({o, r:computeResultados(o)}));
   const datosGrafico = cqOrdenarDatosGrafico(datos);
@@ -3401,6 +3512,10 @@ function renderCompareResult(){
     ganancia: sumMoney('ganancia'),
     capitalMaximo: sumMoney('capitalMaximo')
   };
+  const costosFijosEstructura=Number(cqRoeCostosFijos.estructura)||0;
+  const costosFijosImpuestos=Number(cqRoeCostosFijos.impuestos)||0;
+  const costosFijosTotal=costosFijosEstructura+costosFijosImpuestos;
+  const resultadoNeto=sums.ganancia-costosFijosTotal;
   const avgs = {
     roe: avgRaw('roe'),
     tirMensual: avgRaw('tirMensual'),
@@ -3410,10 +3525,14 @@ function renderCompareResult(){
   };
 
   const rows = [
+    ['Año de venta', 'anioVenta', d=>String(d.o.anioVenta||'—'), false, '—', 'Dato'],
     ['Ingreso total', 'ingresoTotal', d=>fmtMoney(d.r.ingresoTotal), true, fmtMoney(sums.ingresoTotal), 'Total'],
     ['Comisión total', 'comisionTotal', d=>fmtMoney(d.r.comisionTotal), true, fmtMoney(sums.comisionTotal), 'Total'],
     ['Costo total', 'costoTotal', d=>fmtMoney(d.r.costoTotal), true, fmtMoney(sums.costoTotal), 'Total'],
-    ['Ganancia', 'ganancia', d=>fmtMoney(d.r.ganancia), true, fmtMoney(sums.ganancia), 'Total'],
+    ['Ganancia proyectos', 'ganancia', d=>fmtMoney(d.r.ganancia), true, fmtMoney(sums.ganancia), 'Total'],
+    ['Estructura operativa', 'fijoEstructura', d=>'—', true, '− '+fmtMoney(costosFijosEstructura), 'Global'],
+    ['Impuestos', 'fijoImpuestos', d=>'—', true, '− '+fmtMoney(costosFijosImpuestos), 'Global'],
+    ['Resultado neto', 'resultadoNeto', d=>'—', true, fmtMoney(resultadoNeto), 'Final'],
     ['Capital máximo', 'capitalMaximo', d=>cellSpan(fmtMoney(d.r.capitalMaximo), bandCapitalInvertido(d.r.capitalMaximo).color), true, cellSpan(fmtMoney(sums.capitalMaximo), bandCapitalInvertido(sums.capitalMaximo).color), 'Total'],
     ['ROE', 'roe', d=>cellSpan(fmtPct(d.r.roe), bandROE(d.r.roe).color), false, cellSpan(fmtPct(avgs.roe), bandROE(avgs.roe).color), 'Prom.'],
     ['TIR mensual', 'tirMensual', d=>cellSpan(fmtPct(d.r.tirMensual), bandTirMensual(d.r.tirMensual).color), false, cellSpan(fmtPct(avgs.tirMensual), bandTirMensual(avgs.tirMensual).color), 'Prom.'],
@@ -3427,7 +3546,7 @@ function renderCompareResult(){
       <div class="cq-compare-summary-head">
         <div>
           <div class="cq-compare-summary-kicker">RESUMEN</div>
-          <h2>Proyectos comparados</h2>
+          <h2>Resultados seleccionados</h2>
         </div>
         <div class="cq-compare-summary-count">${datos.length}</div>
       </div>
@@ -3437,6 +3556,27 @@ function renderCompareResult(){
         <div class="compare-sum-card gain"><div class="lbl">Ganancia total</div><div class="val">${fmtMoney(sums.ganancia)}</div></div>
         <div class="compare-sum-card cap"><div class="lbl">Capital máximo</div><div class="val">${fmtMoney(sums.capitalMaximo)}</div></div>
       </div>
+
+      <div class="cq-fixed-costs-box">
+        <div class="cq-fixed-costs-title">
+          <div><span>COSTOS FIJOS</span><b>Resultado global</b></div>
+          <small>No modifica el ROE/TIR individual de cada proyecto.</small>
+        </div>
+        <div class="cq-fixed-costs-grid">
+          <label><span>Estructura operativa</span><small>Oficina · empleados · marketing · administración</small>
+            <input type="number" min="0" value="${costosFijosEstructura||''}" placeholder="0" onchange="cqSetCostoFijo('estructura',this.value)">
+          </label>
+          <label><span>Impuestos</span><small>Carga impositiva general</small>
+            <input type="number" min="0" value="${costosFijosImpuestos||''}" placeholder="0" onchange="cqSetCostoFijo('impuestos',this.value)">
+          </label>
+        </div>
+        <div class="cq-fixed-result-lines">
+          <div><span>Ganancia proyectos</span><b>${fmtMoney(sums.ganancia)}</b></div>
+          <div><span>Costos fijos</span><b>− ${fmtMoney(costosFijosTotal)}</b></div>
+          <div class="net ${resultadoNeto<0?'neg':''}"><span>Resultado neto</span><b>${fmtMoney(resultadoNeto)}</b></div>
+        </div>
+      </div>
+
       <div class="compare-summary-grid avg-grid">
         <div class="compare-sum-card avg"><div class="lbl">ROE promedio</div><div class="val">${fmtPct(avgs.roe)}</div></div>
         <div class="compare-sum-card avg"><div class="lbl">TIR anual prom.</div><div class="val">${fmtPct(avgs.tirAnual)}</div></div>
@@ -3448,9 +3588,9 @@ function renderCompareResult(){
     <div class="compare-chart-card cq-chart-premium">
       <div class="compare-chart-head cq-chart-head-orderable">
         <div>
-          <div class="cq-chart-kicker">COMPARACIÓN VISUAL</div>
+          <div class="cq-chart-kicker">RESULTADOS VISUALES</div>
           <h2>${chartIndicador}</h2>
-          <div class="compare-chart-sub">Ordenado automáticamente por el indicador seleccionado.</div>
+          <div class="compare-chart-sub">Visualización de los proyectos seleccionados.</div>
         </div>
         <button type="button" class="cq-chart-order-btn" onclick="cqInvertirOrdenGrafico()" title="Invertir orden">
           <span class="cq-chart-order-arrow">${cqChartOrdenDesc?'↓':'↑'}</span>
@@ -3472,7 +3612,7 @@ function renderCompareResult(){
       <div class="cq-compare-table-head">
         <div>
           <div class="cq-compare-summary-kicker">DETALLE</div>
-          <h2>Cuadro comparativo</h2>
+          <h2>Cuadro final de resultados</h2>
         </div>
       </div>
       <div class="table-wrap">

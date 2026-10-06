@@ -6279,6 +6279,61 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
   return true;
 }
 
+// CQ — cola de sincronización no bloqueante para consumos.
+// Mantiene el orden de los envíos y, sobre todo, NO llama renderObraDetalle()
+// al terminar: así una sincronización anterior nunca borra la carga nueva
+// que el usuario esté completando en pantalla.
+var cqColaSyncConsumosPanol=Promise.resolve();
+
+function cqEncolarSyncConsumoPanol(movId,meta){
+  meta=meta||{};
+  cqColaSyncConsumosPanol=cqColaSyncConsumosPanol.then(async function(){
+    var mov=(state.movimientos||[]).find(function(m){
+      return String(m&&m.id||'')===String(movId);
+    });
+    if(!mov)return;
+
+    var okMat=!meta.cargarMateriales;
+    var okGas=!meta.gastosDebeCargar;
+
+    if(meta.cargarMateriales){
+      try{
+        await sincronizarConsumoConMateriales(mov,true);
+        cqPanolSetSyncEstadoActual(mov.id,'materiales','ok','');
+        okMat=true;
+        await persist();
+      }catch(e){
+        console.warn('Materiales',e);
+        cqPanolSetSyncEstadoActual(mov.id,'materiales','error',String(e&&e.message||e));
+        try{await persist();}catch(_e){}
+      }
+    }
+
+    if(meta.gastosDebeCargar){
+      try{
+        await sincronizarConsumoConGastos(mov,true);
+        okGas=true;
+      }catch(e){
+        console.warn('Gastos',e);
+        cqPanolSetSyncEstadoActual(mov.id,'gastos','error',String(e&&e.message||e));
+        try{await persist();}catch(_e){}
+      }
+    }
+
+    // No renderizar la obra acá: el usuario puede estar cargando el siguiente producto.
+    if(meta.cargarMateriales&&okMat&&meta.gastosDebeCargar&&okGas)showToast(
+      Number(meta.cantidadNoMateriales)>0
+        ?'✓ Sincronizado · Materiales '+fmtN(meta.cantidadMateriales)+' u · Gastos OK'
+        :'✓ Sincronizado con Materiales y Gastos'
+    );
+    else if(meta.cargarMateriales&&okMat&&!meta.gastosDebeCargar)showToast('✓ Sincronizado con Materiales');
+    else if(!meta.cargarMateriales&&meta.gastosDebeCargar&&okGas)showToast('✓ Sincronizado con Gastos');
+    else if((meta.cargarMateriales&&!okMat)||(meta.gastosDebeCargar&&!okGas))showToast('⚠️ El consumo quedó en Pañol, pero una sincronización falló. Verificar.','err');
+  }).catch(function(e){
+    console.warn('Cola de sincronización Pañol',e);
+  });
+}
+
 async function registrarConsumo(){
   var prod=getProductoDesdeConsumoInput();
   var prodId=prod?prod.id:'';
@@ -6390,52 +6445,19 @@ async function registrarConsumo(){
   cqMaterialSeleccionadoPanol=null;
   renderObraDetalle();
 
-  var okMat=!cargarMateriales,okGas=!gastosDebeCargar;
+  // CQ — sincronización en segundo plano.
+  // El consumo ya quedó guardado en Pañol y el formulario se liberó arriba.
+  // Materiales/Gastos continúan linkeándose sin bloquear una nueva carga ni
+  // volver a renderizar el formulario mientras el usuario está escribiendo.
+  cqEncolarSyncConsumoPanol(mov.id,{
+    cargarMateriales:cargarMateriales,
+    gastosDebeCargar:gastosDebeCargar,
+    cantidadNoMateriales:cantidadNoMateriales,
+    cantidadMateriales:cantidadMateriales
+  });
 
-  if(cargarMateriales){
-    try{
-      await sincronizarConsumoConMateriales(mov,true);
-      mov.materialesSyncEstado='ok';
-      mov.materialesSyncError='';
-      okMat=true;
-      await persist();
-    }catch(e){
-      mov.materialesSyncEstado='error';
-      mov.materialesSyncError=String(e&&e.message||e);
-      await persist();
-      console.warn('Materiales',e);
-    }
-  }
+  showToast('✓ Consumo guardado en Pañol · sincronizando en segundo plano');
 
-  if(gastosDebeCargar){
-    try{
-      await sincronizarConsumoConGastos(mov,true);
-      okGas=true;
-    }catch(e){
-      console.warn('Gastos',e);
-      mov.gastosSyncEstado='error';
-      mov.gastosSyncError=String(e&&e.message||e);
-      await persist();
-    }
-  }
-
-  renderObraDetalle();
-
-  if(cargarMateriales&&okMat&&gastosDebeCargar&&okGas)showToast(
-    cantidadNoMateriales>0
-      ?'✓ Salida controlada · Materiales solo '+fmtN(cantidadMateriales)+' u · Gastos OK'
-      :'✓ Consumo cargado en Materiales y Gastos'
-  );
-  else if(cargarMateriales&&okMat&&!gastosDebeCargar)showToast(
-    cantidadNoMateriales>0
-      ?'✓ Salida controlada · Materiales solo '+fmtN(cantidadMateriales)+' u'
-      :'✓ Consumo cargado en Materiales · sin Gastos por falta de precio'
-  );
-  else if(!cargarMateriales&&cantidadNoMateriales>0&&gastosDebeCargar&&okGas)showToast('✓ Salida controlada en Pañol y Gastos · sin duplicar Materiales');
-  else if(!cargarMateriales&&cantidadNoMateriales>0&&!gastosDebeCargar)showToast('✓ Salida controlada solo en Pañol · sin Materiales');
-  else if(!cargarMateriales&&gastosDebeCargar&&okGas)showToast('✓ Consumo cargado en Gastos · no se eligió Materiales');
-  else if(!cargarMateriales&&!gastosDebeCargar)showToast('✓ Consumo descontado solo de Pañol');
-  else showToast('⚠️ Consumo guardado, pero alguna sincronización falló. Verificar.','err');
 }
 
 function consumirStockFIFO(prodId,cantidad){
