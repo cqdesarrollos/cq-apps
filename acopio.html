@@ -6899,6 +6899,20 @@ async function cargarIntegracionesAuditadasMaterialesAcopio(){
   return materialesIntegracionesAuditadasAcopio;
 }
 
+function cqRetiroExisteRealEnMateriales(retiro,a){
+  a=a||getAcopio();
+  if(!a||!retiro)return false;
+  var iid=integracionRetiroId(a.id,retiro.id);
+
+  // Fuente de verdad: el documento REAL materiales/data_planilla_exacta_v4.
+  if(materialesIntegradosAcopio instanceof Set && materialesIntegradosAcopio.has(iid)){
+    return true;
+  }
+  return (materialesCargasSnapshotAcopio||[]).some(function(c){
+    return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a);
+  });
+}
+
 function estadoMaterialesRetiro(retiro){
   var a=getAcopio();
   if(!a||!retiro)return {cls:'err',txt:'No se pudo verificar Materiales'};
@@ -6908,67 +6922,34 @@ function estadoMaterialesRetiro(retiro){
       ?{cls:'off',txt:'Materiales se registra luego al consumir desde Pañol'}
       :{cls:'off',txt:'Materiales fue omitido en este retiro'};
   }
-  var iid=integracionRetiroId(a.id,retiro.id);
 
-  // IMPORTANTE para cargas masivas: el estado local puede seguir figurando como
-  // "pendiente" unos instantes aunque la carga YA exista realmente en Materiales.
-  // Antes de mostrar el punto gris, verificar el destino real.
-  if(retiro.materialesSyncEstado==='pendiente'||retiro.materialesSyncEstado==='sincronizando'){
-    if(materialAcopioConfirmadoReciente(iid)){
-      return {cls:'ok',txt:'Cargado OK en Materiales'};
-    }
-    if(materialesIntegradosAcopio instanceof Set && materialesIntegradosAcopio.has(iid)){
-      return {cls:'ok',txt:'Cargado OK en Materiales'};
-    }
-    var existeMientrasPendiente=(materialesCargasSnapshotAcopio||[]).some(function(c){
-      return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a);
-    });
-    if(existeMientrasPendiente){
-      return {cls:'ok',txt:'Cargado OK en Materiales'};
-    }
-    if(materialesIntegracionesAuditadasAcopio instanceof Set && materialesIntegracionesAuditadasAcopio.has(iid)){
-      return {cls:'ok',txt:'Cargado OK en Materiales'};
-    }
-    return {cls:'off',txt:'Materiales se sincroniza en segundo plano'};
-  }
-
-  // Si el retiro quedó en estado OK, la escritura transaccional principal ya terminó
-  // correctamente. Pintar verde sin depender de un Map temporal ni de otro snapshot.
-  if(String(retiro.materialesSyncEstado||'')==='ok'){
+  // CQ 06/10/2026 — el verde NO se toma más de materialesSyncEstado="ok".
+  // Esa marca pertenece a Acopio y puede quedar vieja si Materiales fue modificado,
+  // reconciliado o perdió una carga. El punto verde sólo aparece si el retiro
+  // existe realmente en materiales/data_planilla_exacta_v4.
+  if(cqRetiroExisteRealEnMateriales(retiro,a)){
     return {cls:'ok',txt:'Cargado OK en Materiales'};
   }
 
-  // La escritura directa a Materiales se confirma dentro de una transacción.
-  // Si esa escritura terminó OK, el punto puede mostrarse verde de inmediato.
-  // Luego los snapshots/auditorías siguen verificando en segundo plano.
-  if(String(retiro.materialesSyncEstado||'')==='ok' && materialAcopioConfirmadoReciente(iid)){
-    return {cls:'ok',txt:'Cargado OK en Materiales'};
-  }
-  if(String(retiro.materialesSyncEstado||'')==='error' && materialesIntegradosAcopio===null){
-    return {cls:'wait',txt:'Reintentando / verificando Materiales…'};
-  }
-
-  // Documento principal de Materiales.
-  if(materialesIntegradosAcopio instanceof Set && materialesIntegradosAcopio.has(iid)){
-    return {cls:'ok',txt:'Cargado OK en Materiales'};
-  }
-  var existePrincipal=(materialesCargasSnapshotAcopio||[]).some(function(c){
-    return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a);
-  });
-  if(existePrincipal)return {cls:'ok',txt:'Cargado OK en Materiales'};
-
-  // 4) Auditoría de integración: respaldo para cargas históricas que sí fueron enviadas
-  // pero perdieron metadata auxiliar al re-guardar la planilla de Materiales.
-  if(materialesIntegracionesAuditadasAcopio instanceof Set && materialesIntegracionesAuditadasAcopio.has(iid)){
-    return {cls:'ok',txt:'Cargado OK en Materiales'};
-  }
-
-  // Hasta terminar ambas verificaciones no pintar rojo prematuramente.
-  if(materialesIntegradosAcopio===null || materialesIntegracionesAuditadasAcopio===null || materialesAuditandoAcopio){
+  // Hasta recibir el primer snapshot real no afirmar que falta.
+  if(materialesIntegradosAcopio===null){
     return {cls:'wait',txt:'Verificando Materiales…'};
   }
   if(materialesVerificacionErrorAcopio){
     return {cls:'wait',txt:'No se pudo verificar Materiales todavía'};
+  }
+
+  var estado=String(retiro.materialesSyncEstado||'');
+  if(estado==='pendiente'||estado==='sincronizando'){
+    return {cls:'wait',txt:'Sincronizando con Materiales…'};
+  }
+
+  // Si Acopio decía OK pero el destino no lo tiene, mostrar la inconsistencia real.
+  if(estado==='ok'){
+    return {cls:'err',txt:'FALTA en Materiales aunque Acopio figuraba OK. Se reparará automáticamente.'};
+  }
+  if(estado==='error'){
+    return {cls:'err',txt:'NO está cargado en Materiales. Verificar / reparar.'};
   }
 
   return {cls:'err',txt:'NO está cargado en Materiales. Verificar.'};
@@ -6977,6 +6958,76 @@ function puntoMaterialesRetiro(retiro){
   var e=estadoMaterialesRetiro(retiro);
   return '<span class="mat-sync-dot '+e.cls+'" title="'+e.txt.replace(/"/g,'&quot;')+'" aria-label="'+e.txt.replace(/"/g,'&quot;')+'"></span>';
 }
+
+var cqAutoReparandoMaterialesAcopio=false;
+var cqAutoRepararMaterialesTimer=null;
+
+function cqProgramarAutoReparacionMaterialesAcopio(){
+  clearTimeout(cqAutoRepararMaterialesTimer);
+  cqAutoRepararMaterialesTimer=setTimeout(function(){
+    cqAutoRepararMaterialesFaltantesActual().catch(function(e){
+      console.warn('Auto-reparación Materiales',e);
+    });
+  },450);
+}
+
+// Repara únicamente retiros del acopio abierto que:
+// 1) debían cargarse en Materiales,
+// 2) Acopio ya había marcado como OK,
+// 3) NO existen en el documento real de Materiales.
+// Es un upsert por integrationId: no vuelve a descontar stock ni duplica retiros.
+async function cqAutoRepararMaterialesFaltantesActual(){
+  if(cqAutoReparandoMaterialesAcopio)return;
+  if(!window._cqFirebaseReady||!window._cqFirebase)return;
+  if(materialesIntegradosAcopio===null||materialesVerificacionErrorAcopio)return;
+
+  var a=getAcopio();
+  if(!a)return;
+
+  var faltantes=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
+    if(!r||r.cargarMateriales===false)return false;
+    if(String(r.materialesSyncEstado||'')!=='ok')return false;
+    return !cqRetiroExisteRealEnMateriales(r,a);
+  });
+
+  if(!faltantes.length)return;
+
+  cqAutoReparandoMaterialesAcopio=true;
+  var ok=0,errores=0;
+  try{
+    for(var i=0;i<faltantes.length;i++){
+      var r=faltantes[i];
+      try{
+        r.materialesSyncEstado='sincronizando';
+        r.materialesSyncError='';
+        try{renderRetirarHistorial();}catch(_e){}
+        await sincronizarRetiroConMateriales(r,true);
+        r.materialesSyncEstado='ok';
+        r.materialesSyncError='';
+        r.materialesSyncAt=new Date().toISOString();
+        ok++;
+      }catch(e){
+        errores++;
+        r.materialesSyncEstado='error';
+        r.materialesSyncError=String(e&&e.message||e);
+        r.materialesSyncAt=new Date().toISOString();
+        console.warn('No se pudo reponer retiro faltante en Materiales',r.id,e);
+      }
+    }
+    // Guardar sólo los estados de sincronización en Acopio.
+    try{persist();}catch(_e){}
+    try{renderRetirarHistorial();}catch(_e){}
+    if(ok){
+      toast('✓ Se repararon '+ok+' retiro(s) que faltaban en Materiales');
+    }
+    if(errores){
+      toast('⚠️ '+errores+' retiro(s) siguen faltando en Materiales','err');
+    }
+  }finally{
+    cqAutoReparandoMaterialesAcopio=false;
+  }
+}
+
 function iniciarVerificacionMaterialesAcopio(){
   if(!window._cqFirebaseReady||!window._cqFirebase){setTimeout(iniciarVerificacionMaterialesAcopio,700);return;}
   var f=window._cqFirebase;
@@ -6993,11 +7044,16 @@ function iniciarVerificacionMaterialesAcopio(){
     }else{
       materialesCargasSnapshotAcopio=[];
     }
+    // El Set representa SOLAMENTE lo que existe en el documento real de Materiales.
+    // No mezclar confirmaciones locales: podían mantener un punto verde aunque la
+    // carga ya no estuviera realmente en Materiales.
     materialesConfirmadosRecientesAcopio.forEach(function(ts,iid){
-      if(Date.now()-ts<10000)ids.add(String(iid));
-      else materialesConfirmadosRecientesAcopio.delete(iid);
+      if(Date.now()-ts>=15000)materialesConfirmadosRecientesAcopio.delete(iid);
     });
     materialesIntegradosAcopio=ids;
+    // Si Acopio conservó un estado OK histórico pero el retiro desapareció de
+    // Materiales, reponerlo de forma idempotente por integrationId.
+    cqProgramarAutoReparacionMaterialesAcopio();
     // CQ 27/08/2026 — no releer toda la colección materiales_integraciones en cada cambio.
     // data_planilla_exacta_v4 es la fuente principal y ya contiene los integrationId.
     try{ renderRetirarHistorial(); }catch(_e){}
