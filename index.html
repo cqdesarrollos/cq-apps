@@ -2082,14 +2082,34 @@ html.cq-layout-empleado .cq-secundarios:empty{display:none!important}
 }
 </style>
 
-<style id="cq-no-flash-perfil-v1">
+<style id="cq-no-flash-perfil-v2">
 /* No mostrar el panel base antes de conocer el rol real del usuario.
-   Evita que un empleado vea fugazmente la vista/perfil de Gerencia al volver. */
+   Mientras se restaura una sesión recordada, mostrar una espera visible en vez de fondo vacío. */
 html:not(.cq-profile-ready) .app{visibility:hidden!important}
 html.cq-profile-ready .app{visibility:visible!important}
+#cq-boot-loader{
+  display:none;position:fixed;inset:0;z-index:29990;
+  align-items:center;justify-content:center;flex-direction:column;gap:13px;
+  background:#0b1b51;color:#dce8e3;font-family:Arial,Helvetica,sans-serif;
+}
+html.cq-gerencia-recordada:not(.cq-profile-ready) #cq-boot-loader{display:flex}
+html.cq-profile-ready #cq-boot-loader{display:none!important}
+.cq-boot-spinner{
+  width:38px;height:38px;border-radius:50%;
+  border:4px solid rgba(255,255,255,.18);border-top-color:#00ce7c;
+  animation:cqBootSpin .7s linear infinite;
+}
+.cq-boot-text{font-size:12px;font-weight:800;letter-spacing:.02em}
+.cq-boot-sub{font-size:9px;color:#9fb1c7;margin-top:-7px}
+@keyframes cqBootSpin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
+<div id="cq-boot-loader" role="status" aria-live="polite">
+  <div class="cq-boot-spinner" aria-hidden="true"></div>
+  <div class="cq-boot-text">Cargando menú…</div>
+  <div class="cq-boot-sub">Restaurando tu acceso</div>
+</div>
 <div class="app">
   <header class="header">
     <div class="header-left">
@@ -2332,7 +2352,9 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-await setPersistence(auth, browserLocalPersistence);
+const cqPersistenceReady=setPersistence(auth, browserLocalPersistence).catch(e=>{
+  console.warn("Persistencia Firebase:",e);
+});
 
 const overlay=document.getElementById("cq-gerencia-auth");
 const checking=document.getElementById("cq-auth-checking");
@@ -2356,6 +2378,40 @@ const GERENCIA_USERS={
 function keyFromEmail(email){
   const target=String(email||"").toLowerCase();
   return Object.keys(GERENCIA_USERS).find(k=>GERENCIA_USERS[k].toLowerCase()===target) || null;
+}
+
+const CQ_PROFILE_CACHE_KEY="cq_auth_profile_1h";
+const CQ_PROFILE_CACHE_TTL=60*60*1000;
+function cqLeerPerfilCache(user){
+  try{
+    const raw=JSON.parse(localStorage.getItem(CQ_PROFILE_CACHE_KEY)||"null");
+    if(!raw||!user)return null;
+    const age=Date.now()-Number(raw.validadoEn||0);
+    if(age<0||age>CQ_PROFILE_CACHE_TTL)return null;
+    if(String(raw.email||"").toLowerCase()!==String(user.email||"").toLowerCase())return null;
+    const mods=Array.isArray(raw.modulos)?raw.modulos:[];
+    const role=(raw.role==="gerencia"||raw.rol==="gerencia"||mods.includes("gerencia"))?"gerencia":"empleado";
+    return {
+      id:raw.id||keyFromEmail(user.email),
+      nombre:raw.nombre||keyFromEmail(user.email)||"Usuario",
+      email:user.email,
+      modulos:[...new Set(mods.map(normalizeModuleName).concat(role==="empleado"?["postobra","arquitectura"]:[]))],
+      role
+    };
+  }catch(e){return null}
+}
+function cqGuardarPerfilCache(profile){
+  try{
+    localStorage.setItem(CQ_PROFILE_CACHE_KEY,JSON.stringify({
+      id:profile.id||"",nombre:profile.nombre||"",email:profile.email||"",
+      modulos:Array.isArray(profile.modulos)?profile.modulos:[],
+      role:profile.role||"empleado",rol:profile.role==="gerencia"?"gerencia":"operaciones",
+      validadoEn:Date.now()
+    }));
+  }catch(e){}
+}
+function cqBorrarPerfilCache(){
+  try{localStorage.removeItem(CQ_PROFILE_CACHE_KEY)}catch(e){}
 }
 function showLogin(text=""){
   document.documentElement.classList.remove("cq-profile-ready");
@@ -2425,17 +2481,20 @@ function applyUnifiedPermissions(profile){
   }
   document.querySelector('.title .sub').textContent=isGerencia?"Panel de Gestión":"Panel Operativo";
 }
-function grant(profile){
+function grant(profile,guardarCache=true){
   window._cqGerenciaProfile=profile;
-  document.documentElement.classList.add("cq-profile-ready");
   try{
     localStorage.setItem("cq_unificado_demo_recordada","1");
     document.documentElement.classList.add("cq-gerencia-recordada");
+    if(guardarCache)cqGuardarPerfilCache(profile);
   }catch(e){}
   overlay.classList.add("hidden");
   checking.style.display="block";
   form.style.display="none";
+
+  // Aplicar permisos ANTES de hacer visible el menú: evita cualquier flash de Gerencia.
   applyUnifiedPermissions(profile);
+  document.documentElement.classList.add("cq-profile-ready");
   badge.textContent="🔐 "+profile.nombre+" · "+(profile.role==="gerencia"?"Gerencia":"Operaciones");
   if(userWrap) userWrap.style.display="flex";
 
@@ -2447,18 +2506,31 @@ function grant(profile){
   }
 }
 onAuthStateChanged(auth, async user=>{
-  if(!user){ showLogin(); return; }
+  if(!user){
+    cqBorrarPerfilCache();
+    showLogin();
+    return;
+  }
+
+  // Retorno rápido: si este usuario fue validado hace menos de 1 h, mostrar su menú
+  // inmediatamente y revalidar contra Firestore en segundo plano.
+  const cached=cqLeerPerfilCache(user);
+  if(cached)grant(cached,false);
+
   try{
     const profile=await gerenciaProfile(user);
     if(!profile){
+      cqBorrarPerfilCache();
       await signOut(auth);
       showLogin("Este usuario no tiene permisos configurados.");
       return;
     }
-    grant(profile);
+    grant(profile,true);
   }catch(e){
     console.warn("Gerencia auth:",e);
-    showLogin("No se pudieron verificar los permisos.");
+    // Si ya había un perfil reciente validado, mantener el menú visible y reintentar
+    // en la próxima entrada en vez de volver a dejar una pantalla azul vacía.
+    if(!cached)showLogin("No se pudieron verificar los permisos.");
   }
 });
 
@@ -2500,6 +2572,7 @@ if(salirBtn){
   salirBtn.addEventListener("click",async ()=>{
     try{
       localStorage.removeItem("cq_unificado_demo_recordada");
+      cqBorrarPerfilCache();
       document.documentElement.classList.remove("cq-gerencia-recordada");
     }catch(e){}
     try{
@@ -2585,6 +2658,7 @@ form.addEventListener("submit",async e=>{
   msg.textContent="Verificando…";
   try{
     localStorage.setItem("cq_unificado_demo_ultimo_usuario",key);
+    await cqPersistenceReady;
     await signInWithEmailAndPassword(auth,email,passInput.value);
   }catch(e){
     msg.textContent="Usuario o contraseña incorrectos.";
