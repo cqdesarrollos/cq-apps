@@ -565,6 +565,11 @@ th:nth-child(2), td:nth-child(2){display:none!important}
  .cq-selected-product{padding:8px!important}
 }
 </style>
+
+<style id="cq-observacion-general-obra-v73">
+#obs{height:64px!important;min-height:64px!important;resize:vertical!important;line-height:1.3!important}
+.cq-general-obs-note{margin-top:5px;padding:6px 8px;border-radius:8px;background:#f2f7f4;color:#48675a;font-size:8px;font-weight:800;line-height:1.3}
+</style>
 </head>
 <body>
 
@@ -588,7 +593,7 @@ th:nth-child(2), td:nth-child(2){display:none!important}
 </main>
 
 <div class="modalbg" id="modal"><div class="modal"><div class="mhd"><div><b>Nueva solicitud</b><div style="font-size:10px;color:#cfe4db;margin-top:2px">Pedido semanal de materiales</div></div><button onclick="cerrar()">×</button></div><div class="mbody">
-<div class="section"><div class="sectiontitle">Datos del pedido</div><div class="grid2"><div><label>Obra</label><select id="obra"><option value="">Cargando obras…</option></select></div><div><label>Fecha necesaria</label><input id="fecha" type="date"></div></div><div style="margin-top:9px"><label>Prioridad</label><select id="prioridad"><option>Normal</option><option>Urgente</option></select></div></div>
+<div class="section"><div class="sectiontitle">Datos del pedido</div><div class="grid2"><div><label>Obra</label><select id="obra"><option value="">Cargando obras…</option></select></div><div><label>Fecha necesaria</label><input id="fecha" type="date"></div></div><div style="margin-top:9px"><label>Prioridad</label><select id="prioridad"><option>Normal</option><option>Urgente</option></select></div><div style="margin-top:9px"><label>Observación general de la obra</label><textarea id="obs" rows="2" placeholder="Ej.: entregar todo junto / coordinar con encargado / indicación general para esta obra"></textarea></div></div>
 <div class="section"><div class="sectiontitle">Artículos · Catálogo de Materiales</div><div id="cqFuenteMateriales" style="font-size:8px;color:#73877e;font-weight:700;margin:-3px 0 7px">Conectando con MATERIALES · Firebase…</div><div class="catalogbox"><div class="catfilters"><input id="buscar" placeholder="Buscar material..." oninput="renderCatalog()"></div><div class="matlist" id="matlist"></div></div><div class="selected" id="selected"></div></div>
 </div><div class="mfoot"><button class="btn btn-cancel" onclick="cerrar()">Cancelar</button><button class="btn btn-green" onclick="guardar()">Guardar solicitud</button></div></div></div>
 
@@ -616,7 +621,7 @@ function renderSelected(){
         </div>`).join('')
     : '<div class="empty" style="padding:16px">Elegí artículos del catálogo para armar el pedido.</div>';
 }
-function guardar(){if(!$('obra').value.trim())return alert('Seleccioná la obra.');if(!seleccion.length)return alert('Agregá al menos un material.');let fecha=$('fecha').value||isoToday();pedidos.unshift({id:Date.now(),creado:isoToday(),fecha,semana:weekOf(fecha),obra:$('obra').value.trim(),responsable:'',prioridad:$('prioridad').value,obs:'',estado:'Pendiente',items:JSON.parse(JSON.stringify(seleccion))});persist();cerrar();render()}
+function guardar(){if(!$('obra').value.trim())return alert('Seleccioná la obra.');if(!seleccion.length)return alert('Agregá al menos un material.');let fecha=$('fecha').value||isoToday();pedidos.unshift({id:Date.now(),creado:isoToday(),fecha,semana:weekOf(fecha),obra:$('obra').value.trim(),responsable:'',prioridad:$('prioridad').value,obs:($('obs')?.value||'').trim(),estado:'Pendiente',items:JSON.parse(JSON.stringify(seleccion))});persist();cerrar();render()}
 function persist(){localStorage.setItem(KEY,JSON.stringify(pedidos))}
 function estado(id){let p=pedidos.find(x=>x.id===id),seq=['Pendiente','Enviado','Recibido'];p.estado=seq[(seq.indexOf(p.estado)+1)%seq.length];persist();render()}
 function borrar(id){if(confirm('¿Eliminar esta solicitud?')){pedidos=pedidos.filter(x=>x.id!==id);persist();render()}}
@@ -750,7 +755,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
         semana:weekOf(fecha),
         obra:obra,
         prioridad:document.getElementById("prioridad")?.value||"Normal",
-        obs:'',
+        obs:(document.getElementById('obs')?.value||'').trim(),
         estado:"Pendiente",
         items:JSON.parse(JSON.stringify(seleccion))
       };
@@ -813,7 +818,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
     const pedido={
       id:Date.now(),creado:isoToday(),fecha:fecha,semana:weekOf(fecha),
       obra:obra,prioridad:document.getElementById("prioridad")?.value||"Normal",
-      obs:'',
+      obs:(document.getElementById('obs')?.value||'').trim(),
       estado:"Pendiente",items:JSON.parse(JSON.stringify(seleccion))
     };
 
@@ -901,7 +906,7 @@ window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
    const p=pedidos.find(x=>String(x.id)===String(id));
    if(!p)return;
    const lineas=(p.items||[]).map(x=>"• "+(x.material||x.nombre||"")+" — "+(x.cantidad||x.qty||"")+(x.nota?"\n  Comentario: "+x.nota:"")).join("\n");
-   alert("Obra: "+p.obra+"\nFecha: "+fechaCorta(p.fecha)+"\nPrioridad: "+(p.prioridad||"Normal")+(p.obs?"\nObservación: "+p.obs:"")+"\n\n"+lineas);
+   alert("Obra: "+p.obra+"\nFecha: "+fechaCorta(p.fecha)+"\nPrioridad: "+(p.prioridad||"Normal")+(p.obs?"\nObservación general de la obra: "+p.obs:"")+"\n\n"+lineas);
  }
  
  window.cqEliminarItem=async function(id,itemIndex){
@@ -946,10 +951,12 @@ window.eliminarPedido=async function(id){
    if(!rows.length){alert("Marcá al menos un ítem.");return}
 
    try{
-     const W=1080, rowH=112, headerH=190, tableHeadH=58, footerH=70;
+     const W=1080, rowH=112, headerH=190, tableHeadH=58, footerH=70, obsBandH=78;
      let cambios=0, ant=null;
      rows.forEach(r=>{const o=String(r.p?.obra||"");if(ant!==null&&o!==ant)cambios++;ant=o});
-     const H=headerH+tableHeadH+(rows.length*rowH)+(cambios*16)+footerH;
+     const pedidosConObs=new Set();
+     rows.forEach(r=>{if(String(r.p?.obs||"").trim())pedidosConObs.add(String(r.p?.id??r.p?.obra??""))});
+     const H=headerH+tableHeadH+(rows.length*rowH)+(cambios*16)+(pedidosConObs.size*obsBandH)+footerH;
      const c=document.createElement("canvas"); c.width=W; c.height=H;
      const ctx=c.getContext("2d");
      const esc=v=>String(v??"");
@@ -985,9 +992,36 @@ window.eliminarPedido=async function(id){
      ctx.fillText("OBRA",65,y+36);ctx.fillText("PRODUCTO",245,y+36);ctx.fillText("CANTIDAD",750,y+36);ctx.fillText("PRIORIDAD",885,y+36);
      y+=tableHeadH;
 
-     let obraAnt=null;
+     const wrapCanvas=(txt,maxW,maxLines=2)=>{
+       const words=String(txt||"").split(/\s+/), lines=[]; let cur="";
+       for(const w of words){
+         const test=cur?cur+" "+w:w;
+         if(ctx.measureText(test).width<=maxW)cur=test;
+         else{if(cur)lines.push(cur);cur=w;if(lines.length>=maxLines-1)break;}
+       }
+       if(cur&&lines.length<maxLines)lines.push(cur);
+       const joined=lines.join(" ");
+       if(joined.length<String(txt||"").length && lines.length){
+         let last=lines.length-1;
+         while(lines[last].length>3&&ctx.measureText(lines[last]+"…").width>maxW)lines[last]=lines[last].slice(0,-1);
+         lines[last]+="…";
+       }
+       return lines;
+     };
+     let obraAnt=null, pedidoAnt=null;
      for(const r of rows){
        const obra=esc(r.p?.obra), producto=esc(r.x?.material||r.x?.nombre||""), comentario=esc(r.x?.nota||""), cantidad=esc(qty(r.x)), prioridad=pri(r.p);
+       const pedidoKey=String(r.p?.id??obra), obsGeneral=esc(r.p?.obs||"").trim();
+       if(pedidoKey!==pedidoAnt){
+         pedidoAnt=pedidoKey;
+         if(obsGeneral){
+           ctx.fillStyle="#f1f6f3";ctx.fillRect(45,y,W-90,obsBandH);
+           ctx.fillStyle="#1f4d40";ctx.font="700 18px Arial";ctx.fillText("OBSERVACIÓN GENERAL · "+obra,65,y+25);
+           ctx.fillStyle="#53675e";ctx.font="600 20px Arial";
+           const gl=wrapCanvas(obsGeneral,W-140,2);gl.forEach((ln,j)=>ctx.fillText(ln,65,y+51+j*22));
+           y+=obsBandH;
+         }
+       }
        if(obraAnt!==null && obra!==obraAnt){
          ctx.strokeStyle="#9aa7a1";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(45,y+7);ctx.lineTo(W-45,y+7);ctx.stroke();y+=14;
        }
@@ -1000,22 +1034,6 @@ window.eliminarPedido=async function(id){
        do{ctx.font="700 "+obraFont+"px Arial";if(ctx.measureText(obra).width<=160)break;obraFont--}while(obraFont>14);
        ctx.fillText(obra,65,y+47);
        ctx.font="20px Arial";
-       const wrapCanvas=(txt,maxW,maxLines=2)=>{
-         const words=String(txt||"").split(/\s+/), lines=[]; let cur="";
-         for(const w of words){
-           const test=cur?cur+" "+w:w;
-           if(ctx.measureText(test).width<=maxW)cur=test;
-           else{if(cur)lines.push(cur);cur=w;if(lines.length>=maxLines-1)break;}
-         }
-         if(cur&&lines.length<maxLines)lines.push(cur);
-         const joined=lines.join(" ");
-         if(joined.length<String(txt||"").length && lines.length){
-           let last=lines.length-1;
-           while(lines[last].length>3&&ctx.measureText(lines[last]+"…").width>maxW)lines[last]=lines[last].slice(0,-1);
-           lines[last]+="…";
-         }
-         return lines;
-       };
        const prodLines=wrapCanvas(producto,455,2);
        prodLines.forEach((ln,j)=>ctx.fillText(ln,245,y+31+j*23));
        if(comentario){
@@ -1185,7 +1203,7 @@ window.eliminarPedido=async function(id){
       '<div><small>Estado</small><strong>'+E(p.estado||"Pendiente")+'</strong></div>'+
     '</div>'+
     '<div class="view-items">'+its.map(x=>'<div class="view-item"><div><b>'+E(x.material||x.nombre||"")+'</b><small>'+E(x.subrubro||"")+'</small></div><div class="view-qty">'+E(qty(x))+'</div></div>').join('')+'</div>'+
-    (p.obs?'<div class="view-obs"><b>Observación:</b> '+E(p.obs)+'</div>':'');
+    (p.obs?'<div class="view-obs"><b>Observación general de la obra:</b> '+E(p.obs)+'</div>':'');
    const m=document.getElementById("viewPedidoModal");m.classList.add("open");m.setAttribute("aria-hidden","false");
  };
  document.getElementById("viewPedidoModal").addEventListener("click",e=>{if(e.target.id==="viewPedidoModal")cerrarVistaPedido()});
@@ -1306,15 +1324,9 @@ window.eliminarPedido=async function(id){
  };
  
 function cqMigrarObservacionesLegacy(){
-  let cambio=false;
-  (pedidos||[]).forEach(p=>{
-    if(p && p.obs && Array.isArray(p.items) && p.items.length===1 && !p.items[0].nota){
-      p.items[0].nota=p.obs;
-      p.obs='';
-      cambio=true;
-    }
-  });
-  if(cambio){ try{persist();}catch(e){} }
+  // V73: p.obs vuelve a ser la observación GENERAL de la obra/pedido.
+  // No migrar ni vaciar este campo: las observaciones por producto viven en item.nota.
+  return;
 }
 setTimeout(cqMigrarObservacionesLegacy,600);
 function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>{if(selected.has(k(p.id,i)))out.push({p,x})}));return out}
@@ -1350,9 +1362,25 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
   pdf.setTextColor(...muted);pdf.setFont("helvetica","normal");pdf.setFontSize(8);
   pdf.text(rows.length+" item"+(rows.length===1?"":"s")+" · "+obras.length+" obra"+(obras.length===1?"":"s"),margin,49);
   let y=54;y=tableHead(y);
-  let obraAnterior=null;
+  let obraAnterior=null, pedidoAnterior=null;
   rows.forEach(({p,x},idx)=>{
     const obraActual=String(p.obra||"");
+    const pedidoKey=String(p.id??obraActual);
+    const obsGeneral=String(p.obs||"").trim();
+    if(pedidoKey!==pedidoAnterior){
+      pedidoAnterior=pedidoKey;
+      if(obsGeneral){
+        const generalLines=pdf.splitTextToSize(obsGeneral,170);
+        const generalH=Math.max(13,9+(generalLines.length*3.8));
+        if(y+generalH>282){pdf.addPage();header();y=50;y=tableHead(y)}
+        pdf.setFillColor(241,246,243);pdf.rect(margin,y,tableW,generalH,"F");
+        pdf.setTextColor(31,77,64);pdf.setFont("helvetica","bold");pdf.setFontSize(7.4);
+        pdf.text("OBSERVACIÓN GENERAL · "+obraActual,margin+4,y+4.8);
+        pdf.setTextColor(...muted);pdf.setFont("helvetica","normal");pdf.setFontSize(8.3);
+        pdf.text(generalLines,margin+4,y+9.2);
+        y+=generalH;
+      }
+    }
     if(obraActual!==obraAnterior){
       if(obraAnterior!==null){
         y+=2;
@@ -1627,6 +1655,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
    document.getElementById("obra").value=p.obra||"";
    document.getElementById("fecha").value=p.fecha||isoToday();
    document.getElementById("prioridad").value=P(p);
+   if(document.getElementById("obs"))document.getElementById("obs").value=p.obs||"";
    
    renderSelected();
 
@@ -1646,7 +1675,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
      p.fecha=document.getElementById("fecha").value||isoToday();
      p.semana=weekOf(p.fecha);
      p.prioridad=document.getElementById("prioridad").value;
-     p.obs='';
+     p.obs=(document.getElementById('obs')?.value||'').trim();
      p.items=JSON.parse(JSON.stringify(seleccion));
      persist();
      window._cqEditId=null;
@@ -2547,10 +2576,12 @@ try{
     var obra=document.getElementById('obra');
     var fecha=document.getElementById('fecha');
     var prioridad=document.getElementById('prioridad');
+    var obsGeneral=document.getElementById('obs');
     var buscar=document.getElementById('buscar');
     if(obra)obra.value=p.obra||'';
     if(fecha)fecha.value=p.fecha||isoToday();
     if(prioridad)prioridad.value=P(p);
+    if(obsGeneral)obsGeneral.value=p.obs||'';
     if(buscar)buscar.value='';
 
     cqModoModalEdicion(true);
@@ -2617,7 +2648,7 @@ try{
       fecha:fecha,
       semana:weekOf(fecha),
       prioridad:document.getElementById("prioridad")?.value||"Normal",
-      obs:"",
+      obs:(document.getElementById("obs")?.value||"").trim(),
       items:JSON.parse(JSON.stringify(seleccion))
     };
 
@@ -2647,4 +2678,8 @@ try{
 }
 </style>
 
+
+<script id="cq-pedidos-v73-observacion-general-marca">
+window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
+</script>
 </body></html>
