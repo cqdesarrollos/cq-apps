@@ -15586,6 +15586,276 @@ window.abrirGraficoDirecto = function(){
 })();
 </script>
 
+
+<script id="cq-maestro-unico-sin-reversion-v1">
+(function(){
+  if(window.__cqMaestroUnicoSinReversionV1)return;
+  window.__cqMaestroUnicoSinReversionV1=true;
+
+  function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  }
+  function matById(id){
+    return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;
+  }
+  function ensure(){
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.nombreManualConfirmado||typeof state.nombreManualConfirmado!=='object')state.nombreManualConfirmado={};
+    if(!state.matNombres||typeof state.matNombres!=='object')state.matNombres={};
+    if(!state.matCodigos||typeof state.matCodigos!=='object')state.matCodigos={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+  }
+
+  // Aplica los datos maestros a catálogo + TODOS los registros del artículo.
+  function aplicarMaestro(id,lock){
+    id=Number(id);
+    if(!Number.isFinite(id)||!lock)return false;
+    ensure();
+    var m=matById(id);
+    if(!m)return false;
+
+    var nombre=String(lock.nombre||m.mat||'').trim();
+    var codigo=String(lock.codigo!=null?lock.codigo:(state.matCodigos[id]||m.codigo||'')).trim();
+    var categoria=String(lock.categoria||state.matCategorias[id]||m.catName||'').trim();
+
+    if(nombre){
+      state.nombreManualConfirmado[id]=true;
+      state.matNombres[id]=nombre;
+      m.mat=nombre;
+    }
+    state.matCodigos[id]=codigo;
+    m.codigo=codigo;
+
+    if(categoria){
+      state.categoriaManual[id]=categoria;
+      state.matCategorias[id]=categoria;
+      m.catName=categoria;
+    }
+
+    (CATS||[]).forEach(function(c){
+      (c.items||[]).forEach(function(x){
+        if(Number(x.id)!==id)return;
+        if(nombre)x.mat=nombre;
+        x.codigo=codigo;
+        if(categoria)x.catName=categoria;
+      });
+    });
+    (state.extraMats||[]).forEach(function(x){
+      if(Number(x.id)!==id)return;
+      if(nombre)x.mat=nombre;
+      x.codigo=codigo;
+      if(categoria)x.catName=categoria;
+    });
+    (state.materialesNuevos||[]).forEach(function(x){
+      if(Number(x.id)!==id)return;
+      if(nombre)x.mat=nombre;
+      x.codigo=codigo;
+      if(categoria)x.catName=categoria;
+    });
+
+    // Histórico y movimientos automáticos: mismo matId = mismo nombre/código maestro.
+    (state.cargas||[]).forEach(function(c){
+      if(Number(c.matId)!==id)return;
+      if(nombre)c.matName=nombre;
+      if(codigo)c.matCode=codigo;
+    });
+
+    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{},{
+      nombre:nombre,
+      codigo:codigo,
+      categoria:categoria,
+      comentarios:lock.comentarios!=null?String(lock.comentarios||''):
+        String((state.catalogoManual[id]&&state.catalogoManual[id].comentarios)||m.comentarios||''),
+      manual:true,
+      updatedAt:new Date().toISOString()
+    });
+
+    try{
+      if(categoria&&typeof moverMaterialACategoria==='function')moverMaterialACategoria(id,categoria);
+      if(categoria&&typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(m,categoria);
+    }catch(e){}
+    return true;
+  }
+  window.cqAplicarMaestroMaterial=aplicarMaestro;
+
+  /*
+   * Guardado seguro corregido:
+   * conserva altas automáticas remotas, pero NO deja que el remoto reintroduzca
+   * nombre/rubro viejos para un material editado manualmente.
+   */
+  window.cqGuardarMaterialesSeguro = cqGuardarMaterialesSeguro = async function(extra){
+    if(!window._dbReady||!window._runTransaction)throw new Error('Firebase transaccional no disponible');
+    normalizeState();
+    ensure();
+
+    var ref=window._doc(window._db,'materiales','data_planilla_exacta_v4');
+    var local=clone(state);
+    extra=extra||{};
+
+    await window._runTransaction(window._db,async function(tx){
+      var snap=await tx.get(ref);
+      var remoto=snap.exists()?(snap.data()||{}):{};
+      var remCargas=Array.isArray(remoto.cargas)?remoto.cargas:[];
+      var locCargas=Array.isArray(local.cargas)?local.cargas:[];
+
+      function esAuto(c){
+        if(!c)return false;
+        if(c.automatico===true||c.integracionId)return true;
+        var o=String(c.origen||c.source||'').toLowerCase();
+        return o==='acopio'||o==='panol'||o==='caja_chica'||o==='cq_caja_gerencia'||o==='caja_gerencia';
+      }
+
+      var manuales=locCargas.filter(function(c){return !esAuto(c);});
+      var mapa={};
+      locCargas.filter(esAuto).forEach(function(c){
+        mapa[String(c.integracionId||('legacy_'+c.id))]=clone(c);
+      });
+      remCargas.filter(esAuto).forEach(function(c){
+        var k=String(c.integracionId||('legacy_'+c.id));
+        // Firebase aporta altas/movimientos; luego se imponen datos maestros locales.
+        mapa[k]=clone(c);
+      });
+
+      var locks=local.catalogoManual||{};
+      Object.keys(mapa).forEach(function(k){
+        var c=mapa[k];
+        var id=Number(c&&c.matId);
+        var lock=locks[id]||locks[String(id)];
+        if(!lock||lock.manual===false)return;
+        if(String(lock.nombre||'').trim())c.matName=String(lock.nombre).trim();
+        if(String(lock.codigo||'').trim())c.matCode=String(lock.codigo).trim();
+      });
+
+      local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
+
+      // Los mapas maestros locales también ganan sobre una copia remota antigua.
+      local.catalogoManual=clone(state.catalogoManual||{});
+      local.categoriaManual=clone(state.categoriaManual||{});
+      local.nombreManualConfirmado=clone(state.nombreManualConfirmado||{});
+      local.matNombres=clone(state.matNombres||{});
+      local.matCategorias=clone(state.matCategorias||{});
+      local.matCodigos=clone(state.matCodigos||{});
+
+      Object.keys(extra).forEach(function(k){local[k]=extra[k];});
+      local.updatedAt=new Date().toISOString();
+      tx.set(ref,local);
+    });
+
+    // Una sola lectura final.
+    var ver=await window._getDoc(ref);
+    if(ver.exists()){
+      var d=ver.data()||{};
+      delete d.updatedAt;
+      state=d;
+      normalizeState();
+      ensure();
+      Object.keys(state.catalogoManual||{}).forEach(function(id){
+        var lock=state.catalogoManual[id];
+        if(lock&&lock.manual!==false)aplicarMaestro(Number(id),lock);
+      });
+      localStorage.setItem(DB_KEY,JSON.stringify(state));
+    }
+    return true;
+  };
+
+  /*
+   * Edición de Catálogo: reemplaza toda la cadena de wrappers anteriores.
+   * Un click en Guardar = una modificación de estado + un único persist().
+   */
+  window.guardarNombreMat = guardarNombreMat = async function(){
+    var id=Number(selectedCargaMat);
+    var mat=matById(id);
+    if(!mat){try{closeEditarNombreMat();}catch(e){} return;}
+
+    var nombreEl=document.getElementById('editar-mat-nombre-input');
+    var codigoEl=document.getElementById('editar-mat-codigo');
+    var catEl=document.getElementById('editar-mat-cat');
+    var comentarioEl=document.getElementById('editar-mat-comentarios');
+
+    var nombre=nombreEl?String(nombreEl.value||'').trim():'';
+    var codigo=codigoEl?String(codigoEl.value||'').trim():'';
+    var categoria=catEl?String(catEl.value||'').trim():'';
+    var comentarios=comentarioEl?String(comentarioEl.value||'').trim():'';
+
+    if(!nombre){alert('Ingresá un nombre.');return;}
+    if(!categoria){alert('Seleccioná una categoría.');return;}
+
+    // Mantener la regla histórica especial de cemento.
+    if(id===7||codigo==='4816306010'||codigo==='4816306011'){
+      id=7; selectedCargaMat=7;
+      nombre='CEMENTO PORTLAND HOLCIM 25 KG';
+      codigo='4816306010';
+      categoria='Cemento';
+    }
+
+    var lock={nombre:nombre,codigo:codigo,categoria:categoria,comentarios:comentarios,manual:true};
+    aplicarMaestro(id,lock);
+
+    // Guardar comentarios también en el material activo.
+    mat=matById(id);
+    if(mat)mat.comentarios=comentarios;
+    (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.comentarios=comentarios;});
+    (CATS||[]).forEach(function(c){
+      (c.items||[]).forEach(function(x){if(Number(x.id)===id)x.comentarios=comentarios;});
+    });
+
+    localStorage.setItem(DB_KEY,JSON.stringify(state));
+    try{renderActive();}catch(e){}
+    try{renderCatalogo();}catch(e){}
+    try{renderReporte();}catch(e){}
+    try{closeEditarNombreMat();}catch(e){}
+
+    suppressRemoteUntil=Date.now()+2500;
+    try{
+      setSyncStatus('Firebase: guardando...');
+      await cqGuardarMaterialesSeguro();
+      await updateLastSync('guardó cambios');
+      setSyncStatus('Firebase: guardado','ok');
+      try{renderActive();}catch(e){}
+      try{renderCatalogo();}catch(e){}
+      try{renderReporte();}catch(e){}
+      try{showToast('✓ Material actualizado · nombre y rubro fijados');}catch(e){}
+    }catch(e){
+      console.warn('Guardado maestro Materiales',e);
+      setSyncStatus('Firebase: error','err');
+      try{showToast('⚠ No se pudo guardar en Firebase');}catch(_){}
+    }
+  };
+
+  /*
+   * La búsqueda masiva de códigos contra Acopio/Pañol era ejecutada en cada lectura
+   * completa y podía prolongar SYNC. Las integraciones en tiempo real ya traen código.
+   * Se conserva disponible sólo cuando se la fuerza manualmente con true.
+   */
+  if(typeof completarCodigosDesdeAcopioYPanol==='function'){
+    var completarCodigosOriginal=completarCodigosDesdeAcopioYPanol;
+    window.completarCodigosDesdeAcopioYPanol = completarCodigosDesdeAcopioYPanol = async function(forzar){
+      if(forzar===true)return completarCodigosOriginal(true);
+      return {actualizados:0,omitido:true};
+    };
+    window.completarCodigosDesdeAcopio=completarCodigosDesdeAcopioYPanol;
+  }
+
+  // Al terminar cualquier normalización, volver a imponer únicamente locks manuales,
+  // sin escribir Firebase ni iniciar otro ciclo de SYNC.
+  var normalizeFinal=normalizeState;
+  normalizeState=function(){
+    var r=normalizeFinal.apply(this,arguments);
+    ensure();
+    Object.keys(state.catalogoManual||{}).forEach(function(id){
+      var lock=state.catalogoManual[id];
+      if(lock&&lock.manual!==false)aplicarMaestro(Number(id),lock);
+    });
+    return r;
+  };
+
+  console.log('CQ Materiales: maestro único nombre/rubro + sync simplificado activo');
+})();
+</script>
+
 </body>
 </html>
 
@@ -16453,184 +16723,3 @@ body:has(#modal-reporte.open) #modal-reporte{
   setTimeout(instalar,300);
 })();
 </script>
-
-
-<script id="cq-maestro-manual-definitivo-v1">
-(function(){
-  if(window.__cqMaestroManualDefinitivoV1)return;
-  window.__cqMaestroManualDefinitivoV1=true;
-
-  var MASTER_COLLECTION='materiales';
-  var MASTER_DOC='catalogo_maestro_manual_v1';
-  var aplicandoMaestro=false;
-
-  function norm(v){
-    return String(v||'').toLowerCase().normalize('NFD')
-      .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
-  }
-  function matById(id){
-    return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;
-  }
-  function asegurar(){
-    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
-    if(!state.nombreManualConfirmado||typeof state.nombreManualConfirmado!=='object')state.nombreManualConfirmado={};
-    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
-    if(!state.matNombres||typeof state.matNombres!=='object')state.matNombres={};
-    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
-  }
-
-  function aplicarMaestro(id,lock){
-    id=Number(id);
-    if(!Number.isFinite(id)||!lock)return false;
-    asegurar();
-    var m=matById(id);
-    if(!m)return false;
-    var cambio=false;
-
-    var nombre=String(lock.nombre||'').trim();
-    if(nombre){
-      state.nombreManualConfirmado[id]=true;
-      state.matNombres[id]=nombre;
-      if(String(m.mat||'')!==nombre){m.mat=nombre;cambio=true;}
-      (CATS||[]).forEach(function(c){
-        (c.items||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
-      });
-      (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
-      (state.materialesNuevos||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
-      (state.cargas||[]).forEach(function(c){
-        if(Number(c.matId)===id && String(c.matName||'')!==nombre){
-          c.matName=nombre;cambio=true;
-        }
-      });
-    }
-
-    var categoria=String(lock.categoria||'').trim();
-    if(categoria){
-      state.categoriaManual[id]=categoria;
-      state.matCategorias[id]=categoria;
-      m.catName=categoria;
-      (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.catName=categoria;});
-      (state.materialesNuevos||[]).forEach(function(x){if(Number(x.id)===id)x.catName=categoria;});
-      try{if(typeof moverMaterialACategoria==='function')moverMaterialACategoria(id,categoria);}catch(e){}
-      try{if(typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(m,categoria);}catch(e){}
-      cambio=true;
-    }
-
-    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{},lock,{
-      nombre:nombre||m.mat,
-      categoria:categoria||state.matCategorias[id]||m.catName||'',
-      manual:true
-    });
-    return cambio;
-  }
-
-  async function guardarMaestroFirebase(id,lock){
-    if(!window._dbReady||!window._setDoc||!window._doc)return false;
-    var obj={};
-    obj['m_'+String(id)]=Object.assign({},lock,{
-      materialId:Number(id),
-      manual:true,
-      updatedAt:new Date().toISOString()
-    });
-    await window._setDoc(
-      window._doc(window._db,MASTER_COLLECTION,MASTER_DOC),
-      obj,
-      {merge:true}
-    );
-    return true;
-  }
-
-  async function leerYAplicarMaestros(repararPrincipal){
-    if(aplicandoMaestro||!window._dbReady||!window._getDoc||!window._doc)return false;
-    aplicandoMaestro=true;
-    try{
-      var snap=await window._getDoc(window._doc(window._db,MASTER_COLLECTION,MASTER_DOC));
-      if(!snap.exists())return false;
-      var data=snap.data()||{}, cambio=false;
-      Object.keys(data).forEach(function(k){
-        if(k.indexOf('m_')!==0)return;
-        var id=Number(k.slice(2));
-        if(aplicarMaestro(id,data[k]))cambio=true;
-      });
-      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(e){}
-      try{if(typeof renderActive==='function')renderActive();}catch(e){}
-      try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
-      if(cambio && repararPrincipal && typeof persist==='function'){
-        suppressRemoteUntil=Date.now()+9000;
-        await persist();
-      }
-      return cambio;
-    }catch(e){
-      console.warn('No se pudo aplicar catálogo maestro manual',e);
-      return false;
-    }finally{
-      aplicandoMaestro=false;
-    }
-  }
-  window.cqLeerCatalogoMaestroManual=leerYAplicarMaestros;
-
-  // La edición del usuario pasa a ser la autoridad definitiva para nombre + rubro.
-  var guardarPrev=window.guardarNombreMat || (typeof guardarNombreMat==='function'?guardarNombreMat:null);
-  if(typeof guardarPrev==='function'){
-    window.guardarNombreMat=guardarNombreMat=async function(){
-      var id=Number(selectedCargaMat);
-      var mAntes=matById(id);
-      var nombreAntes=mAntes?String(mAntes.mat||'').trim():'';
-      var categoriaAntes=mAntes?String((state.matCategorias&&state.matCategorias[id])||mAntes.catName||'').trim():'';
-
-      var ne=document.getElementById('editar-mat-nombre-input');
-      var ce=document.getElementById('editar-mat-cat');
-      var nombre=ne?String(ne.value||'').trim():'';
-      var categoria=ce?String(ce.value||'').trim():'';
-
-      var r=await guardarPrev.apply(this,arguments);
-
-      // Aunque sólo cambie el rubro, fijamos AMBOS datos actuales como maestros.
-      var lock={
-        nombre:nombre||nombreAntes,
-        categoria:categoria||categoriaAntes
-      };
-      aplicarMaestro(id,lock);
-
-      try{
-        await guardarMaestroFirebase(id,lock);
-      }catch(e){
-        console.warn('No se pudo guardar maestro manual separado',e);
-      }
-
-      // Actualiza el documento principal y, por lo tanto, todos los registros/reportes.
-      try{
-        suppressRemoteUntil=Date.now()+9000;
-        if(typeof persist==='function')await persist();
-      }catch(e){console.warn('No se pudo persistir edición maestra',e);}
-
-      // persist() fusiona cargas automáticas con Firebase; reaplicar al final garantiza
-      // que ninguna carga histórica recupere el nombre viejo.
-      aplicarMaestro(id,lock);
-      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(e){}
-      try{if(typeof renderActive==='function')renderActive();}catch(e){}
-      try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
-      return r;
-    };
-  }
-
-  // Cada lectura completa de Firebase termina reaplicando el maestro separado.
-  var loadPrev=window.loadFromFirebase || (typeof loadFromFirebase==='function'?loadFromFirebase:null);
-  if(typeof loadPrev==='function'){
-    window.loadFromFirebase=loadFromFirebase=async function(){
-      var r=await loadPrev.apply(this,arguments);
-      await leerYAplicarMaestros(true);
-      return r;
-    };
-  }
-
-  document.addEventListener('firebase-ready',function(){
-    setTimeout(function(){leerYAplicarMaestros(true);},700);
-    setTimeout(function(){leerYAplicarMaestros(true);},2500);
-  });
-  setTimeout(function(){leerYAplicarMaestros(true);},3500);
-
-  console.log('CQ catálogo maestro manual definitivo activo');
-})();
-</script>
-
