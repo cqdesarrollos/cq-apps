@@ -3511,6 +3511,40 @@ function cqInvertirOrdenGrafico(){
   renderCompareResult();
 }
 
+/* CQ: prorrateo anual de estructura/impuestos entre proyectos vendidos en cada año.
+   Cada proyecto cuenta una sola vez por año, aunque tenga U1/U2 vendidas ese mismo año. */
+function cqRoeAniosVentaProyecto(o){
+  return [...new Set((o&&o.unidades||[]).map(u=>Number(u.anioVenta)).filter(y=>Number.isFinite(y)&&y>0))];
+}
+function cqRoeProyectosVendidosEnAnio(y){
+  y=Number(y);
+  return (obras||[]).filter(o=>(o.unidades||[]).some(u=>Number(u.anioVenta)===y));
+}
+function cqRoeCostoFijoImputadoProyecto(o,k){
+  if(!o||!['estructura','impuestos'].includes(k))return 0;
+  const years = cqRoeResultYear==='todos'
+    ? cqRoeAniosVentaProyecto(o)
+    : [Number(cqRoeResultYear)];
+  return years.reduce((acc,y)=>{
+    if(!(o.unidades||[]).some(u=>Number(u.anioVenta)===Number(y)))return acc;
+    const vendidos=cqRoeProyectosVendidosEnAnio(y);
+    if(!vendidos.length)return acc;
+    const fijo=cqCostosFijosAnio(y);
+    return acc + (Number(fijo[k])||0)/vendidos.length;
+  },0);
+}
+function cqRoeCostosFijosAnualesIncluidos(){
+  const years = cqRoeResultYear==='todos'
+    ? cqRoeYearsDisponibles()
+    : [Number(cqRoeResultYear)];
+  return years.reduce((a,y)=>{
+    const f=cqCostosFijosAnio(y);
+    a.estructura+=(Number(f.estructura)||0);
+    a.impuestos+=(Number(f.impuestos)||0);
+    return a;
+  },{estructura:0,impuestos:0});
+}
+
 function renderCompareResult(){
   const wrap = document.getElementById('compare-result');
   const picked = cqCompareOrdenadas(cqRoeObrasResultado().filter(o=>comparePicked.includes(o.id)));
@@ -3531,10 +3565,18 @@ function renderCompareResult(){
     ganancia: sumMoney('ganancia'),
     capitalMaximo: sumMoney('capitalMaximo')
   };
-  const _cfAnio=cqCostosFijosAnio(cqRoeResultYear);
+  // Totales anuales cargados (sirven de base); en resultados se imputa a cada proyecto
+  // según la cantidad TOTAL de proyectos vendidos en ese mismo año.
+  const _cfAnio=cqRoeResultYear==='todos' ? cqRoeCostosFijosAnualesIncluidos() : cqCostosFijosAnio(cqRoeResultYear);
   const costosFijosEstructura=Number(_cfAnio.estructura)||0;
   const costosFijosImpuestos=Number(_cfAnio.impuestos)||0;
-  const costosFijosTotal=costosFijosEstructura+costosFijosImpuestos;
+  const imputaciones=datos.map(d=>({
+    estructura:cqRoeCostoFijoImputadoProyecto(d.o,'estructura'),
+    impuestos:cqRoeCostoFijoImputadoProyecto(d.o,'impuestos')
+  }));
+  const costosFijosEstructuraSeleccionados=imputaciones.reduce((a,x)=>a+x.estructura,0);
+  const costosFijosImpuestosSeleccionados=imputaciones.reduce((a,x)=>a+x.impuestos,0);
+  const costosFijosTotal=costosFijosEstructuraSeleccionados+costosFijosImpuestosSeleccionados;
   const resultadoNeto=sums.ganancia-costosFijosTotal;
   const avgs = {
     roe: avgRaw('roe'),
@@ -3550,9 +3592,9 @@ function renderCompareResult(){
     ['Comisión total', 'comisionTotal', d=>fmtMoney(d.r.comisionTotal), true, fmtMoney(sums.comisionTotal), 'Total'],
     ['Costo total', 'costoTotal', d=>fmtMoney(d.r.costoTotal), true, fmtMoney(sums.costoTotal), 'Total'],
     ['Ganancia proyectos', 'ganancia', d=>fmtMoney(d.r.ganancia), true, fmtMoney(sums.ganancia), 'Total'],
-    ['Estructura operativa', 'fijoEstructura', d=>'—', true, '− '+fmtMoney(costosFijosEstructura), 'Global'],
-    ['Impuestos', 'fijoImpuestos', d=>'—', true, '− '+fmtMoney(costosFijosImpuestos), 'Global'],
-    ['Resultado neto', 'resultadoNeto', d=>'—', true, fmtMoney(resultadoNeto), 'Final'],
+    ['Estructura operativa', 'fijoEstructura', d=>'− '+fmtMoney(cqRoeCostoFijoImputadoProyecto(d.o,'estructura')), true, '− '+fmtMoney(costosFijosEstructuraSeleccionados), 'Imputado'],
+    ['Impuestos', 'fijoImpuestos', d=>'− '+fmtMoney(cqRoeCostoFijoImputadoProyecto(d.o,'impuestos')), true, '− '+fmtMoney(costosFijosImpuestosSeleccionados), 'Imputado'],
+    ['Resultado neto', 'resultadoNeto', d=>fmtMoney((Number(d.r.ganancia)||0)-cqRoeCostoFijoImputadoProyecto(d.o,'estructura')-cqRoeCostoFijoImputadoProyecto(d.o,'impuestos')), true, fmtMoney(resultadoNeto), 'Final'],
     ['Capital máximo', 'capitalMaximo', d=>cellSpan(fmtMoney(d.r.capitalMaximo), bandCapitalInvertido(d.r.capitalMaximo).color), true, cellSpan(fmtMoney(sums.capitalMaximo), bandCapitalInvertido(sums.capitalMaximo).color), 'Total'],
     ['ROE', 'roe', d=>cellSpan(fmtPct(d.r.roe), bandROE(d.r.roe).color), false, cellSpan(fmtPct(avgs.roe), bandROE(avgs.roe).color), 'Prom.'],
     ['TIR mensual', 'tirMensual', d=>cellSpan(fmtPct(d.r.tirMensual), bandTirMensual(d.r.tirMensual).color), false, cellSpan(fmtPct(avgs.tirMensual), bandTirMensual(avgs.tirMensual).color), 'Prom.'],
@@ -3579,8 +3621,8 @@ function renderCompareResult(){
 
       <div class="cq-fixed-costs-box">
         <div class="cq-fixed-costs-title">
-          <div><span>COSTOS FIJOS ${cqRoeResultYear==='todos'?'':cqRoeResultYear}</span><b>${cqRoeResultYear==='todos'?'Elegí un año para cargarlos':'Anuales · no ligados a ningún proyecto'}</b></div>
-          <small>No modifica el ROE/TIR individual de cada proyecto.</small>
+          <div><span>COSTOS FIJOS ${cqRoeResultYear==='todos'?'':cqRoeResultYear}</span><b>${cqRoeResultYear==='todos'?'Elegí un año para cargarlos':'Anuales · prorrateados entre los proyectos vendidos ese año'}</b></div>
+          <small>Se imputan por partes iguales a cada proyecto vendido en el año. ROE/TIR individual no se modifica.</small>
         </div>
         <div class="cq-fixed-costs-grid">
           <label><span>Estructura operativa</span><small>Oficina · empleados · marketing · administración</small>
@@ -3592,7 +3634,7 @@ function renderCompareResult(){
         </div>
         <div class="cq-fixed-result-lines">
           <div><span>Ganancia proyectos</span><b>${fmtMoney(sums.ganancia)}</b></div>
-          <div><span>Costos fijos</span><b>− ${fmtMoney(costosFijosTotal)}</b></div>
+          <div><span>Costos fijos imputados a la selección</span><b>− ${fmtMoney(costosFijosTotal)}</b></div>
           <div class="net ${resultadoNeto<0?'neg':''}"><span>Resultado neto</span><b>${fmtMoney(resultadoNeto)}</b></div>
         </div>
       </div>

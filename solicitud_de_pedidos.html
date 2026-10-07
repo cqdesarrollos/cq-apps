@@ -2978,16 +2978,16 @@ window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
 .obra-head .cq-obs-inline-v78{
   display:inline-flex!important;align-items:center!important;gap:4px!important;
   margin-left:10px!important;min-width:0!important;max-width:68%!important;
-  color:#1f4d40!important;font-size:10px!important;font-weight:800!important;
-  line-height:1.25!important;vertical-align:middle!important;white-space:normal!important
+  color:#1f4d40!important;font-size:12.8px!important;font-weight:900!important;
+  line-height:1.3!important;vertical-align:middle!important;white-space:normal!important
 }
-.obra-head .cq-obs-inline-v78 b{font-size:10px!important;color:#1f4d40!important}
+.obra-head .cq-obs-inline-v78 b{font-size:13px!important;color:#1f4d40!important;font-weight:1000!important}
 .cq-obra-obs-wrap.cq-v78-movida{display:none!important}
 @media(max-width:760px){
  .obra-head{align-items:center!important;gap:7px!important}
  .obra-head strong{flex:0 0 auto!important}
- .obra-head .cq-obs-inline-v78{font-size:8.4px!important;max-width:50%!important;margin-left:5px!important}
- .obra-head .cq-obs-inline-v78 b{font-size:8.4px!important}
+ .obra-head .cq-obs-inline-v78{font-size:10.6px!important;max-width:58%!important;margin-left:5px!important;line-height:1.28!important}
+ .obra-head .cq-obs-inline-v78 b{font-size:10.8px!important}
 }
 </style>
 
@@ -3009,7 +3009,7 @@ window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
         var bloques=Array.from(wrap.querySelectorAll('.cq-obra-obs'));
         var textos=[];
         bloques.forEach(function(b){
-          var txt=(b.textContent||'').replace(/^\s*Observación general(?:\s*·\s*[^:]+)?:\s*/i,'').trim();
+          var txt=(b.textContent||'').replace(/^\s*Observación(?:\s+general)?(?:\s*·\s*[^:]+)?:\s*/i,'').trim();
           if(txt && textos.indexOf(txt)<0)textos.push(txt);
         });
         if(!textos.length)return;
@@ -3018,7 +3018,7 @@ window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
         if(old)old.remove();
         var span=document.createElement('span');
         span.className='cq-obs-inline-v78';
-        var b=document.createElement('b');b.textContent='Observación general:';
+        var b=document.createElement('b');b.textContent='Observación:';
         span.appendChild(b);
         span.appendChild(document.createTextNode(' '+textos.join(' · ')));
         strong.insertAdjacentElement('afterend',span);
@@ -3100,12 +3100,12 @@ window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
 
       for(var gi=0;gi<groups.length;gi++){
         var g=groups[gi],hue=hueFor(g.obra),head=hsl(hue,46,93),stripe=hsl(hue,57,55),body=hsl(hue,28,98);
-        var title='Obra '+g.obra,obsTxt=g.obs.length?'Observación general: '+g.obs.join(' · '):'';
+        var title='Obra '+g.obra,obsTxt=g.obs.length?'Observación: '+g.obs.join(' · '):'';
 
         ctx.font='700 25px Arial';var titleW=ctx.measureText(title).width;
-        ctx.font='700 17px Arial';var obsAvail=Math.max(260,CW-90-titleW);
+        ctx.font='700 22px Arial';var obsAvail=Math.max(260,CW-110-titleW);
         var obsLines=obsTxt?wrapLines(ctx,obsTxt,obsAvail):[];
-        var headH=Math.max(76,36+(Math.max(1,obsLines.length)*23));
+        var headH=Math.max(92,40+(Math.max(1,obsLines.length)*28));
         var th=44;
 
         var metas=[],bodyH=0;
@@ -3125,10 +3125,10 @@ window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
 
         ctx.fillStyle=dark;ctx.font='700 25px Arial';ctx.fillText(title,M+34,y+34);
         if(obsLines.length){
-          ctx.fillStyle=green;ctx.font='700 17px Arial';
+          ctx.fillStyle=green;ctx.font='700 22px Arial';
           var ox=M+52+titleW;
-          ctx.fillText(obsLines[0],ox,y+34);
-          for(var oi=1;oi<obsLines.length;oi++)ctx.fillText(obsLines[oi],M+34,y+34+oi*23);
+          ctx.fillText(obsLines[0],ox,y+38);
+          for(var oi=1;oi<obsLines.length;oi++)ctx.fillText(obsLines[oi],M+34,y+38+oi*28);
         }
 
         var ty=y+headH;
