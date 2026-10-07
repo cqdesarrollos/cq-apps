@@ -2700,4 +2700,213 @@ try{
 <script id="cq-pedidos-v73-observacion-general-marca">
 window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
 </script>
+
+
+<!-- V75 · PDF horizontal legible + edición de productos corregida -->
+<style id="cq-v75-observacion-general-destacada">
+/* La observación general también queda más visible en la app. */
+.cq-obra-obs{font-size:10.5px!important;font-weight:800!important;line-height:1.4!important;color:#294b3e!important}
+.cq-obra-obs b{font-size:11px!important;font-weight:1000!important;color:#145c43!important}
+@media(max-width:560px){
+ .cq-obra-obs{font-size:9.2px!important}
+ .cq-obra-obs b{font-size:9.8px!important}
+}
+</style>
+
+<script id="cq-pedidos-v75-pdf-horizontal-edicion">
+(function(){
+  /*
+   * FIX edición: la V70 llamaba a P(p), pero P vive dentro de otro IIFE y no es global.
+   * Ese error cortaba la ejecución después de abrir el modal, por eso no se renderizaban
+   * los productos existentes ni el catálogo para modificarlos.
+   */
+  function cqPrioridadPedido(p){
+    return String((p&&p.prioridad)||'Normal').toLowerCase()==='urgente'?'Urgente':'Normal';
+  }
+  function cqModoModalEdicionV75(esEdicion){
+    var modal=document.getElementById('modal');
+    if(!modal)return;
+    var titulo=modal.querySelector('.mhd b');
+    if(titulo)titulo.textContent=esEdicion?'Modificar solicitud':'Nueva solicitud';
+    var guardarBtn=modal.querySelector('.mfoot .btn-green');
+    if(guardarBtn)guardarBtn.textContent=esEdicion?'Guardar cambios':'Guardar solicitud';
+  }
+
+  window.editarPedido=function(id){
+    var p=(Array.isArray(pedidos)?pedidos:[]).find(function(x){return String(x.id)===String(id)});
+    if(!p)return;
+
+    /* abrir() limpia la selección; por eso primero abrimos y después restauramos. */
+    abrir();
+    seleccion.splice(0,seleccion.length,...JSON.parse(JSON.stringify(Array.isArray(p.items)?p.items:[])));
+    window._cqEditId=id;
+
+    var obra=document.getElementById('obra');
+    var fecha=document.getElementById('fecha');
+    var prioridad=document.getElementById('prioridad');
+    var obsGeneral=document.getElementById('obs');
+    var buscar=document.getElementById('buscar');
+
+    if(obra)obra.value=p.obra||'';
+    if(fecha)fecha.value=p.fecha||isoToday();
+    if(prioridad)prioridad.value=cqPrioridadPedido(p);
+    if(obsGeneral)obsGeneral.value=p.obs||'';
+    if(buscar)buscar.value='';
+
+    cqModoModalEdicionV75(true);
+
+    /* Render inmediato de lo ya cargado y del catálogo completo. */
+    if(typeof renderSelected==='function')renderSelected();
+    if(typeof window.renderCatalogV22==='function')window.renderCatalogV22();
+    else if(typeof renderCatalog==='function')renderCatalog();
+
+    /* Si Firebase todavía estaba terminando de cargar MATERIALES, reintenta una vez. */
+    setTimeout(function(){
+      try{
+        if(typeof renderSelected==='function')renderSelected();
+        if(typeof window.renderCatalogV22==='function')window.renderCatalogV22();
+      }catch(e){console.warn('V75 render edición',e)}
+    },180);
+  };
+
+  /*
+   * PDF real A4 HORIZONTAL. Ocupa casi todo el ancho de la hoja y usa tipografía mayor.
+   * Reemplaza la salida anterior en imagen vertical, manteniendo el botón WhatsApp/Compartir.
+   */
+  window.cqCompartirPreviewPDF=async function(){
+    var rows=window._cqPreviewRows||[];
+    if(!rows.length){alert('Marcá al menos un ítem.');return}
+    if(!window.jspdf || !window.jspdf.jsPDF){alert('Esperá unos segundos y volvé a intentar.');return}
+
+    try{
+      var jsPDF=window.jspdf.jsPDF;
+      var pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
+      var pageW=297,pageH=210,margin=9,contentW=pageW-(margin*2);
+      var navy=[16,38,95],soft=[240,247,244],line=[218,228,223],dark=[28,50,42],muted=[91,110,101],green=[31,77,64];
+      var logo=window._cqShareLogo||'';
+      var pageNo=1;
+
+      function esc(v){return String(v==null?'':v)}
+      function qty(x){return x&&((x.cantidad!=null)?x.cantidad:(x.qty!=null?x.qty:''))}
+      function pri(p){return String((p&&p.prioridad)||'Normal').toLowerCase().indexOf('urg')>=0?'Urgente':'Normal'}
+      function fc(v){var a=String(v||'').split('-');return a.length===3?a[2]+'/'+a[1]+'/'+a[0]:String(v||'')}
+
+      function header(){
+        pdf.setFillColor.apply(pdf,navy);pdf.roundedRect(margin,8,contentW,25,3,3,'F');
+        try{if(logo)pdf.addImage(logo,'JPEG',margin+3,10,31,21,undefined,'FAST')}catch(e){}
+        pdf.setDrawColor(255,255,255);pdf.setLineWidth(.25);pdf.line(margin+38,13,margin+38,28);
+        pdf.setTextColor(255,255,255);pdf.setFont('helvetica','bold');pdf.setFontSize(15);
+        pdf.text('SOLICITUD DE PEDIDOS',margin+44,23.5);
+
+        pdf.setTextColor.apply(pdf,muted);pdf.setFont('helvetica','normal');pdf.setFontSize(8.5);
+        var obras=new Set(rows.map(function(r){return String((r.p&&r.p.obra)||'')}));
+        pdf.text(rows.length+' ítem'+(rows.length===1?'':'s')+' · '+obras.size+' obra'+(obras.size===1?'':'s'),margin,39);
+        return 43;
+      }
+
+      function tableHead(y){
+        pdf.setFillColor.apply(pdf,soft);pdf.rect(margin,y,contentW,9,'F');
+        pdf.setTextColor.apply(pdf,muted);pdf.setFont('helvetica','bold');pdf.setFontSize(8.5);
+        pdf.text('OBRA',margin+4,y+6);
+        pdf.text('PRODUCTO',margin+55,y+6);
+        pdf.text('CANTIDAD',margin+214,y+6);
+        pdf.text('PRIORIDAD',margin+246,y+6);
+        return y+9;
+      }
+
+      function nuevaPagina(){
+        pdf.addPage('a4','landscape');pageNo++;
+        return tableHead(header());
+      }
+
+      var y=tableHead(header());
+      var obraAnterior=null,pedidoAnterior=null;
+
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i]||{},p=r.p||{},x=r.x||{};
+        var obra=esc(p.obra),pedidoKey=String(p.id!=null?p.id:obra),obsGeneral=esc(p.obs).trim();
+
+        if(pedidoKey!==pedidoAnterior){
+          pedidoAnterior=pedidoKey;
+          if(obsGeneral){
+            pdf.setFont('helvetica','bold');pdf.setFontSize(11.3);
+            var obsLines=pdf.splitTextToSize(obsGeneral,contentW-10);
+            var obsH=Math.max(18,11+(obsLines.length*5.2));
+            if(y+obsH>pageH-13)y=nuevaPagina();
+            pdf.setFillColor(239,247,243);pdf.roundedRect(margin,y,contentW,obsH,2,2,'F');
+            pdf.setTextColor.apply(pdf,green);pdf.setFont('helvetica','bold');pdf.setFontSize(9.5);
+            pdf.text('OBSERVACIÓN GENERAL · '+obra+(p.fecha?' · '+fc(p.fecha):''),margin+4,y+6);
+            pdf.setTextColor.apply(pdf,dark);pdf.setFont('helvetica','bold');pdf.setFontSize(11.3);
+            pdf.text(obsLines,margin+4,y+12);
+            y+=obsH+1.5;
+          }
+        }
+
+        if(obraAnterior!==null && obra!==obraAnterior){
+          y+=1.5;
+          pdf.setDrawColor(160,174,167);pdf.setLineWidth(.35);pdf.line(margin,y,margin+contentW,y);y+=2.5;
+        }
+        obraAnterior=obra;
+
+        var producto=esc(x.material||x.nombre||''),comentario=esc(x.nota||'').trim();
+        pdf.setFont('helvetica','bold');pdf.setFontSize(9.4);
+        var obraLines=pdf.splitTextToSize(obra,47);
+        pdf.setFont('helvetica','normal');pdf.setFontSize(9.6);
+        var prodLines=pdf.splitTextToSize(producto,153);
+        pdf.setFont('helvetica','bolditalic');pdf.setFontSize(9.3);
+        var comLines=comentario?pdf.splitTextToSize('Obs.: '+comentario,153):[];
+        var textLines=Math.max(obraLines.length,prodLines.length+(comLines.length?comLines.length:0));
+        var h=Math.max(11,5+(textLines*4.7)+(comLines.length?1.5:0));
+        if(y+h>pageH-13)y=nuevaPagina();
+
+        pdf.setDrawColor.apply(pdf,line);pdf.setLineWidth(.18);pdf.line(margin,y+h,margin+contentW,y+h);
+        pdf.setTextColor.apply(pdf,dark);
+        pdf.setFont('helvetica','bold');pdf.setFontSize(9.4);pdf.text(obraLines,margin+4,y+6);
+        pdf.setFont('helvetica','normal');pdf.setFontSize(9.6);pdf.text(prodLines,margin+55,y+6);
+        if(comLines.length){
+          var cy=y+6+(prodLines.length*4.7)+.8;
+          pdf.setTextColor.apply(pdf,green);pdf.setFont('helvetica','bolditalic');pdf.setFontSize(9.3);pdf.text(comLines,margin+55,cy);
+        }
+
+        pdf.setTextColor.apply(pdf,dark);pdf.setFont('helvetica','bold');pdf.setFontSize(10.3);
+        pdf.text(String(qty(x)),margin+220,y+6);
+
+        var urgente=pri(p)==='Urgente';
+        pdf.setFillColor.apply(pdf,urgente?[255,231,228]:[255,244,215]);
+        pdf.roundedRect(margin+245,y+2,28,7,3.5,3.5,'F');
+        pdf.setTextColor.apply(pdf,urgente?[180,60,52]:[139,104,27]);pdf.setFont('helvetica','bold');pdf.setFontSize(8.2);
+        pdf.text(pri(p),margin+259,y+6.7,{align:'center'});
+        y+=h;
+      }
+
+      /* Pie y numeración en todas las páginas. */
+      var total=pdf.getNumberOfPages();
+      for(var pg=1;pg<=total;pg++){
+        pdf.setPage(pg);
+        pdf.setTextColor.apply(pdf,muted);pdf.setFont('helvetica','normal');pdf.setFontSize(7.5);
+        pdf.text('CQ Desarrollos · Solicitud de materiales',margin,pageH-6);
+        pdf.text('Página '+pg+' de '+total,pageW-margin,pageH-6,{align:'right'});
+      }
+
+      var blob=pdf.output('blob');
+      var file=new File([blob],'solicitud_pedidos_cq.pdf',{type:'application/pdf'});
+      if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+        await navigator.share({files:[file],title:'Solicitud de Pedidos CQ'});
+        if(typeof window.cqMarcarSeleccionEnviada==='function')window.cqMarcarSeleccionEnviada();
+        return;
+      }
+
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url)},30000);
+      alert('El teléfono no habilitó compartir el PDF desde el navegador. Se descargó el PDF.');
+    }catch(e){
+      if(e&&e.name==='AbortError')return;
+      console.error('CQ PDF horizontal',e);
+      alert('No se pudo crear/compartir el PDF: '+((e&&e.message)||e));
+    }
+  };
+})();
+</script>
+
 </body></html>
