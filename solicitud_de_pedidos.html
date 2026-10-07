@@ -2967,4 +2967,342 @@ window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
 })();
 </script>
 
+
+<style id="cq-v77-inline-obs-screen">
+.obra-head .cq-obra-head-main{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;width:100%!important}
+.obra-head .cq-obra-title-line{display:flex!important;align-items:center!important;gap:10px!important;flex-wrap:wrap!important;min-width:0!important;flex:1 1 auto!important}
+.obra-head .cq-obra-inline-obs{display:inline-flex!important;align-items:center!important;gap:4px!important;min-width:0!important;font-size:10px!important;color:#1f4d40!important;font-weight:800!important;line-height:1.2!important;white-space:normal!important}
+.obra-head .cq-obra-inline-obs b{font-size:10px!important;color:#1f4d40!important}
+@media(max-width:760px){
+ .obra-head .cq-obra-head-main{align-items:flex-start!important;gap:7px!important}
+ .obra-head .cq-obra-title-line{gap:6px!important}
+ .obra-head .cq-obra-inline-obs{font-size:8.8px!important;line-height:1.25!important}
+ .obra-head .cq-obra-inline-obs b{font-size:8.8px!important}
+}
+</style>
+
+<script id="cq-v77-ajustes-finales">
+(function(){
+  function el(id){return document.getElementById(id)}
+  function priorPedido(p){return String((p&&p.prioridad)||'Normal').toLowerCase()==='urgente'?'Urgente':'Normal'}
+  function semanaSafe(fecha){return fecha?weekOf(fecha):''}
+  function fechaSafe(v){return String(v||'').trim()}
+  function setModoModal(esEdicion){
+    var modal=el('modal'); if(!modal)return;
+    var titulo=modal.querySelector('.mhd b');
+    if(titulo)titulo.textContent=esEdicion?'Modificar solicitud':'Nueva solicitud';
+    var btn=modal.querySelector('.mfoot .btn-green');
+    if(btn)btn.textContent=esEdicion?'Guardar cambios':'Guardar solicitud';
+  }
+
+  window.abrir=function(){
+    try{seleccion.splice(0,seleccion.length)}catch(e){window.seleccion=[]}
+    window._cqEditId=null;
+    if(el('obra'))el('obra').value='';
+    if(el('fecha'))el('fecha').value='';
+    if(el('obs'))el('obs').value='';
+    if(el('prioridad'))el('prioridad').value='Normal';
+    if(el('buscar'))el('buscar').value='';
+    setModoModal(false);
+    if(typeof renderSelected==='function')renderSelected();
+    if(typeof window.renderCatalogV22==='function')window.renderCatalogV22();
+    else if(typeof renderCatalog==='function')renderCatalog();
+    if(el('modal'))el('modal').style.display='flex';
+  };
+
+  window.editarPedido=function(id){
+    var p=(Array.isArray(pedidos)?pedidos:[]).find(function(x){return String(x.id)===String(id)});
+    if(!p)return;
+    abrir();
+    try{seleccion.splice(0,seleccion.length,...JSON.parse(JSON.stringify(Array.isArray(p.items)?p.items:[])))}catch(e){seleccion=JSON.parse(JSON.stringify(Array.isArray(p.items)?p.items:[]))}
+    window._cqEditId=id;
+    if(el('obra'))el('obra').value=p.obra||'';
+    if(el('fecha'))el('fecha').value=p.fecha||'';
+    if(el('prioridad'))el('prioridad').value=priorPedido(p);
+    if(el('obs'))el('obs').value=p.obs||'';
+    if(el('buscar'))el('buscar').value='';
+    setModoModal(true);
+    if(typeof renderSelected==='function')renderSelected();
+    if(typeof window.renderCatalogV22==='function')window.renderCatalogV22();
+    else if(typeof renderCatalog==='function')renderCatalog();
+    setTimeout(function(){
+      try{
+        if(typeof renderSelected==='function')renderSelected();
+        if(typeof window.renderCatalogV22==='function')window.renderCatalogV22();
+      }catch(e){console.warn('V77 render edición',e)}
+    },150);
+  };
+
+  window.guardar=async function(){
+    var obra=(el('obra')?.value||'').trim();
+    if(!obra)return alert('Seleccioná la obra.');
+    if(!Array.isArray(seleccion)||!seleccion.length)return alert('Agregá al menos un material.');
+
+    var fecha=fechaSafe(el('fecha')?.value||'');
+    var dataBase={
+      obra:obra,
+      fecha:fecha,
+      semana:semanaSafe(fecha),
+      prioridad:el('prioridad')?.value||'Normal',
+      obs:(el('obs')?.value||'').trim(),
+      items:JSON.parse(JSON.stringify(seleccion))
+    };
+
+    try{
+      if(window._cqEditId!=null){
+        var id=window._cqEditId;
+        var actual=(Array.isArray(pedidos)?pedidos:[]).find(function(x){return String(x.id)===String(id)});
+        if(!actual)return;
+
+        if(typeof window.cqActualizarPedidoFirebase==='function'){
+          await window.cqActualizarPedidoFirebase(id,dataBase);
+        }else{
+          Object.assign(actual,dataBase);
+          persist();
+        }
+        window._cqEditId=null;
+        cerrar();
+        if(typeof window.render==='function')window.render();
+        return;
+      }
+
+      pedidos.unshift({
+        id:Date.now(),
+        creado:isoToday(),
+        fecha:dataBase.fecha,
+        semana:dataBase.semana,
+        obra:dataBase.obra,
+        responsable:'',
+        prioridad:dataBase.prioridad,
+        obs:dataBase.obs,
+        estado:'Pendiente',
+        items:dataBase.items
+      });
+      var r=persist();
+      if(r&&typeof r.then==='function')await r;
+      cerrar();
+      if(typeof window.render==='function')window.render();
+    }catch(e){
+      console.error('Guardar solicitud V77',e);
+      alert('No se pudo guardar la solicitud: '+((e&&e.message)||e));
+    }
+  };
+
+  window.render=function(){
+    if(window.cqRefrescarCatalogoObrasFiltro)window.cqRefrescarCatalogoObrasFiltro();
+    pedidos.forEach(function(p){if(p.estado==='Enviado')p.estado='Pedido';if(p.estado==='Recibido')p.estado='Entregado';if(!p.estado)p.estado='Pendiente'});
+    try{kpis()}catch(e){}
+    var fechaEnt=el('cqFechaEntregado')?.value||'';
+    var filtroEnt=el('cqFiltroEntregado');
+    if(filtroEnt)filtroEnt.style.display=cqEstadoActivo==='Entregado'?'flex':'none';
+    var arr=pedidos.filter(function(p){return !p.archivado&&(p.estado||'Pendiente')===cqEstadoActivo&&(cqEstadoActivo!=='Entregado'||!fechaEnt||(p.fechaEntregado||p.fecha)===fechaEnt)});
+    var count=document.querySelector('.cardhd span');if(count)count.textContent=arr.length+' solicitudes';
+    var title=document.querySelector('#pedidos .cardhd b');if(title)title.textContent=cqEstadoActivo==='Pendiente'?'Pedidos de obra':cqEstadoActivo;
+    var wrap=document.querySelector('.tblwrap');if(!wrap)return;
+    if(!arr.length){wrap.innerHTML='<div class="empty">No hay ítems en '+E(cqEstadoActivo.toLowerCase())+'.</div>';return}
+
+    var grupos={};arr.forEach(function(p){(grupos[p.obra]||(grupos[p.obra]=[])).push(p)});
+    var visibles=new Set();arr.forEach(function(p){(p.items||[]).forEach(function(_,i){visibles.add(k(p.id,i))})});
+    [...selected].forEach(function(z){if(!visibles.has(z))selected.delete(z)});
+    var n=selected.size,destino=cqEstadoActivo==='Pendiente'?'Pedido':cqEstadoActivo==='Pedido'?'Entregado':'';
+    var todosVisibles=[...visibles].length>0 && [...visibles].every(function(z){return selected.has(z)});
+    var pesoTop=el('cqPesoTotalTop');if(pesoTop)pesoTop.textContent='⚖ '+fmtKg(pesoSeleccionado());
+
+    wrap.innerHTML='<div class="cq-list-actions"><small>Marcá los ítems</small><label class="cq-select-all cq-select-all-global"><input type="checkbox" '+(todosVisibles?'checked':'')+' onchange="cqToggleTodos(this.checked)"> Todos</label><div class="cq-flow-actions">'+
+      (cqEstadoActivo==='Pendiente'?'<button type="button" class="cq-send-selected show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqEnviarSeleccionados()">↗ WhatsApp <span class="count">'+n+'</span></button>':'')+
+      (destino?'<button type="button" class="cq-move-selected '+(destino==='Pedido'?'a-pedido':'a-entregado')+' show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqMoverSeleccion(\''+destino+'\')">→ Enviar a '+destino+' <span class="count">'+n+'</span></button>':'')+
+      (cqEstadoActivo==='Pedido'?'<div class="cq-fecha-entrega-bulk"><input type="date" id="cqFechaEntregaBulk" aria-label="Fecha de entrega"><button type="button" class="cq-fecha-entrega-btn '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqAsignarFechaEntregaSeleccion()">📅 Fecha entrega <span class="count">'+n+'</span></button></div>':'')+
+      (cqEstadoActivo!=='Pendiente'?'<button type="button" class="cq-back-selected '+(n?'show':'')+'" onclick="cqVolverSeleccion()">← Volver</button>':'')+
+      '</div></div><div class="pedidos-grouped">'+Object.entries(grupos).map(function(entry){
+        var ps=entry[1]||[];
+        var obra=String(ps?.[0]?.obra||entry[0]||'');
+        var botonesModificar=(cqEstadoActivo==='Pendiente'||cqEstadoActivo==='Pedido')?'<div class="cq-obra-edit-actions">'+ps.map(function(p){return '<button type="button" class="cq-modificar-pedido" onclick="editarPedido('+JSON.stringify(p.id)+')">✎ '+(ps.length>1?'Modificar '+FC(p.fecha):'Modificar')+'</button>'}).join('')+'</div>':'';
+        var obsVistas=new Set(),obsLineas=[];
+        ps.forEach(function(p){
+          var obs=String(p&&p.obs||'').trim();
+          if(!obs)return;
+          var etiqueta=obs+(ps.length>1&&p.fecha?' ('+FC(p.fecha)+')':'');
+          if(obsVistas.has(etiqueta))return;
+          obsVistas.add(etiqueta);obsLineas.push(etiqueta);
+        });
+        var obsInline=obsLineas.length?'<span class="cq-obra-inline-obs"><b>Observación general:</b> '+E(obsLineas.join(' · '))+'</span>':'';
+        return '<section class="obra-group cq-obra-color" data-obra-color="'+E(obra)+'"><div class="obra-head"><div class="cq-obra-head-main"><div class="cq-obra-title-line"><strong>Obra <span class="cq-obra-num">'+E(obra)+'</span></strong>'+obsInline+'</div>'+botonesModificar+'</div></div><div class="pedido-head-v37"><div></div><div>Fecha</div><div>Producto</div><div>Cant.</div><div>Prioridad</div><div>Acciones</div></div>'+
+        ps.map(function(p){return (p.items||[]).map(function(x,i){
+          var on=selected.has(k(p.id,i)),pr=P(p),pk=itemKey(x),peso=pesos[pk];
+          return '<div class="pedido-row-v37 '+(on?'selected':'')+'"><div><input class="cq-item-check" type="checkbox" '+(on?'checked':'')+' onchange="cqToggleItem('+JSON.stringify(p.id)+','+i+',this.checked)"></div><div class="pedido-date">'+(p.fecha?FC(p.fecha):'-')+(cqEstadoActivo==='Pedido'&&p.fechaEntrega?'<small class="cq-fecha-entrega-row">Entrega '+FC(p.fechaEntrega)+'</small>':'')+'</div><div class="pedido-material"><b>'+E(x.material||x.nombre||'')+'</b>'+(x.nota?'<small class="cq-item-comment">💬 '+E(x.nota)+'</small>':'')+(peso!=null?'<small>'+E(peso)+' kg/u · <b>'+E(fmtKg(pesoFila(x)))+'</b></small>':'')+'</div><div class="pedido-cant">'+E(Q(x)||'-')+'</div><div class="prio '+pr.toLowerCase()+'">'+pr+'</div><div class="icon-actions">'+((cqEstadoActivo==='Pendiente'||cqEstadoActivo==='Pedido')?'<button class="icon-btn icon-edit" title="Modificar pedido" onclick="editarPedido('+JSON.stringify(p.id)+')">✎</button>':'')+'<button class="icon-btn icon-delete" onclick="cqEliminarItem('+JSON.stringify(p.id)+','+i+')">×</button></div></div>'
+        }).join('')}).join('')+'</section>';
+      }).join('')+'</div>';
+
+    document.querySelectorAll('.obra-group').forEach(function(sec){
+      var obra=sec.getAttribute('data-obra-color')||sec.querySelector('.obra-head strong')?.textContent||'';
+      var h=0;for(var i=0;i<obra.length;i++)h=(h*31+obra.charCodeAt(i))>>>0;
+      sec.style.setProperty('--obraHue',String(h%360));
+    });
+    if(window.cqAplicarFiltroObrasDOM)window.cqAplicarFiltroObrasDOM();
+  };
+
+  window.cqCompartirPreviewPDF=async function(){
+    var rows=window._cqPreviewRows||[];
+    if(!rows.length){alert('Marcá al menos un ítem.');return}
+
+    try{
+      var W=1200,H=1800,margin=42,contentW=W-(margin*2),bottomY=H-62;
+      var navy='#10265f',card='#ffffff',soft='#f6f8f7',line='#d9e2dd',dark='#20372f',muted='#68776f',green='#1f4d40';
+      var logo=window._cqShareLogo||'';
+      var pages=[];
+
+      function roundRect(ctx,x,y,w,h,r){var rr=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+rr,y);ctx.arcTo(x+w,y,x+w,y+h,rr);ctx.arcTo(x+w,y+h,x,y+h,rr);ctx.arcTo(x,y+h,x,y,rr);ctx.arcTo(x,y,x+w,y,rr);ctx.closePath();}
+      function wrapLines(ctx,text,maxW){
+        var words=String(text||'').split(/\s+/).filter(Boolean); if(!words.length)return [''];
+        var lines=[],cur='';
+        for(var i=0;i<words.length;i++){
+          var test=cur?cur+' '+words[i]:words[i];
+          if(ctx.measureText(test).width<=maxW){cur=test;continue}
+          if(cur)lines.push(cur); cur=words[i];
+          while(ctx.measureText(cur).width>maxW && cur.length>1){
+            var cut=cur.length-1; while(cut>1 && ctx.measureText(cur.slice(0,cut)+'…').width>maxW)cut--;
+            lines.push(cur.slice(0,cut)+'…'); cur=cur.slice(cut);
+          }
+        }
+        if(cur)lines.push(cur); return lines.length?lines:[''];
+      }
+      function blobOf(canvas){return new Promise(function(resolve,reject){canvas.toBlob(function(b){if(b)resolve(b);else reject(new Error('No se pudo crear PNG'))},'image/png')})}
+      async function loadImage(src){return await new Promise(function(resolve){if(!src)return resolve(null);try{var img=new Image();img.onload=function(){resolve(img)};img.onerror=function(){resolve(null)};img.src=src;setTimeout(function(){if(!(img.complete&&img.naturalWidth))resolve(null)},900)}catch(e){resolve(null)}})}
+      function hueFor(txt){var h=0,s=String(txt||'');for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%360}
+      function hsl(h,s,l){return 'hsl('+h+','+s+'%,'+l+'%)'}
+      function qty(x){return x&&((x.cantidad!=null)?x.cantidad:(x.qty!=null?x.qty:''))}
+      function pri(p){return String((p&&p.prioridad)||'Normal').toLowerCase().indexOf('urg')>=0?'Urgente':'Normal'}
+      function fmtFecha(v){var a=String(v||'').split('-');return a.length===3?a[2]+'/'+a[1]+'/'+a[0]:String(v||'')}
+
+      var logoImg=await loadImage(logo);
+      var groupMap=new Map();
+      rows.forEach(function(r){
+        var p=r.p||{}, x=r.x||{}, obra=String(p.obra||'Sin obra');
+        if(!groupMap.has(obra))groupMap.set(obra,{obra:obra,obs:[],items:[],_seen:new Set(),_pedSeen:new Set()});
+        var g=groupMap.get(obra);
+        var obs=String(p.obs||'').trim();
+        if(obs){
+          var obsTxt=obs;
+          if(!g._seen.has(obsTxt)){g._seen.add(obsTxt);g.obs.push(obsTxt)}
+        }
+        g.items.push({p:p,x:x});
+      });
+      var groups=Array.from(groupMap.values()).map(function(g){delete g._seen;delete g._pedSeen;return g});
+
+      function drawHeader(ctx,pageIndex){
+        ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
+        ctx.fillStyle=navy;roundRect(ctx,margin,24,contentW,118,24);ctx.fill();
+        if(logoImg){try{ctx.drawImage(logoImg,margin+18,38,140,84)}catch(e){}}
+        ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(margin+184,46);ctx.lineTo(margin+184,116);ctx.stroke();
+        ctx.fillStyle='#ffffff';ctx.font='700 42px Arial';ctx.fillText('SOLICITUD DE PEDIDOS',margin+215,86);
+        ctx.fillStyle='#dbe6e0';ctx.font='24px Arial';ctx.fillText('Formato igual a la pantalla principal · sin fecha',margin+215,116);
+        if(pageIndex>0){ctx.fillStyle=muted;ctx.font='bold 20px Arial';ctx.fillText('Continuación',W-margin-130,160)}
+        return 170;
+      }
+      function newPage(){
+        var canvas=document.createElement('canvas'); canvas.width=W; canvas.height=H;
+        var ctx=canvas.getContext('2d');
+        var page={canvas:canvas,ctx:ctx,y:drawHeader(ctx,pages.length)}; pages.push(page); return page;
+      }
+      var page=newPage(),ctx=page.ctx,y=page.y;
+
+      groups.forEach(function(g){
+        var hue=hueFor(g.obra), headBg=hsl(hue,42,93), stripe=hsl(hue,56,57), rowBg=hsl(hue,26,97);
+        var headerTitle='Obra '+g.obra;
+        ctx.font='700 24px Arial'; var titleW=ctx.measureText(headerTitle).width;
+        ctx.font='700 17px Arial';
+        var obsText=g.obs.length?('Observación general: '+g.obs.join(' · ')):'';
+        var obsMaxW=contentW-40-titleW-26;
+        var obsLines=obsText?wrapLines(ctx,obsText,Math.max(260,obsMaxW)):[];
+        var headH=Math.max(86,24+(obsLines.length?obsLines.length*24:0)+18);
+        var tableH=42;
+
+        var rowHeights=[]; var bodyH=0;
+        g.items.forEach(function(row){
+          var x=row.x||{}, pk=itemKey(x), peso=pesos[pk];
+          ctx.font='700 18px Arial'; var prodLines=wrapLines(ctx,String(x.material||x.nombre||''),610);
+          ctx.font='italic bold 15px Arial'; var noteLines=x.nota?wrapLines(ctx,'💬 '+String(x.nota||''),610):[];
+          ctx.font='15px Arial'; var pesoLines=peso!=null?wrapLines(ctx,String(peso)+' kg/u · '+String(fmtKg(pesoFila(x))),610):[];
+          var lines=prodLines.length+noteLines.length+pesoLines.length;
+          var rh=Math.max(64,22+(lines*21));
+          rowHeights.push({h:rh,prodLines:prodLines,noteLines:noteLines,pesoLines:pesoLines,peso:peso}); bodyH+=rh;
+        });
+        var groupH=headH+tableH+bodyH+14;
+        if(y+groupH>bottomY){page=newPage();ctx=page.ctx;y=page.y}
+
+        ctx.fillStyle=card;roundRect(ctx,margin,y,contentW,groupH,22);ctx.fill();
+        ctx.strokeStyle='#e0e6e2';ctx.lineWidth=2;roundRect(ctx,margin,y,contentW,groupH,22);ctx.stroke();
+        ctx.fillStyle=stripe;ctx.fillRect(margin,y,14,groupH);
+        ctx.fillStyle=headBg;ctx.fillRect(margin+14,y,contentW-14,headH);
+
+        ctx.fillStyle=dark;ctx.font='700 24px Arial';ctx.fillText(headerTitle,margin+38,y+35);
+        if(obsLines.length){
+          ctx.fillStyle=green;ctx.font='700 17px Arial';
+          var firstX=margin+50+titleW;
+          ctx.fillText(obsLines[0],firstX,y+35);
+          for(var oi=1;oi<obsLines.length;oi++) ctx.fillText(obsLines[oi],margin+38,y+35+(oi*24));
+        }
+
+        var tableY=y+headH;
+        ctx.fillStyle=soft;ctx.fillRect(margin+14,tableY,contentW-14,tableH);
+        ctx.fillStyle=muted;ctx.font='700 16px Arial';
+        ctx.fillText('PRODUCTO',margin+52,tableY+26);
+        ctx.fillText('CANT.',margin+780,tableY+26);
+        ctx.fillText('PRIORIDAD',margin+905,tableY+26);
+
+        var ry=tableY+tableH;
+        g.items.forEach(function(row,idx){
+          var x=row.x||{}, p=row.p||{}, meta=rowHeights[idx], pk=itemKey(x), peso=pesos[pk];
+          ctx.fillStyle=rowBg;ctx.fillRect(margin+14,ry,contentW-14,meta.h);
+          ctx.strokeStyle=line;ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(margin+14,ry+meta.h);ctx.lineTo(W-margin,ry+meta.h);ctx.stroke();
+
+          ctx.fillStyle=dark;ctx.font='700 18px Arial';
+          meta.prodLines.forEach(function(ln,i){ctx.fillText(ln,margin+52,ry+26+(i*21))});
+          var yy=ry+26+(meta.prodLines.length*21);
+          if(meta.noteLines.length){ctx.fillStyle=green;ctx.font='italic bold 15px Arial';meta.noteLines.forEach(function(ln,i){ctx.fillText(ln,margin+52,yy+(i*18))});yy+=meta.noteLines.length*18;}
+          if(meta.pesoLines.length){ctx.fillStyle=muted;ctx.font='15px Arial';meta.pesoLines.forEach(function(ln,i){ctx.fillText(ln,margin+52,yy+(i*18))});}
+
+          ctx.fillStyle=dark;ctx.font='700 22px Arial';ctx.fillText(String(qty(x)||'-'),margin+790,ry+34);
+          var urgente=pri(p)==='Urgente';
+          ctx.fillStyle=urgente?'#ffe7e4':'#fff4d7';roundRect(ctx,margin+880,ry+16,210,38,19);ctx.fill();
+          ctx.fillStyle=urgente?'#b43c34':'#8b681b';ctx.font='700 18px Arial';ctx.textAlign='center';ctx.fillText(pri(p),margin+985,ry+41);ctx.textAlign='left';
+          ry+=meta.h;
+        });
+
+        y+=groupH+18;
+      });
+
+      pages.forEach(function(p,idx){
+        var c=p.ctx; c.fillStyle=muted; c.font='20px Arial';
+        c.fillText('CQ Desarrollos · Solicitud de materiales',margin,H-22);
+        c.textAlign='right'; c.fillText('Página '+(idx+1)+' de '+pages.length,W-margin,H-22); c.textAlign='left';
+      });
+
+      var files=[];
+      for(var i=0;i<pages.length;i++){
+        var blob=await blobOf(pages[i].canvas);
+        files.push(new File([blob],'solicitud_pedidos_cq_'+(i+1)+'.png',{type:'image/png'}));
+      }
+      if(navigator.share && (!navigator.canShare || navigator.canShare({files:files}))){
+        await navigator.share({files:files,title:'Solicitud de Pedidos CQ'});
+        if(typeof window.cqMarcarSeleccionEnviada==='function')window.cqMarcarSeleccionEnviada();
+        return;
+      }
+      for(var f=0;f<files.length;f++){
+        var url=URL.createObjectURL(files[f]);
+        var a=document.createElement('a'); a.href=url; a.download=files[f].name; document.body.appendChild(a); a.click(); a.remove();
+        (function(u){setTimeout(function(){URL.revokeObjectURL(u)},30000)})(url);
+      }
+      alert(files.length===1?'El teléfono no habilitó compartir la imagen desde el navegador. Se descargó la imagen.':'El teléfono no habilitó compartir las imágenes desde el navegador. Se descargaron '+files.length+' imágenes.');
+    }catch(e){
+      if(e&&e.name==='AbortError')return;
+      console.error('CQ imagen formato pantalla',e);
+      alert('No se pudo crear/compartir la imagen: '+((e&&e.message)||e));
+    }
+  };
+
+  setTimeout(function(){try{window.render&&window.render()}catch(e){}},80);
+})();
+</script>
+
 </body></html>
