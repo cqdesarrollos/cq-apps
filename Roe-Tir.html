@@ -2420,14 +2420,19 @@ function cellSpan(text, color){ return `<span class="cell-${color}">${text}</spa
 
 const COLOR_HEX = { green:'#3E7D5C', yellow:'#B8843A', red:'#A8503F', gray:'#8E8A80' };
 const INDICADORES_CHART = {
-  'Ganancia':       { get:r=>r.ganancia,      isPct:false, isMonths:false, band:null },
-  'Ingreso total':  { get:r=>r.ingresoTotal,  isPct:false, isMonths:false, band:null },
-  'Capital máximo': { get:r=>r.capitalMaximo, isPct:false, isMonths:false, band:bandCapitalInvertido },
-  'ROE':            { get:r=>r.roe,           isPct:true,  isMonths:false, band:bandROE },
-  'TIR anual':      { get:r=>r.tirAnual,      isPct:true,  isMonths:false, band:bandTirAnual },
-  'TIR mensual':    { get:r=>r.tirMensual,    isPct:true,  isMonths:false, band:bandTirMensual },
-  'Payback':        { get:r=>r.payback,       isPct:false, isMonths:true,  band:bandPayback },
-  'Capital/Costo':  { get:r=>r.capitalCosto,  isPct:true,  isMonths:false, band:bandCapitalCosto },
+  'Ingreso total':        { get:r=>r.ingresoTotal,  isPct:false, isMonths:false, band:null },
+  'Comisión total':       { get:r=>r.comisionTotal, isPct:false, isMonths:false, band:null },
+  'Costo total':          { get:r=>r.costoTotal,    isPct:false, isMonths:false, band:null },
+  'Ganancia proyectos':   { get:r=>r.ganancia,      isPct:false, isMonths:false, band:null },
+  'Estructura operativa': { get:(r,d)=>cqRoeCostoFijoImputadoProyecto(d.o,'estructura'), isPct:false, isMonths:false, band:null },
+  'Impuestos':            { get:(r,d)=>cqRoeCostoFijoImputadoProyecto(d.o,'impuestos'),  isPct:false, isMonths:false, band:null },
+  'Resultado neto':       { get:(r,d)=>(Number(r.ganancia)||0)-cqRoeCostoFijoImputadoProyecto(d.o,'estructura')-cqRoeCostoFijoImputadoProyecto(d.o,'impuestos'), isPct:false, isMonths:false, band:null },
+  'Capital máximo':       { get:r=>r.capitalMaximo, isPct:false, isMonths:false, band:bandCapitalInvertido },
+  'ROE':                  { get:r=>r.roe,           isPct:true,  isMonths:false, band:bandROE },
+  'TIR mensual':          { get:r=>r.tirMensual,    isPct:true,  isMonths:false, band:bandTirMensual },
+  'TIR anual':            { get:r=>r.tirAnual,      isPct:true,  isMonths:false, band:bandTirAnual },
+  'Payback':              { get:r=>r.payback,       isPct:false, isMonths:true,  band:bandPayback },
+  'Capital/Costo':        { get:r=>r.capitalCosto,  isPct:true,  isMonths:false, band:bandCapitalCosto },
 };
 let chartIndicador = 'Ganancia';
 let chartInstance = null;
@@ -2451,12 +2456,12 @@ function renderCompareChart(datos){
 
   const def = INDICADORES_CHART[chartIndicador];
   const labels = datos.map(d=>d.o.nombre||'—');
-  const raw = datos.map(d=>def.get(d.r));
+  const raw = datos.map(d=>def.get(d.r,d));
   const values = raw.map(v=> v==null ? 0 : (def.isPct ? v*100 : v));
   const isMobile = window.innerWidth <= 560;
 
   const colors = datos.map(d=>{
-    const v = def.get(d.r);
+    const v = def.get(d.r,d);
     return def.band ? COLOR_HEX[def.band(v).color] : '#236450';
   });
 
@@ -3491,8 +3496,8 @@ let cqChartOrdenDesc = true;
 function cqOrdenarDatosGrafico(datos){
   const def = INDICADORES_CHART[chartIndicador];
   return (datos||[]).slice().sort((a,b)=>{
-    const av = def && def.get ? def.get(a.r) : null;
-    const bv = def && def.get ? def.get(b.r) : null;
+    const av = def && def.get ? def.get(a.r,a) : null;
+    const bv = def && def.get ? def.get(b.r,b) : null;
 
     const aOk = av!==null && av!==undefined && isFinite(Number(av));
     const bOk = bv!==null && bv!==undefined && isFinite(Number(bv));
