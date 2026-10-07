@@ -2163,7 +2163,46 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
 
 <style id="cq-report-wsp-v3">
 .cq-rw-box{margin:12px 0;padding:12px;border:1px solid #d8e3df;border-radius:14px;background:#fff}.cq-rw-head{display:flex;justify-content:space-between;gap:8px;align-items:center}.cq-rw-title{font-weight:900;font-size:11px}.cq-rw-actions{display:flex;gap:6px}.cq-rw-btn{border:0;border-radius:9px;padding:9px 11px;font-weight:900}.cq-rw-btn.w{background:#1f8f63;color:#fff}.cq-rw-btn.p{background:#fff;border:1px solid #cad8d4;color:#315e56}.cq-rw-help{font-size:9px;color:#71807d;margin:7px 0}.cq-rw-items{display:grid;gap:5px;max-height:280px;overflow:auto}.cq-rw-row{display:grid;grid-template-columns:22px 1fr 86px;gap:6px;align-items:center;padding:6px;border:1px solid #eee;border-radius:8px}.cq-rw-name{font-size:9px;font-weight:800}.cq-rw-qty{width:100%;height:29px;border:1px solid #cddbd7;border-radius:7px;padding:4px 6px;font-weight:900}@media(max-width:560px){.cq-rw-head{align-items:flex-start;flex-direction:column}.cq-rw-actions{width:100%}.cq-rw-btn{flex:1}}
-</style></head>
+</style>
+<style id="cq-tablet-fullwidth-final-v1">
+/* Tablet horizontal: todas las solapas usan todo el ancho disponible.
+   Solo modifica layout; no toca Firebase, datos ni JavaScript. */
+@media (min-width:768px) and (max-width:1366px) and (orientation:landscape){
+  html,body{width:100%!important;max-width:none!important;overflow-x:hidden!important;}
+
+  .view,
+  #view-stock,
+  #view-obras,
+  #view-reportes,
+  #view-reporte-stock{
+    width:100%!important;
+    max-width:none!important;
+    margin-left:0!important;
+    margin-right:0!important;
+    padding-left:18px!important;
+    padding-right:18px!important;
+  }
+
+  .view.active{width:100%!important;max-width:none!important;}
+  .view > .card,
+  .view > .carga-form,
+  .view > .chart-card,
+  .view > .quick-access,
+  .view > .alert-panel,
+  .view > .resumen-strip,
+  #view-obras #obra-detalle,
+  #view-reportes #reportes-body,
+  #view-reporte-stock #reporte-stock-body{
+    width:100%!important;
+    max-width:none!important;
+  }
+
+  .tabs{width:100%!important;max-width:none!important;}
+  .chart-card,.chart-wrap{width:100%!important;max-width:none!important;}
+  #view-reportes canvas,#view-reporte-stock canvas{width:100%!important;max-width:100%!important;}
+}
+</style>
+</head>
 <body>
 
 <div id="cq-access-guard">
@@ -9947,5 +9986,194 @@ function r(){setTimeout(mount,100)}document.addEventListener("change",r);window.
 #view-reportes .cq-report-filter-grid,
 #view-reporte-stock .cq-report-filter-grid{
   grid-template-columns:1fr 1fr!important;
+}
+</style>
+
+<style id="cq-tablet-legibilidad-grande-v2">
+/* Tablet horizontal — versión legible: agranda controles, textos y tarjetas
+   de las 4 solapas sin tocar datos, Firebase ni JavaScript. */
+@media (min-width:768px) and (max-width:1366px) and (orientation:landscape){
+  /* Cabecera y navegación */
+  .hdr{height:76px!important;padding-left:24px!important;padding-right:24px!important}
+  .logo{width:48px!important;height:48px!important;font-size:24px!important}
+  .hdr-title{font-size:21px!important}
+  .hdr-sub{font-size:13px!important}
+  .cq-home-header{height:38px!important;padding:0 12px!important;font-size:12px!important}
+  .cq-panol-folder{width:38px!important;min-width:38px!important;font-size:16px!important}
+  .sync-status,.user-pill{min-height:38px!important;font-size:12.5px!important;padding-top:8px!important;padding-bottom:8px!important}
+
+  .tabs{top:76px!important;padding:12px 16px!important;gap:11px!important}
+  .tb{height:72px!important;min-height:72px!important;padding:9px 12px!important;border-radius:17px!important}
+  .tb-ico{font-size:26px!important}
+  .tb-copy b{font-size:16px!important}
+  .tb-copy small{font-size:11px!important;margin-top:5px!important}
+
+  /* Base común de todas las solapas */
+  .view,#view-stock,#view-obras,#view-reportes,#view-reporte-stock{
+    padding:20px 22px 60px!important;
+  }
+  #view-stock.active::before,
+  #view-obras.active::before,
+  #view-reportes.active::before,
+  #view-reporte-stock.active::before{
+    font-size:16px!important;
+    padding:14px 17px!important;
+    margin-bottom:14px!important;
+    border-radius:18px!important;
+  }
+  .sec-ttl{font-size:13px!important;margin-top:18px!important;margin-bottom:10px!important}
+  .card,.carga-form,.prod-card,.chart-card{border-radius:18px!important}
+  .card-hd{min-height:48px!important;padding:12px 16px!important;font-size:15px!important}
+  .card-bd{padding:16px 18px!important}
+  .empty-state{font-size:15px!important;padding:48px 18px!important}
+  .empty-state .ic{font-size:34px!important}
+
+  /* Formularios comunes */
+  .carga-row,.carga-row.triple{gap:11px!important;margin-bottom:11px!important}
+  .carga-fld label,.fld label{font-size:11px!important;margin-bottom:5px!important}
+  .carga-fld input,.carga-fld select,.fld input,.fld select,
+  .filter-row input,.filter-row select,.combo-down input,.panol-subrubro-input{
+    min-height:46px!important;height:46px!important;
+    padding:9px 12px!important;font-size:14px!important;border-radius:11px!important;
+  }
+  .btn-cargar{min-height:48px!important;height:48px!important;font-size:14px!important;border-radius:12px!important}
+  .btn-secundario{min-height:42px!important;height:42px!important;padding:8px 12px!important;font-size:12.5px!important}
+  .btn{font-size:13px!important;padding:10px 17px!important}
+
+  /* ================= PAÑOL / STOCK ================= */
+  #view-stock .carga-form{padding:15px!important;margin-bottom:12px!important}
+  #view-stock .carga-form>.card-hd{
+    min-height:44px!important;margin:-15px -15px 12px!important;padding:10px 13px!important;font-size:14px!important;
+  }
+  #view-stock .carga-fld label{font-size:10.5px!important}
+  #view-stock .carga-fld input,#view-stock .carga-fld select,#view-stock .panol-subrubro-input{
+    height:44px!important;min-height:44px!important;font-size:13.5px!important;padding:8px 11px!important;
+  }
+  #view-stock .btn-cargar{height:46px!important;min-height:46px!important;font-size:14px!important}
+  #view-stock .carga-form>.btn-secundario{height:41px!important;min-height:41px!important;font-size:12px!important}
+
+  .quick-access{gap:12px!important;margin-bottom:16px!important}
+  .quick-card{padding:15px!important;border-radius:17px!important}
+  .quick-title{font-size:12px!important;margin-bottom:9px!important}
+  .quick-chip{font-size:11.5px!important;padding:7px 10px!important}
+  .quick-empty{font-size:12.5px!important}
+
+  #view-stock .cq-stock-search-main,#view-stock #stock-search{
+    height:44px!important;min-height:44px!important;margin-bottom:8px!important;
+    padding:8px 12px!important;font-size:13px!important;border-radius:11px!important;
+  }
+  .cq-stock-filtros-toggle{
+    min-height:44px!important;padding:8px 12px!important;margin-bottom:8px!important;
+    border-radius:11px!important;font-size:12.5px!important;
+  }
+  #cq-stock-filtros-resumen{font-size:10.5px!important}
+  .cq-stock-filtros-panel{gap:9px!important;padding:10px!important;margin-bottom:10px!important;border-radius:12px!important}
+  .cq-stock-multi>label,.cq-stock-disp-wrap>label,.cq-stock-date-range>label{
+    font-size:9.5px!important;margin-bottom:4px!important;
+  }
+  .cq-stock-multi-btn,#stock-disponibilidad-filter,.cq-stock-date-range input{
+    height:40px!important;min-height:40px!important;padding:7px 10px!important;font-size:11.5px!important;border-radius:9px!important;
+  }
+  .cq-stock-date-range-grid small{font-size:8.5px!important;margin-bottom:3px!important}
+  .cq-stock-limpiar{min-height:38px!important;font-size:10.5px!important;border-radius:9px!important}
+  .cq-stock-multi-search input{height:38px!important;min-height:38px!important;font-size:11px!important}
+  .cq-stock-multi-actions button{min-height:36px!important;font-size:10.5px!important}
+  .cq-stock-multi-option{min-height:38px!important;padding:8px 9px!important;font-size:11px!important}
+  .cq-stock-multi-option input{width:17px!important;height:17px!important}
+  .cq-stock-disp-menu button{min-height:39px!important;padding:8px 10px!important;font-size:11px!important}
+
+  #view-stock #stock-list .prod-card{
+    padding:12px 14px!important;margin-bottom:8px!important;border-radius:13px!important;border-left-width:4px!important;
+  }
+  #view-stock #stock-list .prod-top{gap:10px!important}
+  #view-stock #stock-list .fav-btn{font-size:16px!important;padding:3px!important}
+  #view-stock #stock-list .prod-nombre{font-size:14px!important;line-height:1.25!important}
+  #view-stock #stock-list .prod-codigo{font-size:10px!important;margin-top:3px!important}
+  #view-stock #stock-list .prod-rubro{font-size:10px!important;max-width:330px!important;padding:4px 8px!important}
+  #view-stock #stock-list .stock-state{font-size:10px!important;padding:5px 9px!important}
+  #view-stock #stock-list .prod-stock{font-size:25px!important}
+  #view-stock #stock-list .prod-stock small{font-size:10px!important;margin-top:3px!important}
+  #view-stock #stock-list .icon-mini{width:36px!important;height:36px!important;font-size:15px!important;border-radius:10px!important}
+  #view-stock #stock-list .prod-icons{gap:6px!important;margin-top:7px!important}
+  #view-stock #stock-list .lote-row{font-size:11.5px!important;padding:4px 0!important}
+
+  /* ================= OBRAS ================= */
+  #view-obras .chips{gap:8px!important;margin-bottom:14px!important}
+  #view-obras .chip,#view-reportes .chip{font-size:13px!important;padding:9px 14px!important;border-radius:11px!important}
+  .cq-obra-filtros-toggle{
+    min-height:44px!important;padding:8px 12px!important;margin:9px 0 8px!important;
+    border-radius:11px!important;font-size:12.5px!important;
+  }
+  .cq-obra-filtros-toggle span:nth-child(2){font-size:10.5px!important}
+  #view-obras .cq-obra-hist-filtros.open{gap:9px!important;padding:10px!important;margin-bottom:10px!important}
+  .cq-obra-multi>label,.cq-obra-date-range>label{font-size:9.5px!important;margin-bottom:4px!important}
+  .cq-obra-multi-btn,.cq-obra-date-grid input{
+    height:40px!important;min-height:40px!important;padding:7px 10px!important;font-size:11.5px!important;border-radius:9px!important;
+  }
+  .cq-obra-date-grid small{font-size:8.5px!important;margin-bottom:3px!important}
+  .cq-obra-multi-actions button{min-height:36px!important;font-size:10.5px!important}
+  .cq-obra-multi-option{min-height:38px!important;padding:8px 9px!important;font-size:11px!important}
+  .cq-obra-multi-option input{width:17px!important;height:17px!important}
+  #view-obras .cq-obra-hist-limpiar{height:38px!important;min-height:38px!important;font-size:10.5px!important}
+
+  #obra-detalle .hist-entry{
+    grid-template-columns:78px minmax(0,1fr) 76px 52px 52px 74px!important;
+    gap:10px!important;padding:13px 14px!important;
+  }
+  #obra-detalle .hist-fecha{font-size:11px!important}
+  #obra-detalle .hist-mat{font-size:14px!important;line-height:1.3!important}
+  #obra-detalle .hist-sub,#obra-detalle .hist-extra{font-size:11.5px!important;line-height:1.35!important}
+  #obra-detalle .hist-val{font-size:15px!important}
+  #obra-detalle .sync-mini-label-panol{font-size:8px!important}
+  #obra-detalle .obra-delete-btn{min-height:34px!important;padding:7px 10px!important;font-size:10.5px!important}
+
+  /* ================= REPORTES ================= */
+  .report-metric-switch,.report-stock-metric-switch{
+    gap:9px!important;padding:8px!important;margin-bottom:14px!important;border-radius:17px!important;
+  }
+  .report-metric-btn,.report-stock-metric-btn{
+    min-height:44px!important;padding:10px 10px!important;font-size:13px!important;border-radius:12px!important;
+  }
+  .report-metric-note,.report-stock-note{font-size:12px!important;margin-bottom:14px!important}
+  .resumen-strip{gap:10px!important;margin-bottom:15px!important}
+  .resumen-card{min-height:92px!important;padding:15px 16px!important;border-radius:17px!important}
+  .resumen-card .rc-lbl{font-size:11px!important}
+  .resumen-card .rc-val{font-size:21px!important;margin-top:5px!important}
+
+  #view-reportes .cq-report-filter-grid,#view-reporte-stock .cq-report-filter-grid{gap:10px!important;margin-bottom:12px!important}
+  .cq-report-multi>label,.cq-report-order label,.cq-report-date-range>label{font-size:10px!important;margin-bottom:5px!important}
+  .cq-report-multi-btn,.cq-report-order select,.cq-report-date-grid input{
+    height:43px!important;min-height:43px!important;padding:8px 11px!important;font-size:12px!important;border-radius:10px!important;
+  }
+  .cq-report-date-grid small{font-size:8.5px!important;margin-bottom:3px!important}
+  .cq-report-multi-search input{min-height:38px!important;height:38px!important;font-size:11px!important}
+  .cq-report-multi-options{max-height:290px!important;padding:5px!important}
+  .cq-report-multi-option{min-height:38px!important;padding:8px 9px!important;font-size:11px!important}
+  .cq-report-multi-option input{width:17px!important;height:17px!important}
+  .cq-report-multi-actions{padding:7px!important;gap:8px!important}
+  .cq-report-multi-actions button{height:36px!important;font-size:10.5px!important;padding:6px 11px!important}
+
+  .chart-card{padding:17px!important;margin-bottom:15px!important}
+  .chart-card h3{font-size:15px!important;margin-bottom:11px!important}
+  .chart-product-note{font-size:11.5px!important;line-height:1.4!important;margin-bottom:7px!important}
+  #view-reportes .chart-wrap,#view-reporte-stock .chart-wrap{min-height:300px!important}
+
+  /* Compartir / informe */
+  .cq-rw-box{padding:15px!important;border-radius:16px!important;margin:15px 0!important}
+  .cq-rw-title{font-size:13px!important}
+  .cq-rw-btn{padding:10px 13px!important;font-size:11px!important}
+  .cq-rw-help{font-size:10.5px!important}
+  .cq-rw-row{grid-template-columns:25px 1fr 100px!important;padding:8px!important}
+  .cq-rw-name{font-size:11px!important}
+  .cq-rw-qty{height:36px!important;font-size:12px!important}
+
+  /* Modales también legibles en tablet */
+  .modal{width:min(650px,94vw)!important;border-radius:18px!important}
+  .modal-hd{padding:16px 18px 13px!important}
+  .modal-ttl{font-size:16px!important}
+  .mbody{padding:17px 18px!important}
+  .mfooter{padding:0 18px 17px!important}
+  .fld label{font-size:10.5px!important}
+  .fld input,.fld select,.fld textarea{font-size:13.5px!important;padding:10px 12px!important}
 }
 </style>
