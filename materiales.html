@@ -10092,7 +10092,54 @@ function cqAbrirPDFImprimible(data){
     '<table><thead><tr>'+data.headers.map(function(h){return '<th>'+cqEscapeExport(h)+'</th>';}).join('')+
     '</tr></thead><tbody>'+filas+'</tbody></table>'+
     '<script>window.onload=function(){setTimeout(function(){window.print();},250)}<\/script>'+
-    '</body></html>'
+    '
+<style id="cq-catalogo-tablet-fill-final">
+/* Catálogo en tablet horizontal: la tabla de Materiales cargados ocupa TODO el ancho. */
+@media (min-width:768px) and (max-width:1600px) and (orientation:landscape){
+  #view-catalogo #catalogo-content,
+  #view-catalogo #catalogo-content .card,
+  #view-catalogo #catalogo-content .tbl-wrap{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+
+  #view-catalogo #catalogo-content .tbl-wrap{
+    overflow-x:hidden!important;
+  }
+
+  #view-catalogo #catalogo-content .tbl-wrap table{
+    width:100%!important;
+    min-width:100%!important;
+    max-width:100%!important;
+    table-layout:fixed!important;
+    border-collapse:collapse!important;
+  }
+
+  /* Repartir el ancho útil para eliminar el gran vacío de la derecha. */
+  #view-catalogo #catalogo-content table th:nth-child(1),
+  #view-catalogo #catalogo-content table td:nth-child(1){width:38%!important;}
+  #view-catalogo #catalogo-content table th:nth-child(2),
+  #view-catalogo #catalogo-content table td:nth-child(2){width:18%!important;}
+  #view-catalogo #catalogo-content table th:nth-child(3),
+  #view-catalogo #catalogo-content table td:nth-child(3){width:44%!important;}
+
+  #view-catalogo #catalogo-content table td:nth-child(1),
+  #view-catalogo #catalogo-content table td:nth-child(2),
+  #view-catalogo #catalogo-content table td:nth-child(3){
+    overflow:hidden!important;
+  }
+
+  /* La observación puede usar todo el ancho de su columna. */
+  #view-catalogo #catalogo-content table td:nth-child(3) > div{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+}
+</style>
+
+</body></html>'
   );
   w.document.close();
 }
