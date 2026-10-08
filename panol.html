@@ -8879,7 +8879,7 @@ document.addEventListener('click',function(e){
     renderReporteStockV4();
   };
 
-  function renderReportesV4(){var cqBigRep=!!(window.matchMedia&&window.matchMedia('(min-width:700px) and (orientation:landscape)').matches);
+  function renderReportesV4(){
     var ord=document.getElementById('rep-orden');if(ord)ord.value=cqRepOrdenV4;
     syncRepMetricaUI();
     renderFiltroObrasReportes();
@@ -8920,14 +8920,14 @@ document.addEventListener('click',function(e){
     if(!arr.length){body.innerHTML='<div class="empty-state"><div class="ic">📊</div>Todavía no hay consumo cargado para graficar.</div>';destroyChart('obra');destroyChart('obraCant');return;}
     var titulo=repMetrica==='pesos'?'Consumo en pesos por producto y obra':(repMetrica==='usd'?'Consumo en dólares por producto y obra':'Cantidades por producto y obra');
     var prodFiltrado=repProductosMulti.length===1?state.productos.find(function(p){return String(p.id)===String(repProductosMulti[0]);}):null;if(prodFiltrado)titulo=(repMetrica==='cantidad'?'Cantidad de ':'Consumo de ')+prodFiltrado.nombre+' por obra';
-    body.innerHTML='<div class="chart-card"><h3>'+escHTML(titulo)+'</h3><div class="chart-product-note">Cada barra identifica el producto y la obra donde fue consumido.</div><div class="chart-wrap" style="height:'+Math.max(cqBigRep?280:210,arr.length*(cqBigRep?40:31))+'px"><canvas id="chart-obra"></canvas></div></div>';
+    body.innerHTML='<div class="chart-card"><h3>'+escHTML(titulo)+'</h3><div class="chart-product-note">Cada barra identifica el producto y la obra donde fue consumido.</div><div class="chart-wrap" style="height:'+Math.max(260,arr.length*(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?42:31))+'px"><canvas id="chart-obra"></canvas></div></div>';
     function fv(v){return repMetrica==='pesos'?fmtMoney(v):(repMetrica==='usd'?fmtUSD(v):fmtN(v)+' u');}
     destroyChart('obra');destroyChart('obraCant');
-    charts.obra=new Chart(document.getElementById('chart-obra'),{type:'bar',data:{labels:arr.map(function(x){return x.producto+' · '+x.obra;}),datasets:[{data:arr.map(function(x){return x[campo];}),backgroundColor:repMetrica==='pesos'?'#B7AFD2':(repMetrica==='usd'?'#C9C2DE':'#D7C09A'),hoverBackgroundColor:repMetrica==='pesos'?'#A59BC6':(repMetrica==='usd'?'#B7AED1':'#C7AA7C'),borderRadius:5,maxBarThickness:(cqBigRep?24:17),valueFormatter:fv,labelColor:'#554B6C'}]},options:{indexAxis:'y',maintainAspectRatio:false,layout:{padding:{right:78,left:34,top:5,bottom:5}},plugins:{legend:{display:false},tooltip:{callbacks:{title:function(it){return arr[it[0].dataIndex].producto;},label:function(ctx){var x=arr[ctx.dataIndex];return x.obra+' · '+fv(ctx.parsed.x);}}}},scales:{y:{grid:{display:false},ticks:{font:{size:(cqBigRep?11.5:7.2),weight:'700'},color:'#5E536F',autoSkip:false,crossAlign:'far',padding:10,callback:function(v){return wrapLabel(this.getLabelForValue(v),28);}}},x:{grace:'18%',grid:{color:'rgba(28,61,53,.06)'},ticks:{font:{size:(cqBigRep?9:6)},color:'#81788B',callback:function(v){return repMetrica==='pesos'?fmtMoney(v):(repMetrica==='usd'?fmtUSD(v):fmtN(v));}}}}}});
+    charts.obra=new Chart(document.getElementById('chart-obra'),{type:'bar',data:{labels:arr.map(function(x){return x.producto+' · '+x.obra;}),datasets:[{data:arr.map(function(x){return x[campo];}),backgroundColor:repMetrica==='pesos'?'#B7AFD2':(repMetrica==='usd'?'#C9C2DE':'#D7C09A'),hoverBackgroundColor:repMetrica==='pesos'?'#A59BC6':(repMetrica==='usd'?'#B7AED1':'#C7AA7C'),borderRadius:6,maxBarThickness:(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?24:17),valueFormatter:fv,labelColor:'#554B6C'}]},options:{indexAxis:'y',maintainAspectRatio:false,layout:{padding:{right:78,left:34,top:5,bottom:5}},plugins:{legend:{display:false},tooltip:{callbacks:{title:function(it){return arr[it[0].dataIndex].producto;},label:function(ctx){var x=arr[ctx.dataIndex];return x.obra+' · '+fv(ctx.parsed.x);}}}},scales:{y:{grid:{display:false},ticks:{font:{size:(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?12:7.2),weight:'700'},color:'#5E536F',autoSkip:false,crossAlign:'far',padding:10,callback:function(v){return wrapLabel(this.getLabelForValue(v),28);}}},x:{grace:'18%',grid:{color:'rgba(28,61,53,.06)'},ticks:{font:{size:(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?9.5:6)},color:'#81788B',callback:function(v){return repMetrica==='pesos'?fmtMoney(v):(repMetrica==='usd'?fmtUSD(v):fmtN(v));}}}}}});
   }
 
   window.setStockRepMetrica=function(m){if(['cantidad','pesos','usd'].indexOf(m)<0)return;stockRepMetricaV4=m;renderReporteStockV4();};
-  function renderReporteStockV4(){var cqBigRep=!!(window.matchMedia&&window.matchMedia('(min-width:700px) and (orientation:landscape)').matches);
+  function renderReporteStockV4(){
     var ord=document.getElementById('stockrep-orden');if(ord)ord.value=cqStockRepOrdenV4;
     var w=document.getElementById('report-stock-metric-switch');if(w)Array.prototype.forEach.call(w.querySelectorAll('.report-stock-metric-btn'),function(b){b.classList.toggle('active',b.getAttribute('data-mode')===stockRepMetricaV4);});
     syncLabel('stock','subrubro');syncLabel('stock','producto');
@@ -8947,9 +8947,9 @@ document.addEventListener('click',function(e){
       if(cqStockRepOrdenV4==='az')return String(a.p&&a.p.nombre||'').localeCompare(String(b.p&&b.p.nombre||''),'es',{sensitivity:'base'});
       return b[campo]-a[campo];
     });var titulo=stockRepMetricaV4==='pesos'?'Valor en pesos por producto':(stockRepMetricaV4==='usd'?'Valor en dólares por producto':'Cantidad actual por producto');
-    body.innerHTML='<div class="chart-card"><h3>'+escHTML(titulo)+'</h3><div class="chart-product-note">Stock disponible actualmente en Pañol.</div><div class="chart-wrap" style="height:'+Math.max(cqBigRep?280:210,rows.length*(cqBigRep?40:31))+'px"><canvas id="chart-stock-report"></canvas></div></div>';
+    body.innerHTML='<div class="chart-card"><h3>'+escHTML(titulo)+'</h3><div class="chart-product-note">Stock disponible actualmente en Pañol.</div><div class="chart-wrap" style="height:'+Math.max(260,rows.length*(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?42:31))+'px"><canvas id="chart-stock-report"></canvas></div></div>';
     if(charts.stockReport){charts.stockReport.destroy();charts.stockReport=null;}function fv(v){return stockRepMetricaV4==='pesos'?fmtMoney(v):(stockRepMetricaV4==='usd'?fmtUSD(v):fmtN(v)+' u');}
-    charts.stockReport=new Chart(document.getElementById('chart-stock-report'),{type:'bar',data:{labels:rows.map(function(x){return x.p.nombre;}),datasets:[{data:rows.map(function(x){return x[campo];}),backgroundColor:'#91BBB5',hoverBackgroundColor:'#7EAAA4',borderRadius:5,maxBarThickness:(cqBigRep?24:17),valueFormatter:fv,labelColor:'#3F6761'}]},options:{indexAxis:'y',maintainAspectRatio:false,layout:{padding:{right:78,left:34,top:5,bottom:5}},plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return fv(ctx.parsed.x);}}}},scales:{y:{grid:{display:false},ticks:{font:{size:(cqBigRep?11.5:7.2),weight:'700'},color:'#426F69',autoSkip:false,crossAlign:'far',padding:10,callback:function(v){return wrapLabel(this.getLabelForValue(v),28);}}},x:{grace:'18%',grid:{color:'rgba(78,129,122,.07)'},ticks:{font:{size:(cqBigRep?9:6)},color:'#6C8D88',callback:function(v){return stockRepMetricaV4==='pesos'?fmtMoney(v):(stockRepMetricaV4==='usd'?fmtUSD(v):fmtN(v));}}}}}});
+    charts.stockReport=new Chart(document.getElementById('chart-stock-report'),{type:'bar',data:{labels:rows.map(function(x){return x.p.nombre;}),datasets:[{data:rows.map(function(x){return x[campo];}),backgroundColor:'#91BBB5',hoverBackgroundColor:'#7EAAA4',borderRadius:6,maxBarThickness:(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?24:17),valueFormatter:fv,labelColor:'#3F6761'}]},options:{indexAxis:'y',maintainAspectRatio:false,layout:{padding:{right:78,left:34,top:5,bottom:5}},plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return fv(ctx.parsed.x);}}}},scales:{y:{grid:{display:false},ticks:{font:{size:(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?12:7.2),weight:'700'},color:'#426F69',autoSkip:false,crossAlign:'far',padding:10,callback:function(v){return wrapLabel(this.getLabelForValue(v),28);}}},x:{grace:'18%',grid:{color:'rgba(78,129,122,.07)'},ticks:{font:{size:(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?9.5:6)},color:'#6C8D88',callback:function(v){return stockRepMetricaV4==='pesos'?fmtMoney(v):(stockRepMetricaV4==='usd'?fmtUSD(v):fmtN(v));}}}}}});
   }
   window.renderReporteStock=renderReporteStockV4;
   window.renderReportes=renderReportesV4;
@@ -8957,7 +8957,7 @@ document.addEventListener('click',function(e){
   // Corrige el plugin de valores para que no dibuje texto fuera del área visible.
   if(window.Chart){
     try{Chart.unregister(valueLabelsPlugin);}catch(e){}
-    var safeLabels={id:'valueLabelsSafe',afterDatasetsDraw:function(chart){var ctx=chart.ctx,area=chart.chartArea;chart.data.datasets.forEach(function(ds,i){var meta=chart.getDatasetMeta(i);if(meta.hidden)return;meta.data.forEach(function(bar,index){var value=ds.data[index];if(value==null)return;var label=ds.valueFormatter?ds.valueFormatter(value):value,pos=bar.tooltipPosition?bar.tooltipPosition():{x:bar.x,y:bar.y},isRep=chart.canvas&&(chart.canvas.id==='chart-obra'||chart.canvas.id==='chart-stock-report');ctx.save();ctx.fillStyle=ds.labelColor||'#1C3D35';ctx.font=(isRep?(window.matchMedia&&window.matchMedia('(min-width:700px) and (orientation:landscape)').matches?"800 11px 'Space Grotesk',sans-serif":"800 6.5px 'Space Grotesk',sans-serif"):"800 9px 'Space Grotesk',sans-serif");ctx.textBaseline='middle';if(isRep){var tw=ctx.measureText(String(label)).width,x=pos.x+5;if(x+tw>area.right-2){x=Math.min(pos.x-5,area.right-3);ctx.textAlign='right';}else ctx.textAlign='left';ctx.fillText(label,Math.max(area.left+2,x),pos.y);}else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(label,pos.x,pos.y-6);}ctx.restore();});});}};
+    var safeLabels={id:'valueLabelsSafe',afterDatasetsDraw:function(chart){var ctx=chart.ctx,area=chart.chartArea;chart.data.datasets.forEach(function(ds,i){var meta=chart.getDatasetMeta(i);if(meta.hidden)return;meta.data.forEach(function(bar,index){var value=ds.data[index];if(value==null)return;var label=ds.valueFormatter?ds.valueFormatter(value):value,pos=bar.tooltipPosition?bar.tooltipPosition():{x:bar.x,y:bar.y},isRep=chart.canvas&&(chart.canvas.id==='chart-obra'||chart.canvas.id==='chart-stock-report');ctx.save();ctx.fillStyle=ds.labelColor||'#1C3D35';ctx.font=(isRep?(window.matchMedia&&window.matchMedia('(min-width:600px) and (orientation:landscape)').matches?"800 12px 'Space Grotesk',sans-serif":"800 6.5px 'Space Grotesk',sans-serif"):"800 9px 'Space Grotesk',sans-serif");ctx.textBaseline='middle';if(isRep){var tw=ctx.measureText(String(label)).width,x=pos.x+5;if(x+tw>area.right-2){x=Math.min(pos.x-5,area.right-3);ctx.textAlign='right';}else ctx.textAlign='left';ctx.fillText(label,Math.max(area.left+2,x),pos.y);}else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(label,pos.x,pos.y-6);}ctx.restore();});});}};
     Chart.register(safeLabels);
   }
 
@@ -10182,75 +10182,151 @@ function r(){setTimeout(mount,100)}document.addEventListener("change",r);window.
 </style>
 
 
-<style id="cq-tablet-proporcional-obras-reportes-v3">
-/* TABLET HORIZONTAL — proporción de tamaños. Solo presentación. */
-@media (min-width:700px) and (orientation:landscape){
-  /* OBRAS — botones y todo lo que sigue */
-  #view-obras #obras-chips{gap:7px!important;margin-bottom:12px!important}
-  #view-obras #obras-chips .chip{min-height:38px!important;height:auto!important;padding:8px 12px!important;border-radius:999px!important;font-size:13px!important;line-height:1.15!important}
 
-  #view-obras #obra-detalle>.resumen-strip{gap:10px!important;margin:0 0 12px!important}
-  #view-obras #obra-detalle>.resumen-strip .resumen-card{min-height:76px!important;padding:12px 14px!important;border-radius:14px!important;box-shadow:0 7px 18px rgba(28,61,53,.08)!important}
-  #view-obras #obra-detalle>.resumen-strip .rc-lbl{font-size:11.5px!important;line-height:1.15!important}
-  #view-obras #obra-detalle>.resumen-strip .rc-val{margin-top:5px!important;font-size:21px!important;line-height:1.05!important}
+<style id="cq-tablet-proporcion-final-v4">
+/* ============================================================
+   TABLET HORIZONTAL — escala final proporcional
+   Solo presentación. No toca datos, Firebase ni lógica.
+   ============================================================ */
+@media (min-width:600px) and (orientation:landscape){
 
-  #view-obras .cq-sync-manual-row{gap:10px!important;margin:0 0 12px!important}
-  #view-obras .cq-sync-manual-btn{min-height:44px!important;padding:8px 12px!important;border-radius:11px!important;font-size:13px!important;line-height:1.15!important}
+  /* ---------- OBRAS ---------- */
+  #view-obras{padding:18px 20px 60px!important}
+  #view-obras .sec-ttl{font-size:18px!important;margin:12px 2px 10px!important;line-height:1.1!important}
 
-  #view-obras #obra-detalle>.card .card-hd{min-height:46px!important;padding:11px 14px!important;font-size:15px!important;line-height:1.2!important}
-  #view-obras #obra-detalle .hist-entry{grid-template-columns:66px minmax(0,1fr) 66px 44px 44px 62px!important;gap:8px!important;padding:10px 12px!important;min-height:58px!important}
-  #view-obras #obra-detalle .hist-fecha{font-size:10.5px!important;line-height:1.2!important}
-  #view-obras #obra-detalle .hist-mat{font-size:13.5px!important;line-height:1.22!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
-  #view-obras #obra-detalle .hist-sub{margin-top:2px!important;font-size:10.5px!important;line-height:1.18!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
-  #view-obras #obra-detalle .hist-extra{margin-top:2px!important;font-size:10px!important;line-height:1.18!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
-  #view-obras #obra-detalle .hist-val{font-size:13px!important;line-height:1.1!important}
-  #view-obras #obra-detalle .sync-labeled-panol{min-width:38px!important;gap:2px!important}
-  #view-obras #obra-detalle .sync-mini-label-panol{font-size:8px!important}
-  #view-obras #obra-detalle .gasto-sync-dot,#view-obras #obra-detalle .mat-sync-dot{width:9px!important;height:9px!important}
-  #view-obras #obra-detalle .hist-acciones{gap:5px!important}
-  #view-obras #obra-detalle .icon-mini,#view-obras #obra-detalle .obra-delete-btn{min-height:31px!important;height:31px!important;padding:5px 8px!important;border-radius:8px!important;font-size:11px!important}
+  /* Botones de obras: claramente más grandes */
+  #view-obras #obras-chips{gap:8px!important;margin-bottom:14px!important;align-items:center!important}
+  #view-obras #obras-chips .chip{
+    min-height:46px!important;height:auto!important;padding:10px 15px!important;
+    border-radius:999px!important;font-size:16px!important;line-height:1.1!important;font-weight:900!important;
+  }
 
-  /* Obra puntual: conservar la misma escala legible */
-  #view-obras #obra-detalle>.card:first-child{border-radius:14px!important;margin-bottom:12px!important}
-  #view-obras #obra-detalle>.card:first-child>.card-hd{min-height:44px!important;padding:10px 13px!important;font-size:14px!important}
-  #view-obras #obra-detalle>.card:first-child>.card-bd{padding:12px!important}
-  #view-obras #obra-detalle>.card:first-child .fld{gap:4px!important;margin-bottom:8px!important}
-  #view-obras #obra-detalle>.card:first-child .fld label{font-size:10.5px!important}
-  #view-obras #obra-detalle>.card:first-child .fld input,#view-obras #obra-detalle>.card:first-child .fld select,#view-obras #obra-detalle>.card:first-child .panol-subrubro-input,#view-obras #obra-detalle>.card:first-child .cq-mat-search{min-height:40px!important;height:40px!important;padding:7px 10px!important;border-radius:9px!important;font-size:13px!important;line-height:1.15!important}
-  #view-obras #obra-detalle>.card:first-child .carga-row{gap:8px!important;margin-bottom:8px!important}
-  #view-obras #obra-detalle>.card:first-child .consumo-comment{min-height:58px!important;height:58px!important;padding:8px 10px!important;border-radius:9px!important;font-size:12.5px!important;line-height:1.25!important}
-  #view-obras #obra-detalle>.card:first-child .btn-cargar{min-height:44px!important;height:44px!important;padding:8px 10px!important;border-radius:10px!important;font-size:14px!important}
-  #view-obras #consumo-codigo-panel .combo-item,#view-obras #consumo-prod-panel .combo-item,#view-obras #consumo-prod-panel .cq-consumo-simple-item{min-height:34px!important;padding:7px 9px!important;gap:7px!important}
-  #view-obras #consumo-codigo-panel .combo-item-name,#view-obras #consumo-prod-panel .combo-item-name,#view-obras #consumo-prod-panel .cq-consumo-simple-item .combo-item-name{font-size:12px!important;line-height:1.15!important}
-  #view-obras #consumo-codigo-panel .combo-item-meta,#view-obras #consumo-prod-panel .combo-item-meta{font-size:9px!important;line-height:1.15!important}
-  #view-obras #consumo-codigo-panel .combo-item-stock,#view-obras #consumo-prod-panel .combo-item-stock,#view-obras #consumo-prod-panel .cq-consumo-simple-item .combo-item-stock{font-size:9.5px!important;padding:3px 6px!important}
+  /* Registrar consumo: subir toda la escala, no solo los campos */
+  #view-obras #obra-detalle>.card:first-child{margin-bottom:14px!important;border-radius:16px!important}
+  #view-obras #obra-detalle>.card:first-child>.card-hd{
+    min-height:52px!important;padding:13px 16px!important;font-size:18px!important;line-height:1.15!important;
+  }
+  #view-obras #obra-detalle>.card:first-child>.card-bd{padding:15px 16px!important}
+  #view-obras #obra-detalle>.card:first-child .carga-row{gap:11px!important;margin-bottom:11px!important}
+  #view-obras #obra-detalle>.card:first-child .fld{gap:5px!important;margin-bottom:11px!important}
+  #view-obras #obra-detalle>.card:first-child .fld label,
+  #view-obras #obra-detalle>.card:first-child .carga-fld label{font-size:13px!important;margin-bottom:5px!important;line-height:1.1!important}
+  #view-obras #obra-detalle>.card:first-child .fld input,
+  #view-obras #obra-detalle>.card:first-child .fld select,
+  #view-obras #obra-detalle>.card:first-child .carga-fld input,
+  #view-obras #obra-detalle>.card:first-child .carga-fld select,
+  #view-obras #obra-detalle>.card:first-child .panol-subrubro-input,
+  #view-obras #obra-detalle>.card:first-child .cq-mat-search{
+    min-height:48px!important;height:48px!important;padding:9px 12px!important;
+    border-radius:11px!important;font-size:15.5px!important;line-height:1.15!important;
+  }
+  #view-obras #obra-detalle>.card:first-child .cq-mat-check{min-height:46px!important;padding:10px 12px!important;margin-bottom:10px!important}
+  #view-obras #obra-detalle>.card:first-child .cq-mat-check label{font-size:14px!important}
+  #view-obras #obra-detalle>.card:first-child .cq-mat-check small{font-size:10.5px!important}
+  #view-obras #obra-detalle>.card:first-child .consumo-comment{
+    min-height:76px!important;height:76px!important;padding:10px 12px!important;border-radius:11px!important;
+    font-size:15px!important;line-height:1.3!important;
+  }
+  #view-obras #obra-detalle>.card:first-child .btn-cargar{
+    min-height:50px!important;height:50px!important;padding:10px 12px!important;border-radius:11px!important;font-size:16px!important;
+  }
 
-  /* REPORTES — botones Cantidad/$/u$s */
-  #view-reportes .report-metric-switch,#view-reporte-stock .report-stock-metric-switch{gap:7px!important;margin:0 0 9px!important;padding:6px!important;border-radius:13px!important}
-  #view-reportes .report-metric-btn,#view-reporte-stock .report-stock-metric-btn{min-height:40px!important;height:40px!important;padding:8px 10px!important;border-radius:10px!important;font-size:14px!important;line-height:1.1!important}
-  #view-reportes .report-metric-note,#view-reporte-stock .report-stock-note{margin:0 2px 10px!important;font-size:10.5px!important;line-height:1.25!important}
+  /* Desplegables dentro de Obras */
+  #view-obras #consumo-codigo-panel .combo-item,
+  #view-obras #consumo-prod-panel .combo-item,
+  #view-obras #consumo-prod-panel .cq-consumo-simple-item{min-height:42px!important;padding:9px 11px!important;gap:9px!important}
+  #view-obras #consumo-codigo-panel .combo-item-name,
+  #view-obras #consumo-prod-panel .combo-item-name,
+  #view-obras #consumo-prod-panel .cq-consumo-simple-item .combo-item-name{font-size:14px!important;line-height:1.15!important}
+  #view-obras #consumo-codigo-panel .combo-item-meta,
+  #view-obras #consumo-prod-panel .combo-item-meta{font-size:10.5px!important;line-height:1.2!important}
+  #view-obras #consumo-codigo-panel .combo-item-stock,
+  #view-obras #consumo-prod-panel .combo-item-stock,
+  #view-obras #consumo-prod-panel .cq-consumo-simple-item .combo-item-stock{font-size:11px!important;padding:4px 7px!important}
 
-  /* Cuatro recuadros superiores */
-  #view-reportes .resumen-strip,#view-reporte-stock .resumen-strip{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;margin-bottom:12px!important}
-  #view-reportes .resumen-card,#view-reporte-stock .resumen-card{min-height:74px!important;padding:12px 14px!important;border-radius:14px!important;box-shadow:0 7px 18px rgba(28,61,53,.08)!important}
-  #view-reportes .rc-lbl,#view-reporte-stock .rc-lbl{font-size:10.5px!important;line-height:1.15!important}
-  #view-reportes .rc-val,#view-reporte-stock .rc-val{margin-top:4px!important;font-size:19px!important;line-height:1.05!important}
+  /* Resumen y acciones */
+  #view-obras #obra-detalle>.resumen-strip{gap:11px!important;margin:0 0 13px!important}
+  #view-obras #obra-detalle>.resumen-strip .resumen-card{
+    min-height:88px!important;padding:14px 16px!important;border-radius:15px!important;
+    box-shadow:0 7px 18px rgba(28,61,53,.08)!important;
+  }
+  #view-obras #obra-detalle>.resumen-strip .rc-lbl{font-size:13px!important;line-height:1.15!important}
+  #view-obras #obra-detalle>.resumen-strip .rc-val{margin-top:6px!important;font-size:25px!important;line-height:1.05!important}
+  #view-obras .cq-sync-manual-row{gap:11px!important;margin:0 0 13px!important}
+  #view-obras .cq-sync-manual-btn{min-height:48px!important;padding:10px 13px!important;border-radius:11px!important;font-size:14px!important;line-height:1.15!important}
+  #view-obras .cq-obra-filtros-toggle{min-height:50px!important;padding:10px 14px!important;font-size:16px!important;border-radius:12px!important}
+  #view-obras .cq-obra-filtros-toggle span:nth-child(2){font-size:12px!important}
 
-  /* Filtros proporcionados */
-  #view-reportes .sec-ttl,#view-reporte-stock .sec-ttl{margin:10px 2px 6px!important;font-size:11.5px!important;line-height:1.15!important}
-  #view-reportes .cq-report-filter-grid,#view-reporte-stock .cq-report-filter-grid{gap:9px!important;margin-bottom:10px!important}
-  #view-reportes .cq-report-multi>label,#view-reportes .cq-report-order label,#view-reportes .cq-report-date-range>label,#view-reporte-stock .cq-report-multi>label,#view-reporte-stock .cq-report-order label,#view-reporte-stock .cq-report-date-range>label{font-size:10.5px!important;margin-bottom:4px!important}
-  #view-reportes .cq-report-multi-btn,#view-reportes .cq-report-order select,#view-reportes .cq-report-date-grid input,#view-reporte-stock .cq-report-multi-btn,#view-reporte-stock .cq-report-order select,#view-reporte-stock .cq-report-date-grid input{min-height:42px!important;height:42px!important;padding:7px 10px!important;border-radius:9px!important;font-size:12.5px!important;line-height:1.15!important}
-  #view-reportes .cq-report-date-grid small,#view-reporte-stock .cq-report-date-grid small{font-size:9.5px!important}
+  /* Historial de obra */
+  #view-obras #obra-detalle>.card .card-hd{min-height:52px!important;padding:13px 16px!important;font-size:18px!important;line-height:1.15!important}
+  #view-obras #obra-detalle .hist-entry{
+    grid-template-columns:78px minmax(0,1fr) 76px 50px 50px 70px!important;
+    gap:10px!important;padding:13px 14px!important;min-height:68px!important;
+  }
+  #view-obras #obra-detalle .hist-fecha{font-size:12px!important;line-height:1.2!important}
+  #view-obras #obra-detalle .hist-mat{font-size:16px!important;line-height:1.25!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+  #view-obras #obra-detalle .hist-sub{margin-top:3px!important;font-size:12.5px!important;line-height:1.22!important;white-space:normal!important}
+  #view-obras #obra-detalle .hist-extra{margin-top:3px!important;font-size:12px!important;line-height:1.22!important;white-space:normal!important}
+  #view-obras #obra-detalle .hist-val{font-size:15px!important;line-height:1.1!important}
+  #view-obras #obra-detalle .sync-mini-label-panol{font-size:9px!important}
+  #view-obras #obra-detalle .gasto-sync-dot,#view-obras #obra-detalle .mat-sync-dot{width:10px!important;height:10px!important}
+  #view-obras #obra-detalle .icon-mini,#view-obras #obra-detalle .obra-delete-btn{min-height:34px!important;height:34px!important;font-size:12px!important}
 
-  /* Obras del Reporte Consumos */
-  #view-reportes #reportes-obra-filtro{gap:6px!important;margin-bottom:10px!important}
-  #view-reportes #reportes-obra-filtro .chip{min-height:34px!important;height:auto!important;padding:7px 11px!important;border-radius:999px!important;font-size:12px!important;line-height:1.1!important}
+  /* ---------- REPORTES: CONSUMOS + STOCK ---------- */
+  #view-reportes,#view-reporte-stock{padding:18px 20px 60px!important}
+  #view-reportes.active::before,#view-reporte-stock.active::before{
+    font-size:20px!important;padding:15px 18px!important;margin-bottom:14px!important;border-radius:18px!important;
+  }
 
-  /* Reporte/gráfico */
-  #view-reportes .chart-card,#view-reporte-stock .chart-card{margin-top:9px!important;padding:13px!important;border-radius:14px!important;border-left-width:4px!important;box-shadow:0 6px 16px rgba(28,61,53,.06)!important}
-  #view-reportes .chart-card h3,#view-reporte-stock .chart-card h3{margin:0 0 4px!important;font-size:14px!important;line-height:1.15!important}
-  #view-reportes .chart-product-note,#view-reporte-stock .chart-product-note{margin:0 0 7px!important;font-size:10px!important;line-height:1.25!important}
-  #view-reportes .chart-wrap,#view-reporte-stock .chart-wrap{margin-top:4px!important;min-height:280px!important}
+  /* Cantidades / Pesos / Dólares: más importantes que los filtros */
+  #view-reportes .report-metric-switch,#view-reporte-stock .report-stock-metric-switch{
+    gap:9px!important;margin:0 0 10px!important;padding:8px!important;border-radius:15px!important;
+  }
+  #view-reportes .report-metric-btn,#view-reporte-stock .report-stock-metric-btn{
+    min-height:50px!important;height:50px!important;padding:10px 12px!important;
+    border-radius:11px!important;font-size:17px!important;line-height:1.1!important;font-weight:900!important;
+  }
+  #view-reportes .report-metric-note,#view-reporte-stock .report-stock-note{margin:0 2px 11px!important;font-size:11.5px!important;line-height:1.25!important}
+
+  /* Cuatro recuadros: subirlos una escala */
+  #view-reportes .resumen-strip,#view-reporte-stock .resumen-strip{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important;margin-bottom:13px!important}
+  #view-reportes .resumen-card,#view-reporte-stock .resumen-card{
+    min-height:88px!important;padding:14px 16px!important;border-radius:15px!important;
+    box-shadow:0 7px 18px rgba(28,61,53,.08)!important;
+  }
+  #view-reportes .rc-lbl,#view-reporte-stock .rc-lbl{font-size:12.5px!important;line-height:1.15!important}
+  #view-reportes .rc-val,#view-reporte-stock .rc-val{margin-top:5px!important;font-size:23px!important;line-height:1.05!important}
+
+  /* Filtros: BAJAR escala para que no dominen la pantalla */
+  #view-reportes .sec-ttl,#view-reporte-stock .sec-ttl{margin:9px 2px 6px!important;font-size:12.5px!important;line-height:1.15!important}
+  #view-reportes .cq-report-filter-grid,#view-reporte-stock .cq-report-filter-grid{gap:8px!important;margin-bottom:9px!important}
+  #view-reportes .cq-report-multi>label,#view-reportes .cq-report-order label,#view-reportes .cq-report-date-range>label,
+  #view-reporte-stock .cq-report-multi>label,#view-reporte-stock .cq-report-order label,#view-reporte-stock .cq-report-date-range>label{
+    font-size:11px!important;margin-bottom:4px!important;line-height:1.1!important;
+  }
+  #view-reportes .cq-report-multi-btn,#view-reportes .cq-report-order select,#view-reportes .cq-report-date-grid input,
+  #view-reporte-stock .cq-report-multi-btn,#view-reporte-stock .cq-report-order select,#view-reporte-stock .cq-report-date-grid input{
+    min-height:38px!important;height:38px!important;padding:6px 9px!important;border-radius:9px!important;font-size:12.5px!important;line-height:1.1!important;
+  }
+  #view-reportes .cq-report-date-grid small,#view-reporte-stock .cq-report-date-grid small{font-size:9.5px!important;margin-bottom:2px!important}
+  #view-reportes .cq-report-multi-search input,#view-reporte-stock .cq-report-multi-search input{height:36px!important;min-height:36px!important;font-size:12px!important}
+  #view-reportes .cq-report-multi-option,#view-reporte-stock .cq-report-multi-option{min-height:38px!important;padding:8px 9px!important;font-size:12.5px!important}
+  #view-reportes .cq-report-multi-actions button,#view-reporte-stock .cq-report-multi-actions button{height:36px!important;font-size:12px!important}
+
+  /* Obras dentro del reporte consumos */
+  #view-reportes #reportes-obra-filtro{gap:7px!important;margin-bottom:11px!important}
+  #view-reportes #reportes-obra-filtro .chip{
+    min-height:40px!important;height:auto!important;padding:8px 12px!important;
+    border-radius:999px!important;font-size:14px!important;line-height:1.1!important;font-weight:900!important;
+  }
+
+  /* Gráficos y textos del reporte */
+  #view-reportes .chart-card,#view-reporte-stock .chart-card{
+    margin-top:9px!important;padding:15px!important;border-radius:15px!important;
+    border-left-width:4px!important;box-shadow:0 6px 16px rgba(28,61,53,.06)!important;
+  }
+  #view-reportes .chart-card h3,#view-reporte-stock .chart-card h3{margin:0 0 5px!important;font-size:17px!important;line-height:1.15!important}
+  #view-reportes .chart-product-note,#view-reporte-stock .chart-product-note{margin:0 0 8px!important;font-size:11.5px!important;line-height:1.25!important}
+  #view-reportes .chart-wrap,#view-reporte-stock .chart-wrap{margin-top:5px!important;min-height:320px!important}
 }
 </style>
