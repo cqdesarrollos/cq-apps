@@ -2049,6 +2049,7 @@ function setSyncStatus(txt,cls=''){const el=document.getElementById('sync-status
 function persistConfig(){
   localStorage.setItem('gastos_config',JSON.stringify(config));
   if(window._dbReady&&modoFirebase){
+    suppressRemoteUntil=Date.now()+1500;
     const payload=JSON.parse(JSON.stringify({...config,updatedAt:new Date().toISOString()}));
     window._setDoc(window._doc(window._db,'config','app'),payload).then(()=>setSyncStatus('Firebase: guardado','ok')).catch(e=>{console.warn(e);setSyncStatus('Firebase: error','err')});
   }
@@ -2072,7 +2073,7 @@ async function loadFromFirebase(){
     const conf=await window._getDoc(window._doc(window._db,'config','app'));
     if(conf.exists()){
       const data=conf.data();
-      if(data.obras&&data.subrubros){config=normalizeConfig({obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC});localStorage.setItem('gastos_config',JSON.stringify(config));}
+      if(data.obras&&data.subrubros){config=normalizeConfig({...config,...data,obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC,finRules:(data.finRules&&typeof data.finRules==='object')?data.finRules:(config.finRules||{})});localStorage.setItem('gastos_config',JSON.stringify(config));}
     }
     // CQ 23/08/2026 — ahorro de lecturas: al iniciar sólo leer la obra activa.
     // Las demás conservan su cache local y se actualizan al seleccionarlas mediante subscribeObra().
@@ -2099,7 +2100,7 @@ function subscribeConfig(){
     if(!snap.exists())return;
     const data=snap.data();
     if(!(data.obras&&data.subrubros))return;
-    config=normalizeConfig({obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC});
+    config=normalizeConfig({...config,...data,obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC,finRules:(data.finRules&&typeof data.finRules==='object')?data.finRules:(config.finRules||{})});
     localStorage.setItem('gastos_config',JSON.stringify(config));
     if(!config.obras.find(o=>o.id===curObra))curObra=config.obras[0]?.id;
     config.obras.forEach(o=>{if(!state[o.id])state[o.id]=emptyState()});
@@ -2159,10 +2160,12 @@ async function buildRemoteBackupPayload(kind='auto'){
 
   const rawConfig=configSnap.data()||{};
   const remoteConfig=normalizeConfig({
+    ...rawConfig,
     obras:rawConfig.obras,
     subrubros:rawConfig.subrubros,
     categoryLabels:rawConfig.categoryLabels,
-    defaultTC:rawConfig.defaultTC
+    defaultTC:rawConfig.defaultTC,
+    finRules:rawConfig.finRules||{}
   });
   if(!Array.isArray(remoteConfig.obras)||!remoteConfig.obras.length)throw new Error('CONFIG_REMOTA_INVALIDA');
 
@@ -9851,6 +9854,85 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     const paybackBadges=pb.map(v=>badge('payback',v,fmtPaybackFin(v)));
     const capCostoBadges=cc.map(v=>badge('capitalCosto',v,fmtPctFin(v)));
     return `<div class="rep-fin-pivot-wrap"><table class="rep-fin-pivot"><thead><tr><th>Indicador</th>${rows.map(r=>`<th>${r.o.short||r.o.label}</th>`).join('')}<th class="rep-total-col">TOTAL / PROM.</th></tr></thead><tbody>${g('Ventas y costos')}${row('Unidades vendidas',units.map(v=>String(v)),String(sum(units))+' un.')}${row('Ingreso total',moneyArr(ingreso),fmtMoney(sum(ingreso)))}${row('Comisión total',moneyArr(com),fmtMoney(sum(com)))}${row('Costo total',moneyArr(cost),fmtMoney(sum(cost)))}${row('Ganancia proyectos',moneyArr(gan),fmtMoney(sum(gan)),sum(gan)>=0?'good':'bad','rep-row-soft-gan')}${row('Margen %',pctArr(margPct),fmtPctFin(finAvg(margPct)),'avg','rep-row-soft-margen')}${g('Costos fijos y resultado neto')}${row('Costos fijos prorrateados',moneyArr(fix),fmtMoney(sum(fix)))}${row('Resultado neto',moneyArr(net),fmtMoney(sum(net)),sum(net)>=0?'good':'bad','rep-row-soft-neto')}${g('Capital y retorno')}${row('Capital máximo',capBadges,fmtMoney(sum(cap)))}${row('ROE',roeBadges,fmtPctFin(finAvg(roe)),'avg')}${row('TIR mensual',tirMBadges,fmtPctFin(finAvg(tirm)),'avg')}${row('TIR anual',tirABadges,fmtPctFin(finAvg(tira)),'avg')}${row('Payback',paybackBadges,fmtPaybackFin(finAvg(pb)),'avg')}${row('Capital/Costo',capCostoBadges,fmtPctFin(finAvg(cc)),'avg')}</tbody></table></div><div class="rep-fin-scroll-note">En el teléfono se ve la primera columna y podés deslizar hacia la derecha para ver las obras.</div>`;
+  };
+})();
+</script>
+
+
+<style id="cq-v36-rule-persistence-and-highlight">
+/* Ganancia / Margen / Resultado: solo color en texto y números, sin pintar la celda */
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan td,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen td,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto td{
+  background:#fff!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan td{
+  color:#247255!important;
+  font-weight:900!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen td{
+  color:#34748E!important;
+  font-weight:900!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto td{
+  color:#9A6B12!important;
+  font-weight:900!important;
+}
+
+/* En Reporte financiero, las reglas se ven en el número sin colorear toda la celda */
+#view-reporte-financiero .rep-fin-cell-badge{
+  background:transparent!important;
+  border-color:transparent!important;
+  border-radius:0!important;
+  padding:0!important;
+  min-width:0!important;
+}
+#view-reporte-financiero .rep-fin-cell-badge.fin-rule-green{
+  background:transparent!important;
+  border-color:transparent!important;
+  color:#087A4A!important;
+}
+#view-reporte-financiero .rep-fin-cell-badge.fin-rule-yellow{
+  background:transparent!important;
+  border-color:transparent!important;
+  color:#A96C08!important;
+}
+#view-reporte-financiero .rep-fin-cell-badge.fin-rule-red{
+  background:transparent!important;
+  border-color:transparent!important;
+  color:#B73327!important;
+}
+#view-reporte-financiero .rep-fin-cell-badge.fin-rule-neutral{
+  background:transparent!important;
+  border-color:transparent!important;
+  color:#335446!important;
+}
+</style>
+
+<script id="cq-v36-global-finrules-fix">
+(function(){
+  /* Las reglas son configuración GLOBAL: una sola copia para todas las obras. */
+  const _saveFinRulesV36=window.saveFinRules;
+  window.saveFinRules=function(){
+    const rules=getFinRules();
+    ['capitalMax','roe','tirMensual','tirAnual','payback','capitalCosto'].forEach(k=>{
+      rules[k].green=parseRuleInput(`rule-${k}-green`,k);
+      rules[k].yellow=parseRuleInput(`rule-${k}-yellow`,k);
+    });
+    config.finRules=JSON.parse(JSON.stringify(rules));
+    localStorage.setItem('gastos_config',JSON.stringify(config));
+    suppressRemoteUntil=Date.now()+1800;
+    persistConfig();
+    closeModal('modal-fin-rules');
+    renderResumen();
+    if(document.getElementById('view-reporte')?.classList.contains('active'))renderReporte();
+    if(document.getElementById('view-reporte-financiero')?.classList.contains('active'))renderReporteFinancieroTab();
   };
 })();
 </script>

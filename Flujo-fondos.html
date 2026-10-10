@@ -5421,12 +5421,13 @@ function flowRenderPicker(){document.getElementById('flowMonthPicker').innerHTML
 function flowCatRows(type,mi){
  const rows=flowState[type]||[];
  const html=rows.map((r,ri)=>{
-  if(type==='incomes'&&Number.isInteger(r.hiddenFrom)&&mi>=r.hiddenFrom)return '';
+  // Cualquier concepto dado de baja deja de mostrarse desde el mes elegido.
+  if(Number.isInteger(r.hiddenFrom)&&mi>=r.hiddenFrom)return '';
   const input=`<input class="${type==='works'?'flow-work-value':''}" type="number" step="1" inputmode="decimal" data-flow-cell="${type}:${ri}:${mi}" value="${fnum(r.months[mi])||''}" placeholder="0">`;
   const incomeReceived=type==='incomes'&&Array.isArray(r.received)&&!!r.received[mi];
   const valueCell=type==='incomes'?`<div class="flow-income-cell">${input}<button type="button" class="flow-income-check ${incomeReceived?'checked':''}" data-income-check="${ri}:${mi}" title="${incomeReceived?'Ingreso recibido':'Marcar como ingresado'}" aria-label="${incomeReceived?'Ingreso recibido':'Marcar como ingresado'}"></button></div>`:input;
-  const workActions=type==='works'?`<div class="flow-entry-actions"><button type="button" class="flow-entry-action edit-work" data-work-ri="${ri}" title="Modificar obra">✎</button><button type="button" class="flow-entry-action delete del-work" data-work-ri="${ri}" title="Eliminar obra">×</button></div>`:'';
-  const otherActions=type==='others'?`<div class="flow-entry-actions"><button type="button" class="flow-entry-action edit-other" data-other-ri="${ri}" title="Modificar nombre">✎</button></div>`:'';
+  const workActions=type==='works'?`<div class="flow-entry-actions"><button type="button" class="flow-entry-action edit-work" data-work-ri="${ri}" title="Modificar obra">✎</button><button type="button" class="flow-entry-action delete del-work-forward" data-work-ri="${ri}" data-work-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button></div>`:'';
+  const otherActions=type==='others'?`<div class="flow-entry-actions"><button type="button" class="flow-entry-action edit-other" data-other-ri="${ri}" title="Modificar nombre">✎</button><button type="button" class="flow-entry-action delete del-other-forward" data-other-ri="${ri}" data-other-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button></div>`:'';
   const incomeActions=type==='incomes'?`<div class="flow-entry-actions"><button type="button" class="flow-entry-action edit-income" data-income-ri="${ri}" title="Modificar nombre">✎</button><button type="button" class="flow-entry-action delete del-income-forward" data-income-ri="${ri}" data-income-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button></div>`:'';
   return `<div class="flow-entry ${type==='works'&&r.autoCost?'new-work':''} ${incomeReceived?'income-received':''}"><div class="flow-entry-name" title="${fesc(r.name)}">${fesc(r.name)}${type==='works'&&r.autoCost?'<span class="flow-new-tag">Nueva</span>':''}</div>${valueCell}${workActions}${otherActions}${incomeActions}</div>`
  }).join('');
@@ -5465,15 +5466,35 @@ function flowRenderPanels(){
  document.querySelectorAll('.edit-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameWork(+b.dataset.workRi)});
  document.querySelectorAll('.edit-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameOther(+b.dataset.otherRi)});
  document.querySelectorAll('.edit-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameIncome(+b.dataset.incomeRi)});
- document.querySelectorAll('.del-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteWork(+b.dataset.workRi)});
+ document.querySelectorAll('.del-work-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteWorkForward(+b.dataset.workRi,+b.dataset.workMi)});
+ document.querySelectorAll('.del-other-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteOtherForward(+b.dataset.otherRi,+b.dataset.otherMi)});
  document.querySelectorAll('.del-income-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteIncomeForward(+b.dataset.incomeRi,+b.dataset.incomeMi)});
 }
 function flowRefreshAll(){flowPersist();flowRenderPanels();if(document.getElementById('dashboardPage'))dashboardRender();updateHeaderForActivePage()}
 function flowAddManualWork(mi){const name=(prompt('Nombre de la obra:','Nueva obra')||'').trim();if(!name)return;flowState.works.push({id:'w'+Date.now(),name,months:Array(flowState.months.length).fill(0),manual:true});flowOpenCats.add(mi+':works');flowRefreshAll()}
 function flowRenameWork(ri){const r=flowState.works[ri];if(!r)return;const name=(prompt('Modificar nombre de la obra:',r.name)||'').trim();if(!name||name===r.name)return;r.name=name;flowRefreshAll()}
-function flowDeleteWork(ri){const r=flowState.works[ri];if(!r)return;if(!confirm(`¿Eliminar la obra "${r.name}" y todos sus importes del flujo?`))return;flowState.works.splice(ri,1);flowRefreshAll()}
+function flowDeleteWorkForward(ri,mi){
+ const r=flowState.works[ri];if(!r||!flowState.months[mi])return;
+ const month=flowState.months[mi];
+ if(!confirm(`¿Eliminar la obra "${r.name}" desde ${month} en adelante?
+
+Los meses anteriores y sus valores cargados se conservarán.`))return;
+ r.hiddenFrom=mi;
+ for(let i=mi;i<flowState.months.length;i++)r.months[i]=0;
+ flowRefreshAll();toast(`Obra eliminada desde ${month}`)
+}
 function flowAddOther(mi){const name=(prompt('Nombre del nuevo egreso:','Nuevo egreso')||'').trim();if(!name)return;flowState.others.push({id:'e'+Date.now(),name,months:Array(flowState.months.length).fill(0),included:true,manual:true});flowOpenCats.add(mi+':others');flowRefreshAll();toast('Egreso agregado')}
 function flowRenameOther(ri){const r=flowState.others[ri];if(!r)return;const name=(prompt('Modificar nombre del egreso:',r.name)||'').trim();if(!name||name===r.name)return;r.name=name;flowRefreshAll()}
+function flowDeleteOtherForward(ri,mi){
+ const r=flowState.others[ri];if(!r||!flowState.months[mi])return;
+ const month=flowState.months[mi];
+ if(!confirm(`¿Eliminar "${r.name}" desde ${month} en adelante?
+
+Los meses anteriores y sus valores cargados se conservarán.`))return;
+ r.hiddenFrom=mi;
+ for(let i=mi;i<flowState.months.length;i++)r.months[i]=0;
+ flowRefreshAll();toast(`Egreso eliminado desde ${month}`)
+}
 let newIncomeDefaultMonth=0;
 let newIncomeMode='installments';
 
@@ -7395,7 +7416,7 @@ function cqFlowSheetGroup(type,title,months){
   let html=type==='works'?'':`<tr class="flow-sheet-group ${type}"><td>${title}</td>${months.map(()=>'<td></td>').join('')}</tr>`;
   rows.forEach((r,ri)=>{
     html+=`<tr><td title="${fesc(r.name)}">${fesc(r.name)}</td>${months.map(mi=>{
-      if(type==='incomes'&&Number.isInteger(r.hiddenFrom)&&mi>=r.hiddenFrom){
+      if(Number.isInteger(r.hiddenFrom)&&mi>=r.hiddenFrom){
         return '<td></td>';
       }
       return `<td><input class="flow-sheet-cell" type="number" step="1" inputmode="decimal" data-sheet-cell="${type}:${ri}:${mi}" value="${fnum(r.months[mi])||''}" placeholder="0"></td>`;
