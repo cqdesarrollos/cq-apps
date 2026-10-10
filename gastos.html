@@ -9260,5 +9260,213 @@ calcularMetricasFinancieras=function(fin,gastos){
 initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-anio');if(!sel)return;const cur=sel.value,years=new Set([String(new Date().getFullYear())]);(repGetState('oficina').gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))years.add(y)});config.obras.forEach(o=>{if(isObraSimple(o.id))return;const f=repGetState(o.id).financiero||{},u=cqFinUnits(f);['A','B'].forEach(k=>{[u[k].fechaVenta,u[k].ventaMes,...(u[k].cuotasDetalle||[]).map(c=>c.mes)].forEach(v=>{const y=String(v||'').slice(0,4);if(/^\d{4}$/.test(y))years.add(y)})})});const arr=[...years].sort((a,b)=>b.localeCompare(a));sel.innerHTML=arr.map(y=>`<option value="${y}">${y}</option>`).join('');sel.value=arr.includes(cur)?cur:(arr.includes(String(new Date().getFullYear()))?String(new Date().getFullYear()):arr[0])}
 </script>
 
+<style id="cq-v30-period-and-finance-styles">
+/* ===== v30: filtros periodo multi + ajustes financieros ===== */
+.cq-period-hidden{display:none!important}
+.cq-period-inline{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cq-period-chip{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border:1px solid #DCE7DE;border-radius:11px;background:#fff;color:#214439;font:800 11px 'Space Grotesk',sans-serif;cursor:pointer;box-shadow:0 2px 6px rgba(28,61,53,.04)}
+.cq-period-chip strong{font-weight:900}
+.cq-period-chip.cq-period-clear{background:#F8FBF8;color:#7A9E82}
+.cq-period-chip .mini{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:#91A299}
+.cq-period-modal-bg{position:fixed;inset:0;background:rgba(16,31,24,.45);z-index:99998;display:none;align-items:center;justify-content:center;padding:18px}
+.cq-period-modal-bg.open{display:flex}
+.cq-period-modal{width:min(420px,96vw);max-height:min(78vh,680px);display:flex;flex-direction:column;background:#fff;border:1px solid #DDE8DE;border-radius:18px;box-shadow:0 18px 40px rgba(18,42,34,.18);overflow:hidden}
+.cq-period-modal-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid #E9EFEB;background:linear-gradient(135deg,#F5FAF7,#EEF7F2)}
+.cq-period-modal-title{font-size:14px;font-weight:900;color:#173F35}
+.cq-period-modal-close{border:none;background:none;color:#7E9588;font-size:22px;line-height:1;cursor:pointer}
+.cq-period-modal-tools{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid #EEF3EF;background:#FBFDFC}
+.cq-period-modal-tools button,.cq-period-modal-ft button{font:800 10.5px 'Space Grotesk',sans-serif;border-radius:10px;border:1px solid #DDE8DE;background:#fff;color:#214439;min-height:34px;padding:0 12px;cursor:pointer}
+.cq-period-modal-body{padding:12px 14px 14px;overflow:auto}
+.cq-period-modal-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cq-period-opt{display:flex;align-items:center;gap:8px;padding:10px 11px;border:1px solid #E4ECE5;border-radius:12px;background:#FBFDFC;color:#214439;font-size:11px;font-weight:700;cursor:pointer}
+.cq-period-opt input{accent-color:#0A8C63;width:15px;height:15px}
+.cq-period-modal-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;border-top:1px solid #E9EFEB;background:#FCFDFC}
+
+#view-reporte-financiero .rep-fin-metric-btn.metric-comision{border-color:#CBD7E1!important;background:#F5F8FB!important;color:#496679!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-comision.active{background:linear-gradient(135deg,#6F8796,#4C6472)!important;border-color:#4C6472!important;color:#fff!important}
+#view-reporte-financiero .rep-fin-chart-shell.metric-comision .rep-fin-fill{background:linear-gradient(90deg,#89A1B2,#607887)!important}
+
+#view-reporte-financiero .rep-fin-pivot-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0 2px}
+#view-reporte-financiero .rep-fin-pivot{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}
+#view-reporte-financiero .rep-fin-pivot thead th{background:#EFF6F8;color:#7A9E82;font-size:10px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid #E3ECE4;white-space:nowrap}
+#view-reporte-financiero .rep-fin-pivot tbody th{background:#fff;color:#3A6A58;font-size:11px;font-weight:900;letter-spacing:.03em;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid #EEF4EE;white-space:nowrap;text-align:left;min-width:168px;position:sticky;left:0;z-index:2}
+#view-reporte-financiero .rep-fin-pivot td{background:#fff;font-size:11.5px;padding:10px 12px;border-bottom:1px solid #EEF4EE;white-space:nowrap;min-width:118px}
+#view-reporte-financiero .rep-fin-pivot thead th:first-child{position:sticky;left:0;z-index:3}
+#view-reporte-financiero .rep-fin-pivot .rep-total-col{background:#F7FBF9;font-weight:900}
+#view-reporte-financiero .rep-fin-pivot .rep-fin-group-row th{position:sticky;left:0;z-index:4;background:#F6F8F5;color:#648471;font-size:10px;padding:9px 12px;border-top:1px solid #E8EFE8;border-bottom:1px solid #E8EFE8;letter-spacing:.08em}
+#view-reporte-financiero .rep-fin-scroll-note{padding:0 14px 10px;font-size:9.5px;color:#91A299}
+#view-reporte-financiero .rep-fin-card .rep-card-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+#view-reporte-financiero .rep-fin-group-chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 9px;background:#F4FAF7;border:1px solid #DCE8E0;color:#5F8470;font-size:9.5px;font-weight:800}
+
+#view-resumen .fin-groups{display:grid;gap:10px;margin-top:12px}
+#view-resumen .fin-group{border:1px solid #E2ECE4;border-radius:14px;background:#FAFCFB;overflow:hidden}
+#view-resumen .fin-group-title{padding:9px 11px;background:#F3F8F4;border-bottom:1px solid #E6F0E8;color:#547766;font-size:10px;font-weight:900;letter-spacing:.07em;text-transform:uppercase}
+#view-resumen .fin-group-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;padding:10px}
+#view-resumen .fin-group-grid .fin-indicador{margin:0}
+#view-resumen .fin-summary-note{margin-top:9px;font-size:9.5px;color:#8FA191}
+
+@media(max-width:650px){
+  .cq-period-inline{gap:5px}
+  .cq-period-chip{min-height:31px;padding:0 9px;font-size:10px;border-radius:10px}
+  .cq-period-modal{width:96vw;max-height:82vh}
+  .cq-period-modal-list{grid-template-columns:1fr}
+  #view-reporte-financiero .rep-fin-pivot tbody th{min-width:136px;font-size:10.2px;padding:9px 10px}
+  #view-reporte-financiero .rep-fin-pivot td{min-width:106px;font-size:10.2px;padding:9px 10px}
+  #view-reporte-financiero .rep-fin-pivot thead th{padding:9px 10px;font-size:9.4px}
+  #view-reporte-financiero .rep-fin-scroll-note{padding:0 10px 8px;font-size:8.8px}
+  #view-resumen .fin-group-grid{grid-template-columns:1fr 1fr;gap:7px;padding:9px}
+}
+</style>
+
+<script id="cq-v30-period-and-finance-js">
+(function(){
+  const STORAGE_KEY='cq_period_multi_v30';
+  const MONTHS=[['01','Enero'],['02','Febrero'],['03','Marzo'],['04','Abril'],['05','Mayo'],['06','Junio'],['07','Julio'],['08','Agosto'],['09','Septiembre'],['10','Octubre'],['11','Noviembre'],['12','Diciembre']];
+  const MONTH_MAP=Object.fromEntries(MONTHS);
+  function currentYear(){return String(new Date().getFullYear())}
+  function loadState(){
+    try{const raw=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+      return {
+        gastos:{years:Array.isArray(raw.gastos?.years)?raw.gastos.years:[],months:Array.isArray(raw.gastos?.months)?raw.gastos.months:[]},
+        resumen:{years:Array.isArray(raw.resumen?.years)?raw.resumen.years:[],months:Array.isArray(raw.resumen?.months)?raw.resumen.months:[]},
+        reporte:{years:Array.isArray(raw.reporte?.years)?raw.reporte.years:[],months:Array.isArray(raw.reporte?.months)?raw.reporte.months:[]},
+        'reporte-financiero':{years:Array.isArray(raw['reporte-financiero']?.years)?raw['reporte-financiero'].years:[currentYear()],months:Array.isArray(raw['reporte-financiero']?.months)?raw['reporte-financiero'].months:[]}
+      };
+    }catch(e){return {gastos:{years:[],months:[]},resumen:{years:[],months:[]},reporte:{years:[],months:[]},'reporte-financiero':{years:[currentYear()],months:[]}}}
+  }
+  const state=window.CQ_PERIOD_MULTI=loadState();
+  function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
+  function uniq(arr){return [...new Set((arr||[]).map(v=>String(v||'')).filter(Boolean))]}
+  function sortYears(arr){return uniq(arr).sort((a,b)=>b.localeCompare(a))}
+  function sortMonths(arr){return uniq(arr).sort()}
+  function tabState(tab){if(!state[tab])state[tab]={years:[],months:[]};return state[tab]}
+  function monthLabel(m){return MONTH_MAP[m]||m}
+  function shortPeriodSummary(tab,type){
+    const vals=tabState(tab)[type];
+    if(!vals.length)return type==='years'?'Todos los años':'Todos los meses';
+    if(type==='years')return vals.length===1?vals[0]:vals.length+' años';
+    return vals.length===1?monthLabel(vals[0]):vals.length+' meses';
+  }
+  function visiblePeriodSummary(tab){
+    const st=tabState(tab);
+    const ys=st.years.length?st.years.join(', '):'todos los años';
+    const ms=st.months.length?st.months.map(monthLabel).join(', '):'todos los meses';
+    return ys+' · '+ms;
+  }
+  function collectYearsGastosCurrent(){const years=new Set();(getS().gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))years.add(y)});if(!years.size)years.add(currentYear());return [...years].sort((a,b)=>b.localeCompare(a))}
+  function collectYearsAllGastos(){const years=new Set();(config?.obras||[]).forEach(o=>{(repGetState(o.id).gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))years.add(y)})});if(!years.size)years.add(currentYear());return [...years].sort((a,b)=>b.localeCompare(a))}
+  function collectYearsFin(){const years=new Set([currentYear()]);(repGetState('oficina').gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))years.add(y)});(config?.obras||[]).forEach(o=>{if(isObraSimple(o.id))return;const f=repGetState(o.id).financiero||{};const u=cqFinUnits?cqFinUnits(f):unidadesFin(f);['A','B'].forEach(k=>{const x=u[k]||{};[x.fechaVenta,x.ventaMes,...((x.cuotasDetalle||[]).map(c=>c.mes))].forEach(v=>{const y=String(v||'').slice(0,4);if(/^\d{4}$/.test(y))years.add(y)})})});return [...years].sort((a,b)=>b.localeCompare(a))}
+  function availableYears(tab){if(tab==='gastos'||tab==='resumen')return collectYearsGastosCurrent();if(tab==='reporte')return collectYearsAllGastos();return collectYearsFin()}
+  function periodMatches(dateValue,tab){const st=tabState(tab);const raw=String(dateValue||'');const y=raw.slice(0,4),m=raw.slice(5,7);if(st.years.length&&!st.years.includes(y))return false;if(st.months.length&&!st.months.includes(m))return false;return true}
+  window.cqPeriodMatches=periodMatches;
+  function finYearsSelected(){const st=tabState('reporte-financiero');const fallback=document.getElementById('reporte-fin-anio')?.value||currentYear();return st.years.length?st.years:[fallback]}
+  function finMonthsSelected(){return tabState('reporte-financiero').months}
+  function syncNativeInputs(){
+    const repFinY=document.getElementById('reporte-fin-anio'); if(repFinY&&tabState('reporte-financiero').years[0]) repFinY.value=tabState('reporte-financiero').years[0];
+    const repFinM=document.getElementById('reporte-fin-mes'); if(repFinM) repFinM.value=tabState('reporte-financiero').months[0]||'';
+    const rep=document.getElementById('reporte-mes'); if(rep&&tabState('reporte').years.length===1&&tabState('reporte').months.length===1) rep.value=tabState('reporte').years[0]+'-'+tabState('reporte').months[0]; else if(rep) rep.value='';
+    const gas=document.getElementById('filtro-mes'); if(gas&&tabState('gastos').years.length===1&&tabState('gastos').months.length===1) gas.value=tabState('gastos').years[0]+'-'+tabState('gastos').months[0]; else if(gas) gas.value='';
+    const res=document.getElementById('resumen-mes'); if(res&&tabState('resumen').years.length===1&&tabState('resumen').months.length===1) res.value=tabState('resumen').years[0]+'-'+tabState('resumen').months[0]; else if(res) res.value='';
+  }
+  function rerenderTab(tab){
+    syncNativeInputs(); updatePeriodButtons();
+    if(tab==='gastos') renderAll();
+    else if(tab==='resumen') renderResumen();
+    else if(tab==='reporte') renderReporte();
+    else if(tab==='reporte-financiero') renderReporteFinancieroTab();
+  }
+  window.cqResetPeriod=function(tab){state[tab]={years:tab==='reporte-financiero'?[currentYear()]:[],months:[]};saveState();rerenderTab(tab)};
+  function ensurePicker(){
+    if(document.getElementById('cq-period-modal'))return;
+    const wrap=document.createElement('div');wrap.id='cq-period-modal';wrap.className='cq-period-modal-bg';
+    wrap.innerHTML='<div class="cq-period-modal" onclick="event.stopPropagation()"><div class="cq-period-modal-hd"><div class="cq-period-modal-title" id="cq-period-modal-title">Seleccionar</div><button class="cq-period-modal-close" type="button" onclick="cqClosePeriodPicker()">×</button></div><div class="cq-period-modal-tools"><button type="button" onclick="cqSelectAllPeriodPicker()">Todos</button><button type="button" onclick="cqClearPeriodPicker()">Limpiar</button></div><div class="cq-period-modal-body"><div class="cq-period-modal-list" id="cq-period-modal-list"></div></div><div class="cq-period-modal-ft"><button type="button" onclick="cqClosePeriodPicker()">Cancelar</button><button type="button" onclick="cqApplyPeriodPicker()">Aplicar</button></div></div>';
+    wrap.addEventListener('click',e=>{if(e.target===wrap)window.cqClosePeriodPicker()});
+    document.body.appendChild(wrap);
+  }
+  const picker={tab:'gastos',type:'years'};
+  window.cqOpenPeriodPicker=function(tab,type){ensurePicker();picker.tab=tab;picker.type=type==='month'?'months':'years';const title=document.getElementById('cq-period-modal-title');if(title)title.textContent=(picker.type==='years'?'Años':'Meses')+' · '+(tab==='reporte-financiero'?'Reporte financiero':tab.charAt(0).toUpperCase()+tab.slice(1));const list=document.getElementById('cq-period-modal-list');if(!list)return;const selected=new Set(tabState(tab)[picker.type]);const opts=picker.type==='years'?availableYears(tab).map(v=>({value:v,label:v})):MONTHS.map(([value,label])=>({value,label}));list.innerHTML=opts.map(o=>`<label class="cq-period-opt"><input type="checkbox" value="${o.value}" ${selected.has(o.value)?'checked':''}><span>${o.label}</span></label>`).join('');document.getElementById('cq-period-modal').classList.add('open')};
+  window.cqClosePeriodPicker=function(){document.getElementById('cq-period-modal')?.classList.remove('open')};
+  window.cqSelectAllPeriodPicker=function(){document.querySelectorAll('#cq-period-modal-list input[type="checkbox"]').forEach(i=>i.checked=true)};
+  window.cqClearPeriodPicker=function(){document.querySelectorAll('#cq-period-modal-list input[type="checkbox"]').forEach(i=>i.checked=false)};
+  window.cqApplyPeriodPicker=function(){const vals=[...document.querySelectorAll('#cq-period-modal-list input[type="checkbox"]:checked')].map(i=>i.value);tabState(picker.tab)[picker.type]=picker.type==='years'?sortYears(vals):sortMonths(vals);saveState();window.cqClosePeriodPicker();rerenderTab(picker.tab)};
+  function mkButtons(tab){return `<div class="cq-period-inline" id="cq-period-${tab}"><button type="button" class="cq-period-chip" onclick="cqOpenPeriodPicker('${tab}','year')"><span class="mini">Año</span><strong data-period-tab="${tab}" data-period-type="years"></strong></button><button type="button" class="cq-period-chip" onclick="cqOpenPeriodPicker('${tab}','month')"><span class="mini">Mes</span><strong data-period-tab="${tab}" data-period-type="months"></strong></button><button type="button" class="cq-period-chip cq-period-clear" onclick="cqResetPeriod('${tab}')">Todo</button></div>`}
+  function ensurePeriodUI(){
+    const gActions=document.querySelector('#view-gastos .sec-actions');
+    if(gActions&&!document.getElementById('cq-period-gastos')){gActions.insertAdjacentHTML('afterbegin',mkButtons('gastos'));document.querySelector('#view-gastos .filtro-mes-wrap')?.classList.add('cq-period-hidden')}
+    const rActions=document.querySelector('#view-resumen .sec-actions');
+    if(rActions&&!document.getElementById('cq-period-resumen')){rActions.insertAdjacentHTML('afterbegin',mkButtons('resumen'));document.getElementById('resumen-mes')?.classList.add('cq-period-hidden')}
+    const repActions=document.querySelector('#view-reporte .rep-actions');
+    if(repActions&&!document.getElementById('cq-period-reporte')){repActions.insertAdjacentHTML('afterbegin',mkButtons('reporte'));document.getElementById('reporte-mes')?.classList.add('cq-period-hidden')}
+    const finActions=document.querySelector('#view-reporte-financiero .rep-fin-period-filters');
+    if(finActions&&!document.getElementById('cq-period-reporte-financiero')){finActions.insertAdjacentHTML('afterbegin',mkButtons('reporte-financiero'));document.getElementById('reporte-fin-anio')?.classList.add('cq-period-hidden');document.getElementById('reporte-fin-mes')?.classList.add('cq-period-hidden')}
+  }
+  function updatePeriodButtons(){document.querySelectorAll('[data-period-tab]').forEach(el=>{const tab=el.getAttribute('data-period-tab');const type=el.getAttribute('data-period-type');el.textContent=shortPeriodSummary(tab,type)})}
+
+  /* Compatibilidad botones existentes */
+  window.syncResumenMes=function(){cqResetPeriod('resumen')};
+  window.setReporteMesActual=function(){const d=new Date();state.reporte={years:[String(d.getFullYear())],months:[String(d.getMonth()+1).padStart(2,'0')]};saveState();rerenderTab('reporte')};
+  window.clearReporteMes=function(){state.reporte={years:[],months:[]};saveState();rerenderTab('reporte')};
+  window.clearFilters=function(){state.gastos={years:[],months:[]};saveState();document.getElementById('filtro-cat').value='';const sub=document.getElementById('filtro-sub');if(sub)sub.value='';renderAll();updatePeriodButtons()};
+
+  /* Filtros de periodo efectivos */
+  filteredGastos=function(useResumen=false){
+    const tab=useResumen?'resumen':'gastos';
+    const cat=useResumen?'':(document.getElementById('filtro-cat')?.value||'');
+    const sub=useResumen?'':getFiltroSubrubro();
+    return (getS().gastos||[]).filter(g=>{const gsub=g.subrubro||g.concepto||'Sin subrubro';return periodMatches(g.fecha,tab)&&(!cat||g.cat===cat)&&(!sub||filtroSubrubroKey(gsub)===filtroSubrubroKey(sub));});
+  };
+  repAdvancedGastos=function(){
+    const cat=document.getElementById('reporte-cat-filter')?.value||'all';
+    const sub=document.getElementById('reporte-sub-filter')?.value||'all';
+    const arr=[];repSelectedObras().forEach(o=>{const s=repGetState(o.id);(s.gastos||[]).forEach(g=>{if(isAcopioObra(o.id)&&(g.cat==='mo'||g.cat==='ext'))return;const gsub=reporteSubrubroVisible(g.subrubro||g.concepto||'Sin subrubro');if(!periodMatches(g.fecha,'reporte'))return;if(cat!=='all'&&g.cat!==cat)return;if(sub!=='all'&&reporteSubrubroKey(gsub)!==reporteSubrubroKey(sub))return;arr.push({...g,obraId:o.id,obraLabel:o.label,obraShort:o.short,subrubro:gsub});});});return arr;
+  };
+
+  /* Render resumen con grupos lógicos */
+  renderResumen=function(){
+    const todosGastos=getS().gastos||[];
+    const gastos=todosGastos.filter(g=>periodMatches(g.fecha,'resumen'));
+    const {totUSD,byCat}=calcTotales(gastos);
+    const cats=categoriasPermitidasObra(curObra);
+    document.getElementById('resumen-cats').innerHTML=cats.map(cat=>{const val=byCat[cat]||0;const list=gastos.filter(g=>g.cat===cat);if(!list.length)return'';const bySub={};list.forEach(g=>{const key=reporteSubrubroVisible(g.subrubro||g.concepto||'Sin subrubro');bySub[key]=(bySub[key]||0)+toUSD(g.monto,g.moneda,g.tc)});const pct=totUSD>0?(val/totUSD*100).toFixed(1):'0.0';return `<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${CAT_LABELS[cat]}</span></span><span class="resumen-total-cat">${fmt(val,'usd')} · ${pct}%</span></div><table class="tbl"><tbody>${Object.entries(bySub).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td class="r-val">${fmt(v,'usd')}</td><td class="r" style="width:110px"><div style="height:7px;background:#EEF4EE;border-radius:999px;overflow:hidden"><div style="height:100%;border-radius:999px;width:${Math.abs(val)>0?(Math.abs(v)/Math.abs(val)*100).toFixed(0):0}%;background:#2E7D5E"></div></div></td></tr>`).join('')}</tbody></table></div>`}).join('')||'<div class="empty">Sin gastos cargados para resumir.</div>';
+    const fin=getS().financiero||{};
+    if(isObraSimple(curObra)){const calcAll=calcTotales(todosGastos);document.getElementById('fin-grid').innerHTML=`<div class="fin-card"><div class="kpi-lbl">${isAcopioObra(curObra)?'Acopio':'Costos automáticos'}</div><div class="fin-row"><span class="fin-lbl">Gastos cargados</span><span class="fin-val">${fmt(calcAll.totUSD,'usd')}</span></div><div class="fin-row"><span class="fin-lbl">Registros</span><span class="fin-val">${calcAll.count}</span></div><div class="fin-row"><span class="fin-lbl">Filtro visible</span><span class="fin-val">${visiblePeriodSummary('resumen')}</span></div></div>`;return}
+    const m=calcularMetricasFinancieras(fin,todosGastos);const u=unidadesFin(fin);
+    const ventaDetalle=m.venta>0?`<div class="fin-row fin-detail-row"><span class="fin-lbl">Venta inicial · ${fmtMesFin(m.ventaMes)}</span><span class="fin-val">${fmt(m.venta,'usd')}</span></div>`:'';
+    const comisionPctTxt=` · ${Number(fin.comisionPct||0).toFixed(2).replace(/\.00$/,'')}%`;
+    const unidadHTML=['A','B'].map(k=>{const x=u[k]||{};const fecha=x.fechaVenta?` · ${fmtFechaCortaFin(x.fechaVenta)}`:'';return `<div class="fin-row fin-unidad-summary"><span class="fin-lbl">Unidad ${k}</span><span class="fin-val fin-unidad-val">${etapaVentaLabel(x.etapa)}${fecha}</span></div>`}).join('');
+    const cuotasDetalle=m.cuotas.length?m.cuotas.map((c,i)=>`<div class="fin-row fin-detail-row"><span class="fin-lbl">Cuota ${i+1} · ${fmtMesFin(c.mes)}</span><span class="fin-val">${fmt(c.monto,'usd')}</span></div>`).join(''):`<div class="fin-empty-detail">Sin cuotas cargadas</div>`;
+    const costosEntries=Object.entries(m.costosMes).sort((a,b)=>a[0].localeCompare(b[0]));const costosDetalle=costosEntries.length?costosEntries.map(([mes,v])=>`<div class="fin-row fin-detail-row costo-mes-row"><span class="fin-lbl">${fmtMesFin(mes)}</span><span class="fin-val">${fmt(v,'usd')}</span></div>`).join(''):`<div class="fin-empty-detail">Sin costos con fecha</div>`;
+    const margenPct=m.totalIngresos?m.margen/m.totalIngresos:null;
+    const faltaTxt=m.faltanMeses?`<div class="fin-aviso-meses">Asigná el mes al precio inicial y a todas las cuotas para calcular TIR y Payback.</div>`:'';
+    const tirTxt=m.tirMultiple?`<div class="fin-tir-note">Flujo no convencional: existen ${m.tirRoots.length} TIR posibles. Se muestra la TIR positiva para comparación.</div>`:'';
+    const indicador=(key,label,val,txt)=>`<div class="fin-indicador ${finRuleClass(key,val)}"><span>${label}</span><strong>${txt}</strong></div>`;
+    const group=(title,items)=>`<div class="fin-group"><div class="fin-group-title">${title}</div><div class="fin-group-grid">${items.join('')}</div></div>`;
+    const groupedIndicadores=`<div class="fin-groups">${group('Capital',[
+      indicador('capitalMax','Capital máximo',m.capitalMax,fmt(m.capitalMax,'usd')),
+      indicador('capitalCosto','Capital / costo',m.capitalCosto,fmtPctFin(m.capitalCosto))
+    ])}${group('Retorno',[
+      indicador('roe','ROE',m.roe,fmtPctFin(m.roe)),
+      indicador('tirMensual','TIR mensual',m.tirMensual,fmtPctFin(m.tirMensual)),
+      indicador('tirAnual','TIR anual',m.tirAnual,fmtPctFin(m.tirAnual)),
+      indicador('payback','Payback',m.payback,fmtPaybackFin(m.payback))
+    ])}</div>`;
+    const acuerdosHTML=renderAcuerdosMOHTML(todosGastos);
+    document.getElementById('fin-grid').innerHTML=`<div class="fin-card fin-card-resumen-unico"><div class="kpi-lbl">Resumen financiero</div><div class="fin-row pos"><span class="fin-lbl">Precio de venta</span><span class="fin-val">${fmt(m.totalIngresos,'usd')}</span></div><div class="fin-row fin-comision-summary"><span class="fin-lbl">Comisión${comisionPctTxt}</span><span class="fin-val">${fmt(m.comision,'usd')}</span></div>${ventaDetalle}${unidadHTML}<details class="fin-collapse"><summary><span>Cuotas total</span><strong>${fmt(sumCuotasDetalle(fin),'usd')}</strong></summary><div class="fin-collapse-body">${cuotasDetalle}</div></details><details class="fin-collapse"><summary><span>Costo total</span><strong>${fmt(m.costoTotal,'usd')}</strong></summary><div class="fin-collapse-body">${costosDetalle}</div></details><div class="fin-row fin-highlight ${m.margen>=0?'pos':'neg'}"><span class="fin-lbl">Margen estimado</span><span class="fin-val">${fmt(m.margen,'usd')}</span></div><div class="fin-row fin-highlight fin-highlight-pct ${m.margen>=0?'pos':'neg'}"><span class="fin-lbl">Margen %</span><span class="fin-val">${margenPct===null?'—':(margenPct*100).toFixed(1)+'%'}</span></div><div class="fin-subtitulo fin-indicadores-title"><span>Indicadores agrupados</span><button type="button" class="btn-sm fin-rules-btn" onclick="openFinRules()">⚙ Reglas</button></div>${groupedIndicadores}${faltaTxt}${tirTxt}<div class="fin-summary-note">Los indicadores quedaron separados por lógica para que sea más claro leer capital, retorno y recuperación.</div><div class="fin-formulas-note">Margen = venta − costos − comisión · ROE = margen / capital máximo</div></div>${acuerdosHTML}`;
+  };
+
+  /* Reporte financiero multi-período */
+  officeFixedCostInfo=function(){const years=finYearsSelected();const gastos=(repGetState('oficina').gastos||[]).filter(g=>years.includes(String(g.fecha||'').slice(0,4)));const total=gastos.reduce((a,g)=>a+toUSD(g.monto,g.moneda,g.tc),0);const byMonth={};gastos.forEach(g=>{const ym=String(g.fecha||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(ym))byMonth[ym]=(byMonth[ym]||0)+toUSD(g.monto,g.moneda,g.tc)});let units=0;config.obras.forEach(o=>{if(isObraSimple(o.id))return;units+=cqSoldUnitsInPeriod(repGetState(o.id).financiero||{},years,[])});return{total,byMonth,units,perUnit:units?total/units:0}};
+  function cqSoldUnitsInPeriod(fin,years,months){const u=cqFinUnits?cqFinUnits(fin):unidadesFin(fin);return ['A','B'].filter(k=>{const d=String(u[k]?.fechaVenta||'');if(!u[k]?.etapa||!d)return false;const y=d.slice(0,4),m=d.slice(5,7);if(years.length&&!years.includes(y))return false;if(months.length&&!months.includes(m))return false;return true;}).length}
+  repFinRowsData=function(){const years=finYearsSelected(),months=finMonthsSelected(),fixed=officeFixedCostInfo();const obras=repSelectedObras().filter(o=>!isObraSimple(o.id));return obras.map(o=>{const s=repGetState(o.id),fin=s.financiero||{},has=tieneVentasCargadas(fin),soldYear=cqSoldUnitsInPeriod(fin,years,[]),soldPeriod=cqSoldUnitsInPeriod(fin,years,months);if(has&&months.length&&soldPeriod===0)return null;if(has&&!months.length&&soldYear===0)return null;const share=fixed.units?soldYear/fixed.units:0;const fixedCost=fixed.total*share;const direct=calcularMetricasFinancieras(fin,s.gastos||[]);const adjusted=calcularMetricasFinancieras(fin,[...(s.gastos||[]),...allocatedFixedGastos(years[0]||currentYear(),share)]);const net=direct.margen-fixedCost;const margenPct=direct.totalIngresos?direct.margen/direct.totalIngresos:null;return{o,s,fin,direct,adjusted,fixedCost,net,margenPct,soldYear,soldPeriod,legacy:!has}}).filter(Boolean)};
+  repFinPivot=function(rows){const sum=a=>a.reduce((x,v)=>x+(Number(v)||0),0);const fmtMoney=v=>fmt(v,'usd');const row=(label,vals,totalTxt,totalCls='')=>`<tr><th>${label}</th>${vals.map(v=>`<td class="${typeof v==='number'?(Number(v)<0?'bad':Number(v)>0?'good':''):''}">${typeof v==='object'&&v?.html?v.html:v}</td>`).join('')}<td class="rep-total-col ${totalCls}">${totalTxt}</td></tr>`;const cols=rows.length+2;const g=t=>`<tr class="rep-fin-group-row"><th colspan="${cols}">${t}</th></tr>`;const ingreso=rows.map(r=>r.direct.totalIngresos),com=rows.map(r=>r.direct.comision),cost=rows.map(r=>r.direct.costoTotal),gan=rows.map(r=>r.direct.margen),fix=rows.map(r=>r.fixedCost),net=rows.map(r=>r.net),cap=rows.map(r=>r.adjusted.capitalMax),margPct=rows.map(r=>r.margenPct),roe=rows.map(r=>r.adjusted.roe),tirm=rows.map(r=>r.adjusted.tirMensual),tira=rows.map(r=>r.adjusted.tirAnual),pb=rows.map(r=>r.adjusted.payback),cc=rows.map(r=>r.adjusted.capitalCosto),units=rows.map(r=>r.soldYear);const moneyArr=a=>a.map(v=>fmtMoney(v));const pctArr=a=>a.map(v=>fmtPctFin(v));const pbArr=a=>a.map(v=>fmtPaybackFin(v));return `<div class="rep-fin-pivot-wrap"><table class="rep-fin-pivot"><thead><tr><th>Indicador</th>${rows.map(r=>`<th>${r.o.short||r.o.label}</th>`).join('')}<th class="rep-total-col">TOTAL / PROM.</th></tr></thead><tbody>${g('Ventas y costos')}${row('Unidades vendidas',units.map(v=>String(v)),String(sum(units))+' un.')}${row('Ingreso total',moneyArr(ingreso),fmtMoney(sum(ingreso)))}${row('Comisión total',moneyArr(com),fmtMoney(sum(com)))}${row('Costo total',moneyArr(cost),fmtMoney(sum(cost)))}${row('Ganancia proyectos',moneyArr(gan),fmtMoney(sum(gan)),sum(gan)>=0?'good':'bad')}${row('Margen %',pctArr(margPct),fmtPctFin(finAvg(margPct)),'avg')}${g('Costos fijos y resultado neto')}${row('Costos fijos prorrateados',moneyArr(fix),fmtMoney(sum(fix)))}${row('Resultado neto',moneyArr(net),fmtMoney(sum(net)),sum(net)>=0?'good':'bad')}${g('Capital y retorno')}${row('Capital máximo',moneyArr(cap),fmtMoney(sum(cap)))}${row('ROE',pctArr(roe),fmtPctFin(finAvg(roe)),'avg')}${row('TIR mensual',pctArr(tirm),fmtPctFin(finAvg(tirm)),'avg')}${row('TIR anual',pctArr(tira),fmtPctFin(finAvg(tira)),'avg')}${row('Payback',pbArr(pb),fmtPaybackFin(finAvg(pb)),'avg')}${row('Capital/Costo',pctArr(cc),fmtPctFin(finAvg(cc)),'avg')}</tbody></table></div><div class="rep-fin-scroll-note">En el teléfono se ve la primera columna y podés deslizar hacia la derecha para ver las obras.</div>`};
+  renderReporteFinancieroComparativo=function(){const el=document.getElementById('reporte-financiero');if(!el)return;const years=finYearsSelected(),months=finMonthsSelected(),fixed=officeFixedCostInfo(),rows=repFinRowsData();if(!rows.length){el.innerHTML='<div class="rep-empty">No hay obras seleccionadas con ventas compatibles con el período.</div>';return}const yearsTxt=years.join(', ');const monthsTxt=months.length?months.map(monthLabel).join(', '):'Todos los meses';const note=`<div class="rep-fin-fixed-note"><strong>Costos fijos OFICINA ${yearsTxt}:</strong> ${fmt(fixed.total,'usd')} · <strong>Unidades vendidas en el período anual:</strong> ${fixed.units} · <strong>Prorrateo:</strong> ${fixed.units?fmt(fixed.perUnit,'usd')+' por unidad':'sin unidades con fecha de venta'} · <strong>Filtro visible:</strong> ${monthsTxt}. El prorrateo usa los años seleccionados completos.</div>`;const chips=`<span class="rep-fin-group-chip">Años: ${yearsTxt}</span><span class="rep-fin-group-chip">Meses: ${monthsTxt}</span>`;el.innerHTML=renderRepFinChart(rows)+note+repFinPivot(rows)+`<div class="rep-mini-note">Capital máximo, ROE, TIR, Payback y Capital/Costo del reporte incluyen el costo fijo prorrateado. Ganancia proyectos se muestra antes de costos fijos; Resultado neto los descuenta.</div>`;document.querySelector('#view-reporte-financiero .rep-card-actions').innerHTML=`<span class="consol-small">Todo el proyecto · obras seleccionadas</span>${chips}`};
+  renderReporteFinancieroTab=function(){initReporteFinPeriodo();renderReporteObrasChips();updatePeriodButtons();renderReporteFinancieroComparativo()};
+
+  /* Inicialización */
+  const _showTab=showTab; showTab=function(t){ensurePeriodUI(); updatePeriodButtons(); return _showTab(t)};
+  document.addEventListener('DOMContentLoaded',()=>{ensurePicker();ensurePeriodUI();syncNativeInputs();updatePeriodButtons()});
+  ensurePicker();ensurePeriodUI();syncNativeInputs();updatePeriodButtons();
+})();
+</script>
 </body>
 </html>
