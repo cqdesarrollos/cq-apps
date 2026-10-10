@@ -2026,27 +2026,11 @@ function findObraByCode(code){
 }
 
 function repair25100MesesVenta(){
-  const ob = state.obras.find(o=>{
-    const c=normalizeCodeCQ(o.code);
-    return c==='25.100' || c==='25100';
-  });
-  if(!ob || !state.casas)return;
-  let changed=false;
-  Object.keys(state.casas).forEach(y=>{
-    Object.keys(state.casas[y]||{}).forEach(m=>{
-      obraCasas(ob).forEach(letra=>{
-        const key=ob.id+'_'+letra;
-        const raw=state.casas[y][m][key];
-        if(!raw)return;
-        const n=normalizeCasa(raw);
-        if(n.saleStatus && raw.meses!==0 && raw.meses!=='0'){
-          raw.meses=0;
-          changed=true;
-        }
-      });
-    });
-  });
-  if(changed)saveState();
+  // Reparación histórica desactivada.
+  // Esta rutina forzaba a 0 los meses de cualquier unidad vendida de la obra 25.100
+  // cada vez que se cargaba el estado o volvía una actualización desde Firebase.
+  // Eso pisaba el cálculo automático correcto (por ejemplo: 7 meses para 25.100 B).
+  return false;
 }
 
 function repairJulioErroresPuntuales(){
@@ -2995,8 +2979,14 @@ function setCasaStatus(casaKey,status,kind){
   const cur = {obraStatus: eff.obraStatus, saleStatus: eff.saleStatus, meses: eff.meses};
   cur.saleStatus = status || '';
 
-  if(cur.saleStatus && !eff.saleStatus){
-    cur.meses = calcMesesVentaAuto(casaKey,state.year,state.month,cur.saleStatus);
+  if(cur.saleStatus){
+    const mesesAuto = calcMesesVentaAuto(casaKey,state.year,state.month,cur.saleStatus);
+    // Alta nueva de venta: calcular siempre.
+    // Recuperación del bug anterior: si ya quedó guardado 0 pero el cálculo real es mayor,
+    // volver a tomar el valor automático al seleccionar nuevamente el estado vendido.
+    if(!eff.saleStatus || ((eff.meses===0 || eff.meses==='0' || eff.meses==='' || eff.meses==null) && mesesAuto>0)){
+      cur.meses = mesesAuto;
+    }
   }
   if(!cur.saleStatus){
     cur.meses = '';
