@@ -2775,7 +2775,7 @@ function renderGastos(){
   document.getElementById('gastos-title').textContent=titleParts.length?`Gastos filtrados · ${titleParts.join(' · ')}`:'Todos los gastos';
   document.getElementById('gastos-total-filtrado').textContent=`Total filtrado: ${fmt(total,'usd')}`;
   if(!gastos.length){el.innerHTML='<div class="empty">Sin gastos para este filtro.</div>';return}
-  el.innerHTML=`<table class="tbl"><thead><tr><th>Fecha</th><th>Subrubro</th><th>Cat.</th><th class="r">Monto</th><th class="r">U$S</th><th></th></tr></thead><tbody>${gastos.map(g=>{const nuevo=isNuevoGasto(g);return `<tr class="${CAT_COLORS[g.cat]} ${nuevo?'nuevo-row':''} ${g.tipoMovimiento==='ingreso'?'ingreso-row':''}"><td class="mono">${(g.fecha||'').slice(5).split('-').reverse().join('/')}</td><td class="gasto-subrubro-cell"><div class="gasto-subrubro-main">${g.subrubro||g.concepto}${nuevo?'<span class="nuevo-badge">NUEVO</span>':''}<span class="tag ${TAG_COLORS[g.cat]} gasto-cat-mobile">${CAT_SHORT[g.cat]}</span></div>${cqNotaGastoHTML(g)?`<div class="gasto-nota-mobile">${cqNotaGastoHTML(g)}</div>`:''}${cqOrigenGastoHTML(g)}</td><td class="gasto-cat-col"><span class="tag ${TAG_COLORS[g.cat]}">${CAT_SHORT[g.cat]}</span></td><td class="r-val gasto-monto-compacto">${fmt(g.monto,g.moneda).replace(/\s+/g,'')}</td><td class="r-val gasto-usd-compacto">${fmt(toUSD(g.monto,g.moneda,g.tc),'usd').replace(/\s+/g,'')}</td><td class="r"><button class="btn-sm gasto-action-btn gasto-edit-btn" title="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" onclick="editGasto('${g.id}')">✏️</button> <button class="btn-del gasto-action-btn gasto-delete-btn" title="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" onclick="deleteGasto('${g.id}')">🗑️</button></td></tr>`}).join('')}</tbody></table>`;
+  el.innerHTML=`<table class="tbl"><thead><tr><th>Fecha</th><th>Subrubro</th><th>Cat.</th><th class="r">Monto</th><th class="r">U$S</th><th></th></tr></thead><tbody>${gastos.map(g=>{const nuevo=isNuevoGasto(g);return `<tr class="${CAT_COLORS[g.cat]} ${nuevo?'nuevo-row':''} ${g.tipoMovimiento==='ingreso'?'ingreso-row':''}"><td class="mono">${(g.fecha||'').slice(5).split('-').reverse().join('/')}</td><td class="gasto-subrubro-cell"><div class="gasto-subrubro-main">${g.subrubro||g.concepto}${nuevo?'<span class="nuevo-badge">NUEVO</span>':''}<span class="tag ${TAG_COLORS[g.cat]} gasto-cat-mobile">${CAT_SHORT[g.cat]}</span></div>${cqNotaGastoHTML(g)?`<div class="gasto-nota-mobile">${cqNotaGastoHTML(g)}</div>`:''}${cqOrigenGastoHTML(g)}</td><td class="gasto-cat-col"><span class="tag ${TAG_COLORS[g.cat]}">${CAT_SHORT[g.cat]}</span></td><td class="r-val gasto-monto-compacto">${fmt(g.monto,g.moneda).replace(/\s+/g,' ')}</td><td class="r-val gasto-usd-compacto">${fmt(toUSD(g.monto,g.moneda,g.tc),'usd').replace(/\s+/g,' ')}</td><td class="r"><button class="btn-sm gasto-action-btn gasto-edit-btn" title="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" onclick="editGasto('${g.id}')">✏️</button> <button class="btn-del gasto-action-btn gasto-delete-btn" title="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" onclick="deleteGasto('${g.id}')">🗑️</button></td></tr>`}).join('')}</tbody></table>`;
 }
 function sumCuotasDetalle(fin){
   if(!fin)return 0;
@@ -7773,6 +7773,78 @@ onAuthStateChanged(auth,async user=>{
     font-size:20px!important;
     line-height:1!important;
     font-weight:900!important;
+  }
+}
+</style>
+
+
+<style id="cq-tablet-importes-ajuste-v15">
+/* Ajuste fino: importes de tablet un poco más chicos que v14 */
+@media (min-width:700px) and (max-width:2600px) and (orientation:landscape){
+  #view-gastos #gastos-list .tbl td.gasto-monto-compacto,
+  #view-gastos #gastos-list .tbl td.gasto-usd-compacto,
+  #view-gastos #gastos-list .gasto-monto-compacto,
+  #view-gastos #gastos-list .gasto-usd-compacto,
+  #view-gastos #gastos-list .tbl td:nth-child(4),
+  #view-gastos #gastos-list .tbl td:nth-child(5){
+    font-size:17px!important;
+    line-height:1!important;
+    font-weight:900!important;
+    letter-spacing:-.02em!important;
+    white-space:nowrap!important;
+  }
+}
+@media (min-width:700px) and (orientation:landscape) and (pointer:coarse){
+  #view-gastos #gastos-list .gasto-monto-compacto,
+  #view-gastos #gastos-list .gasto-usd-compacto{
+    font-size:17px!important;
+  }
+}
+</style>
+
+
+<style id="cq-obras-mo-ajustes-v17">
+/* TABLET horizontal: número de obra un poco más grande pero en chips más compactos */
+@media (min-width: 700px) and (max-width: 1280px) and (orientation: landscape){
+  .obra-bar{
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    padding: 5px 10px !important;
+    gap: 3px !important;
+  }
+  .obra-bar .obra-chip,
+  .obra-bar .obra-add{
+    height: 25px !important;
+    min-height: 25px !important;
+    max-height: 25px !important;
+    padding: 1px 3px !important;
+    border-radius: 7px !important;
+    font-size: 8.9px !important;
+    line-height: 1 !important;
+  }
+  .obra-chip.active::after{
+    width: 15px !important;
+    height: 15px !important;
+    margin-left: 5px !important;
+    font-size: 8.5px !important;
+  }
+}
+
+/* CELU: ensanchar un poco Presupuestos MO aprovechando el margen lateral */
+@media (max-width: 650px){
+  #view-resumen .mo-budget-wrap{
+    width: calc(100% + 12px) !important;
+    max-width: calc(100% + 12px) !important;
+    margin-left: -6px !important;
+    margin-right: -6px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 14px !important;
+  }
+  #view-resumen .mo-budget-head{
+    margin-bottom: 8px !important;
+  }
+  #view-resumen .mo-budget-grid{
+    width: 100% !important;
   }
 }
 </style>
