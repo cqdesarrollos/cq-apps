@@ -2775,7 +2775,7 @@ function renderGastos(){
   document.getElementById('gastos-title').textContent=titleParts.length?`Gastos filtrados · ${titleParts.join(' · ')}`:'Todos los gastos';
   document.getElementById('gastos-total-filtrado').textContent=`Total filtrado: ${fmt(total,'usd')}`;
   if(!gastos.length){el.innerHTML='<div class="empty">Sin gastos para este filtro.</div>';return}
-  el.innerHTML=`<table class="tbl"><thead><tr><th>Fecha</th><th>Subrubro</th><th>Cat.</th><th class="r">Monto</th><th class="r">U$S</th><th></th></tr></thead><tbody>${gastos.map(g=>{const nuevo=isNuevoGasto(g);return `<tr class="${CAT_COLORS[g.cat]} ${nuevo?'nuevo-row':''}"><td class="mono">${(g.fecha||'').slice(5).split('-').reverse().join('/')}</td><td class="gasto-subrubro-cell"><div class="gasto-subrubro-main">${g.subrubro||g.concepto}${nuevo?'<span class="nuevo-badge">NUEVO</span>':''}<span class="tag ${TAG_COLORS[g.cat]} gasto-cat-mobile">${CAT_SHORT[g.cat]}</span></div>${cqNotaGastoHTML(g)?`<div class="gasto-nota-mobile">${cqNotaGastoHTML(g)}</div>`:''}${cqOrigenGastoHTML(g)}</td><td class="gasto-cat-col"><span class="tag ${TAG_COLORS[g.cat]}">${CAT_SHORT[g.cat]}</span></td><td class="r-val gasto-monto-compacto">${fmt(g.monto,g.moneda).replace(/\s+/g,'')}</td><td class="r-val gasto-usd-compacto">${fmt(toUSD(g.monto,g.moneda,g.tc),'usd').replace(/\s+/g,'')}</td><td class="r"><button class="btn-sm gasto-action-btn gasto-edit-btn" title="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" onclick="editGasto('${g.id}')">✏️</button> <button class="btn-del gasto-action-btn gasto-delete-btn" title="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" onclick="deleteGasto('${g.id}')">🗑️</button></td></tr>`}).join('')}</tbody></table>`;
+  el.innerHTML=`<table class="tbl"><thead><tr><th>Fecha</th><th>Subrubro</th><th>Cat.</th><th class="r">Monto</th><th class="r">U$S</th><th></th></tr></thead><tbody>${gastos.map(g=>{const nuevo=isNuevoGasto(g);return `<tr class="${CAT_COLORS[g.cat]} ${nuevo?'nuevo-row':''} ${g.tipoMovimiento==='ingreso'?'ingreso-row':''}"><td class="mono">${(g.fecha||'').slice(5).split('-').reverse().join('/')}</td><td class="gasto-subrubro-cell"><div class="gasto-subrubro-main">${g.subrubro||g.concepto}${nuevo?'<span class="nuevo-badge">NUEVO</span>':''}<span class="tag ${TAG_COLORS[g.cat]} gasto-cat-mobile">${CAT_SHORT[g.cat]}</span></div>${cqNotaGastoHTML(g)?`<div class="gasto-nota-mobile">${cqNotaGastoHTML(g)}</div>`:''}${cqOrigenGastoHTML(g)}</td><td class="gasto-cat-col"><span class="tag ${TAG_COLORS[g.cat]}">${CAT_SHORT[g.cat]}</span></td><td class="r-val gasto-monto-compacto">${fmt(g.monto,g.moneda).replace(/\s+/g,'')}</td><td class="r-val gasto-usd-compacto">${fmt(toUSD(g.monto,g.moneda,g.tc),'usd').replace(/\s+/g,'')}</td><td class="r"><button class="btn-sm gasto-action-btn gasto-edit-btn" title="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" onclick="editGasto('${g.id}')">✏️</button> <button class="btn-del gasto-action-btn gasto-delete-btn" title="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" onclick="deleteGasto('${g.id}')">🗑️</button></td></tr>`}).join('')}</tbody></table>`;
 }
 function sumCuotasDetalle(fin){
   if(!fin)return 0;
@@ -2844,7 +2844,7 @@ function usdToAcuerdoMoneda(valor,a){return parseFloat(valor)||0}
 function fmtAcuerdoValue(n,a){return fmt(n,'ars')}
 function ensureAcuerdosMO(){const fin=getS().financiero;if(!fin.acuerdosMO)fin.acuerdosMO={mo:{monto:0,moneda:'usd',tc:1400},ext:{}};if(!fin.acuerdosMO.ext)fin.acuerdosMO.ext={};fin.acuerdosMO.mo=normalizeAcuerdo(fin.acuerdosMO.mo);Object.keys(fin.acuerdosMO.ext).forEach(k=>{fin.acuerdosMO.ext[k]=normalizeAcuerdo(fin.acuerdosMO.ext[k])});return fin.acuerdosMO}
 function updatePagoSaldoInfo(){const box=document.getElementById('mo-saldo-info');if(!box)return;if(document.getElementById('gasto-tipo')?.value==='ingreso'){box.style.display='none';return;}const cat=document.getElementById('g-cat')?.value||'';const sub=(document.getElementById('g-subrubro-sel')?.value||'');if(cat!=='mo'&&cat!=='ext'){box.style.display='none';return;}const acuerdos=ensureAcuerdosMO();const gastoActualUSD=(document.getElementById('g-moneda')?.value==='usd'?((parseFloat(document.getElementById('g-monto')?.value)||0)*(parseFloat(document.getElementById('g-tc')?.value)||getDefaultTC())):(parseFloat(document.getElementById('g-monto')?.value)||0));let acuerdo={monto:0,moneda:'usd',tc:1400},gastadoUSD=0,titulo='';if(cat==='mo'){acuerdo=acuerdos.mo;gastadoUSD=sumGastosByARS('mo','',getS().gastos);titulo='Mano de obra general';}else{titulo=sub||'Extra sin seleccionar';acuerdo=sub?normalizeAcuerdo(acuerdos.ext[sub]):{monto:0,moneda:'usd',tc:1400};gastadoUSD=sub?sumGastosByARS('ext',sub,getS().gastos):0;}const gastado=usdToAcuerdoMoneda(gastadoUSD,acuerdo);const gastoActual=usdToAcuerdoMoneda(gastoActualUSD,acuerdo);const saldo=acuerdo.monto-gastado;const saldoPost=saldo-gastoActual;const cls=saldoPost>=0?'ok':'bad';const aviso=!acuerdo.monto?'<br><span class="warn">No hay presupuesto acordado cargado para este rubro.</span>':'';box.innerHTML=`<strong>${titulo}</strong> <span class="currency-pill">${acuerdo.moneda==='usd'?'U$S':'ARS'}</span><br>Presupuesto: ${fmtAcuerdoValue(acuerdo.monto,acuerdo)} · Pagado: ${fmtAcuerdoValue(gastado,acuerdo)} · Saldo actual: ${fmtAcuerdoValue(saldo,acuerdo)}<br>Después de este pago: <span class="${cls}">${fmtAcuerdoValue(saldoPost,acuerdo)}</span>${aviso}`;box.style.display='block';}
-function renderAcuerdosMOHTML(gastos){const acuerdos=ensureAcuerdosMO();function row(nombre,acuerdo,gastadoUSD){acuerdo=normalizeAcuerdo(acuerdo);const gastado=usdToAcuerdoMoneda(gastadoUSD,acuerdo);const saldo=acuerdo.monto-gastado;const pct=acuerdo.monto?Math.min(100,Math.max(0,(gastado/acuerdo.monto)*100)):0;const comentario=acuerdo.comentario?`<div style="grid-column:1/-1;padding:7px 10px 9px;background:#F8FBF8;border-top:1px dashed #DDE8DE;font-size:12px;color:#58705D"><strong>Comentario:</strong> ${escComentario(acuerdo.comentario)}</div>`:'';return`<div class="mo-budget-cell"><div class="mo-budget-name">${nombre}</div><div class="mo-budget-sub"><span class="currency-pill">${acuerdo.moneda==='usd'?'U$S':'ARS'}</span></div></div><div class="mo-budget-cell r">${fmtAcuerdoValue(acuerdo.monto,acuerdo)}</div><div class="mo-budget-cell r">${fmtAcuerdoValue(gastado,acuerdo)}<div style="height:4px;background:#EEF4EE;border-radius:2px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct.toFixed(0)}%;background:#2E7D5E"></div></div></div><div class="mo-budget-cell r ${saldo>=0?'good':'bad'}">${fmtAcuerdoValue(saldo,acuerdo)}</div>${comentario}`}const moGastado=sumGastosByARS('mo','',gastos);const extras=Object.entries(acuerdos.ext);const extrasHTML=extras.length?extras.map(([nombre,acuerdo])=>row(nombre,acuerdo,sumGastosByARS('ext',nombre,gastos))).join(''):`<div class="mo-budget-cell" style="grid-column:1/-1;color:#A8BFA8;text-align:center">Sin extras acordados cargados.</div>`;return`<div class="fin-card mo-budget-wrap"><div class="mo-budget-head"><div class="kpi-lbl" style="margin:0">Presupuestos mano de obra</div><button class="btn-sm" onclick="openModalAcuerdos()">✏ Editar presupuestos</button></div><div class="mo-budget-grid"><div class="mo-budget-cell h">Rubro</div><div class="mo-budget-cell h r">Acordado</div><div class="mo-budget-cell h r">Pagado</div><div class="mo-budget-cell h r">Saldo</div>${row('Mano de obra general',acuerdos.mo,moGastado)}${extrasHTML}</div></div>`}
+function renderAcuerdosMOHTML(gastos){const acuerdos=ensureAcuerdosMO();function row(nombre,acuerdo,gastadoUSD){acuerdo=normalizeAcuerdo(acuerdo);const gastado=usdToAcuerdoMoneda(gastadoUSD,acuerdo);const saldo=acuerdo.monto-gastado;const pct=acuerdo.monto?Math.min(100,Math.max(0,(gastado/acuerdo.monto)*100)):0;const comentario=acuerdo.comentario?`<div style="grid-column:1/-1;padding:7px 10px 9px;background:#F8FBF8;border-top:1px dashed #DDE8DE;font-size:12px;color:#58705D"><strong>Comentario:</strong> ${escComentario(acuerdo.comentario)}</div>`:'';return`<div class="mo-budget-cell"><div class="mo-budget-name">${nombre}</div><div class="mo-budget-sub"><span class="currency-pill">${acuerdo.moneda==='usd'?'U$S':'ARS'}</span></div></div><div class="mo-budget-cell r">${fmtAcuerdoValue(acuerdo.monto,acuerdo)}</div><div class="mo-budget-cell r">${fmtAcuerdoValue(gastado,acuerdo)}<div style="height:4px;background:#EEF4EE;border-radius:2px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct.toFixed(0)}%;background:#2E7D5E"></div></div></div><div class="mo-budget-cell r ${saldo>=0?'good':'bad'}">${fmtAcuerdoValue(saldo,acuerdo)}</div>${comentario}`}const moGastado=sumGastosByARS('mo','',gastos);const extras=Object.entries(acuerdos.ext);const extrasHTML=extras.length?extras.map(([nombre,acuerdo])=>row(nombre,acuerdo,sumGastosByARS('ext',nombre,gastos))).join(''):`<div class="mo-budget-cell" style="grid-column:1/-1;color:#A8BFA8;text-align:center">Sin extras acordados cargados.</div>`;return`<div class="fin-card mo-budget-wrap"><div class="mo-budget-head"><div class="kpi-lbl" style="margin:0">Presupuestos MO</div><button class="btn-sm" onclick="openModalAcuerdos()">✏ Editar presupuestos</button></div><div class="mo-budget-grid"><div class="mo-budget-cell h">Rubro</div><div class="mo-budget-cell h r">Acordado</div><div class="mo-budget-cell h r">Pagado</div><div class="mo-budget-cell h r">Saldo</div>${row('Mano de obra general',acuerdos.mo,moGastado)}${extrasHTML}</div></div>`}
 function setGastoModalTipo(tipo='gasto'){const ingreso=tipo==='ingreso';const tipoEl=document.getElementById('gasto-tipo');if(tipoEl)tipoEl.value=ingreso?'ingreso':'gasto';const modal=document.getElementById('modal-gasto');if(modal)modal.dataset.movimiento=ingreso?'ingreso':'gasto';const mt=document.getElementById('gasto-modal-title');if(mt)mt.textContent=(document.getElementById('gasto-edit-id')?.value?'Modificar ':'Registrar ')+(ingreso?'ingreso':'gasto');const lbl=document.getElementById('g-monto-label');if(lbl)lbl.textContent=ingreso?'Monto del ingreso':'Monto';const note=document.getElementById('g-ingreso-note');if(note)note.style.display=ingreso?'block':'none';const saveBtn=document.getElementById('gasto-save-btn');if(saveBtn)saveBtn.textContent=ingreso?'💾 Guardar ingreso':'💾 Guardar gasto';updateMontoRules();updatePagoSaldoInfo()}
 function openModal(id){if(id==='modal-gasto'){document.getElementById('gasto-edit-id').value='';document.getElementById('gasto-tipo').value='gasto';document.getElementById('g-fecha').value=today();document.getElementById('g-monto').value='';document.getElementById('g-nota').value='';{const gCat=document.getElementById('g-cat');const permitidas=categoriasPermitidasObra(curObra);gCat.value=permitidas.includes('mat')?'mat':(permitidas.includes('ofi')?'ofi':(permitidas[0]||''));}document.getElementById('g-moneda').value='ars';document.getElementById('g-tc').value=getDefaultTC();updateSubrubroOptions();setGastoModalTipo('gasto')}document.getElementById(id).classList.add('open')}
 function openIngreso(){openModal('modal-gasto');setGastoModalTipo('ingreso')}
@@ -7419,6 +7419,215 @@ onAuthStateChanged(auth,async user=>{
   #view-resumen .mo-budget-sub,
   #view-resumen .currency-pill{
     font-size: 9.2px !important;
+  }
+}
+</style>
+
+
+<style id="cq-resumen-encabezados-una-fila-v11">
+/* RESUMEN: encabezados y acciones en una sola fila, compactos y prolijos */
+#view-resumen > .sec-ttl{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:8px!important;
+  margin:12px 0 8px!important;
+  flex-direction:unset!important;
+}
+#view-resumen > .sec-ttl > span:first-child{
+  min-width:0!important;
+  margin:0!important;
+  white-space:nowrap!important;
+  font-size:13px!important;
+  line-height:1!important;
+  letter-spacing:.045em!important;
+}
+#view-resumen > .sec-ttl > .sec-actions{
+  width:auto!important;
+  min-width:0!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex-wrap:nowrap!important;
+  gap:6px!important;
+}
+#view-resumen > .sec-ttl > .sec-actions .filter,
+#view-resumen > .sec-ttl > .sec-actions .btn-sm{
+  width:auto!important;
+  min-width:0!important;
+  min-height:34px!important;
+  height:34px!important;
+  padding:0 10px!important;
+  border-radius:10px!important;
+  font-size:11.5px!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+#view-resumen #resumen-mes{
+  width:145px!important;
+  max-width:145px!important;
+  padding:0 8px!important;
+}
+#view-resumen #btn-editar-fin{
+  width:auto!important;
+  min-width:0!important;
+  padding:0 13px!important;
+}
+
+/* Presupuestos MO: título + editar en una única fila compacta */
+#view-resumen .mo-budget-head{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:8px!important;
+  margin-bottom:9px!important;
+}
+#view-resumen .mo-budget-head .kpi-lbl{
+  min-width:0!important;
+  margin:0!important;
+  white-space:nowrap!important;
+  font-size:12.5px!important;
+  line-height:1!important;
+  letter-spacing:.045em!important;
+}
+#view-resumen .mo-budget-head .btn-sm{
+  width:auto!important;
+  min-width:0!important;
+  min-height:34px!important;
+  height:34px!important;
+  padding:0 11px!important;
+  font-size:11.5px!important;
+  border-radius:10px!important;
+  white-space:nowrap!important;
+}
+
+/* Móvil vertical: conservar una sola fila con medidas más contenidas */
+@media(max-width:650px) and (orientation:portrait){
+  #view-resumen > .sec-ttl{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    gap:5px!important;
+    margin:10px 0 7px!important;
+  }
+  #view-resumen > .sec-ttl > span:first-child{
+    font-size:11.3px!important;
+    letter-spacing:.025em!important;
+  }
+  #view-resumen > .sec-ttl > .sec-actions{
+    gap:4px!important;
+  }
+  #view-resumen > .sec-ttl > .sec-actions .filter,
+  #view-resumen > .sec-ttl > .sec-actions .btn-sm{
+    min-height:31px!important;
+    height:31px!important;
+    padding:0 7px!important;
+    border-radius:9px!important;
+    font-size:10.2px!important;
+  }
+  #view-resumen #resumen-mes{
+    width:116px!important;
+    max-width:116px!important;
+    padding:0 5px!important;
+    font-size:9.8px!important;
+  }
+  #view-resumen #btn-editar-fin{
+    padding:0 9px!important;
+    font-size:10.5px!important;
+  }
+
+  #view-resumen .mo-budget-head{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    gap:5px!important;
+    margin-bottom:7px!important;
+  }
+  #view-resumen .mo-budget-head .kpi-lbl{
+    font-size:11.3px!important;
+    letter-spacing:.025em!important;
+  }
+  #view-resumen .mo-budget-head .btn-sm{
+    min-height:31px!important;
+    height:31px!important;
+    padding:0 8px!important;
+    font-size:10.2px!important;
+    border-radius:9px!important;
+  }
+}
+
+/* Tablet horizontal: misma idea, con aire suficiente */
+@media(min-width:700px) and (max-width:1280px) and (orientation:landscape){
+  #view-resumen > .sec-ttl{
+    margin:9px 0 6px!important;
+    gap:8px!important;
+  }
+  #view-resumen > .sec-ttl > span:first-child{
+    font-size:11.8px!important;
+  }
+  #view-resumen > .sec-ttl > .sec-actions .filter,
+  #view-resumen > .sec-ttl > .sec-actions .btn-sm{
+    min-height:30px!important;
+    height:30px!important;
+    padding:0 9px!important;
+    font-size:10.5px!important;
+  }
+  #view-resumen #resumen-mes{
+    width:132px!important;
+    max-width:132px!important;
+  }
+  #view-resumen .mo-budget-head{
+    margin-bottom:6px!important;
+  }
+  #view-resumen .mo-budget-head .kpi-lbl{
+    font-size:11.5px!important;
+  }
+  #view-resumen .mo-budget-head .btn-sm{
+    min-height:30px!important;
+    height:30px!important;
+    padding:0 9px!important;
+    font-size:10.5px!important;
+  }
+}
+</style>
+
+
+<style id="cq-ingresos-tablet-legibilidad-v12">
+/* INGRESOS: diferenciación armónica, sin competir con los colores de categoría */
+#view-gastos #gastos-list tr.ingreso-row td{
+  background:#F7F3FF !important;
+  border-bottom-color:#E9E0F8 !important;
+}
+#view-gastos #gastos-list tr.ingreso-row td:first-child{
+  box-shadow:inset 4px 0 0 #8B5CF6 !important;
+}
+#view-gastos #gastos-list tr.ingreso-row .gasto-subrubro-main{
+  color:#4F3973 !important;
+}
+#view-gastos #gastos-list tr.ingreso-row .gasto-monto-compacto,
+#view-gastos #gastos-list tr.ingreso-row .gasto-usd-compacto{
+  color:#6D28D9 !important;
+  font-weight:900 !important;
+}
+#view-gastos #gastos-list tr.ingreso-row:hover td{
+  background:#F2ECFF !important;
+}
+
+/* TABLET HORIZONTAL: aprovechar el ancho y agrandar importes del listado */
+@media (min-width:700px) and (max-width:1280px) and (orientation:landscape){
+  #view-gastos #gastos-list .gasto-monto-compacto,
+  #view-gastos #gastos-list .gasto-usd-compacto{
+    font-size:14.5px !important;
+    line-height:1.05 !important;
+    letter-spacing:-.015em !important;
+    font-weight:900 !important;
+    white-space:nowrap !important;
+    overflow:visible !important;
+  }
+  #view-gastos #gastos-list .tbl th:nth-child(4),
+  #view-gastos #gastos-list .tbl th:nth-child(5){
+    font-size:11.5px !important;
+  }
+  #view-gastos #gastos-list .tbl td:nth-child(4),
+  #view-gastos #gastos-list .tbl td:nth-child(5){
+    padding-left:6px !important;
+    padding-right:6px !important;
   }
 }
 </style>
