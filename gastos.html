@@ -6434,6 +6434,193 @@ onAuthStateChanged(auth,async user=>{
 }
 </style>
 
+
+
+<style id="cq-ajustes-ingreso-listado-v2">
+/* =========================================================
+   Ajustes visuales solicitados
+   1) Agregar ingreso: color propio (violeta), distinto de carga masiva.
+   2) Agregar gasto / ingreso: mismas dimensiones y tipografia.
+   3) Listado: descripcion + importes ARS/USD mas legibles sin desbordar.
+   ========================================================= */
+
+/* Botones principales: misma caja y misma tipografia */
+#view-gastos .btn-add-gasto,
+#view-gastos .btn-add-ingreso{
+  box-sizing:border-box!important;
+  min-height:42px!important;
+  height:42px!important;
+  max-height:42px!important;
+  padding:0 18px!important;
+  border-radius:14px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:6px!important;
+  font-family:'Space Grotesk',sans-serif!important;
+  font-size:14px!important;
+  font-weight:900!important;
+  line-height:1!important;
+  letter-spacing:.005em!important;
+  white-space:nowrap!important;
+  margin:0!important;
+}
+
+/* Ingreso violeta para que no se confunda con Carga masiva (azul) */
+#view-gastos .btn-add-ingreso{
+  background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,0) 44%),linear-gradient(135deg,#6D28D9 0%,#9333EA 100%)!important;
+  color:#fff!important;
+  border:1px solid rgba(109,40,217,.56)!important;
+  box-shadow:0 10px 22px rgba(109,40,217,.24),inset 0 1px 0 rgba(255,255,255,.28)!important;
+  text-shadow:0 1px 0 rgba(0,0,0,.10)!important;
+}
+#view-gastos .btn-add-ingreso:hover{
+  background:linear-gradient(135deg,#5B21B6 0%,#7E22CE 100%)!important;
+  box-shadow:0 13px 25px rgba(109,40,217,.29)!important;
+}
+#view-gastos .btn-add-ingreso::after,
+#view-gastos .btn-add-gasto::after{display:none!important;content:none!important}
+
+/* Listado principal: usar el ancho disponible de forma mas equilibrada */
+#view-gastos #gastos-list .tbl{
+  table-layout:fixed!important;
+  width:100%!important;
+}
+#view-gastos #gastos-list .tbl th:nth-child(1),
+#view-gastos #gastos-list .tbl td:nth-child(1){width:8%!important}
+#view-gastos #gastos-list .tbl th:nth-child(2),
+#view-gastos #gastos-list .tbl td:nth-child(2){width:42%!important}
+#view-gastos #gastos-list .tbl th:nth-child(3),
+#view-gastos #gastos-list .tbl td:nth-child(3){width:9%!important}
+#view-gastos #gastos-list .tbl th:nth-child(4),
+#view-gastos #gastos-list .tbl td:nth-child(4){width:17%!important}
+#view-gastos #gastos-list .tbl th:nth-child(5),
+#view-gastos #gastos-list .tbl td:nth-child(5){width:15%!important}
+#view-gastos #gastos-list .tbl th:nth-child(6),
+#view-gastos #gastos-list .tbl td:nth-child(6){width:9%!important}
+
+/* Descripcion / subrubro */
+#view-gastos #gastos-list .gasto-subrubro-cell{
+  padding-left:7px!important;
+  padding-right:5px!important;
+  overflow:hidden!important;
+}
+#view-gastos #gastos-list .gasto-subrubro-main{
+  color:#111!important;
+  font-size:13px!important;
+  font-weight:850!important;
+  line-height:1.18!important;
+  white-space:normal!important;
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+}
+#view-gastos #gastos-list .gasto-nota-mobile,
+#view-gastos #gastos-list .gasto-nota-ref,
+#view-gastos #gastos-list .gasto-origen-ref{
+  font-size:10.5px!important;
+  line-height:1.2!important;
+  margin-top:3px!important;
+  white-space:normal!important;
+  overflow-wrap:anywhere!important;
+}
+
+/* Importes: mas grandes pero siempre en una sola linea */
+#view-gastos #gastos-list .gasto-monto-compacto,
+#view-gastos #gastos-list .gasto-usd-compacto{
+  font-family:'JetBrains Mono',monospace!important;
+  font-size:11.5px!important;
+  font-weight:900!important;
+  line-height:1.08!important;
+  letter-spacing:-.025em!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:clip!important;
+  padding-left:2px!important;
+  padding-right:3px!important;
+  text-align:right!important;
+}
+#view-gastos #gastos-list .tbl td{
+  padding-top:8px!important;
+  padding-bottom:8px!important;
+  vertical-align:middle!important;
+}
+
+/* Tablet / telefono: todo sigue encuadrado, priorizando descripcion e importes */
+@media(max-width:650px){
+  #view-gastos .btn-add-gasto,
+  #view-gastos .btn-add-ingreso{
+    min-height:36px!important;
+    height:36px!important;
+    max-height:36px!important;
+    padding:0 11px!important;
+    font-size:11.5px!important;
+    border-radius:10px!important;
+    gap:4px!important;
+  }
+}
+
+@media(max-width:560px) and (orientation:portrait){
+  #view-gastos #gastos-list .tbl th:nth-child(3),
+  #view-gastos #gastos-list .tbl td:nth-child(3){display:none!important}
+
+  #view-gastos #gastos-list .tbl th:nth-child(1),
+  #view-gastos #gastos-list .tbl td:nth-child(1){width:10%!important}
+  #view-gastos #gastos-list .tbl th:nth-child(2),
+  #view-gastos #gastos-list .tbl td:nth-child(2){width:43%!important}
+  #view-gastos #gastos-list .tbl th:nth-child(4),
+  #view-gastos #gastos-list .tbl td:nth-child(4){width:18%!important}
+  #view-gastos #gastos-list .tbl th:nth-child(5),
+  #view-gastos #gastos-list .tbl td:nth-child(5){width:18%!important}
+  #view-gastos #gastos-list .tbl th:nth-child(6),
+  #view-gastos #gastos-list .tbl td:nth-child(6){width:11%!important}
+
+  #view-gastos #gastos-list .tbl th{
+    padding:5px 2px!important;
+    font-size:7.2px!important;
+    line-height:1!important;
+  }
+  #view-gastos #gastos-list .tbl td{
+    padding:7px 2px!important;
+    line-height:1.12!important;
+  }
+  #view-gastos #gastos-list .tbl td:nth-child(1){
+    font-size:7.6px!important;
+    letter-spacing:-.03em!important;
+  }
+  #view-gastos #gastos-list .gasto-subrubro-cell{
+    padding-left:4px!important;
+    padding-right:3px!important;
+  }
+  #view-gastos #gastos-list .gasto-subrubro-main{
+    font-size:10.2px!important;
+    line-height:1.15!important;
+  }
+  #view-gastos #gastos-list .gasto-nota-mobile,
+  #view-gastos #gastos-list .gasto-nota-ref,
+  #view-gastos #gastos-list .gasto-origen-ref{
+    font-size:8.1px!important;
+    line-height:1.12!important;
+  }
+  #view-gastos #gastos-list .gasto-monto-compacto,
+  #view-gastos #gastos-list .gasto-usd-compacto{
+    font-size:9.4px!important;
+    letter-spacing:-.055em!important;
+    padding-left:0!important;
+    padding-right:1px!important;
+  }
+  #view-gastos #gastos-list .gasto-cat-mobile{
+    font-size:6.7px!important;
+    padding:1px 3px!important;
+  }
+}
+
+@media(max-width:380px) and (orientation:portrait){
+  #view-gastos #gastos-list .gasto-subrubro-main{font-size:9.6px!important}
+  #view-gastos #gastos-list .gasto-monto-compacto,
+  #view-gastos #gastos-list .gasto-usd-compacto{font-size:8.8px!important;letter-spacing:-.06em!important}
+}
+</style>
+
 </body>
 
 </html>
