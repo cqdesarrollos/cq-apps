@@ -1816,7 +1816,7 @@ html.cq-fast-1h-gastos #cq-gerencia-only{display:none!important}
 <div class="fld"><label>Selección de obras</label><div class="bulk-tools"><button type="button" onclick="toggleTodasObrasMasivas(true)">☑ Seleccionar todas</button><button type="button" onclick="toggleTodasObrasMasivas(false)">🧹 Limpiar</button></div><div class="bulk-obras-grid" id="gm-obras"></div><div class="bulk-summary" id="gm-summary">Seleccioná una o más obras.</div></div>
 </div><div class="mfooter"><button class="btn btn-s" onclick="closeModal('modal-gasto-masivo')">✕ Cancelar</button><button class="btn btn-p" onclick="saveGastoMasivo()">📚 Cargar en obras</button></div></div></div>
 <div class="modal-bg" id="modal-gasto" data-movimiento="gasto"><div class="modal"><div class="modal-hd"><span class="modal-ttl" id="gasto-modal-title">Registrar gasto</span><button class="modal-x" onclick="closeModal('modal-gasto')">✕</button></div><div class="mbody"><input type="hidden" id="gasto-edit-id" value=""><input type="hidden" id="gasto-tipo" value="gasto"><div class="fld-row"><div class="fld"><label>Fecha</label><input type="date" id="g-fecha"></div><div class="fld"><label>Categoría</label><select id="g-cat"></select></div></div><div class="fld" id="g-subrubro-fld"><label>Subrubro</label><div class="combo-wrap"><input type="text" id="g-subrubro-search" placeholder="🔎 Buscar subrubro..." autocomplete="off" oninput="filterSubrubroCombo()" onfocus="filterSubrubroCombo()"><div id="g-subrubro-dropdown" class="combo-dropdown" style="display:none"></div></div><select id="g-subrubro-sel" onchange="onSubrubroSel()" style="display:none"><option value="">-- Seleccionar --</option></select></div><div class="fld-row"><div class="fld"><label>Moneda</label><select id="g-moneda"><option value="ars">$ ARS</option><option value="usd">U$S</option></select></div><div class="fld"><label id="g-monto-label">Monto</label><input type="number" id="g-monto" placeholder="0" step="100"><div id="g-ingreso-note" class="muted" style="display:none;margin-top:4px">Se guardará automáticamente como valor negativo.</div></div></div><div class="fld"><label>Tipo de cambio (si ARS)</label><input type="number" id="g-tc" value="1400" min="1" step="1"></div><div class="fld"><label>Nota / proveedor</label><input type="text" id="g-nota" placeholder="Referencia, proveedor..."></div><div id="mo-saldo-info" class="saldo-box" style="display:none"></div></div><div class="mfooter"><button class="btn btn-s" onclick="closeModal('modal-gasto')">✕ Cancelar</button><button class="btn btn-p" id="gasto-save-btn" onclick="saveGasto()">💾 Guardar gasto</button></div></div></div>
-<div class="modal-bg" id="modal-fin"><div class="modal"><div class="modal-hd"><span class="modal-ttl">Precio de venta, cuotas y comisión</span><button class="modal-x" onclick="closeModal('modal-fin')">✕</button></div><div class="mbody"><div class="fld"><label>Precio de venta base (U$S)</label><input type="number" id="fin-venta" min="0" step="0.01"></div><div class="fld"><label>Cuotas acumuladas (U$S)</label><input type="number" id="fin-cuotas" min="0" step="0.01"></div><div class="fld"><label>Comisión (U$S)</label><input type="number" id="fin-comision" min="0" step="0.01"></div><div class="muted">En el resumen financiero, el precio de venta se muestra automáticamente como precio base + cuotas. El costo total se calcula solo con los gastos cargados.</div></div><div class="mfooter"><button class="btn btn-s" onclick="closeModal('modal-fin')">✕ Cancelar</button><button class="btn btn-p" onclick="saveFinanciero()">💾 Guardar</button></div></div></div>
+<div class="modal-bg" id="modal-fin"><div class="modal"><div class="modal-hd"><span class="modal-ttl">Precio de venta y cuotas</span><button class="modal-x" onclick="closeModal('modal-fin')">✕</button></div><div class="mbody"><div class="fld"><label>Precio de venta base (U$S)</label><input type="number" id="fin-venta" min="0" step="0.01"></div><div class="fld"><label>Cuotas (U$S)</label><div id="fin-cuotas-list" class="cuotas-list"></div><button type="button" class="btn-sm cuotas-add-btn" onclick="addCuotaRow()">＋ Agregar cuota</button><div class="muted" id="fin-cuotas-total">Total cuotas: U$S 0</div></div><div class="muted">Cada cuota que agregues se suma automáticamente al precio de venta dentro del resumen financiero.</div></div><div class="mfooter"><button class="btn btn-s" onclick="closeModal('modal-fin')">✕ Cancelar</button><button class="btn btn-p" onclick="saveFinanciero()">💾 Guardar</button></div></div></div>
 <div class="modal-bg" id="modal-acuerdos"><div class="modal"><div class="modal-hd"><span class="modal-ttl">Presupuestos de mano de obra</span><button class="modal-x" onclick="closeModal('modal-acuerdos')">✕</button></div><div class="mbody"><div class="muted" style="margin-bottom:10px">Cargá lo acordado para mano de obra general y para cada extra. Podés elegir moneda. Si usás pesos, el tipo de cambio sirve para comparar contra pagos cargados en U$S o ARS.</div><div class="fld-row"><div class="fld"><label>Mano de obra acordada</label><input type="number" id="amo-general" min="0" step="0.01"></div><div class="fld"><label>Moneda</label><select id="amo-general-moneda" onchange="toggleAmoTc('general')"><option value="ars">$ ARS</option></select></div></div><div class="fld"><label>Comentario mano de obra</label><textarea id="amo-general-comentario" rows="2" placeholder="Agregar comentario u observación"></textarea></div><input type="hidden" id="amo-general-tc" value=""><div class="sec-ttl" style="margin:12px 0 8px"><span>Manos de obra extra</span><button class="btn-sm" type="button" onclick="addAcuerdoExtraRow()">＋ Agregar extra</button></div><div id="amo-extras"></div></div><div class="mfooter"><button class="btn btn-s" onclick="closeModal('modal-acuerdos')">✕ Cancelar</button><button class="btn btn-p" onclick="saveAcuerdosMO()">💾 Guardar</button></div></div></div>
 <div class="modal-bg" id="modal-obra"><div class="modal"><div class="modal-hd"><span class="modal-ttl" id="obra-modal-title">Obra</span><button class="modal-x" onclick="closeModal('modal-obra')">✕</button></div><div class="mbody"><input type="hidden" id="obra-id-edit"><div class="fld"><label>Nombre visible</label><input type="text" id="obra-label" placeholder="Ej: L12 Mz93 - Nelson"></div><div class="fld"><label>Nombre corto para botón</label><input type="text" id="obra-short" placeholder="Ej: L12/N"></div></div><div class="mfooter"><button class="btn btn-s" onclick="closeModal('modal-obra')">✕ Cancelar</button><button class="btn btn-p" onclick="saveObra()">💾 Guardar</button></div></div></div>
 
@@ -1826,7 +1826,7 @@ html.cq-fast-1h-gastos #cq-gerencia-only{display:none!important}
 <div class="obra-bar" id="obra-bar"></div>
 <div id="obra-bar-spacer" class="obra-bar-spacer" aria-hidden="true"></div>
 <div class="view active" id="view-gastos"><div class="kpi-row" id="kpi-row"></div><div class="sec-ttl"><span>Movimientos</span><div class="sec-actions"><div class="filtro-mes-wrap"><span class="filtro-mes-lbl">Mes</span><input class="filter" type="month" id="filtro-mes" onchange="renderAll()"></div><select id="filtro-cat" class="filter cq-native-filter-hidden" aria-hidden="true" tabindex="-1"></select><button type="button" id="cq-cat-filter-btn" class="filter cq-multi-filter-btn" onclick="cqOpenMultiFilter('cat')">Todas las categorías <span>⌄</span></button><select id="filtro-sub" class="filter cq-native-filter-hidden" aria-hidden="true" tabindex="-1"><option value="">Todos los subrubros</option></select><button type="button" id="cq-sub-filter-btn" class="filter cq-multi-filter-btn" onclick="cqOpenMultiFilter('sub')">Todos los subrubros <span>⌄</span></button><button id="btn-carga-masiva" class="btn-bulk-gasto" onclick="openGastoMasivo()">📚 Carga masiva</button><button class="btn-sm btn-add-gasto" onclick="openModal('modal-gasto')">📝 Agregar gasto</button><button class="btn-sm btn-add-ingreso" onclick="openIngreso()">↩️ Agregar ingreso</button></div></div><div class="card"><div class="card-hd"><span id="gastos-title">Todos los gastos</span><span id="gastos-total-filtrado"></span></div><div id="gastos-list"></div></div></div>
-<div class="view" id="view-resumen"><div class="sec-ttl"><span>Resumen por categoría</span><div class="sec-actions"><input class="filter" type="month" id="resumen-mes" onchange="renderResumen()"><button class="btn-sm" onclick="syncResumenMes()">👁 Ver todo</button></div></div><div id="resumen-cats"></div><div class="sec-ttl"><span>Resumen financiero</span><div class="sec-actions"><button class="btn-sm" id="btn-presupuesto-mo" onclick="openModalAcuerdos()">🧰 Presupuesto MO</button><button class="btn-sm" id="btn-editar-fin" onclick="openModalFin()">🧾 Editar venta/cuotas</button></div></div><div class="fin-grid" id="fin-grid"></div></div>
+<div class="view" id="view-resumen"><div class="sec-ttl"><span>Resumen por categoría</span><div class="sec-actions"><input class="filter" type="month" id="resumen-mes" onchange="renderResumen()"><button class="btn-sm" onclick="syncResumenMes()">👁 Ver todo</button></div></div><div id="resumen-cats"></div><div class="sec-ttl"><span>Resumen financiero</span><div class="sec-actions"><button class="btn-sm" id="btn-editar-fin" onclick="openModalFin()">🧾 Editar venta/cuotas</button></div></div><div class="fin-grid" id="fin-grid"></div></div>
 
 <div class="view" id="view-consolidado">
   <div class="consol-hero">
@@ -1991,7 +1991,7 @@ Object.keys(c.subrubros).forEach(cat=>{if(Array.isArray(c.subrubros[cat]))c.subr
 function loadConfig(){try{return normalizeConfig(JSON.parse(localStorage.getItem('gastos_config')||'null')||{obras:DEFAULT_OBRAS,subrubros:DEFAULT_SUBRUBROS})}catch(e){return normalizeConfig({obras:DEFAULT_OBRAS,subrubros:DEFAULT_SUBRUBROS})}}
 function getDefaultTC(){return parseFloat(config.defaultTC)||1400}
 function setDefaultTC(tc){tc=parseFloat(tc);if(!isNaN(tc)&&tc>0){config.defaultTC=tc;localStorage.setItem('gastos_config',JSON.stringify(config));if(window._dbReady)persistConfig();}}
-function emptyState(){return{gastos:[],financiero:{venta:0,cuotas:0,comision:0,acuerdosMO:{mo:{monto:0,moneda:'usd',tc:1400},ext:{}}}}}
+function emptyState(){return{gastos:[],financiero:{venta:0,cuotas:0,cuotasDetalle:[],comision:0,acuerdosMO:{mo:{monto:0,moneda:'usd',tc:1400},ext:{}}}}}
 function dbKey(id){return'gastos_'+id}function getS(){if(!state[curObra])state[curObra]=emptyState();if(curObra==='oficina'&&Array.isArray(state[curObra].gastos)){state[curObra].gastos.forEach(g=>{if(g.cat!=='ofi')g.cat='ofi';});}return state[curObra]}
 function initLocal(){config.obras.forEach(o=>{try{const loaded=JSON.parse(localStorage.getItem(dbKey(o.id))||'null');state[o.id]=migrateState(loaded||emptyState())}catch(e){state[o.id]=emptyState()}})}
 function inferCatBySubrubro(subrubro,currentCat){
@@ -2002,7 +2002,7 @@ function inferCatBySubrubro(subrubro,currentCat){
   if(matches.length===1 && matches[0]!==currentCat)return matches[0];
   return currentCat;
 }
-function migrateState(s){s=s||emptyState();s.gastos=s.gastos||[];s.financiero=s.financiero||{};if(s.financiero.cobrado&&!s.financiero.venta)s.financiero.venta=s.financiero.cobrado;if(!('cuotas'in s.financiero))s.financiero.cuotas=0;if(!('comision'in s.financiero))s.financiero.comision=0;if(!s.financiero.acuerdosMO)s.financiero.acuerdosMO={mo:0,ext:{}};if(!s.financiero.acuerdosMO.ext)s.financiero.acuerdosMO.ext={};s.gastos=s.gastos.map(g=>{const sub=g.subrubro||g.concepto||'Sin subrubro';return{...g,subrubro:sub,cat:inferCatBySubrubro(sub,g.cat)}});return s}
+function migrateState(s){s=s||emptyState();s.gastos=s.gastos||[];s.financiero=s.financiero||{};if(s.financiero.cobrado&&!s.financiero.venta)s.financiero.venta=s.financiero.cobrado;if(!('cuotas'in s.financiero))s.financiero.cuotas=0;if(!Array.isArray(s.financiero.cuotasDetalle))s.financiero.cuotasDetalle=(parseFloat(s.financiero.cuotas)||0)?[parseFloat(s.financiero.cuotas)||0]:[];if(!('comision'in s.financiero))s.financiero.comision=0;if(!s.financiero.acuerdosMO)s.financiero.acuerdosMO={mo:0,ext:{}};if(!s.financiero.acuerdosMO.ext)s.financiero.acuerdosMO.ext={};s.gastos=s.gastos.map(g=>{const sub=g.subrubro||g.concepto||'Sin subrubro';return{...g,subrubro:sub,cat:inferCatBySubrubro(sub,g.cat)}});return s}
 
 function setSyncStatus(txt,cls=''){const el=document.getElementById('sync-status');if(el){el.title=txt;el.className='sync-dot '+(cls==='ok'?'ok':cls==='err'?'err':'')}}
 function persistConfig(){
@@ -2777,6 +2777,14 @@ function renderGastos(){
   if(!gastos.length){el.innerHTML='<div class="empty">Sin gastos para este filtro.</div>';return}
   el.innerHTML=`<table class="tbl"><thead><tr><th>Fecha</th><th>Subrubro</th><th>Cat.</th><th class="r">Monto</th><th class="r">U$S</th><th></th></tr></thead><tbody>${gastos.map(g=>{const nuevo=isNuevoGasto(g);return `<tr class="${CAT_COLORS[g.cat]} ${nuevo?'nuevo-row':''}"><td class="mono">${(g.fecha||'').slice(5).split('-').reverse().join('/')}</td><td class="gasto-subrubro-cell"><div class="gasto-subrubro-main">${g.subrubro||g.concepto}${nuevo?'<span class="nuevo-badge">NUEVO</span>':''}<span class="tag ${TAG_COLORS[g.cat]} gasto-cat-mobile">${CAT_SHORT[g.cat]}</span></div>${cqNotaGastoHTML(g)?`<div class="gasto-nota-mobile">${cqNotaGastoHTML(g)}</div>`:''}${cqOrigenGastoHTML(g)}</td><td class="gasto-cat-col"><span class="tag ${TAG_COLORS[g.cat]}">${CAT_SHORT[g.cat]}</span></td><td class="r-val gasto-monto-compacto">${fmt(g.monto,g.moneda).replace(/\s+/g,'')}</td><td class="r-val gasto-usd-compacto">${fmt(toUSD(g.monto,g.moneda,g.tc),'usd').replace(/\s+/g,'')}</td><td class="r"><button class="btn-sm gasto-action-btn gasto-edit-btn" title="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Editar ingreso':'Editar gasto'}" onclick="editGasto('${g.id}')">✏️</button> <button class="btn-del gasto-action-btn gasto-delete-btn" title="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" aria-label="${g.tipoMovimiento==='ingreso'?'Eliminar ingreso':'Eliminar gasto'}" onclick="deleteGasto('${g.id}')">🗑️</button></td></tr>`}).join('')}</tbody></table>`;
 }
+function sumCuotasDetalle(fin){
+  if(!fin)return 0;
+  if(Array.isArray(fin.cuotasDetalle) && fin.cuotasDetalle.length){
+    return fin.cuotasDetalle.reduce((a,v)=>a+(parseFloat(v)||0),0);
+  }
+  return parseFloat(fin.cuotas)||0;
+}
+
 function renderResumen(){
   const ym=document.getElementById('resumen-mes')?.value||'';
   const gastos=getS().gastos.filter(g=>sameMonth(g.fecha,ym));
@@ -2793,11 +2801,11 @@ function renderResumen(){
       bySub[key]=(bySub[key]||0)+toUSD(g.monto,g.moneda,g.tc);
     });
     const pct=totUSD>0?(val/totUSD*100).toFixed(1):'0.0';
-    return `<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${CAT_LABELS[cat]}</span></span><span>${fmt(val,'usd')} · ${pct}%</span></div><table class="tbl"><tbody>${Object.entries(bySub).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td class="r-val">${fmt(v,'usd')}</td><td class="r" style="width:120px"><div style="height:8px;background:#EEF4EE;border-radius:999px;overflow:hidden"><div style="height:100%;border-radius:999px;width:${Math.abs(val)>0?(Math.abs(v)/Math.abs(val)*100).toFixed(0):0}%;background:#2E7D5E"></div></div></td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${CAT_LABELS[cat]}</span></span><span class="resumen-total-cat">${fmt(val,'usd')} · ${pct}%</span></div><table class="tbl"><tbody>${Object.entries(bySub).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td class="r-val">${fmt(v,'usd')}</td><td class="r" style="width:110px"><div style="height:7px;background:#EEF4EE;border-radius:999px;overflow:hidden"><div style="height:100%;border-radius:999px;width:${Math.abs(val)>0?(Math.abs(v)/Math.abs(val)*100).toFixed(0):0}%;background:#2E7D5E"></div></div></td></tr>`).join('')}</tbody></table></div>`;
   }).join('')||'<div class="empty">Sin gastos cargados para resumir.</div>';
 
   const fin=getS().financiero||{};
-  const cuotas=Number(fin.cuotas||0);
+  const cuotas=sumCuotasDetalle(fin);
   const precioVentaTotal=Number(fin.venta||0)+cuotas;
   const margen=precioVentaTotal-totUSD;
 
@@ -2946,7 +2954,11 @@ function openModalAcuerdos(){const acuerdos=ensureAcuerdosMO();const mo=normaliz
 function acuerdoExtraRowHTML(nombre='',acuerdo={monto:0,moneda:'usd',tc:1400,comentario:''}){acuerdo=normalizeAcuerdo(acuerdo);const id='x'+Date.now()+Math.floor(Math.random()*1000);const opts=[...(config.subrubros.ext||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<option value="${s}" ${s===nombre?'selected':''}>${s}</option>`).join('');return`<div data-extra-row="1" data-extra-row-id="${id}" style="border:1px solid #DDE8DE;border-radius:9px;padding:10px;margin-bottom:8px;background:#F8FBF8"><div class="fld-row"><div class="fld"><label>Extra</label><select class="amo-extra-nombre"><option value="">-- Seleccionar --</option>${opts}</select></div><div class="fld"><label>Acordado</label><input class="amo-extra-monto" type="number" min="0" step="0.01" value="${acuerdo.monto||''}"></div></div><div class="fld"><label>Comentario del extra</label><textarea class="amo-extra-comentario" rows="2" placeholder="Agregar comentario u observación">${escComentario(acuerdo.comentario||'')}</textarea></div><div class="fld-row"><div class="fld"><label>Moneda</label><select class="amo-extra-moneda" onchange="toggleAmoTc('${id}')"><option value="ars" selected>$ ARS</option></select></div></div><div style="display:flex;justify-content:flex-end"><button class="btn-del" type="button" onclick="this.closest('[data-extra-row]').remove()">Eliminar</button></div></div>`}
 function addAcuerdoExtraRow(){const empty=document.getElementById('amo-empty');if(empty)empty.remove();document.getElementById('amo-extras').insertAdjacentHTML('beforeend',acuerdoExtraRowHTML())}
 function saveAcuerdosMO(){const fin=getS().financiero;if(!fin.acuerdosMO)fin.acuerdosMO={mo:{monto:0,moneda:'usd',tc:1400},ext:{}};fin.acuerdosMO.mo={monto:parseFloat(document.getElementById('amo-general').value)||0,moneda:'ars',comentario:(document.getElementById('amo-general-comentario').value||'').trim()};fin.acuerdosMO.ext={};document.querySelectorAll('[data-extra-row]').forEach(row=>{const nombre=row.querySelector('.amo-extra-nombre').value;const monto=parseFloat(row.querySelector('.amo-extra-monto').value)||0;const comentario=(row.querySelector('.amo-extra-comentario')?.value||'').trim();if(nombre)fin.acuerdosMO.ext[nombre]={monto,moneda:'ars',comentario}});persist();closeModal('modal-acuerdos');renderAll()}
-function openModalFin(){const fin=getS().financiero||{};document.getElementById('fin-venta').value=fin.venta||'';document.getElementById('fin-cuotas').value=fin.cuotas||'';document.getElementById('fin-comision').value=fin.comision||'';openModal('modal-fin')}function saveFinanciero(){getS().financiero.venta=parseFloat(document.getElementById('fin-venta').value)||0;getS().financiero.cuotas=parseFloat(document.getElementById('fin-cuotas').value)||0;getS().financiero.comision=parseFloat(document.getElementById('fin-comision').value)||0;persist();closeModal('modal-fin');renderAll()}
+function updateCuotasTotalPreview(){const vals=[...document.querySelectorAll('.fin-cuota-input')].map(i=>parseFloat(i.value)||0);const total=vals.reduce((a,b)=>a+b,0);const el=document.getElementById('fin-cuotas-total');if(el)el.textContent='Total cuotas: '+fmt(total,'usd');return total}
+function removeCuotaRow(btn){const row=btn.closest('.cuota-row');if(row)row.remove();if(!document.querySelector('.cuota-row'))addCuotaRow('');updateCuotasTotalPreview()}
+function addCuotaRow(valor=''){const list=document.getElementById('fin-cuotas-list');if(!list)return;const row=document.createElement('div');row.className='cuota-row';row.innerHTML=`<input type="number" class="fin-cuota-input" min="0" step="0.01" placeholder="Importe de cuota en U$S" value="${valor!==''?String(valor):''}" oninput="updateCuotasTotalPreview()"><button type="button" class="btn-del cuota-del-btn" onclick="removeCuotaRow(this)">✕</button>`;list.appendChild(row);updateCuotasTotalPreview()}
+function renderCuotasEditor(fin){const list=document.getElementById('fin-cuotas-list');if(!list)return;list.innerHTML='';const cuotas=(Array.isArray(fin.cuotasDetalle)&&fin.cuotasDetalle.length)?fin.cuotasDetalle:[((parseFloat(fin.cuotas)||0)?parseFloat(fin.cuotas):'')];cuotas.forEach(v=>addCuotaRow(v));updateCuotasTotalPreview()}
+function openModalFin(){const fin=getS().financiero||{};document.getElementById('fin-venta').value=fin.venta||'';openModal('modal-fin');renderCuotasEditor(fin)}function saveFinanciero(){const fin=getS().financiero||{};fin.venta=parseFloat(document.getElementById('fin-venta').value)||0;const cuotasDetalle=[...document.querySelectorAll('.fin-cuota-input')].map(i=>parseFloat(i.value)||0).filter(v=>v>0);fin.cuotasDetalle=cuotasDetalle;fin.cuotas=cuotasDetalle.reduce((a,b)=>a+b,0);getS().financiero=fin;persist();closeModal('modal-fin');renderAll()}
 function openObraModal(id=''){const o=config.obras.find(x=>x.id===id);document.getElementById('obra-modal-title').textContent=o?'Modificar obra':'Agregar obra';document.getElementById('obra-id-edit').value=o?.id||'';document.getElementById('obra-label').value=o?.label||'';document.getElementById('obra-short').value=o?.short||'';openModal('modal-obra')}function slug(s){return(s||'obra').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')+'_'+Date.now().toString().slice(-4)}
 function saveObra(){const id=document.getElementById('obra-id-edit').value,label=document.getElementById('obra-label').value.trim(),short=document.getElementById('obra-short').value.trim();if(!label||!short){alert('Completá nombre y nombre corto');return}if(id){const o=config.obras.find(x=>x.id===id);o.label=label;o.short=short}else{const newId=slug(label);config.obras.push({id:newId,label,short});state[newId]=emptyState();curObra=newId;localStorage.setItem('gastos_cur_obra',curObra);persist()}persistConfig();closeModal('modal-obra');renderAll();subscribeObra()}
 function deleteObra(id){if(id==='oficina'){alert('La oficina queda fija para gastos generales.');return}if(config.obras.length===1){alert('Tiene que quedar al menos una obra');return}if(!confirm('¿Eliminar la obra del listado? No borra los datos de Firebase, pero deja de mostrarse.'))return;config.obras=config.obras.filter(o=>o.id!==id);if(curObra===id){curObra=config.obras[0].id;localStorage.setItem('gastos_cur_obra',curObra);subscribeObra()}persistConfig();renderAll()}
@@ -7051,6 +7063,129 @@ onAuthStateChanged(auth,async user=>{
     font-size:13px!important;
     padding:8px 12px!important;
   }
+}
+</style>
+
+
+<style id="cq-resumen-ajustes-v8">
+/* 1) Totales del encabezado de cada categoría con tamaño legible y parejo */
+#view-resumen #resumen-cats .card-hd .resumen-total-cat,
+#view-resumen #resumen-cats .card-hd > span:last-child{
+  font-size:13px!important;
+  font-weight:800!important;
+  color:#7A9E82!important;
+}
+
+/* 2) Boton superior de Resumen financiero: solo editar venta/cuotas */
+#view-resumen .sec-ttl + #fin-grid,
+#view-resumen .sec-ttl .sec-actions{align-items:center!important}
+#view-resumen #btn-editar-fin{min-width:230px!important}
+
+/* 3) Ajuste general de tamanos dentro de Resumen a un punto intermedio agradable */
+#view-resumen .sec-ttl>span:first-child{
+  font-size:15px!important;
+  font-weight:900!important;
+  letter-spacing:.055em!important;
+}
+#view-resumen #resumen-cats .card{margin-bottom:12px!important}
+#view-resumen #resumen-cats .card-hd{
+  padding:13px 16px!important;
+  font-size:12px!important;
+}
+#view-resumen #resumen-cats .card-hd .tag{
+  font-size:11.5px!important;
+  padding:5px 10px!important;
+  border-radius:10px!important;
+}
+#view-resumen #resumen-cats .tbl td{
+  padding:11px 16px!important;
+  font-size:12.8px!important;
+  line-height:1.18!important;
+}
+#view-resumen #resumen-cats .tbl td.r-val{
+  font-size:12.8px!important;
+  font-weight:800!important;
+}
+#view-resumen .filter,
+#view-resumen .btn-sm{
+  min-height:44px!important;
+  padding:8px 14px!important;
+  font-size:13px!important;
+  border-radius:12px!important;
+}
+
+/* 4) Resumen financiero: mantener prolijo */
+#view-resumen .fin-grid{grid-template-columns:1fr!important;gap:12px!important}
+#view-resumen .fin-card-resumen-unico .kpi-lbl{font-size:12px!important}
+#view-resumen .fin-card-resumen-unico .fin-row{padding:8px 0!important}
+#view-resumen .fin-card-resumen-unico .fin-lbl{font-size:12.8px!important}
+#view-resumen .fin-card-resumen-unico .fin-val{font-size:13.4px!important}
+
+/* 5) Presupuestos mano de obra: agrandar bloque, titulo, boton y tabla */
+#view-resumen .mo-budget-head{
+  align-items:center!important;
+  gap:12px!important;
+  margin-bottom:12px!important;
+}
+#view-resumen .mo-budget-head .kpi-lbl{
+  font-size:14px!important;
+  line-height:1.12!important;
+}
+#view-resumen .mo-budget-head .btn-sm{
+  min-height:40px!important;
+  padding:8px 16px!important;
+  font-size:13px!important;
+}
+#view-resumen .mo-budget-grid{
+  border-radius:12px!important;
+}
+#view-resumen .mo-budget-cell{
+  padding:12px 12px!important;
+  font-size:12.6px!important;
+}
+#view-resumen .mo-budget-cell.h{
+  font-size:10.5px!important;
+}
+#view-resumen .mo-budget-name{
+  font-size:12.8px!important;
+}
+#view-resumen .mo-budget-sub,
+#view-resumen .currency-pill{
+  font-size:10.5px!important;
+}
+#view-resumen .mo-budget-cell .currency-pill{padding:3px 8px!important}
+#view-resumen .mo-budget-grid [style*="Comentario:"]{
+  font-size:12.6px!important;
+  line-height:1.28!important;
+}
+
+/* 6) Editor de cuotas */
+#modal-fin .cuotas-list{display:flex;flex-direction:column;gap:8px;margin:8px 0 10px}
+#modal-fin .cuota-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+#modal-fin .fin-cuota-input{width:100%;border:1px solid #DDE8DE;border-radius:10px;padding:10px 12px;font-size:14px;font-family:'Space Grotesk',sans-serif;color:#1C2B22;background:#fff}
+#modal-fin .cuota-del-btn{min-width:38px;height:38px;border-radius:10px}
+#modal-fin .cuotas-add-btn{margin-top:2px!important}
+
+@media(max-width:650px){
+  #view-resumen .sec-ttl{flex-direction:column!important;align-items:stretch!important;gap:8px!important}
+  #view-resumen .sec-actions{width:100%!important}
+  #view-resumen .sec-ttl>span:first-child{font-size:13.8px!important}
+  #view-resumen #resumen-cats .card-hd{padding:12px 14px!important}
+  #view-resumen #resumen-cats .card-hd .resumen-total-cat,
+  #view-resumen #resumen-cats .card-hd > span:last-child{font-size:12px!important}
+  #view-resumen #resumen-cats .tbl td{padding:10px 12px!important;font-size:11.9px!important}
+  #view-resumen #resumen-cats .tbl td.r-val{font-size:11.9px!important}
+  #view-resumen .filter,
+  #view-resumen .btn-sm{min-height:40px!important;font-size:12px!important;padding:8px 12px!important}
+  #view-resumen #btn-editar-fin{min-width:0!important;width:100%!important}
+  #view-resumen .mo-budget-head{flex-direction:row!important;align-items:center!important}
+  #view-resumen .mo-budget-head .kpi-lbl{font-size:13px!important}
+  #view-resumen .mo-budget-head .btn-sm{min-height:38px!important;font-size:12px!important;padding:8px 12px!important}
+  #view-resumen .mo-budget-cell{padding:10px 10px!important;font-size:11.5px!important}
+  #view-resumen .mo-budget-cell.h{font-size:9.4px!important}
+  #view-resumen .mo-budget-name{font-size:11.7px!important}
+  #view-resumen .mo-budget-grid [style*="Comentario:"]{font-size:11.6px!important}
+  #modal-fin .fin-cuota-input{font-size:13px!important;padding:9px 10px!important}
 }
 </style>
 
