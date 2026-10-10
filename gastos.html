@@ -9653,5 +9653,207 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 }
 </style>
 
+<style id="cq-v33-ajustes-financieros">
+/* 1) Títulos de grupos del cuadro financiero: colores distintos */
+#view-reporte-financiero .rep-fin-pivot tbody .rep-fin-group-row:nth-of-type(1) th{
+  background:#EEF6FF!important;
+  color:#346B9A!important;
+  border-left:4px solid #4A89BE!important;
+}
+#view-reporte-financiero .rep-fin-pivot tbody .rep-fin-group-row:nth-of-type(8) th{
+  background:#FFF8E8!important;
+  color:#8B6B07!important;
+  border-left:4px solid #D5A21A!important;
+}
+#view-reporte-financiero .rep-fin-pivot tbody .rep-fin-group-row:nth-of-type(11) th{
+  background:#F1F8F4!important;
+  color:#2E6B57!important;
+  border-left:4px solid #2E7D5E!important;
+}
+
+/* 2) Comisión: sin color especial, igual a cualquier indicador neutro */
+#view-reporte-financiero .rep-fin-metric-btn.metric-comision{
+  border-color:#D9E5DB!important;
+  background:#FFFCF8!important;
+  color:#153B31!important;
+}
+#view-reporte-financiero .rep-fin-metric-btn.metric-comision.active{
+  background:linear-gradient(180deg,#0A8C63 0%,#0A7353 100%)!important;
+  border-color:#0A7E5B!important;
+  color:#fff!important;
+}
+#view-reporte-financiero .rep-fin-chart-shell.metric-comision .rep-fin-fill{
+  background:linear-gradient(90deg,#0A8F66 0%,#0A7254 100%)!important;
+}
+
+/* 3) Comisión dentro de Venta por unidad: más fina para no invadir Venta */
+#modal-fin .fin-unit-commission{
+  min-height:38px!important;
+  padding:4px 9px!important;
+  gap:7px!important;
+  border-radius:9px!important;
+  margin-bottom:5px!important;
+}
+#modal-fin .fin-unit-commission input{
+  height:32px!important;
+  min-height:32px!important;
+  padding-top:4px!important;
+  padding-bottom:4px!important;
+}
+#modal-fin .fin-unit-commission .lbl,
+#modal-fin .fin-unit-commission .calc{
+  line-height:1!important;
+}
+#modal-fin .fin-unit-status{
+  margin-top:0!important;
+}
+
+@media(max-width:650px){
+  #modal-fin .fin-unit-commission{
+    grid-template-columns:62px 82px minmax(0,1fr)!important;
+    min-height:36px!important;
+    padding:3px 7px!important;
+    gap:5px!important;
+    margin-bottom:5px!important;
+  }
+  #modal-fin .fin-unit-commission input{
+    height:30px!important;
+    min-height:30px!important;
+    padding:3px 6px!important;
+  }
+  #modal-fin .fin-unit-commission .pct-wrap:after{
+    right:8px!important;
+    font-size:10px!important;
+  }
+  #modal-fin .fin-unit-commission .pct-wrap input{
+    padding-right:22px!important;
+  }
+}
+</style>
+
+<style id="cq-v34-align-fin-columns">
+/* Alinear el nombre de cada obra con los valores de su columna */
+#view-reporte-financiero .rep-fin-pivot thead th:not(:first-child){
+  text-align:right !important;
+  padding-right:12px !important;
+}
+#view-reporte-financiero .rep-fin-pivot tbody td{
+  text-align:right !important;
+  padding-right:12px !important;
+}
+@media(max-width:650px){
+  #view-reporte-financiero .rep-fin-pivot thead th:not(:first-child),
+  #view-reporte-financiero .rep-fin-pivot tbody td{
+    padding-right:10px !important;
+  }
+}
+</style>
+
+
+<style id="cq-v35-fin-report-color-rules">
+/* Resaltar suavemente filas clave del reporte financiero */
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan td{
+  background:#F3FBF6!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan th{
+  color:#246A4D!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen td{
+  background:#F2FAFC!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen th{
+  color:#2D6D83!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto td{
+  background:#FFF8EC!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto th{
+  color:#8D6508!important;
+}
+
+/* Badge compacto para aplicar color de reglas dentro de los números del reporte financiero */
+#view-reporte-financiero .rep-fin-cell-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-end;
+  min-width:74px;
+  padding:3px 7px;
+  border:1px solid #DDE8DE;
+  border-radius:8px;
+  font-weight:900;
+  line-height:1.1;
+  background:#fff;
+}
+#view-reporte-financiero .rep-fin-cell-badge.fin-rule-green{
+  background:#EEF9F2!important;
+  border-color:#A9D7B8!important;
+  color:#087A4A!important;
+}
+#view-reporte-financiero .rep-fin-cell-badge.fin-rule-yellow{
+  background:#FFF9EA!important;
+  border-color:#E9CD82!important;
+  color:#A96C08!important;
+}
+#view-reporte-financiero .rep-fin-cell-badge.fin-rule-red{
+  background:#FFF2F0!important;
+  border-color:#E6B4AE!important;
+  color:#B73327!important;
+}
+#view-reporte-financiero .rep-fin-cell-badge.fin-rule-neutral{
+  background:#FAFCFA!important;
+  border-color:#DDE8DE!important;
+  color:#335446!important;
+}
+@media(max-width:650px){
+  #view-reporte-financiero .rep-fin-cell-badge{
+    min-width:68px;
+    padding:3px 6px;
+    font-size:10px;
+  }
+}
+</style>
+
+<script id="cq-v35-fin-report-color-rules-js">
+(function(){
+  function badge(key,val,txt){
+    return { html:`<span class="rep-fin-cell-badge ${finRuleClass(key,val)}">${txt}</span>` };
+  }
+  window.repFinPivot=function(rows){
+    const sum=a=>a.reduce((x,v)=>x+(Number(v)||0),0);
+    const fmtMoney=v=>fmt(v,'usd');
+    const cols=rows.length+2;
+    const row=(label,vals,totalTxt,totalCls='',rowCls='')=>`<tr class="${rowCls}"><th>${label}</th>${vals.map(v=>`<td class="${typeof v==='number'?(Number(v)<0?'bad':Number(v)>0?'good':''):''}">${typeof v==='object'&&v?.html?v.html:v}</td>`).join('')}<td class="rep-total-col ${totalCls}">${totalTxt}</td></tr>`;
+    const g=t=>`<tr class="rep-fin-group-row"><th colspan="${cols}">${t}</th></tr>`;
+    const ingreso=rows.map(r=>r.direct.totalIngresos),
+          com=rows.map(r=>r.direct.comision),
+          cost=rows.map(r=>r.direct.costoTotal),
+          gan=rows.map(r=>r.direct.margen),
+          fix=rows.map(r=>r.fixedCost),
+          net=rows.map(r=>r.net),
+          cap=rows.map(r=>r.adjusted.capitalMax),
+          margPct=rows.map(r=>r.margenPct),
+          roe=rows.map(r=>r.adjusted.roe),
+          tirm=rows.map(r=>r.adjusted.tirMensual),
+          tira=rows.map(r=>r.adjusted.tirAnual),
+          pb=rows.map(r=>r.adjusted.payback),
+          cc=rows.map(r=>r.adjusted.capitalCosto),
+          units=rows.map(r=>r.soldYear);
+    const moneyArr=a=>a.map(v=>fmtMoney(v));
+    const pctArr=a=>a.map(v=>fmtPctFin(v));
+    const pbArr=a=>a.map(v=>fmtPaybackFin(v));
+    const capBadges=cap.map(v=>badge('capitalMax',v,fmtMoney(v)));
+    const roeBadges=roe.map(v=>badge('roe',v,fmtPctFin(v)));
+    const tirMBadges=tirm.map(v=>badge('tirMensual',v,fmtPctFin(v)));
+    const tirABadges=tira.map(v=>badge('tirAnual',v,fmtPctFin(v)));
+    const paybackBadges=pb.map(v=>badge('payback',v,fmtPaybackFin(v)));
+    const capCostoBadges=cc.map(v=>badge('capitalCosto',v,fmtPctFin(v)));
+    return `<div class="rep-fin-pivot-wrap"><table class="rep-fin-pivot"><thead><tr><th>Indicador</th>${rows.map(r=>`<th>${r.o.short||r.o.label}</th>`).join('')}<th class="rep-total-col">TOTAL / PROM.</th></tr></thead><tbody>${g('Ventas y costos')}${row('Unidades vendidas',units.map(v=>String(v)),String(sum(units))+' un.')}${row('Ingreso total',moneyArr(ingreso),fmtMoney(sum(ingreso)))}${row('Comisión total',moneyArr(com),fmtMoney(sum(com)))}${row('Costo total',moneyArr(cost),fmtMoney(sum(cost)))}${row('Ganancia proyectos',moneyArr(gan),fmtMoney(sum(gan)),sum(gan)>=0?'good':'bad','rep-row-soft-gan')}${row('Margen %',pctArr(margPct),fmtPctFin(finAvg(margPct)),'avg','rep-row-soft-margen')}${g('Costos fijos y resultado neto')}${row('Costos fijos prorrateados',moneyArr(fix),fmtMoney(sum(fix)))}${row('Resultado neto',moneyArr(net),fmtMoney(sum(net)),sum(net)>=0?'good':'bad','rep-row-soft-neto')}${g('Capital y retorno')}${row('Capital máximo',capBadges,fmtMoney(sum(cap)))}${row('ROE',roeBadges,fmtPctFin(finAvg(roe)),'avg')}${row('TIR mensual',tirMBadges,fmtPctFin(finAvg(tirm)),'avg')}${row('TIR anual',tirABadges,fmtPctFin(finAvg(tira)),'avg')}${row('Payback',paybackBadges,fmtPaybackFin(finAvg(pb)),'avg')}${row('Capital/Costo',capCostoBadges,fmtPctFin(finAvg(cc)),'avg')}</tbody></table></div><div class="rep-fin-scroll-note">En el teléfono se ve la primera columna y podés deslizar hacia la derecha para ver las obras.</div>`;
+  };
+})();
+</script>
+
 </body>
 </html>
