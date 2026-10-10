@@ -1611,6 +1611,65 @@ nav.tabs button[data-tab="presentacion"]::before{content:"🎬"!important}
   main{padding-left:12px!important;padding-right:12px!important;}
 }
 </style>
+
+
+<style id="cq-tablet-landscape-fullscreen-trend-fix">
+/* Tablet horizontal: app a pantalla completa + más aire en tendencia para que no se tapen los meses */
+@media (orientation:landscape) and (min-width:900px){
+  html,body{width:100%!important;overflow-x:hidden!important;}
+  #app{max-width:none!important;width:100%!important;margin:0!important;}
+  header.topbar{margin:0!important;}
+  .selector,main{width:100%!important;max-width:none!important;}
+  .selector{padding-left:18px!important;padding-right:18px!important;}
+  main{padding-left:18px!important;padding-right:18px!important;}
+  nav.tabs{margin-left:16px!important;margin-right:16px!important;}
+
+  .selector #yearChips{padding-right:116px!important;}
+  #monthChips{
+    display:grid!important;
+    grid-template-columns:repeat(12,minmax(0,1fr))!important;
+    gap:8px!important;
+    overflow:visible!important;
+    width:100%!important;
+  }
+  #monthChips .chip{
+    width:100%!important;
+    min-width:0!important;
+    padding:8px 4px!important;
+    min-height:34px!important;
+    font-size:12px!important;
+    white-space:nowrap!important;
+  }
+
+  #tab-tendencia>.hint{margin-left:0!important;margin-right:0!important;}
+  #tendenciaCharts{gap:14px!important;}
+  #tendenciaCharts .chartcard.cq-trend-card{
+    height:auto!important;
+    min-height:300px!important;
+  }
+  #tendenciaCharts .cq-trend-head{
+    min-height:64px!important;
+    padding:12px 14px 10px!important;
+  }
+  #tendenciaCharts .cq-trend-head-right{min-width:88px!important;}
+  #tendenciaCharts .cq-trend-canvas{
+    height:210px!important;
+    min-height:210px!important;
+    padding:8px 14px 22px!important;
+  }
+  #tendenciaCharts .cq-trend-canvas::after{
+    left:14px!important;
+    right:14px!important;
+    bottom:34px!important;
+  }
+  #tendenciaCharts .cq-trend-canvas canvas{
+    height:186px!important;
+    max-height:186px!important;
+    margin-bottom:0!important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -3718,7 +3777,7 @@ function renderTendenciaCharts(){
             ticks:{display:false}
           }
         },
-        layout:{padding:{top:32,left:7,right:7,bottom:12}}
+        layout:{padding:{top:32,left:9,right:9,bottom:24}}
       }
     });
     tendenciaChartInstances.push(ch);
