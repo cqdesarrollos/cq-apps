@@ -9468,5 +9468,111 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
   ensurePicker();ensurePeriodUI();syncNativeInputs();updatePeriodButtons();
 })();
 </script>
+<style id="cq-v31-month-multi-oldlook">
+/* Volver al aspecto anterior: un solo selector de mes/año, ahora multiselección */
+.cq-period-inline{display:none!important}
+.cq-monthmulti{display:inline-flex;align-items:center;gap:8px;min-height:38px;height:38px;padding:0 10px;border:1px solid #DDE8DE;border-radius:10px;background:#F7F6F3;color:#1C2B22;font-family:'Space Grotesk',sans-serif;font-weight:700;cursor:pointer;white-space:nowrap;box-sizing:border-box}
+.cq-monthmulti .cq-mm-label{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#9DB9A5}
+.cq-monthmulti .cq-mm-value{font-size:12px;min-width:96px;text-align:left;color:#263A31}
+.cq-monthmulti .cq-mm-cal{font-size:15px;margin-left:auto;color:#53655C}
+#view-gastos .cq-monthmulti{min-width:230px}
+#view-resumen .cq-monthmulti{min-width:205px}
+#view-reporte .cq-monthmulti{min-width:190px;background:#fff}
+#view-reporte-financiero .cq-monthmulti{min-width:190px;background:#fff}
+
+.cq-mm-bg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(18,33,27,.48);z-index:100000}
+.cq-mm-bg.open{display:flex}
+.cq-mm-modal{width:min(520px,96vw);max-height:min(82vh,760px);display:flex;flex-direction:column;background:#fff;border:1px solid #DDE8DE;border-radius:18px;overflow:hidden;box-shadow:0 20px 50px rgba(15,39,31,.22)}
+.cq-mm-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid #E8EFEA;background:linear-gradient(135deg,#F7FBF8,#EFF7F2)}
+.cq-mm-title{font-size:14px;font-weight:900;color:#1B4337}
+.cq-mm-close{border:0;background:none;font-size:23px;color:#789087;cursor:pointer}
+.cq-mm-tools{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid #EEF3EF;background:#FCFDFC}
+.cq-mm-tools button,.cq-mm-ft button{min-height:34px;padding:0 12px;border-radius:10px;border:1px solid #DDE8DE;background:#fff;color:#23473C;font:800 10.5px 'Space Grotesk',sans-serif;cursor:pointer}
+.cq-mm-body{overflow:auto;padding:12px 14px 14px}
+.cq-mm-year{margin-bottom:14px}
+.cq-mm-year-title{font-size:11px;font-weight:900;color:#658574;letter-spacing:.06em;margin:0 0 7px 2px}
+.cq-mm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.cq-mm-opt{display:flex;align-items:center;gap:7px;padding:9px 10px;border:1px solid #E2EBE4;border-radius:11px;background:#FBFDFC;color:#29483E;font-size:10.5px;font-weight:700;cursor:pointer}
+.cq-mm-opt input{width:15px;height:15px;accent-color:#0A8C63}
+.cq-mm-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;border-top:1px solid #E8EFEA;background:#FCFDFC}
+
+@media(max-width:650px){
+  .cq-monthmulti{min-width:0!important;width:100%;height:36px;min-height:36px;padding:0 9px;gap:6px}
+  .cq-monthmulti .cq-mm-label{font-size:8.5px}
+  .cq-monthmulti .cq-mm-value{font-size:10.5px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .cq-monthmulti .cq-mm-cal{font-size:14px}
+  #view-gastos .sec-actions .cq-monthmulti{grid-column:auto!important}
+  .cq-mm-grid{grid-template-columns:repeat(2,1fr)}
+  .cq-mm-modal{width:96vw;max-height:84vh}
+}
+</style>
+
+<script id="cq-v31-month-multi-js">
+(function(){
+  const KEY='cq_multi_month_v31';
+  const M=[['01','Enero'],['02','Febrero'],['03','Marzo'],['04','Abril'],['05','Mayo'],['06','Junio'],['07','Julio'],['08','Agosto'],['09','Septiembre'],['10','Octubre'],['11','Noviembre'],['12','Diciembre']];
+  const ML=Object.fromEntries(M);
+  const tabs=['gastos','resumen','reporte','reporte-financiero'];
+  function curY(){return String(new Date().getFullYear())}
+  function allYear(y){return M.map(([m])=>`${y}-${m}`)}
+  function uniq(a){return [...new Set((a||[]).filter(v=>/^\d{4}-\d{2}$/.test(String(v))))].sort()}
+  function migrate(){
+    let out={gastos:[],resumen:[],reporte:[],'reporte-financiero':allYear(curY())};
+    try{const saved=JSON.parse(localStorage.getItem(KEY)||'null');if(saved){tabs.forEach(t=>out[t]=uniq(saved[t]||[]));return out}}catch(e){}
+    try{const old=window.CQ_PERIOD_MULTI||JSON.parse(localStorage.getItem('cq_period_multi_v30')||'{}');tabs.forEach(t=>{const st=old?.[t];if(!st)return;const ys=Array.isArray(st.years)?st.years:[],ms=Array.isArray(st.months)?st.months:[];if(ys.length&&ms.length)out[t]=uniq(ys.flatMap(y=>ms.map(m=>`${y}-${m}`)));else if(t==='reporte-financiero'&&ys.length&&!ms.length)out[t]=uniq(ys.flatMap(allYear));});}catch(e){}
+    return out;
+  }
+  const S=window.CQ_MULTI_MONTH_V31=migrate();
+  function save(){localStorage.setItem(KEY,JSON.stringify(S))}
+  function periods(tab){return S[tab]||[]}
+  function matchDate(v,tab){const p=periods(tab);if(!p.length)return true;const ym=String(v||'').slice(0,7);return p.includes(ym)}
+  function years(tab){const p=periods(tab);return [...new Set((p.length?p:allYear(curY())).map(x=>x.slice(0,4)))].sort()}
+  function months(tab){return [...new Set(periods(tab).map(x=>x.slice(5,7)))].sort()}
+  function label(tab){const p=periods(tab);if(!p.length)return '-------- de ----';if(p.length===1){const [y,m]=p[0].split('-');return `${ML[m].slice(0,3).toLowerCase()} ${y}`;}const ys=[...new Set(p.map(x=>x.slice(0,4)))];if(ys.length===1&&p.length===12)return ys[0]+' completo';return p.length+' meses';}
+  function availableYears(tab){const set=new Set([curY()]);if(tab==='gastos'||tab==='resumen'){(getS().gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)})}else if(tab==='reporte'){(config.obras||[]).forEach(o=>(repGetState(o.id).gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)}))}else{(repGetState('oficina').gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)});(config.obras||[]).forEach(o=>{if(isObraSimple(o.id))return;const u=cqFinUnits(repGetState(o.id).financiero||{});['A','B'].forEach(k=>{[u[k].fechaVenta,u[k].ventaMes,...(u[k].cuotasDetalle||[]).map(c=>c.mes)].forEach(v=>{const y=String(v||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)})})})}return [...set].sort((a,b)=>b.localeCompare(a))}
+  function ensureModal(){if(document.getElementById('cq-mm-bg'))return;const d=document.createElement('div');d.id='cq-mm-bg';d.className='cq-mm-bg';d.innerHTML='<div class="cq-mm-modal" onclick="event.stopPropagation()"><div class="cq-mm-hd"><div class="cq-mm-title">Seleccionar meses</div><button type="button" class="cq-mm-close" onclick="cqMMClose()">×</button></div><div class="cq-mm-tools"><button type="button" onclick="cqMMAll()">Seleccionar todos</button><button type="button" onclick="cqMMNone()">Ver todo</button></div><div class="cq-mm-body" id="cq-mm-body"></div><div class="cq-mm-ft"><button type="button" onclick="cqMMClose()">Cancelar</button><button type="button" onclick="cqMMApply()">Aplicar</button></div></div>';d.addEventListener('click',e=>{if(e.target===d)window.cqMMClose()});document.body.appendChild(d)}
+  let active='gastos';
+  window.cqMMOpen=function(tab){ensureModal();active=tab;const sel=new Set(periods(tab));document.getElementById('cq-mm-body').innerHTML=availableYears(tab).map(y=>`<section class="cq-mm-year"><div class="cq-mm-year-title">${y}</div><div class="cq-mm-grid">${M.map(([m,n])=>{const v=`${y}-${m}`;return `<label class="cq-mm-opt"><input type="checkbox" value="${v}" ${sel.has(v)?'checked':''}><span>${n}</span></label>`}).join('')}</div></section>`).join('');document.getElementById('cq-mm-bg').classList.add('open')};
+  window.cqMMClose=function(){document.getElementById('cq-mm-bg')?.classList.remove('open')};
+  window.cqMMAll=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>i.checked=true)};
+  window.cqMMNone=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>i.checked=false)};
+  window.cqMMApply=function(){S[active]=uniq([...document.querySelectorAll('#cq-mm-body input[type=checkbox]:checked')].map(i=>i.value));save();window.cqMMClose();updateLabels();rerender(active)};
+  function button(tab){return `<button type="button" class="cq-monthmulti" id="cq-mm-${tab}" onclick="cqMMOpen('${tab}')"><span class="cq-mm-label">Mes</span><span class="cq-mm-value">${label(tab)}</span><span class="cq-mm-cal">▣</span></button>`}
+  function install(){
+    document.querySelectorAll('.cq-period-inline').forEach(e=>e.style.display='none');
+    const g=document.querySelector('#view-gastos .sec-actions');if(g&&!document.getElementById('cq-mm-gastos'))g.insertAdjacentHTML('afterbegin',button('gastos'));
+    const r=document.querySelector('#view-resumen .sec-actions');if(r&&!document.getElementById('cq-mm-resumen'))r.insertAdjacentHTML('afterbegin',button('resumen'));
+    const rp=document.querySelector('#view-reporte .rep-actions');if(rp&&!document.getElementById('cq-mm-reporte'))rp.insertAdjacentHTML('afterbegin',button('reporte'));
+    const rf=document.querySelector('#view-reporte-financiero .rep-fin-period-filters');if(rf&&!document.getElementById('cq-mm-reporte-financiero'))rf.insertAdjacentHTML('afterbegin',button('reporte-financiero'));
+    document.querySelector('#view-gastos .filtro-mes-wrap')?.classList.add('cq-period-hidden');document.getElementById('resumen-mes')?.classList.add('cq-period-hidden');document.getElementById('reporte-mes')?.classList.add('cq-period-hidden');document.getElementById('reporte-fin-anio')?.classList.add('cq-period-hidden');document.getElementById('reporte-fin-mes')?.classList.add('cq-period-hidden');updateLabels();
+  }
+  function updateLabels(){tabs.forEach(t=>{const e=document.querySelector(`#cq-mm-${t} .cq-mm-value`);if(e)e.textContent=label(t)})}
+  function rerender(tab){if(tab==='gastos')renderAll();else if(tab==='resumen')renderResumen();else if(tab==='reporte')renderReporte();else renderReporteFinancieroTab()}
+
+  /* filtros exactos por YYYY-MM */
+  filteredGastos=function(useResumen=false){const tab=useResumen?'resumen':'gastos',cat=useResumen?'':(document.getElementById('filtro-cat')?.value||''),sub=useResumen?'':getFiltroSubrubro();return (getS().gastos||[]).filter(g=>{const gsub=g.subrubro||g.concepto||'Sin subrubro';return matchDate(g.fecha,tab)&&(!cat||g.cat===cat)&&(!sub||filtroSubrubroKey(gsub)===filtroSubrubroKey(sub))})};
+  repAdvancedGastos=function(){const cat=document.getElementById('reporte-cat-filter')?.value||'all',sub=document.getElementById('reporte-sub-filter')?.value||'all',arr=[];repSelectedObras().forEach(o=>{const s=repGetState(o.id);(s.gastos||[]).forEach(g=>{if(isAcopioObra(o.id)&&(g.cat==='mo'||g.cat==='ext'))return;const gsub=reporteSubrubroVisible(g.subrubro||g.concepto||'Sin subrubro');if(!matchDate(g.fecha,'reporte'))return;if(cat!=='all'&&g.cat!==cat)return;if(sub!=='all'&&reporteSubrubroKey(gsub)!==reporteSubrubroKey(sub))return;arr.push({...g,obraId:o.id,obraLabel:o.label,obraShort:o.short,subrubro:gsub})})});return arr};
+
+  /* resumen: mismo diseño v30, sólo cambia el filtro */
+  const oldRenderResumen=renderResumen;
+  renderResumen=function(){
+    const st=window.CQ_PERIOD_MULTI?.resumen;if(st){const pp=periods('resumen');st.years=[...new Set(pp.map(x=>x.slice(0,4)))];st.months=[...new Set(pp.map(x=>x.slice(5,7)))]}
+    return oldRenderResumen();
+  };
+
+  /* Reporte financiero: períodos exactos para ventas; costos fijos siempre anual por años elegidos */
+  function finPeriods(){return periods('reporte-financiero')}
+  function finYears(){const p=finPeriods();return [...new Set((p.length?p:allYear(curY())).map(x=>x.slice(0,4)))].sort()}
+  function sold(fin,annual){const u=cqFinUnits(fin),p=finPeriods(),ys=finYears();return ['A','B'].filter(k=>{const d=String(u[k]?.fechaVenta||'');if(!u[k]?.etapa||!d)return false;if(annual)return ys.includes(d.slice(0,4));return !p.length||p.includes(d.slice(0,7))}).length}
+  officeFixedCostInfo=function(){const ys=finYears(),g=(repGetState('oficina').gastos||[]).filter(x=>ys.includes(String(x.fecha||'').slice(0,4))),total=g.reduce((a,x)=>a+toUSD(x.monto,x.moneda,x.tc),0),byMonth={};g.forEach(x=>{const ym=String(x.fecha||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(ym))byMonth[ym]=(byMonth[ym]||0)+toUSD(x.monto,x.moneda,x.tc)});let units=0;config.obras.forEach(o=>{if(!isObraSimple(o.id))units+=sold(repGetState(o.id).financiero||{},true)});return{total,byMonth,units,perUnit:units?total/units:0}};
+  function allocFixed(ys,share){const out=[];(repGetState('oficina').gastos||[]).forEach((g,i)=>{if(!ys.includes(String(g.fecha||'').slice(0,4)))return;const usd=toUSD(g.monto,g.moneda,g.tc)*share;if(usd)out.push({id:'fixed31_'+i,fecha:g.fecha,cat:'ofi',subrubro:'Costos fijos prorrateados',moneda:'usd',monto:usd,tc:1,tipoMovimiento:g.tipoMovimiento||'gasto'})});return out}
+  repFinRowsData=function(){const fixed=officeFixedCostInfo(),ys=finYears(),p=finPeriods(),obras=repSelectedObras().filter(o=>!isObraSimple(o.id));return obras.map(o=>{const s=repGetState(o.id),fin=s.financiero||{},has=tieneVentasCargadas(fin),soldYear=sold(fin,true),soldPeriod=sold(fin,false);if(has&&p.length&&soldPeriod===0)return null;if(has&&!p.length&&soldYear===0)return null;const share=fixed.units?soldYear/fixed.units:0,fixedCost=fixed.total*share,direct=calcularMetricasFinancieras(fin,s.gastos||[]),adjusted=calcularMetricasFinancieras(fin,[...(s.gastos||[]),...allocFixed(ys,share)]),net=direct.margen-fixedCost,margenPct=direct.totalIngresos?direct.margen/direct.totalIngresos:null;return{o,s,fin,direct,adjusted,fixedCost,net,margenPct,soldYear,soldPeriod,legacy:!has}}).filter(Boolean)};
+  const oldFinRender=renderReporteFinancieroComparativo;
+  renderReporteFinancieroComparativo=function(){oldFinRender();const note=document.querySelector('#reporte-financiero .rep-fin-fixed-note');if(note){const p=finPeriods(),ys=finYears();note.innerHTML=note.innerHTML.replace(/Filtro visible:[^.]+\./,`Filtro visible: ${p.length?p.map(x=>{const [y,m]=x.split('-');return ML[m]+' '+y}).join(', '):'Todo'}.`).replace(/Costos fijos OFICINA [^:]+:/,`Costos fijos OFICINA ${ys.join(', ')}:`)} };
+
+  const oldShow=showTab;showTab=function(t){install();updateLabels();return oldShow(t)};
+  document.addEventListener('DOMContentLoaded',()=>{ensureModal();install()});ensureModal();install();
+})();
+</script>
 </body>
 </html>
