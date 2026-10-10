@@ -2820,10 +2820,14 @@ function renderResumen(){
   }
 
   const acuerdosHTML=renderAcuerdosMOHTML(gastos);
+  const cuotasDetalle=(Array.isArray(fin.cuotasDetalle)?fin.cuotasDetalle:[]).map(v=>parseFloat(v)||0).filter(v=>v>0);
+  const cuotasHTML=cuotasDetalle.length
+    ? cuotasDetalle.map((v,i)=>`<div class="fin-row cuota-resumen-row"><span class="fin-lbl">Cuota ${i+1}</span><span class="fin-val">${fmt(v,'usd')}</span></div>`).join('')
+    : `<div class="fin-row cuota-resumen-row"><span class="fin-lbl">Cuotas</span><span class="fin-val">${fmt(0,'usd')}</span></div>`;
   document.getElementById('fin-grid').innerHTML=
     `<div class="fin-card fin-card-resumen-unico"><div class="kpi-lbl">Resumen financiero</div>
       <div class="fin-row pos"><span class="fin-lbl">Precio de venta</span><span class="fin-val">${fmt(precioVentaTotal,'usd')}</span></div>
-      <div class="fin-row"><span class="fin-lbl">Cuotas</span><span class="fin-val">${fmt(cuotas,'usd')}</span></div>
+      ${cuotasHTML}
       <div class="fin-row"><span class="fin-lbl">Costo total</span><span class="fin-val">${fmt(totUSD,'usd')}</span></div>
       <div class="fin-row ${margen>=0?'pos':'neg'}"><span class="fin-lbl">Margen estimado</span><span class="fin-val">${fmt(margen,'usd')}</span></div>
       <div class="fin-row tot"><span class="fin-lbl">Margen %</span><span class="fin-val">${precioVentaTotal?((margen/precioVentaTotal)*100).toFixed(1)+'%':'—'}</span></div>
@@ -7186,6 +7190,103 @@ onAuthStateChanged(auth,async user=>{
   #view-resumen .mo-budget-name{font-size:11.7px!important}
   #view-resumen .mo-budget-grid [style*="Comentario:"]{font-size:11.6px!important}
   #modal-fin .fin-cuota-input{font-size:13px!important;padding:9px 10px!important}
+}
+</style>
+
+
+<style id="cq-ajustes-resumen-tablet-v9">
+/* 1. Resumen: filas un poco más compactas para aprovechar mejor la pantalla. */
+#view-resumen #resumen-cats .tbl td{
+  padding-top:8px!important;
+  padding-bottom:8px!important;
+}
+#view-resumen #resumen-cats .card-hd{
+  padding-top:11px!important;
+  padding-bottom:11px!important;
+}
+#view-resumen .mo-budget-cell{
+  padding-top:8px!important;
+  padding-bottom:8px!important;
+}
+#view-resumen .mo-budget-grid [style*="Comentario:"]{
+  padding-top:7px!important;
+  padding-bottom:7px!important;
+}
+
+/* Resumen financiero conserva su tamaño; solo distinguimos cada cuota. */
+#view-resumen .fin-card-resumen-unico .cuota-resumen-row .fin-lbl{
+  padding-left:10px!important;
+  color:#58705D!important;
+}
+#view-resumen .fin-card-resumen-unico .cuota-resumen-row .fin-val{
+  color:#1C2B22!important;
+}
+
+/* 2. Tablet horizontal: filtros + carga masiva + gasto + ingreso, todos en una sola fila.
+   No afecta celular en vertical. */
+@media (min-width:700px) and (max-width:1400px) and (orientation:landscape){
+  #view-gastos>.sec-ttl{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr)!important;
+    align-items:center!important;
+    gap:10px!important;
+  }
+  #view-gastos>.sec-ttl>.sec-actions{
+    display:grid!important;
+    grid-template-columns:1.10fr 1.15fr 1.15fr .82fr 1.18fr 1.18fr!important;
+    gap:6px!important;
+    width:100%!important;
+    min-width:0!important;
+    align-items:center!important;
+  }
+  #view-gastos>.sec-ttl>.sec-actions>*{
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    margin:0!important;
+    box-sizing:border-box!important;
+  }
+  #view-gastos .filtro-mes-wrap,
+  #view-gastos #cq-cat-filter-btn,
+  #view-gastos #cq-sub-filter-btn,
+  #view-gastos #btn-carga-masiva,
+  #view-gastos .btn-add-gasto,
+  #view-gastos .btn-add-ingreso{
+    height:38px!important;
+    min-height:38px!important;
+    max-height:38px!important;
+    border-radius:10px!important;
+  }
+  #view-gastos #btn-carga-masiva,
+  #view-gastos .btn-add-gasto,
+  #view-gastos .btn-add-ingreso{
+    padding:0 8px!important;
+    font-size:11px!important;
+    gap:4px!important;
+    box-shadow:none!important;
+    transform:none!important;
+  }
+  #view-gastos #cq-cat-filter-btn,
+  #view-gastos #cq-sub-filter-btn{
+    font-size:10.5px!important;
+    padding:0 8px!important;
+  }
+  #view-gastos .filtro-mes-wrap{
+    padding:0 8px!important;
+  }
+  #view-gastos .filtro-mes-wrap input[type=month]{
+    min-width:0!important;
+    width:100%!important;
+    font-size:10.5px!important;
+  }
+}
+
+@media(max-width:650px) and (orientation:portrait){
+  /* Mantener exactamente la disposición de celular vertical. */
+  #view-resumen #resumen-cats .tbl td{
+    padding-top:8px!important;
+    padding-bottom:8px!important;
+  }
 }
 </style>
 
