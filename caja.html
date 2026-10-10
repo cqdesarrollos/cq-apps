@@ -379,6 +379,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
 <select class="filter" id="filterSubrubro" onchange="renderReports()"><option value="all">Todos los subrubros</option></select>
 <select class="filter" id="filterType" onchange="renderReports()"><option value="all">Todos los tipos</option><option value="gasto">Salidas</option><option value="ingreso">Ingresos</option></select>
 <select class="filter" id="filterDest" onchange="renderReports()"><option value="all">Todos los destinos</option><option value="oficina">Oficina</option><option value="obra">Obras</option></select>
+<select class="filter" id="filterOrder" onchange="renderReports()" title="Ordenar detalle del reporte"><option value="date">Orden: más reciente</option><option value="amountDesc">Importe: mayor a menor</option><option value="amountAsc">Importe: menor a mayor</option></select>
 <input class="filter" id="filterMonth" onchange="renderReports()" type="month"/>
 <input class="filter" id="filterDay" onchange="renderReports()" type="date" title="Filtrar reporte por día"/>
 <button class="btn btn-light" onclick="clearFilters()"><span class="btn-icon">🧹</span>Limpiar filtros</button>
@@ -1794,7 +1795,9 @@ function filtered(){
   const d=document.getElementById('filterDest').value;
   const mo=document.getElementById('filterMonth').value;
   const day=document.getElementById('filterDay')?.value||'';
-  return db.movements.filter(x=>
+  const order=document.getElementById('filterOrder')?.value||'date';
+  const rate=Number(db.exchangeRate)||1;
+  const list=db.movements.filter(x=>
     (currency==='all'||currencyCC(x)===currency)&&
     (work==='all'||String(x.work||'')===work)&&
     (category==='all'||String(x.category||'')===category)&&
@@ -1804,7 +1807,10 @@ function filtered(){
     (!mo||x.date.startsWith(mo))&&
     (!day||x.date===day)&&
     (!q||[x.category,x.subrubro,x.concept,x.work,x.notes].join(' ').toLowerCase().includes(q))
-  ).sort((a,b)=>b.date.localeCompare(a.date)||b.updatedAt.localeCompare(a.updatedAt))
+  );
+  if(order==='amountDesc')return list.sort((a,b)=>amountArsCC(b,rate)-amountArsCC(a,rate)||b.date.localeCompare(a.date));
+  if(order==='amountAsc')return list.sort((a,b)=>amountArsCC(a,rate)-amountArsCC(b,rate)||b.date.localeCompare(a.date));
+  return list.sort((a,b)=>b.date.localeCompare(a.date)||String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
 }
 function currencyCC(m){return String(m&&m.currency||'ars').toLowerCase()==='usd'?'usd':'ars'}
 function movementRateCC(m){return Number(m&&m.tc)||Number(db.exchangeRate)||1}
@@ -1850,7 +1856,7 @@ function render(){
   </tr>`).join('');
   renderReports()
 }
-function clearFilters(){document.getElementById('search').value='';['filterCurrency','filterWork','filterCategory','filterSubrubro','filterType','filterDest'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='all'});document.getElementById('filterMonth').value='';const fd=document.getElementById('filterDay');if(fd)fd.value='';renderReports()}
+function clearFilters(){document.getElementById('search').value='';['filterCurrency','filterWork','filterCategory','filterSubrubro','filterType','filterDest'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='all'});const fo=document.getElementById('filterOrder');if(fo)fo.value='date';document.getElementById('filterMonth').value='';const fd=document.getElementById('filterDay');if(fd)fd.value='';renderReports()}
 function renderReports(){
   populateReportFiltersCC();
   const rate=Number(db.exchangeRate)||1;
