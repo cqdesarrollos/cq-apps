@@ -8226,7 +8226,355 @@ toggleReporteObra=function(id){
 }
 </style>
 
+<style id="cq-reporte-v23-compact-finchart">
+/* Reporte: encabezado azul más compacto y proporcional */
+#view-reporte .rep-hero{
+  padding:12px 14px!important;
+  border-radius:14px!important;
+}
+#view-reporte .rep-top{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  gap:10px!important;
+  align-items:start!important;
+}
+#view-reporte .rep-title{
+  font-size:16px!important;
+  line-height:1.05!important;
+  margin:0!important;
+}
+#view-reporte .rep-sub{
+  font-size:10px!important;
+  line-height:1.2!important;
+  margin-top:3px!important;
+}
+#view-reporte .rep-actions{
+  display:grid!important;
+  grid-template-columns:repeat(3,max-content)!important;
+  gap:8px!important;
+  align-items:center!important;
+}
+#view-reporte .rep-actions input,
+#view-reporte .rep-btn{
+  min-height:34px!important;
+  height:34px!important;
+  padding:0 10px!important;
+  font-size:11px!important;
+  border-radius:10px!important;
+}
+#view-reporte .rep-kpis{
+  margin-top:10px!important;
+  gap:9px!important;
+}
+#view-reporte .rep-kpi{
+  padding:10px 12px!important;
+  border-radius:11px!important;
+}
+#view-reporte .rep-kpi-l{font-size:9.6px!important}
+#view-reporte .rep-kpi-v{font-size:16px!important}
+#view-reporte .rep-card-hd{
+  padding:12px 14px!important;
+}
+#view-reporte .rep-body{padding:12px!important}
+#view-reporte .rep-card-title{font-size:12.5px!important}
+#view-reporte .consol-small{font-size:10px!important;line-height:1.15!important}
+#view-reporte .rep-fin-card .rep-card-actions{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  flex-wrap:wrap!important;
+}
+
+/* Gráfico financiero por obra */
+#view-reporte .rep-fin-chart-shell{
+  display:grid;
+  gap:12px;
+  margin-bottom:12px;
+}
+#view-reporte .rep-fin-metric-tabs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+#view-reporte .rep-fin-metric-btn{
+  appearance:none;
+  border:1px solid #D9E5DB;
+  background:#FFFCF8;
+  color:#153B31;
+  border-radius:15px;
+  min-height:38px;
+  padding:0 14px;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  box-shadow:0 1px 0 rgba(10,40,28,.04);
+}
+#view-reporte .rep-fin-metric-btn.active{
+  background:linear-gradient(180deg,#0A8C63 0%, #0A7353 100%);
+  color:#fff;
+  border-color:#0A7E5B;
+}
+#view-reporte .rep-fin-chart-box{
+  border:1px solid #E2EBE4;
+  background:#fff;
+  border-radius:18px;
+  padding:14px 14px 12px;
+}
+#view-reporte .rep-fin-chart-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:10px;
+}
+#view-reporte .rep-fin-chart-title{
+  font-size:13px;
+  font-weight:900;
+  color:#214439;
+  letter-spacing:.02em;
+}
+#view-reporte .rep-fin-chart-sub{
+  font-size:10px;
+  color:#86A095;
+}
+#view-reporte .rep-fin-bars{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+#view-reporte .rep-fin-bar-row{
+  display:grid;
+  grid-template-columns:minmax(68px,auto) minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+}
+#view-reporte .rep-fin-bar-lbl{
+  font-weight:900;
+  color:#1C3D35;
+  font-size:12px;
+  line-height:1.05;
+}
+#view-reporte .rep-fin-track{
+  position:relative;
+  height:22px;
+  border-radius:999px;
+  background:repeating-linear-gradient(
+    to right,
+    #EFF4EF 0,
+    #EFF4EF calc(20% - 1px),
+    #DFE8E1 calc(20% - 1px),
+    #DFE8E1 20%
+  );
+  overflow:hidden;
+}
+#view-reporte .rep-fin-track:before{
+  content:'';
+  position:absolute;
+  left:0; right:0; top:0; bottom:0;
+  border-radius:999px;
+  box-shadow:inset 0 0 0 1px #E6EEE8;
+  pointer-events:none;
+}
+#view-reporte .rep-fin-fill{
+  position:absolute;
+  left:0;
+  top:0;
+  bottom:0;
+  border-radius:999px;
+  background:linear-gradient(90deg,#0A8F66 0%, #0A7254 100%);
+  box-shadow:0 5px 10px rgba(9,106,77,.12);
+}
+#view-reporte .rep-fin-fill.neg{
+  background:linear-gradient(90deg,#D1695D 0%, #B84537 100%);
+  left:auto;
+  right:0;
+}
+#view-reporte .rep-fin-bar-val{
+  min-width:92px;
+  text-align:right;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11.8px;
+  font-weight:900;
+  color:#193A31;
+  white-space:nowrap;
+}
+#view-reporte .rep-fin-bar-val.bad{color:#B84537}
+#view-reporte .rep-fin-bar-val.good{color:#0A7A4D}
+#view-reporte .rep-fin-chart-note{
+  margin-top:10px;
+  font-size:10px;
+  color:#90A199;
+  line-height:1.25;
+}
+
+@media(max-width:650px){
+  #view-reporte .rep-hero{padding:10px 11px!important;border-radius:13px!important}
+  #view-reporte .rep-top{grid-template-columns:1fr!important;gap:8px!important}
+  #view-reporte .rep-title{font-size:13px!important;max-width:none!important}
+  #view-reporte .rep-sub{display:none!important}
+  #view-reporte .rep-actions{grid-template-columns:1fr 1fr 1fr!important;gap:6px!important}
+  #view-reporte .rep-actions input,
+  #view-reporte .rep-btn{min-height:33px!important;height:33px!important;font-size:10.5px!important;padding:0 8px!important}
+  #view-reporte .rep-kpis{gap:8px!important}
+  #view-reporte .rep-kpi{padding:9px 10px!important}
+  #view-reporte .rep-kpi-v{font-size:15px!important}
+  #view-reporte .rep-card-hd{padding:10px 11px!important}
+  #view-reporte .rep-card-title{font-size:11.5px!important}
+  #view-reporte .rep-body{padding:10px!important}
+  #view-reporte .rep-fin-metric-tabs{gap:6px}
+  #view-reporte .rep-fin-metric-btn{min-height:34px;font-size:10.5px;padding:0 11px;border-radius:13px}
+  #view-reporte .rep-fin-chart-box{padding:11px 10px 10px;border-radius:15px}
+  #view-reporte .rep-fin-chart-title{font-size:11.5px}
+  #view-reporte .rep-fin-chart-sub{font-size:9px}
+  #view-reporte .rep-fin-bar-row{grid-template-columns:54px minmax(0,1fr) auto;gap:8px}
+  #view-reporte .rep-fin-bar-lbl{font-size:10.6px}
+  #view-reporte .rep-fin-track{height:18px}
+  #view-reporte .rep-fin-bar-val{font-size:10.2px;min-width:74px}
+}
+</style>
+
+<script id="cq-reporte-v23-compact-finchart-js">
+window.repFinMetricKey = window.repFinMetricKey || 'margen';
+window.REP_FIN_METRICS = {
+  margen:{label:'Ganancia', type:'usd', dir:'high'},
+  totalIngresos:{label:'Ingreso total', type:'usd', dir:'high'},
+  capitalMax:{label:'Capital máximo', type:'usd', dir:'low'},
+  roe:{label:'ROE', type:'pct', dir:'high'},
+  tirAnual:{label:'TIR anual', type:'pct', dir:'high'},
+  tirMensual:{label:'TIR mensual', type:'pct', dir:'high'},
+  payback:{label:'Payback', type:'payback', dir:'low'}
+};
+function setReporteFinMetric(key){
+  window.repFinMetricKey = key;
+  renderReporteFinancieroComparativo();
+}
+function repFinMetricValue(m,key){
+  if(key==='margen')return Number(m.margen)||0;
+  if(key==='totalIngresos')return Number(m.totalIngresos)||0;
+  if(key==='capitalMax')return Number(m.capitalMax)||0;
+  if(key==='roe')return Number(m.roe)||0;
+  if(key==='tirAnual')return Number(m.tirAnual)||0;
+  if(key==='tirMensual')return Number(m.tirMensual)||0;
+  if(key==='payback')return Number(m.payback)||0;
+  return 0;
+}
+function repFinMetricText(v,key){
+  const meta=window.REP_FIN_METRICS[key]||{};
+  if(meta.type==='usd')return fmt(v,'usd');
+  if(meta.type==='pct')return fmtPctFin(v);
+  if(meta.type==='payback')return fmtPaybackFin(v);
+  return String(v??'—');
+}
+function repFinMetricValueClass(v,key){
+  if(key==='margen')return v>=0?'good':'bad';
+  if(key==='totalIngresos')return 'good';
+  if(key==='capitalMax')return finRuleClass('capitalMax',v).replace('fin-rule-','');
+  if(key==='roe')return finRuleClass('roe',v).replace('fin-rule-','');
+  if(key==='tirAnual')return finRuleClass('tirAnual',v).replace('fin-rule-','');
+  if(key==='tirMensual')return finRuleClass('tirMensual',v).replace('fin-rule-','');
+  if(key==='payback')return finRuleClass('payback',v).replace('fin-rule-','');
+  return '';
+}
+function renderRepFinChart(rows){
+  const key=window.repFinMetricKey || 'margen';
+  const meta=window.REP_FIN_METRICS[key] || window.REP_FIN_METRICS.margen;
+  const values=rows.map(r=>repFinMetricValue(r.m,key));
+  const absMax=Math.max(1,...values.map(v=>Math.abs(Number(v)||0)));
+  const allZero=values.every(v=>!Number.isFinite(v)||Math.abs(v)<1e-12);
+  const tabs=Object.entries(window.REP_FIN_METRICS).map(([k,info])=>`<button type="button" class="rep-fin-metric-btn ${k===key?'active':''}" onclick="setReporteFinMetric('${k}')">${info.label}</button>`).join('');
+  const bars=rows.map(({o,m})=>{
+    const v=repFinMetricValue(m,key);
+    const width=allZero?0:Math.max(0,Math.min(100,Math.abs(v)/absMax*100));
+    const neg=v<0;
+    const vClass=repFinMetricValueClass(v,key);
+    return `<div class="rep-fin-bar-row"><div class="rep-fin-bar-lbl">${o.short||o.label}</div><div class="rep-fin-track"><div class="rep-fin-fill ${neg?'neg':''}" style="width:${width}%"></div></div><div class="rep-fin-bar-val ${vClass}">${repFinMetricText(v,key)}</div></div>`;
+  }).join('');
+  return `<div class="rep-fin-chart-shell"><div class="rep-fin-metric-tabs">${tabs}</div><div class="rep-fin-chart-box"><div class="rep-fin-chart-head"><div class="rep-fin-chart-title">Comparativo · ${meta.label}</div><div class="rep-fin-chart-sub">Obras seleccionadas</div></div><div class="rep-fin-bars">${bars}</div><div class="rep-fin-chart-note">El gráfico compara el indicador financiero elegido para las obras seleccionadas. Los valores se calculan con el proyecto completo.</div></div></div>`;
+}
+
+renderReporteFinancieroComparativo=function(){
+  const el=document.getElementById('reporte-financiero');if(!el)return;
+  const obras=repSelectedObras().filter(o=>!isObraSimple(o.id));
+  if(!obras.length){el.innerHTML='<div class="rep-empty">Seleccioná al menos una obra con datos financieros.</div>';return}
+  const rows=obras.map(o=>{const s=repGetState(o.id);const m=calcularMetricasFinancieras(s.financiero||{},s.gastos||[]);const margenPct=m.totalIngresos?m.margen/m.totalIngresos:null;return{o,m,margenPct}});
+  const chartHtml=renderRepFinChart(rows);
+  const tableHtml=`<div class="rep-fin-table-wrap"><table class="tbl rep-fin-table"><thead><tr><th>Obra</th><th class="r">Venta</th><th class="r">Costo</th><th class="r">Margen</th><th class="r">Margen %</th><th class="r">Capital máx.</th><th class="r">ROE</th><th class="r">TIR mes</th><th class="r">TIR anual</th><th class="r">Payback</th><th class="r">Capital/costo</th></tr></thead><tbody>${rows.map(({o,m,margenPct})=>`<tr><td><strong>${o.short||o.label}</strong></td><td class="r-val">${fmt(m.totalIngresos,'usd')}</td><td class="r-val">${fmt(m.costoTotal,'usd')}</td><td class="r-val ${m.margen>=0?'good':'bad'}">${fmt(m.margen,'usd')}</td><td class="r-val ${m.margen>=0?'good':'bad'}">${margenPct===null?'—':(margenPct*100).toFixed(1)+'%'}</td><td class="r-val"><span class="rep-fin-badge ${finRuleClass('capitalMax',m.capitalMax)}">${fmt(m.capitalMax,'usd')}</span></td><td class="r-val"><span class="rep-fin-badge ${finRuleClass('roe',m.roe)}">${fmtPctFin(m.roe)}</span></td><td class="r-val"><span class="rep-fin-badge ${finRuleClass('tirMensual',m.tirMensual)}">${fmtPctFin(m.tirMensual)}</span></td><td class="r-val"><span class="rep-fin-badge ${finRuleClass('tirAnual',m.tirAnual)}">${fmtPctFin(m.tirAnual)}</span></td><td class="r-val"><span class="rep-fin-badge ${finRuleClass('payback',m.payback)}">${fmtPaybackFin(m.payback)}</span></td><td class="r-val"><span class="rep-fin-badge ${finRuleClass('capitalCosto',m.capitalCosto)}">${fmtPctFin(m.capitalCosto)}</span></td></tr>`).join('')}</tbody></table></div><div class="rep-mini-note">Los indicadores financieros toman el proyecto completo, independientemente del filtro de mes/rubro del reporte.</div>`;
+  el.innerHTML=chartHtml+tableHtml;
+};
+</script>
+
+<style id="cq-v24-resumen-financiero-destacado">
+/* Resumen financiero: diferenciarlo visualmente del resto sin sobrecargar */
+#view-resumen .fin-card-resumen-unico{
+  position:relative!important;
+  background:linear-gradient(180deg,#F7FBFF 0%,#FBFEFC 100%)!important;
+  border:1.5px solid #BFD8E8!important;
+  border-radius:15px!important;
+  box-shadow:0 8px 22px rgba(40,105,145,.10)!important;
+  overflow:hidden!important;
+}
+#view-resumen .fin-card-resumen-unico::before{
+  content:'';
+  position:absolute;
+  left:0;top:0;bottom:0;
+  width:5px;
+  background:linear-gradient(180deg,#2F8BFF 0%,#14A36F 100%);
+}
+#view-resumen .fin-card-resumen-unico>.kpi-lbl{
+  margin:-15px -15px 8px!important;
+  padding:11px 15px 10px 20px!important;
+  background:linear-gradient(90deg,#EAF4FF 0%,#F0FAF5 100%)!important;
+  border-bottom:1px solid #D9E8E2!important;
+  color:#315B70!important;
+  font-size:11px!important;
+  letter-spacing:.08em!important;
+}
+#view-resumen .fin-card-resumen-unico .fin-collapse,
+#view-resumen .fin-card-resumen-unico .fin-row{
+  margin-left:3px!important;
+  margin-right:2px!important;
+}
+#view-resumen .fin-card-resumen-unico .fin-highlight{
+  box-shadow:inset 0 0 0 1px rgba(46,125,94,.05)!important;
+}
+#view-resumen .fin-card-resumen-unico .fin-indicadores{
+  margin-left:3px!important;
+  margin-right:2px!important;
+}
+@media(max-width:650px){
+  #view-resumen .fin-card-resumen-unico{
+    border-radius:13px!important;
+    box-shadow:0 5px 16px rgba(40,105,145,.09)!important;
+  }
+}
+</style>
+
+<script id="cq-v24-fix-open-obra-modal">
+/* Restaurar función de alta/edición de obra, ausente en versiones anteriores */
+function openObraModal(id=''){
+  const idEl=document.getElementById('obra-id-edit');
+  const labelEl=document.getElementById('obra-label');
+  const shortEl=document.getElementById('obra-short');
+  const titleEl=document.getElementById('obra-modal-title');
+  if(!idEl||!labelEl||!shortEl)return;
+
+  if(id){
+    const obra=(config.obras||[]).find(o=>o.id===id);
+    if(!obra)return;
+    idEl.value=obra.id||'';
+    labelEl.value=obra.label||'';
+    shortEl.value=obra.short||'';
+    if(titleEl)titleEl.textContent='Editar obra';
+  }else{
+    idEl.value='';
+    labelEl.value='';
+    shortEl.value='';
+    if(titleEl)titleEl.textContent='Agregar obra';
+  }
+  openModal('modal-obra');
+  setTimeout(()=>labelEl.focus(),80);
+}
+</script>
+
 </body>
-
 </html>
-
