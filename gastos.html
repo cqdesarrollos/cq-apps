@@ -1791,6 +1791,17 @@ html.cq-fast-1h-gastos #cq-gerencia-only{display:none!important}
 }
 </style>
 
+
+<!-- CQ: evita mostrar la pantalla local/vieja durante el arranque -->
+<script id="cq-no-startup-flash-bootstrap">
+  document.documentElement.classList.add('cq-boot-pending');
+</script>
+<style id="cq-no-startup-flash-css">
+  html.cq-boot-pending body{background:#F7F8FA!important;}
+  html.cq-boot-pending body > *:not(#cq-gerencia-only){visibility:hidden!important;}
+  html.cq-boot-pending #cq-gerencia-only{visibility:visible!important;}
+</style>
+
 </head>
 <body>
 
@@ -3638,6 +3649,7 @@ startFirebaseSync=async function(){
     subscribeObra();
 
     firebaseInitialLoadDone=true;
+    if(window.cqRevealGastosApp) window.cqRevealGastosApp();
     initialSnapshot=makeHistorySnapshot();
     updateHistoryButtons();
     readLastSyncMeta();
@@ -10273,6 +10285,33 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 
   ensureVisualSelector();
   setTimeout(()=>{try{renderObraBar();if(typeof renderReporteObrasChips==='function')renderReporteObrasChips();}catch(e){}},0);
+})();
+</script>
+
+
+<script id="cq-no-startup-flash-runtime">
+(function(){
+  let shown=false;
+  window.cqRevealGastosApp=function(){
+    if(shown) return;
+    shown=true;
+    requestAnimationFrame(function(){
+      document.documentElement.classList.remove('cq-boot-pending');
+    });
+  };
+
+  // Si Firebase no responde, no dejar la app oculta indefinidamente.
+  // En ese caso muestra el estado local ya renderizado.
+  setTimeout(function(){
+    if(!shown) window.cqRevealGastosApp();
+  },1800);
+
+  // Sin Firebase, el estado local es el estado definitivo de arranque.
+  setTimeout(function(){
+    try{
+      if(typeof modoFirebase!=='undefined' && !modoFirebase) window.cqRevealGastosApp();
+    }catch(e){}
+  },120);
 })();
 </script>
 
