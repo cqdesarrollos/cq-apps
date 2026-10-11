@@ -10278,3 +10278,129 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 
 </body>
 </html>
+
+<!-- FIX CQ: filtros múltiples Categoría/Subrubro efectivos después de los overrides de período -->
+<script id="cq-fix-filtros-cat-sub-v2">
+(function(){
+  const state = window.CQ_GASTOS_MULTI_FILTER_FIX = window.CQ_GASTOS_MULTI_FILTER_FIX || {type:null,cats:[],subs:[]};
+
+  function norm(v){ return String(v == null ? '' : v); }
+  function subKey(v){
+    try { return typeof filtroSubrubroKey === 'function' ? filtroSubrubroKey(v) : norm(v).trim().toLowerCase(); }
+    catch(e){ return norm(v).trim().toLowerCase(); }
+  }
+
+  /* Capturamos qué filtro se abrió y qué checks se aplicaron. */
+  const oldOpen = window.cqOpenMultiFilter;
+  if(typeof oldOpen === 'function'){
+    window.cqOpenMultiFilter = function(type){
+      state.type = type;
+      return oldOpen.apply(this, arguments);
+    };
+  }
+
+  const oldApply = window.cqApplyMultiFilter;
+  if(typeof oldApply === 'function'){
+    window.cqApplyMultiFilter = function(){
+      try{
+        const vals = [...document.querySelectorAll('#cq-mf-list input[type="checkbox"]:checked')]
+          .map(cb => cb.closest('.cq-mf-row')?.querySelector('span')?.textContent?.trim() || '')
+          .filter(Boolean);
+
+        if(state.type === 'cat'){
+          /* El panel muestra la etiqueta; recuperamos el código real de categoría. */
+          const inv = {};
+          Object.keys(CAT_LABELS || {}).forEach(k => { inv[String(CAT_LABELS[k])] = String(k); });
+          state.cats = vals.map(v => inv[v] || v).filter(Boolean);
+          /* Si cambian categorías, limpiamos subrubros que ya no correspondan. */
+          if(state.subs.length){
+            const cats = new Set(state.cats.map(String));
+            const allowed = new Set();
+            try{
+              (getS().gastos || []).forEach(g => {
+                if(cats.size && !cats.has(String(g.cat))) return;
+                allowed.add(subKey(g.subrubro || g.concepto || 'Sin subrubro'));
+              });
+              state.subs = state.subs.filter(s => allowed.has(subKey(s)));
+            }catch(e){}
+          }
+        } else if(state.type === 'sub'){
+          state.subs = vals.slice();
+        }
+      }catch(e){ console.warn('CQ filtro múltiple:', e); }
+
+      const r = oldApply.apply(this, arguments);
+      /* El render que dispara el código anterior ya leerá filteredGastos corregido. */
+      if(typeof renderAll === 'function') setTimeout(renderAll, 0);
+      return r;
+    };
+  }
+
+  function monthMatches(fecha, useResumen){
+    const tab = useResumen ? 'resumen' : 'gastos';
+
+    /* Versión actual: selector múltiple de meses. */
+    try{
+      const mm = window.CQ_MULTI_MONTH_V31 && window.CQ_MULTI_MONTH_V31[tab];
+      if(Array.isArray(mm)){
+        if(!mm.length) return true;
+        return mm.includes(String(fecha || '').slice(0,7));
+      }
+    }catch(e){}
+
+    /* Fallback al selector simple anterior. */
+    try{
+      const ym = useResumen ? (document.getElementById('resumen-mes')?.value || '') :
+                              (typeof getMonthFilter === 'function' ? getMonthFilter() : (document.getElementById('filtro-mes')?.value || ''));
+      if(!ym) return true;
+      return typeof sameMonth === 'function' ? sameMonth(fecha, ym) : String(fecha || '').slice(0,7) === ym;
+    }catch(e){ return true; }
+  }
+
+  /* Este override va al FINAL del archivo, para que no lo pisen los scripts de período. */
+  window.filteredGastos = function(useResumen=false){
+    const cats = useResumen ? [] : state.cats.slice();
+    const subs = useResumen ? [] : state.subs.slice();
+
+    return (getS().gastos || []).filter(g => {
+      const gsub = g.subrubro || g.concepto || 'Sin subrubro';
+      const catOk = !cats.length || cats.includes(String(g.cat));
+      const subOk = !subs.length || subs.some(s => subKey(s) === subKey(gsub));
+      return monthMatches(g.fecha, useResumen) && catOk && subOk;
+    });
+  };
+
+  /* Mantener consistentes los filtros al cambiar de obra. */
+  const oldRenderObraBarFix = window.renderObraBar;
+  if(typeof oldRenderObraBarFix === 'function'){
+    window.renderObraBar = function(){
+      const r = oldRenderObraBarFix.apply(this, arguments);
+      try{
+        const allowed = new Set((categoriasPermitidasObra(curObra) || []).map(String));
+        state.cats = state.cats.filter(c => allowed.has(String(c)));
+        if(state.subs.length){
+          const validSubs = new Set();
+          (getS().gastos || []).forEach(g => {
+            if(state.cats.length && !state.cats.includes(String(g.cat))) return;
+            validSubs.add(subKey(g.subrubro || g.concepto || 'Sin subrubro'));
+          });
+          state.subs = state.subs.filter(s => validSubs.has(subKey(s)));
+        }
+      }catch(e){}
+      return r;
+    };
+  }
+
+  /* Si alguna rutina llama clearFilters, también borra categoría y subrubro múltiple. */
+  const oldClear = window.clearFilters;
+  window.clearFilters = function(){
+    state.cats = [];
+    state.subs = [];
+    state.type = null;
+    if(typeof oldClear === 'function'){
+      try { return oldClear.apply(this, arguments); } catch(e){}
+    }
+    if(typeof renderAll === 'function') renderAll();
+  };
+})();
+</script>
