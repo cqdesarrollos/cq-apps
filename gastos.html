@@ -10114,5 +10114,167 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
   ensureArchivedModal();
 })();
 </script>
+
+<style id="cq-v40-colores-tipo-obra">
+/* Obras diferenciadas: oficina / acopio / post obra / CQ Extras y las que el usuario marque */
+.obra-bar .obra-chip.obra-diferenciada:not(.active){
+  background:linear-gradient(180deg,rgba(132,105,190,.16),rgba(93,70,153,.10))!important;
+  border-color:#7562AD!important;
+  color:#E8E1FF!important;
+  box-shadow:0 4px 12px rgba(77,57,132,.14),inset 0 1px 0 rgba(255,255,255,.08)!important;
+}
+.obra-bar .obra-chip.obra-diferenciada:hover:not(.active){
+  background:linear-gradient(180deg,rgba(149,119,211,.26),rgba(104,80,166,.18))!important;
+  border-color:#9A83D4!important;
+  color:#fff!important;
+}
+.obra-bar .obra-chip.obra-diferenciada.active{
+  background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 42%),linear-gradient(135deg,#7657BE,#6043A8)!important;
+  border-color:#8C70CF!important;
+  color:#fff!important;
+  box-shadow:0 9px 18px rgba(86,59,151,.24),inset 0 1px 0 rgba(255,255,255,.24)!important;
+}
+
+/* Mismo criterio visual en los selectores de obras de los reportes */
+#view-reporte .rep-obra-chip.obra-diferenciada:not(.active),
+#view-reporte-financiero .rep-obra-chip.obra-diferenciada:not(.active){
+  background:#F4F0FC!important;
+  border-color:#B6A7D8!important;
+  color:#6B5596!important;
+}
+#view-reporte .rep-obra-chip.obra-diferenciada.active,
+#view-reporte-financiero .rep-obra-chip.obra-diferenciada.active{
+  background:linear-gradient(135deg,#7657BE,#6043A8)!important;
+  border-color:#7657BE!important;
+  color:#fff!important;
+}
+
+/* Selector de tipo visual al crear/editar obra */
+.obra-visual-selector{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.obra-visual-option{position:relative;display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid #DDE7E0;border-radius:12px;background:#fff;cursor:pointer;min-height:48px}
+.obra-visual-option input{position:absolute;opacity:0;pointer-events:none}
+.obra-visual-option .obra-swatch{width:28px;height:20px;border-radius:7px;flex:none;border:1px solid rgba(0,0,0,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+.obra-visual-option .obra-swatch.standard{background:#0B2458;border-color:#826D49}
+.obra-visual-option .obra-swatch.especial{background:linear-gradient(135deg,#7657BE,#6043A8);border-color:#8C70CF}
+.obra-visual-option .obra-visual-copy{display:flex;flex-direction:column;line-height:1.08}
+.obra-visual-option .obra-visual-copy strong{font-size:11px;color:#25483C}
+.obra-visual-option .obra-visual-copy small{font-size:9px;color:#91A199;margin-top:3px}
+.obra-visual-option:has(input:checked){border-color:#6E56B4;box-shadow:0 0 0 2px rgba(110,86,180,.10);background:#FAF8FF}
+.obra-visual-option.standard-choice:has(input:checked){border-color:#2D5E98;box-shadow:0 0 0 2px rgba(45,94,152,.10);background:#F7FAFE}
+@media(max-width:520px){.obra-visual-selector{grid-template-columns:1fr}.obra-visual-option{min-height:44px}}
+</style>
+
+<script id="cq-v40-colores-tipo-obra-js">
+(function(){
+  const oldObraChipClass = window.obraChipClass;
+
+  function normObraText(o){
+    return `${o?.id||''} ${o?.label||''} ${o?.short||''}`.toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function specialByDefault(o){
+    const t=normObraText(o);
+    return t.includes('oficina') || t.includes('acopio') || t.includes('post obra') || t.includes('postobra') || t.includes('cq extras');
+  }
+  window.cqObraEsDiferenciada=function(o){
+    if(!o)return false;
+    if(o.visualTipo==='standard')return false;
+    if(o.visualTipo==='especial')return true;
+    return specialByDefault(o);
+  };
+
+  window.obraChipClass=function(o){
+    const base = typeof oldObraChipClass==='function' ? (oldObraChipClass(o)||'') : '';
+    return `${base}${cqObraEsDiferenciada(o)?' obra-diferenciada':''}`.trim();
+  };
+
+  function ensureVisualSelector(){
+    const short=document.getElementById('obra-short');
+    if(!short || document.getElementById('obra-visual-selector-wrap'))return;
+    const fld=short.closest('.fld');
+    if(!fld)return;
+    fld.insertAdjacentHTML('afterend',`<div class="fld" id="obra-visual-selector-wrap">
+      <label>Color del botón</label>
+      <div class="obra-visual-selector">
+        <label class="obra-visual-option standard-choice">
+          <input type="radio" name="obra-visual-tipo" value="standard" checked>
+          <span class="obra-swatch standard"></span>
+          <span class="obra-visual-copy"><strong>Estándar</strong><small>Azul como las obras</small></span>
+        </label>
+        <label class="obra-visual-option">
+          <input type="radio" name="obra-visual-tipo" value="especial">
+          <span class="obra-swatch especial"></span>
+          <span class="obra-visual-copy"><strong>Diferenciado</strong><small>Para oficina, acopio, extras, etc.</small></span>
+        </label>
+      </div>
+    </div>`);
+  }
+  function setVisualChoice(value){
+    ensureVisualSelector();
+    const v=value==='especial'?'especial':'standard';
+    const el=document.querySelector(`input[name="obra-visual-tipo"][value="${v}"]`);
+    if(el)el.checked=true;
+  }
+  function getVisualChoice(){
+    return document.querySelector('input[name="obra-visual-tipo"]:checked')?.value||'standard';
+  }
+
+  window.openObraModal=function(id=''){
+    ensureVisualSelector();
+    const idEl=document.getElementById('obra-id-edit');
+    const labelEl=document.getElementById('obra-label');
+    const shortEl=document.getElementById('obra-short');
+    const titleEl=document.getElementById('obra-modal-title');
+    if(!idEl||!labelEl||!shortEl)return;
+    if(id){
+      const obra=(config.obras||[]).find(o=>o.id===id);
+      if(!obra)return;
+      idEl.value=obra.id||'';
+      labelEl.value=obra.label||'';
+      shortEl.value=obra.short||'';
+      setVisualChoice(cqObraEsDiferenciada(obra)?'especial':'standard');
+      if(titleEl)titleEl.textContent='Editar obra';
+    }else{
+      idEl.value='';labelEl.value='';shortEl.value='';
+      setVisualChoice('standard');
+      if(titleEl)titleEl.textContent='Agregar obra';
+    }
+    openModal('modal-obra');
+    setTimeout(()=>labelEl.focus(),80);
+  };
+
+  window.saveObra=function(){
+    const id=document.getElementById('obra-id-edit')?.value||'';
+    const label=document.getElementById('obra-label')?.value.trim()||'';
+    const short=document.getElementById('obra-short')?.value.trim()||'';
+    const visualTipo=getVisualChoice();
+    if(!label||!short){alert('Completá nombre y nombre corto');return}
+    if(id){
+      const o=(config.obras||[]).find(x=>x.id===id);
+      if(!o)return;
+      o.label=label;o.short=short;o.visualTipo=visualTipo;
+    }else{
+      const newId=slug(label);
+      if((config.obras||[]).some(o=>o.id===newId)){
+        alert('Ya existe una obra con un nombre igual o muy parecido.');return;
+      }
+      config.obras.push({id:newId,label,short,visualTipo});
+      state[newId]=emptyState();
+      curObra=newId;
+      localStorage.setItem('gastos_cur_obra',curObra);
+      persist();
+    }
+    persistConfig();
+    closeModal('modal-obra');
+    renderAll();
+    if(typeof renderConfig==='function' && document.getElementById('view-config')?.classList.contains('active'))renderConfig();
+    if(typeof renderReporteObrasChips==='function')renderReporteObrasChips();
+    subscribeObra();
+  };
+
+  ensureVisualSelector();
+  setTimeout(()=>{try{renderObraBar();if(typeof renderReporteObrasChips==='function')renderReporteObrasChips();}catch(e){}},0);
+})();
+</script>
+
 </body>
 </html>
