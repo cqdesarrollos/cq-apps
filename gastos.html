@@ -9938,184 +9938,61 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 </script>
 
 
-<style id="cq-v37-fin-ultimos-ajustes">
-/* Columna TOTAL / PROM.: mismo fondo en todas las filas */
-#view-reporte-financiero .rep-fin-pivot td.rep-total-col,
-#view-reporte-financiero .rep-fin-pivot th.rep-total-col{
+<style id="cq-v38-total-col-uniform">
+/* TOTAL / PROM.: una sola estética en toda la columna */
+#view-reporte-financiero .rep-fin-pivot th.rep-total-col,
+#view-reporte-financiero .rep-fin-pivot td.rep-total-col{
   background:#EAF6EF!important;
   border-left:3px solid #23936C!important;
 }
-/* Mantener las filas especiales sin fondo, pero conservar la columna total con el mismo color */
 #view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan td.rep-total-col,
 #view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen td.rep-total-col,
 #view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto td.rep-total-col{
   background:#EAF6EF!important;
 }
-/* No colorear automáticamente números positivos/negativos del cuadro comparativo; sólo filas especiales */
-#view-reporte-financiero .rep-fin-pivot tbody td.good,
-#view-reporte-financiero .rep-fin-pivot tbody td.bad,
-#view-reporte-financiero .rep-fin-pivot tbody td.avg{
-  color:#335446!important;
-}
-#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan th,
-#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-gan td{color:#247255!important;font-weight:900!important;}
-#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen th,
-#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-margen td{color:#34748E!important;font-weight:900!important;}
-#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto th,
-#view-reporte-financiero .rep-fin-pivot tr.rep-row-soft-neto td{color:#9A6B12!important;font-weight:900!important;}
 </style>
 
-<script id="cq-v37-fin-ajustes-js">
+<script id="cq-v38-office-fixed-safe">
 (function(){
-  function v37Periods(){
-    const s=(window.CQ_MULTI_MONTH_V31 && window.CQ_MULTI_MONTH_V31['reporte-financiero']) || [];
-    return Array.isArray(s) ? s.filter(v=>/^\d{4}-\d{2}$/.test(String(v))) : [];
-  }
-  function v37Years(){
-    const p=v37Periods();
-    const base=p.length ? p : [`${new Date().getFullYear()}-01`];
-    return [...new Set(base.map(v=>String(v).slice(0,4)))].sort();
-  }
-  function v37OfficeSelected(){
-    try{return (repSelectedObras()||[]).some(o=>o && o.id==='oficina');}catch(e){return false;}
-  }
-  function v37SoldUnits(fin,annual){
-    const u=cqFinUnits(fin||{}), periods=v37Periods(), years=v37Years();
-    return ['A','B'].filter(k=>{
-      const it=u[k]||{}, d=String(it.fechaVenta||'');
-      if(!it.etapa || !/^\d{4}-\d{2}/.test(d)) return false;
-      if(annual) return years.includes(d.slice(0,4));
-      return !periods.length || periods.includes(d.slice(0,7));
-    }).length;
-  }
-  function v37AllocFixed(years,share){
-    if(!v37OfficeSelected()) return [];
-    const out=[];
-    (repGetState('oficina').gastos||[]).forEach((g,i)=>{
-      const y=String(g.fecha||'').slice(0,4);
-      if(!years.includes(y)) return;
-      const usd=toUSD(g.monto,g.moneda,g.tc)*share;
-      if(!usd) return;
-      out.push({id:'fixed37_'+i,fecha:g.fecha,cat:'ofi',subrubro:'Costos fijos prorrateados',moneda:'usd',monto:usd,tc:1,tipoMovimiento:g.tipoMovimiento||'gasto'});
-    });
-    return out;
+  const originalOfficeFixed = window.officeFixedCostInfo;
+  const originalRenderFin = window.renderReporteFinancieroComparativo;
+
+  function officeSelected(){
+    try{return (repSelectedObras()||[]).some(o=>o && o.id==='oficina');}
+    catch(e){return false;}
   }
 
-  window.officeFixedCostInfo=function(){
-    const enabled=v37OfficeSelected(), years=v37Years();
-    if(!enabled) return {enabled:false,total:0,byMonth:{},units:0,perUnit:0};
-    const gastos=(repGetState('oficina').gastos||[]).filter(g=>years.includes(String(g.fecha||'').slice(0,4)));
-    const total=gastos.reduce((a,g)=>a+toUSD(g.monto,g.moneda,g.tc),0);
-    const byMonth={};
-    gastos.forEach(g=>{const ym=String(g.fecha||'').slice(0,7); if(/^\d{4}-\d{2}$/.test(ym)) byMonth[ym]=(byMonth[ym]||0)+toUSD(g.monto,g.moneda,g.tc)});
-    let units=0;
-    (config.obras||[]).forEach(o=>{ if(!isObraSimple(o.id)) units += v37SoldUnits(repGetState(o.id).financiero||{}, true); });
-    return {enabled:true,total,byMonth,units,perUnit:units?total/units:0};
+  /* Mantener exactamente el cálculo que ya funcionaba en v36.
+     Único cambio: si OFICINA no está seleccionada, el costo fijo es cero. */
+  window.officeFixedCostInfo = function(){
+    if(!officeSelected()) return {total:0,byMonth:{},units:0,perUnit:0,enabled:false};
+    const r = typeof originalOfficeFixed==='function' ? originalOfficeFixed.apply(this,arguments) : {total:0,byMonth:{},units:0,perUnit:0};
+    return {...r,enabled:true};
   };
+  try{ officeFixedCostInfo = window.officeFixedCostInfo; }catch(e){}
 
-  window.repFinRowsData=function(){
-    const fixed=officeFixedCostInfo(), years=v37Years(), periods=v37Periods(), includeFixed=!!fixed.enabled;
-    const obras=(repSelectedObras()||[]).filter(o=>!isObraSimple(o.id));
-    return obras.map(o=>{
-      const s=repGetState(o.id), fin=s.financiero||{}, has=tieneVentasCargadas(fin), soldYear=v37SoldUnits(fin,true), soldPeriod=v37SoldUnits(fin,false);
-      if(has && periods.length && soldPeriod===0) return null;
-      if(has && !periods.length && soldYear===0) return null;
-      const share=(includeFixed && fixed.units) ? (soldYear/fixed.units) : 0;
-      const fixedCost=includeFixed ? fixed.total*share : 0;
-      const direct=calcularMetricasFinancieras(fin,s.gastos||[]);
-      const adjusted=includeFixed ? calcularMetricasFinancieras(fin,[...(s.gastos||[]),...v37AllocFixed(years,share)]) : direct;
-      const net=direct.margen-fixedCost;
-      const margenPct=direct.totalIngresos ? direct.margen/direct.totalIngresos : null;
-      return {o,s,fin,direct,adjusted,fixedCost,net,margenPct,soldYear,soldPeriod,legacy:!has,usesFixed:includeFixed};
-    }).filter(Boolean);
+  window.renderReporteFinancieroComparativo = function(){
+    originalRenderFin.apply(this,arguments);
+    const el=document.getElementById('reporte-financiero');
+    if(!el) return;
+
+    if(!officeSelected()){
+      /* Sacar por completo la fila y la nota de costos fijos cuando OFICINA no está marcada. */
+      const rows=[...el.querySelectorAll('.rep-fin-pivot tbody tr')];
+      rows.forEach(tr=>{
+        const txt=(tr.querySelector('th')?.textContent||'').trim().toLowerCase();
+        if(txt==='costos fijos prorrateados') tr.remove();
+        if(txt==='costos fijos y resultado neto'){
+          const th=tr.querySelector('th');
+          if(th) th.textContent='Resultado neto';
+        }
+      });
+      el.querySelector('.rep-fin-fixed-note')?.remove();
+      const note=el.querySelector('.rep-mini-note');
+      if(note) note.textContent='OFICINA no está seleccionada: Resultado neto y los indicadores de Capital y Retorno se calculan sin costos fijos prorrateados.';
+    }
   };
-
-  window.repFinMetricValueRow=function(r,key){
-    const base=r.usesFixed ? r.adjusted : r.direct;
-    if(key==='margen') return r.direct.margen;
-    if(key==='totalIngresos') return r.direct.totalIngresos;
-    if(key==='comision') return r.direct.comision;
-    if(key==='capitalMax') return base.capitalMax;
-    if(key==='roe') return base.roe;
-    if(key==='tirAnual') return base.tirAnual;
-    if(key==='tirMensual') return base.tirMensual;
-    if(key==='payback') return base.payback;
-    return 0;
-  };
-
-  function badge(key,val,txt){
-    return { html:`<span class="rep-fin-cell-badge ${finRuleClass(key,val)}">${txt}</span>` };
-  }
-
-  window.repFinPivot=function(rows){
-    const includeFixed = rows.some(r=>r.usesFixed);
-    const sum=a=>a.reduce((x,v)=>x+(Number(v)||0),0);
-    const cols=rows.length+2;
-    const fmtMoney=v=>fmt(v,'usd');
-    const row=(label,vals,totalTxt,totalCls='',rowCls='')=>`<tr class="${rowCls}"><th>${label}</th>${vals.map(v=>`<td>${typeof v==='object'&&v?.html?v.html:v}</td>`).join('')}<td class="rep-total-col ${totalCls}">${totalTxt}</td></tr>`;
-    const g=t=>`<tr class="rep-fin-group-row"><th colspan="${cols}">${t}</th></tr>`;
-
-    const source = r => r.usesFixed ? r.adjusted : r.direct;
-    const ingreso=rows.map(r=>r.direct.totalIngresos),
-          com=rows.map(r=>r.direct.comision),
-          cost=rows.map(r=>r.direct.costoTotal),
-          gan=rows.map(r=>r.direct.margen),
-          fix=rows.map(r=>r.fixedCost),
-          net=rows.map(r=>r.net),
-          cap=rows.map(r=>source(r).capitalMax),
-          margPct=rows.map(r=>r.margenPct),
-          roe=rows.map(r=>source(r).roe),
-          tirm=rows.map(r=>source(r).tirMensual),
-          tira=rows.map(r=>source(r).tirAnual),
-          pb=rows.map(r=>source(r).payback),
-          cc=rows.map(r=>source(r).capitalCosto),
-          units=rows.map(r=>r.soldYear);
-
-    const moneyArr=a=>a.map(v=>fmtMoney(v));
-    const pctArr=a=>a.map(v=>fmtPctFin(v));
-    const pbArr=a=>a.map(v=>fmtPaybackFin(v));
-    const capBadges=cap.map(v=>badge('capitalMax',v,fmtMoney(v)));
-    const roeBadges=roe.map(v=>badge('roe',v,fmtPctFin(v)));
-    const tirMBadges=tirm.map(v=>badge('tirMensual',v,fmtPctFin(v)));
-    const tirABadges=tira.map(v=>badge('tirAnual',v,fmtPctFin(v)));
-    const paybackBadges=pb.map(v=>badge('payback',v,fmtPaybackFin(v)));
-    const capCostoBadges=cc.map(v=>badge('capitalCosto',v,fmtPctFin(v)));
-
-    return `<div class="rep-fin-pivot-wrap"><table class="rep-fin-pivot"><thead><tr><th>Indicador</th>${rows.map(r=>`<th>${r.o.short||r.o.label}</th>`).join('')}<th class="rep-total-col">TOTAL / PROM.</th></tr></thead><tbody>`+
-      `${g('Ventas y costos')}`+
-      `${row('Unidades vendidas',units.map(v=>String(v)),String(sum(units))+' un.')}`+
-      `${row('Ingreso total',moneyArr(ingreso),fmtMoney(sum(ingreso)))}`+
-      `${row('Comisión total',moneyArr(com),fmtMoney(sum(com)))}`+
-      `${row('Costo total',moneyArr(cost),fmtMoney(sum(cost)))}`+
-      `${row('Ganancia proyectos',moneyArr(gan),fmtMoney(sum(gan)),'','rep-row-soft-gan')}`+
-      `${row('Margen %',pctArr(margPct),fmtPctFin(finAvg(margPct)),'','rep-row-soft-margen')}`+
-      `${g(includeFixed?'Costos fijos y resultado neto':'Resultado neto')}`+
-      `${includeFixed ? row('Costos fijos prorrateados',moneyArr(fix),fmtMoney(sum(fix))) : ''}`+
-      `${row('Resultado neto',moneyArr(net),fmtMoney(sum(net)),'','rep-row-soft-neto')}`+
-      `${g('Capital y retorno')}`+
-      `${row('Capital máximo',capBadges,fmtMoney(sum(cap)))}`+
-      `${row('ROE',roeBadges,fmtPctFin(finAvg(roe)))}`+
-      `${row('TIR mensual',tirMBadges,fmtPctFin(finAvg(tirm)))}`+
-      `${row('TIR anual',tirABadges,fmtPctFin(finAvg(tira)))}`+
-      `${row('Payback',paybackBadges,fmtPaybackFin(finAvg(pb)))}`+
-      `${row('Capital/Costo',capCostoBadges,fmtPctFin(finAvg(cc)))}`+
-      `</tbody></table></div><div class="rep-fin-scroll-note">En el teléfono se ve la primera columna y podés deslizar hacia la derecha para ver las obras.</div>`;
-  };
-
-  window.renderReporteFinancieroComparativo=function(){
-    const el=document.getElementById('reporte-financiero'); if(!el) return;
-    const years=v37Years(), periods=v37Periods(), fixed=officeFixedCostInfo(), rows=repFinRowsData();
-    if(!rows.length){ el.innerHTML='<div class="rep-empty">No hay obras seleccionadas con ventas compatibles con el período.</div>'; return; }
-    const yearsTxt=years.join(', ');
-    const monthsTxt=periods.length ? periods.map(p=>{ const [y,m]=String(p).split('-'); return monthLabel(m)+' '+y; }).join(', ') : 'Todos los meses';
-    const note = fixed.enabled
-      ? `<div class="rep-fin-fixed-note"><strong>Costos fijos OFICINA ${yearsTxt}:</strong> ${fmt(fixed.total,'usd')} · <strong>Unidades vendidas en el período anual:</strong> ${fixed.units} · <strong>Prorrateo:</strong> ${fixed.units?fmt(fixed.perUnit,'usd')+' por unidad':'sin unidades con fecha de venta'} · <strong>Filtro visible:</strong> ${monthsTxt}. El prorrateo usa los años seleccionados completos.</div>`
-      : `<div class="rep-fin-fixed-note"><strong>OFICINA no está seleccionada.</strong> No se muestran costos fijos prorrateados y los indicadores de capital y retorno se calculan sin ese costo.</div>`;
-    const chips=`<span class="rep-fin-group-chip">Años: ${yearsTxt}</span><span class="rep-fin-group-chip">Meses: ${monthsTxt}</span>`;
-    el.innerHTML=renderRepFinChart(rows)+note+repFinPivot(rows)+`<div class="rep-mini-note">Ganancia proyectos se muestra antes de costos fijos. Resultado neto descuenta los costos fijos sólo cuando OFICINA está seleccionada. Capital máximo, ROE, TIR, Payback y Capital/Costo también sólo los incluyen cuando OFICINA está seleccionada.</div>`;
-    const actions=document.querySelector('#view-reporte-financiero .rep-card-actions');
-    if(actions) actions.innerHTML=`<span class="consol-small">Todo el proyecto · obras seleccionadas</span>${chips}`;
-  };
+  try{ renderReporteFinancieroComparativo = window.renderReporteFinancieroComparativo; }catch(e){}
 })();
 </script>
 
