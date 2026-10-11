@@ -627,8 +627,14 @@ button,
 
 
 <style id="cq-gerencia-only-css">
-#cq-gerencia-only{position:fixed;inset:0;z-index:2147483647;background:#153b32;color:#fff;display:flex;align-items:center;justify-content:center;padding:22px;font-family:Arial,Helvetica,sans-serif}
+#cq-gerencia-only{position:fixed;inset:0;z-index:2147483647;background:#153b32;color:#fff;display:flex;align-items:center;justify-content:center;padding:22px;font-family:Arial,Helvetica,sans-serif;opacity:0;visibility:hidden;pointer-events:none}
 #cq-gerencia-only.ok{display:none}
+/* Inicio limpio: no mostrar la app ni la pantalla de verificación hasta resolver el acceso */
+html:not(.cq-fast-1h-financieros):not(.cq-auth-ready-financieros):not(.cq-auth-denied-financieros) #app{visibility:hidden!important}
+html.cq-fast-1h-financieros #app,
+html.cq-auth-ready-financieros #app{visibility:visible!important}
+html.cq-auth-denied-financieros #app{visibility:hidden!important}
+html.cq-auth-denied-financieros #cq-gerencia-only{opacity:1;visibility:visible;pointer-events:auto}
 #cq-gerencia-only .box{width:100%;max-width:370px;text-align:center;padding:24px 20px;border:1px solid rgba(255,255,255,.15);border-radius:22px;background:rgba(255,255,255,.08);box-shadow:0 22px 60px rgba(0,0,0,.25)}
 #cq-gerencia-only .ico{font-size:32px;margin-bottom:8px}
 #cq-gerencia-only .ttl{font-size:18px;font-weight:900}
@@ -654,6 +660,7 @@ button,
 </script>
 <style id="cq-fast-1h-style-Financieros">
 html.cq-fast-1h-financieros #cq-gerencia-only{display:none!important}
+html.cq-fast-1h-financieros #app{visibility:visible!important}
 </style>
 
 
@@ -4235,6 +4242,8 @@ function clearCache(){
 }
 function deny(t){
  clearCache();
+ document.documentElement.classList.remove("cq-auth-ready-financieros");
+ document.documentElement.classList.add("cq-auth-denied-financieros");
  if(box){box.classList.remove("ok");box.classList.remove("hidden");box.style.display="flex"}
  if(msg)msg.textContent=t;
  if(back)back.style.display="inline-block";
@@ -4243,7 +4252,8 @@ function expose(profile){
  window._cqAuthProfile=profile;
  window._cqUsuarioActual=profile.nombre;
  try{localStorage.setItem("cq_usuario_actual",profile.nombre)}catch(e){}
- document.documentElement.classList.add("cq-fast-1h-financieros");
+ document.documentElement.classList.remove("cq-auth-denied-financieros");
+ document.documentElement.classList.add("cq-fast-1h-financieros","cq-auth-ready-financieros");
  if(box){box.classList.add("ok");box.classList.add("hidden");box.style.display="none"}
  document.dispatchEvent(new CustomEvent("cq-auth-ready",{detail:profile}));
 }
