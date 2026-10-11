@@ -9996,5 +9996,123 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 })();
 </script>
 
+<style id="cq-v39-colores-archivo">
+/* ===== Botones del comparativo financiero: cada uno con un tono propio ===== */
+#view-reporte-financiero .rep-fin-metric-btn.metric-margen{background:#EEF9F3!important;border-color:#A9D9BF!important;color:#0A7852!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-totalIngresos{background:#EEF6FF!important;border-color:#BCD7EF!important;color:#2B68A0!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-comision{background:#F5F5FA!important;border-color:#D5D5E6!important;color:#62627E!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-capitalMax{background:#FFF5E9!important;border-color:#EBCB9A!important;color:#A86A0D!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-roe{background:#F5EFFF!important;border-color:#D7C2EF!important;color:#7446A5!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-tirAnual{background:#ECFAF8!important;border-color:#B7E0D9!important;color:#227B72!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-tirMensual{background:#F0F6FF!important;border-color:#C4D6EB!important;color:#416F9C!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-payback{background:#FFF9E8!important;border-color:#E8D48D!important;color:#92710D!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-margen.active{background:linear-gradient(135deg,#0B8C61,#14B27D)!important;color:#fff!important;border-color:#0B8C61!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-totalIngresos.active{background:linear-gradient(135deg,#2C6EA8,#4A98D5)!important;color:#fff!important;border-color:#2C6EA8!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-comision.active{background:linear-gradient(135deg,#6D708A,#8A8EA8)!important;color:#fff!important;border-color:#6D708A!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-capitalMax.active{background:linear-gradient(135deg,#B67211,#E3A03D)!important;color:#fff!important;border-color:#B67211!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-roe.active{background:linear-gradient(135deg,#7148A2,#9567C8)!important;color:#fff!important;border-color:#7148A2!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-tirAnual.active{background:linear-gradient(135deg,#237C75,#3AA39B)!important;color:#fff!important;border-color:#237C75!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-tirMensual.active{background:linear-gradient(135deg,#3F6F9A,#6095C3)!important;color:#fff!important;border-color:#3F6F9A!important}
+#view-reporte-financiero .rep-fin-metric-btn.metric-payback.active{background:linear-gradient(135deg,#A27D10,#D1A52D)!important;color:#fff!important;border-color:#A27D10!important}
+#view-reporte-financiero .rep-fin-chart-shell.metric-comision .rep-fin-fill{background:linear-gradient(90deg,#9699AF,#6D708A)!important}
+
+/* ===== Archivo de obras ===== */
+.obra-archivadas-btn{border-style:dashed!important;border-color:rgba(255,255,255,.26)!important;color:#D8E4DD!important;background:rgba(255,255,255,.055)!important}
+.obra-archivadas-btn:hover{background:rgba(255,255,255,.10)!important;color:#fff!important}
+.rep-archive-toggle{border-style:dashed!important;background:#F8FBF9!important;color:#667F72!important;border-color:#C9D9CF!important}
+.rep-archive-toggle.active{background:#E9F5EF!important;color:#216A4E!important;border-color:#8EC8AA!important}
+.obra-archived-row{background:#F7F9F7!important;color:#789084!important}
+.obra-archived-tag{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#EEF2EF;color:#6F8578;font-size:9px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
+.archive-btn{border:1px solid #D4DED7;background:#fff;color:#6B7F73;border-radius:8px;padding:5px 8px;font:800 10px 'Space Grotesk',sans-serif;cursor:pointer}
+.archive-btn:hover{background:#F4F8F5}
+.archive-btn.restore{border-color:#A9D6BF;color:#177452;background:#F1FBF6}
+
+#cq-archived-modal .arch-list{display:grid;gap:8px}
+#cq-archived-modal .arch-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 11px;border:1px solid #E1EAE3;border-radius:12px;background:#FBFCFB}
+#cq-archived-modal .arch-name{font-weight:900;color:#284A3D;font-size:12px}
+#cq-archived-modal .arch-sub{font-size:9.5px;color:#8AA095;margin-top:2px}
+#cq-archived-modal .arch-actions{display:flex;gap:6px;align-items:center}
+#cq-archived-modal .arch-empty{padding:18px;text-align:center;color:#91A299;font-size:11px}
+@media(max-width:650px){
+  #cq-archived-modal .arch-item{grid-template-columns:1fr}
+  #cq-archived-modal .arch-actions{justify-content:flex-end}
+}
+</style>
+
+<script id="cq-v39-colores-archivo-js">
+(function(){
+  function activeObras(){return (config.obras||[]).filter(o=>!o.archived)}
+  function archivedObras(){return (config.obras||[]).filter(o=>!!o.archived)}
+  window.cqActiveObras=activeObras;
+  window.cqArchivedObras=archivedObras;
+  window.cqShowArchivedReports=window.cqShowArchivedReports||false;
+
+  function ensureArchivedModal(){
+    if(document.getElementById('cq-archived-modal'))return;
+    const wrap=document.createElement('div');
+    wrap.id='cq-archived-modal';wrap.className='modal-bg';
+    wrap.innerHTML=`<div class="modal" style="max-width:520px"><div class="modal-hd"><span class="modal-ttl">📦 Obras archivadas</span><button class="modal-x" onclick="closeModal('cq-archived-modal')">✕</button></div><div class="mbody"><div id="cq-archived-list" class="arch-list"></div></div><div class="mfooter"><button class="btn btn-s" onclick="closeModal('cq-archived-modal')">Cerrar</button></div></div>`;
+    document.body.appendChild(wrap);
+  }
+  function renderArchivedList(){
+    ensureArchivedModal();
+    const el=document.getElementById('cq-archived-list'); if(!el)return;
+    const arr=archivedObras();
+    el.innerHTML=arr.length?arr.map(o=>`<div class="arch-item"><div><div class="arch-name">${o.short||o.label}</div><div class="arch-sub">${o.label||o.short}</div></div><div class="arch-actions"><button class="archive-btn" onclick="cqOpenArchivedObra('${o.id}')">Abrir</button><button class="archive-btn restore" onclick="cqRestoreObra('${o.id}')">Restaurar</button></div></div>`).join(''):`<div class="arch-empty">No hay obras archivadas.</div>`;
+  }
+  window.cqOpenArchivedModal=function(){renderArchivedList();openModal('cq-archived-modal')};
+  window.cqOpenArchivedObra=function(id){closeModal('cq-archived-modal');switchObra(id)};
+  window.cqArchiveObra=function(id){
+    if(id==='oficina'){alert('Oficina queda fija porque se usa para costos generales.');return}
+    const o=(config.obras||[]).find(x=>x.id===id);if(!o)return;
+    if(!confirm(`¿Archivar ${o.short||o.label}?\n\nNo se borra ningún gasto ni dato. La obra deja de aparecer en la barra principal y podés restaurarla cuando quieras.`))return;
+    o.archived=true;
+    if(curObra===id){const next=activeObras().find(x=>x.id!=='oficina')||activeObras()[0]||config.obras.find(x=>x.id==='oficina');if(next){curObra=next.id;localStorage.setItem('gastos_cur_obra',curObra);subscribeObra()}}
+    reporteObrasSel=(reporteObrasSel||[]).filter(x=>x!==id);saveReporteObrasSel();
+    persistConfig();renderAll();renderConfig();renderReporteObrasChips();
+  };
+  window.cqRestoreObra=function(id){
+    const o=(config.obras||[]).find(x=>x.id===id);if(!o)return;
+    o.archived=false;persistConfig();renderAll();renderConfig();renderReporteObrasChips();renderArchivedList();
+  };
+  window.cqToggleArchivedReports=function(){window.cqShowArchivedReports=!window.cqShowArchivedReports;renderReporteObrasChips()};
+
+  /* Barra principal: sólo obras activas + acceso al archivo */
+  window.renderObraBar=function(){
+    const bar=document.getElementById('obra-bar');if(!bar)return;
+    const active=activeObras();const archived=archivedObras();
+    bar.innerHTML=active.map(o=>`<button class="obra-chip ${o.id===curObra?'active':''} ${obraChipClass(o)}" onclick="switchObra('${o.id}')" title="${o.label}">${o.short}</button>`).join('')+
+      `<button class="obra-chip obra-add" onclick="openObraModal()">＋ Obra</button>`+
+      (archived.length?`<button class="obra-chip obra-archivadas-btn" onclick="cqOpenArchivedModal()" title="Ver obras archivadas">📦 ${archived.length}</button>`:'');
+    if(window.ajustarObrasFijas)setTimeout(window.ajustarObrasFijas,0);
+  };
+
+  /* Config: archivar/restaurar sin borrar información */
+  const oldRenderConfig=window.renderConfig;
+  window.renderConfig=function(){
+    const obrasEl=document.getElementById('obras-config');
+    if(obrasEl){
+      obrasEl.innerHTML=`<table class="tbl"><thead><tr><th>Orden</th><th>Obra</th><th>Corto</th><th>Estado</th><th></th></tr></thead><tbody>${(config.obras||[]).map((o,i)=>`<tr class="${o.archived?'obra-archived-row':''}"><td class="mono"><button class="btn-sm" onclick="moveObra('${o.id}',-1)" ${i===0?'disabled':''}>↑</button> <button class="btn-sm" onclick="moveObra('${o.id}',1)" ${i===config.obras.length-1?'disabled':''}>↓</button></td><td>${o.label}</td><td class="mono">${o.short}</td><td>${o.archived?'<span class="obra-archived-tag">Archivada</span>':'<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Activa</span>'}</td><td class="r"><button class="btn-sm" onclick="openObraModal('${o.id}')">Editar</button> ${o.id==='oficina'?'':(o.archived?`<button class="archive-btn restore" onclick="cqRestoreObra('${o.id}')">Restaurar</button>`:`<button class="archive-btn" onclick="cqArchiveObra('${o.id}')">📦 Archivar</button> <button class="btn-del" onclick="deleteObra('${o.id}')">Eliminar</button>`)}</td></tr>`).join('')}</tbody></table>`;
+    }
+    const sub=document.getElementById('subrubros-config');
+    if(sub){sub.innerHTML=Object.entries(CAT_LABELS).map(([cat,label])=>`<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${label}</span></span><span style="display:flex;gap:6px;align-items:center"><button class="btn-sm" title="Modificar nombre de categoría" onclick="editCategory('${cat}')">✏️ Categoría</button><button class="btn-sm" onclick="addSubrubro('${cat}')">＋ Agregar</button></span></div><div class="pillbox">${[...(config.subrubros[cat]||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<span class="pill">${s}<button title="Modificar" onclick="editSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">✏️</button><button title="Eliminar" onclick="delSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">×</button></span>`).join('')}</div></div>`).join('')}
+  };
+
+  /* Reportes: activas por defecto; las archivadas se pueden mostrar si hacen falta para histórico */
+  window.renderReporteObrasChips=function(){
+    const sel=getReporteObrasSel();const archived=archivedObras();
+    ['reporte-obras-chips','reporte-fin-obras-chips'].forEach(id=>{
+      const el=document.getElementById(id);if(!el)return;
+      const list=(config.obras||[]).filter(o=>!o.archived||window.cqShowArchivedReports);
+      el.innerHTML=list.map(o=>`<button class="rep-obra-chip ${sel.includes(o.id)?'active':''} ${obraChipClass(o)} ${o.archived?'obra-archived-row':''}" onclick="toggleReporteObra('${o.id}')">${o.archived?'📦 ':''}${o.short||o.label}</button>`).join('')+
+        (archived.length?`<button class="rep-obra-chip rep-archive-toggle ${window.cqShowArchivedReports?'active':''}" onclick="cqToggleArchivedReports()">${window.cqShowArchivedReports?'Ocultar archivadas':'📦 Archivadas'} (${archived.length})</button>`:'');
+    });
+  };
+  window.selectAllReporteObras=function(){reporteObrasSel=activeObras().map(o=>o.id);saveReporteObrasSel();renderReporteObrasChips();renderReporte()};
+  window.selectAllReporteObrasFin=function(){reporteObrasSel=activeObras().map(o=>o.id);saveReporteObrasSel();renderReporteFinancieroTab()};
+
+  ensureArchivedModal();
+})();
+</script>
 </body>
 </html>
