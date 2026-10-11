@@ -4639,17 +4639,23 @@ function renderFinanzas(){
 
   // Tabla semanas
   const table = document.getElementById('pagos-table');
-  table.innerHTML = `<thead><tr>
-    <th>Sem.</th><th>Etapa</th><th class="r">Pago máx.</th><th class="r">Devengado</th><th class="r">Saldo</th><th style="min-width:110px">Avance</th>
-  </tr></thead><tbody>`+
-  getSemanas().map(s=>{
+  const semanasFin = getSemanas();
+  let totalPagoMaxSemanas = 0;
+  let totalDevengadoSemanas = 0;
+  let totalSaldoSemanas = 0;
+
+  const filasSemanas = semanasFin.map(s=>{
     const {totalMonto,devengado,pctSem}=calcSemana(s);
-    const saldo=totalMonto-devengado;
+    const pagoMax = getPagoMax(s.num);
+    const saldo = pagoMax-devengado;
+    totalPagoMaxSemanas += pagoMax;
+    totalDevengadoSemanas += devengado;
+    totalSaldoSemanas += saldo;
     const done=pctSem>=0.99;
     return `<tr>
       <td class="mono" style="color:#A8BFA8">S${s.num}</td>
       <td style="font-size:11px;color:#4A6A50">${s.etapa}</td>
-      <td class="r mono">${fmt(getPagoMax(s.num))}</td>
+      <td class="r mono">${fmt(pagoMax)}</td>
       <td class="r mono" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(devengado)}</td>
       <td class="r mono" style="color:#A8BFA8">${fmt(saldo)}</td>
       <td>
@@ -4659,7 +4665,25 @@ function renderFinanzas(){
         </div>
       </td>
     </tr>`;
-  }).join('')+'</tbody>';
+  }).join('');
+
+  const avanceTotalSemanas = totalPagoMaxSemanas>0 ? totalDevengadoSemanas/totalPagoMaxSemanas : 0;
+  const avanceTotalPct = Math.max(0, Math.min(100, avanceTotalSemanas*100));
+
+  table.innerHTML = `<thead><tr>
+    <th>Sem.</th><th>Etapa</th><th class="r">Pago máx.</th><th class="r">Devengado</th><th class="r">Saldo</th><th style="min-width:110px">Avance</th>
+  </tr></thead><tbody>${filasSemanas}</tbody>
+  <tfoot><tr class="pagos-total-row">
+    <td></td>
+    <td class="pagos-total-label">TOTAL</td>
+    <td class="r mono pagos-total-num">${fmt(totalPagoMaxSemanas)}</td>
+    <td class="r mono pagos-total-num">${fmt(totalDevengadoSemanas)}</td>
+    <td class="r mono pagos-total-num">${fmt(totalSaldoSemanas)}</td>
+    <td class="pagos-total-avance">
+      <span class="mono pagos-total-pct">${avanceTotalPct.toFixed(0)}%</span>
+      <div class="pagos-total-bar"><div style="width:${avanceTotalPct.toFixed(0)}%"></div></div>
+    </td>
+  </tr></tfoot>`;
 }
 
 
@@ -9717,3 +9741,49 @@ body.cq-constructor-mode #tab-reporte{
   window.addEventListener('orientationchange',function(){ setTimeout(arriba,120); });
 })();
 </script>
+
+
+<style id="cq-finanzas-totales-semana-v5">
+#view-finanzas #pagos-table tfoot .pagos-total-row td{
+  background:#F1F7F3!important;
+  border-top:2px solid #2E7D5E!important;
+  border-bottom:none!important;
+  font-weight:900!important;
+  color:#234D3C!important;
+}
+#view-finanzas #pagos-table .pagos-total-label{
+  font-weight:900!important;
+  letter-spacing:.04em!important;
+  color:#23533F!important;
+}
+#view-finanzas #pagos-table .pagos-total-num{
+  color:#173F35!important;
+  font-weight:900!important;
+}
+#view-finanzas #pagos-table .pagos-total-pct{
+  display:inline-block!important;
+  color:#0A6E3A!important;
+  font-weight:900!important;
+}
+#view-finanzas #pagos-table .pagos-total-bar{
+  height:6px!important;
+  margin-top:4px!important;
+  background:#DCE9E0!important;
+  border-radius:999px!important;
+  overflow:hidden!important;
+}
+#view-finanzas #pagos-table .pagos-total-bar>div{
+  height:100%!important;
+  background:#0A6E3A!important;
+  border-radius:999px!important;
+}
+@media(max-width:700px){
+  #view-finanzas #pagos-table tfoot .pagos-total-row td{padding-top:8px!important;padding-bottom:8px!important;}
+  #view-finanzas #pagos-table .pagos-total-label{font-size:9px!important;}
+  #view-finanzas #pagos-table .pagos-total-num{font-size:9.4px!important;}
+  #view-finanzas #pagos-table .pagos-total-pct{font-size:10px!important;}
+}
+@media (orientation:landscape) and (min-width:700px) and (max-width:1900px) and (pointer:coarse){
+  #view-finanzas #pagos-table .pagos-total-pct{font-size:17px!important;}
+}
+</style>
