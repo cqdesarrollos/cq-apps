@@ -448,9 +448,11 @@ window.__cqCajaChicaSetState=function(next){
 };
 function load(){
   let tcCache=0;
+  let tcCacheAt='';
   try{
     const c=JSON.parse(localStorage.getItem('cq_tc_gerencia_confirmado_v1')||'null');
     tcCache=Number(c&&c.value)||0;
+    tcCacheAt=String(c&&c.confirmedAt||'');
   }catch(e){}
 
   try{
@@ -460,9 +462,18 @@ function load(){
       x.works=Array.isArray(x.works)&&x.works.length?x.works:[...DEFAULT_WORKS];
       x.concepts=Array.isArray(x.concepts)&&x.concepts.length?x.concepts:[...DEFAULT_CONCEPTS];
 
-      // Al iniciar, nunca usar un TC local viejo como fuente maestra.
-      // Si ya existe un TC confirmado de Caja Gerencia, mostrar ése hasta recibir la actualización online.
-      x.exchangeRate=tcCache>0?tcCache:0;
+      // El TC maestro no pertenece al usuario de Caja Chica.
+      // Si este dispositivo ya confirmó un valor desde Caja Gerencia, se usa como
+      // respaldo inicial y se conserva su fecha para que el sync sepa cuál es más nuevo.
+      if(tcCache>0){
+        x.exchangeRate=tcCache;
+        x.exchangeRateSource='gerencia';
+        x.exchangeRateUpdatedAt=tcCacheAt||x.exchangeRateUpdatedAt||'';
+      }else{
+        x.exchangeRate=Number(x.exchangeRate)||0;
+        x.exchangeRateSource=String(x.exchangeRateSource||'');
+        x.exchangeRateUpdatedAt=String(x.exchangeRateUpdatedAt||'');
+      }
       return x;
     }
   }catch(e){}
@@ -472,7 +483,9 @@ function load(){
     deletedMovementIds:[],
     works:[...DEFAULT_WORKS],
     concepts:[...DEFAULT_CONCEPTS],
-    exchangeRate:tcCache>0?tcCache:0
+    exchangeRate:tcCache>0?tcCache:0,
+    exchangeRateSource:tcCache>0?'gerencia':'',
+    exchangeRateUpdatedAt:tcCache>0?tcCacheAt:''
   };
 }
 function saveLocalCC(){localStorage.setItem(KEY,JSON.stringify(db))}
@@ -1971,8 +1984,45 @@ function normalizeCC(x){
   });
   x.works=Array.isArray(x.works)&&x.works.length?x.works:[...DEFAULT_WORKS];
   x.concepts=Array.isArray(x.concepts)&&x.concepts.length?x.concepts:[...DEFAULT_CONCEPTS];
-  x.exchangeRate=Number(x.exchangeRate)||1200;
+  x.exchangeRate=Number(x.exchangeRate)||0;
+  x.exchangeRateSource=String(x.exchangeRateSource||'');
+  x.exchangeRateUpdatedAt=String(x.exchangeRateUpdatedAt||'');
   return x;
+}
+function tcMasterTimeCC(x){
+  const t=Date.parse(String(x&&x.exchangeRateUpdatedAt||''));
+  return Number.isFinite(t)?t:0;
+}
+function pickMasterTCCC(remote,local){
+  const r=Number(remote&&remote.exchangeRate)||0;
+  const l=Number(local&&local.exchangeRate)||0;
+  const rt=tcMasterTimeCC(remote);
+  const lt=tcMasterTimeCC(local);
+  const rs=String(remote&&remote.exchangeRateSource||'');
+  const ls=String(local&&local.exchangeRateSource||'');
+
+  // Un TC confirmado por Caja Gerencia tiene prioridad sobre valores legacy.
+  // Entre dos valores confirmados, gana siempre el más reciente.
+  let src=null;
+  if(rs==='gerencia' && ls==='gerencia'){
+    src=lt>rt?local:remote;
+  }else if(ls==='gerencia'){
+    src=local;
+  }else if(rs==='gerencia'){
+    src=remote;
+  }else if(lt>rt){
+    src=local;
+  }else{
+    src=remote;
+  }
+
+  let value=Number(src&&src.exchangeRate)||0;
+  if(!(value>0))value=r>0?r:(l>0?l:0);
+  return{
+    value,
+    source:String(src&&src.exchangeRateSource||''),
+    updatedAt:String(src&&src.exchangeRateUpdatedAt||'')
+  };
 }
 function movementTimeCC(m){
   const vals=[m&&m.updatedAt,m&&m.createdAt,m&&m.date];
@@ -2046,12 +2096,15 @@ function mergeMigrationCC(remote,local){
     if(v&&!concepts.some(y=>y.toLowerCase()===v.toLowerCase()))concepts.push(v);
   });
 
+  const tcMaster=pickMasterTCCC(remote,local);
   return {
     movements:[...map.values()].sort((a,b)=>String(a.date||"").localeCompare(String(b.date||""))),
     deletedMovementIds,
     works:works.length?works:[...DEFAULT_WORKS],
     concepts:concepts.length?concepts:[...DEFAULT_CONCEPTS],
-    exchangeRate:Number(remote.exchangeRate)||Number(local.exchangeRate)||1200
+    exchangeRate:tcMaster.value,
+    exchangeRateSource:tcMaster.source,
+    exchangeRateUpdatedAt:tcMaster.updatedAt
   };
 }
 function setStatusCC(state,text){
@@ -2615,6 +2668,8 @@ function aplicarTipoCambioGerencia(data,forzar=false){
 
   if(typeof db!=="undefined"){
     db.exchangeRate=value;
+    db.exchangeRateSource='gerencia';
+    db.exchangeRateUpdatedAt=new Date().toISOString();
     try{save();}catch(e){}
   }
 
@@ -2647,7 +2702,9 @@ async function iniciarSyncTCGerencia(){
       await leerTcGerenciaInicial();
     }catch(e){
       console.warn("Caja Chica · no se pudo leer TC inicial de Caja Gerencia",e);
-      programarReintentoTC();
+      // Usuarios operativos pueden usar Caja Chica sin permiso de lectura sobre Caja Gerencia.
+      // En ese caso NO insistir: se conserva el último TC maestro compartido en Caja Chica.
+      if(String(e&&e.code||'')!=='permission-denied')programarReintentoTC();
     }
 
     if(!unsubTcGerencia){
@@ -2658,7 +2715,9 @@ async function iniciarSyncTCGerencia(){
         console.warn("Caja Chica · sync TC Caja Gerencia",e);
         try{if(unsubTcGerencia)unsubTcGerencia();}catch(_){}
         unsubTcGerencia=null;
-        programarReintentoTC();
+        // Si el usuario no tiene acceso a Caja Gerencia (p.ej. Eugenia),
+        // no reintentar en bucle. Caja Chica seguirá usando el TC maestro compartido.
+        if(String(e&&e.code||'')!=='permission-denied')programarReintentoTC();
       });
     }
   }finally{
