@@ -2413,6 +2413,26 @@ html.cq-fast-1h-avance #cq-access-total{display:none!important}
 })();
 </script>
 
+
+<style id="cq-no-old-screen-flash">
+/* Evita mostrar una vista/localStorage viejo durante el arranque. */
+html.cq-app-booting body{background:#f5f7f6;}
+html.cq-app-booting #view-home,
+html.cq-app-booting #view-terminadas,
+html.cq-app-booting #view-constructor,
+html.cq-app-booting #view-avances,
+html.cq-app-booting #view-finanzas,
+html.cq-app-booting #view-reporte,
+html.cq-app-booting #obra-switch,
+html.cq-app-booting #firebase-mode-banner{display:none!important;}
+</style>
+<script id="cq-no-old-screen-flash-bootstrap">
+/* Se ejecuta antes de que el navegador pinte el body. */
+document.documentElement.classList.add('cq-app-booting');
+window.cqRevealInitialScreen=function(){
+  document.documentElement.classList.remove('cq-app-booting');
+};
+</script>
 </head>
 <body>
 
@@ -2525,7 +2545,7 @@ html.cq-fast-1h-avance #cq-access-total{display:none!important}
 <div class="obra-switch" id="obra-switch"></div>
 <div class="mode-banner" id="firebase-mode-banner">⚠️ Modo prueba activo — no lee ni guarda en Firebase. Los cambios quedan solo en este dispositivo.</div>
 
-<div id="view-home" class="home-view active">
+<div id="view-home" class="home-view">
   <div class="section-title" style="justify-content:space-between">
     <span>Constructores</span>
     <span class="home-main-actions" style="display:flex;gap:8px;flex-wrap:wrap">
@@ -5470,7 +5490,11 @@ async function initApp() {
       renderObraSwitch();
       renderKPIs();
       renderSemanas();
-      showHome();
+      /* Si Firebase todavía no está listo, mantenemos ocultas las vistas para no mostrar datos viejos. */
+      if(!isFirebaseEnabled() || window._dbReady){
+        showHome();
+        if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
+      }
       resetHistoryBase();
       appInitialized = true;
       if(isFirebaseEnabled()) setFirebaseStatus('Firebase: sincronizando…','sync');
@@ -5523,7 +5547,11 @@ async function initApp() {
   renderObraSwitch();
   renderKPIs();
   renderSemanas();
-  showHome();
+  /* Mostrar la pantalla recién cuando los datos iniciales ya están resueltos. */
+  if(!isFirebaseEnabled() || window._dbReady){
+    showHome();
+    if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
+  }
   resetHistoryBase();
   appInitialized = true;
 }
@@ -5537,7 +5565,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // Cuando Firebase termina de cargarse, sincroniza datos y refresca la pantalla.
 document.addEventListener('firebase-ready', () => initApp());
-setTimeout(() => { if(!appInitialized){ updateFirebaseModeUI(); renderObraSwitch(); renderKPIs(); renderSemanas(); showHome(); resetHistoryBase(); appInitialized=true; } }, 300);
+setTimeout(() => {
+  if(!appInitialized){ updateFirebaseModeUI(); renderObraSwitch(); renderKPIs(); renderSemanas(); showHome(); resetHistoryBase(); appInitialized=true; if(window.cqRevealInitialScreen) window.cqRevealInitialScreen(); }
+}, 300);
+/* Respaldo visual: si la conexión tarda demasiado, abrir limpio con el estado local ya renderizado. */
+setTimeout(() => {
+  if(document.documentElement.classList.contains('cq-app-booting')){
+    try{ showHome(); }catch(e){}
+    if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
+  }
+}, 2200);
 </script>
 
 <div class="modal-bg" id="modal-admin-obras">
@@ -9439,5 +9476,152 @@ body.cq-constructor-mode #tab-reporte{
   #view-avances .semana-monto{font-size:13.5px!important;line-height:1.2!important;}
   #view-avances .week-pending-badge{font-size:9.5px!important;padding:5px 7px!important;}
   #view-avances .chevron{font-size:14px!important;}
+}
+</style>
+
+
+<style id="cq-finanzas-phone-tablet-ajustes-v2">
+/* Ajustes solicitados:
+   1) Celular: agrandar letra y números en Finanzas.
+   2) Tablet: agrandar sólo los porcentajes del detalle por semana. */
+
+@media (max-width:700px){
+  #view-finanzas > .main-content{
+    padding:12px 10px 22px!important;
+  }
+
+  #view-finanzas .section-title,
+  #view-finanzas .section-title span{
+    font-size:11px!important;
+    line-height:1.2!important;
+    letter-spacing:.05em!important;
+  }
+
+  #view-finanzas .fuera-section{
+    margin-bottom:12px!important;
+    border-radius:12px!important;
+  }
+  #view-finanzas .fuera-header{
+    min-height:52px!important;
+    padding:10px 12px!important;
+    gap:8px!important;
+  }
+  #view-finanzas .fuera-title{
+    font-size:11.5px!important;
+    line-height:1.15!important;
+  }
+  #view-finanzas .fuera-subtitle{
+    font-size:8.8px!important;
+    line-height:1.22!important;
+    max-width:none!important;
+  }
+  #view-finanzas .fuera-saldo{
+    font-size:13px!important;
+  }
+
+  #view-finanzas .fin-grid{
+    gap:8px!important;
+  }
+  #view-finanzas .fin-card{
+    padding:10px!important;
+    border-radius:11px!important;
+  }
+  #view-finanzas .fin-card-title{
+    font-size:9px!important;
+    line-height:1.15!important;
+    margin-bottom:8px!important;
+    padding-bottom:6px!important;
+  }
+  #view-finanzas .fin-row{
+    min-height:28px!important;
+    padding:6px 0!important;
+    gap:8px!important;
+  }
+  #view-finanzas .fin-row-label{
+    font-size:8.8px!important;
+    line-height:1.15!important;
+  }
+  #view-finanzas .fin-row-val{
+    font-size:10.6px!important;
+    line-height:1.05!important;
+  }
+  #view-finanzas .fin-row.saldo .fin-row-label,
+  #view-finanzas .fin-row.saldo .fin-row-val,
+  #view-finanzas .fin-row.total .fin-row-label,
+  #view-finanzas .fin-row.total .fin-row-val{
+    font-size:11.4px!important;
+  }
+
+  #view-finanzas .pagos-table{
+    font-size:10px!important;
+  }
+  #view-finanzas .pagos-table th,
+  #view-finanzas #pagos-table th{
+    font-size:7.1px!important;
+    line-height:1.12!important;
+    padding:5px 4px!important;
+  }
+  #view-finanzas .pagos-table td,
+  #view-finanzas #pagos-table td{
+    font-size:8.9px!important;
+    line-height:1.15!important;
+    padding:5px 4px!important;
+    height:auto!important;
+  }
+  #view-finanzas .pagos-table td.mono,
+  #view-finanzas #pagos-table td.mono{
+    font-size:8.6px!important;
+  }
+  #view-finanzas #pagos-table td:nth-child(2){
+    font-size:8.7px!important;
+    line-height:1.15!important;
+  }
+  #view-finanzas #pagos-table td:last-child > span.mono{
+    display:inline-block!important;
+    font-size:9.8px!important;
+    font-weight:700!important;
+    margin-bottom:4px!important;
+  }
+  #view-finanzas #pagos-table td:last-child > div{
+    height:5px!important;
+    margin-top:3px!important;
+    border-radius:4px!important;
+  }
+
+  #view-finanzas .tag-af,
+  #view-finanzas .tag-ec{
+    min-height:20px!important;
+    padding:3px 6px!important;
+    border-radius:5px!important;
+    font-size:7px!important;
+  }
+  #view-finanzas .btn-mini-edit{
+    min-height:24px!important;
+    height:24px!important;
+    padding:3px 6px!important;
+    font-size:7px!important;
+  }
+  #view-finanzas .btn-danger-sm{
+    min-width:24px!important;
+    min-height:24px!important;
+    height:24px!important;
+    padding:3px 6px!important;
+    font-size:7px!important;
+  }
+}
+
+@media (orientation: landscape) and (min-width:700px) and (max-width:1900px) and (pointer:coarse){
+  #view-finanzas #pagos-table td:last-child > span.mono{
+    display:inline-block!important;
+    font-size:17px!important;
+    line-height:1!important;
+    font-weight:700!important;
+    margin-bottom:4px!important;
+  }
+  #view-finanzas #pagos-table td:last-child > div{
+    height:8px!important;
+    margin-top:5px!important;
+    border-radius:5px!important;
+  }
 }
 </style>
