@@ -9625,3 +9625,96 @@ body.cq-constructor-mode #tab-reporte{
   }
 }
 </style>
+
+
+<style id="cq-tablet-horizontal-header-visible-v3">
+/* Tablet horizontal: mantener visible el encabezado completo debajo de A CERTIFICAR. */
+@media (orientation: landscape) and (min-width:700px) and (max-width:1900px) and (pointer:coarse){
+  body:not(.cq-obra-mode) .header{
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    position:sticky!important;
+    top:42px!important;
+    z-index:9998!important;
+    min-height:58px!important;
+    height:58px!important;
+    padding:6px 12px!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:10px!important;
+  }
+  body:not(.cq-obra-mode) .header-left{
+    display:flex!important;
+    align-items:center!important;
+    min-width:0!important;
+    flex:1 1 auto!important;
+  }
+  body:not(.cq-obra-mode) .header-right{
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    align-items:center!important;
+    justify-content:flex-end!important;
+    gap:7px!important;
+    min-width:0!important;
+    flex:0 0 auto!important;
+  }
+  body:not(.cq-obra-mode) #header-home-btn{
+    display:inline-flex!important;
+    min-width:78px!important;
+    height:40px!important;
+    min-height:40px!important;
+    padding:0 12px!important;
+    align-items:center!important;
+    justify-content:center!important;
+    font-size:12px!important;
+    border-radius:10px!important;
+  }
+  body:not(.cq-obra-mode) .header .history-btn.hist-icon,
+  body:not(.cq-obra-mode) .header .restore-quick{
+    width:40px!important;
+    min-width:40px!important;
+    height:40px!important;
+    min-height:40px!important;
+    padding:0!important;
+    font-size:17px!important;
+    border-radius:10px!important;
+  }
+  body:not(.cq-obra-mode) #firebase-status{
+    min-width:76px!important;
+    height:40px!important;
+    min-height:40px!important;
+    padding:0 12px 0 27px!important;
+    font-size:11px!important;
+    border-radius:10px!important;
+  }
+  body:not(.cq-obra-mode) #firebase-status::before{
+    left:10px!important;
+    width:9px!important;
+    height:9px!important;
+  }
+}
+</style>
+
+<script id="cq-tablet-horizontal-scrolltop-v3">
+(function(){
+  function esTabletHorizontal(){
+    return window.matchMedia && window.matchMedia('(orientation: landscape) and (min-width:700px) and (max-width:1900px) and (pointer:coarse)').matches;
+  }
+  function arriba(){
+    if(!esTabletHorizontal()) return;
+    requestAnimationFrame(function(){ window.scrollTo(0,0); });
+    setTimeout(function(){ window.scrollTo(0,0); },60);
+  }
+  ['showHome','openConstructor','showTerminadas'].forEach(function(name){
+    var original=window[name];
+    if(typeof original!=='function') return;
+    window[name]=function(){
+      var r=original.apply(this,arguments);
+      arriba();
+      return r;
+    };
+  });
+  window.addEventListener('orientationchange',function(){ setTimeout(arriba,120); });
+})();
+</script>
