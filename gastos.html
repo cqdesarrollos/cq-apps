@@ -1792,18 +1792,64 @@ html.cq-fast-1h-gastos #cq-gerencia-only{display:none!important}
 </style>
 
 
-<!-- CQ: evita mostrar la pantalla local/vieja durante el arranque -->
+<!-- CQ: splash limpio durante el arranque; evita mostrar estado local/viejo o layout incompleto -->
 <script id="cq-no-startup-flash-bootstrap">
   document.documentElement.classList.add('cq-boot-pending');
+  window.__cqBootStartedAt = (window.performance && performance.now) ? performance.now() : Date.now();
 </script>
 <style id="cq-no-startup-flash-css">
-  html.cq-boot-pending body{background:#F7F8FA!important;}
-  html.cq-boot-pending body > *:not(#cq-gerencia-only){visibility:hidden!important;}
-  html.cq-boot-pending #cq-gerencia-only{visibility:visible!important;}
+  html.cq-boot-pending body{background:#061E55!important;overflow:hidden!important;}
+  html.cq-boot-pending body > *:not(#cq-startup-splash):not(#cq-gerencia-only){visibility:hidden!important;}
+  html.cq-boot-pending #cq-gerencia-only{visibility:hidden!important;}
+  html.cq-boot-pending #cq-startup-splash{visibility:visible!important;opacity:1!important;}
+
+  #cq-startup-splash{
+    position:fixed;inset:0;z-index:2147483646;
+    display:flex;align-items:center;justify-content:center;
+    padding:24px;background:linear-gradient(155deg,#061E55 0%,#082D68 56%,#0B4A5A 100%);
+    color:#fff;font-family:'Space Grotesk',Arial,sans-serif;
+    opacity:1;transition:opacity .28s ease;
+  }
+  #cq-startup-splash.cq-splash-out{opacity:0;pointer-events:none;}
+  #cq-startup-splash .cq-splash-card{
+    width:min(360px,88vw);display:flex;flex-direction:column;align-items:center;text-align:center;
+  }
+  #cq-startup-splash .cq-splash-mark{
+    width:58px;height:58px;border-radius:18px;display:grid;place-items:center;margin-bottom:16px;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 18px 40px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.18);
+    font-size:27px;font-weight:900;letter-spacing:-.06em;
+  }
+  #cq-startup-splash .cq-splash-mark span{color:#00D27A;}
+  #cq-startup-splash .cq-splash-title{font-size:22px;font-weight:900;letter-spacing:-.03em;line-height:1.05;}
+  #cq-startup-splash .cq-splash-sub{margin-top:5px;font-size:12px;font-weight:700;color:rgba(255,255,255,.66);}
+  #cq-startup-splash .cq-splash-loader{
+    width:42px;height:42px;margin-top:22px;border-radius:50%;
+    border:4px solid rgba(255,255,255,.18);border-top-color:#00D27A;
+    animation:cqSplashSpin .75s linear infinite;
+  }
+  #cq-startup-splash .cq-splash-msg{margin-top:12px;font-size:12px;font-weight:800;color:#D8FFF0;letter-spacing:.01em;}
+  #cq-startup-splash .cq-splash-dots::after{content:'...';display:inline-block;width:16px;text-align:left;animation:cqSplashDots 1.25s steps(4,end) infinite;overflow:hidden;vertical-align:bottom;}
+  @keyframes cqSplashSpin{to{transform:rotate(360deg)}}
+  @keyframes cqSplashDots{0%{width:0}100%{width:16px}}
+  @media(max-width:520px){
+    #cq-startup-splash .cq-splash-mark{width:54px;height:54px;border-radius:16px;font-size:25px}
+    #cq-startup-splash .cq-splash-title{font-size:20px}
+  }
 </style>
 
 </head>
 <body>
+
+<div id="cq-startup-splash" role="status" aria-live="polite" aria-label="Cargando CQ Gastos">
+  <div class="cq-splash-card">
+    <div class="cq-splash-mark">C<span>Q</span></div>
+    <div class="cq-splash-title">CQ Gastos</div>
+    <div class="cq-splash-sub">CQ Desarrollos</div>
+    <div class="cq-splash-loader" aria-hidden="true"></div>
+    <div class="cq-splash-msg" id="cq-startup-splash-msg">Cargando información<span class="cq-splash-dots"></span></div>
+  </div>
+</div>
 
 <div id="cq-gerencia-only">
  <div class="box">
@@ -4136,11 +4182,16 @@ function clearCache(){
 }
 function deny(t){
  clearCache();
+ document.documentElement.classList.remove("cq-boot-pending");
+ const splash=document.getElementById("cq-startup-splash");
+ if(splash){splash.classList.add("cq-splash-out");setTimeout(()=>{try{splash.remove()}catch(e){}},300)}
  if(box){box.classList.remove("ok");box.classList.remove("hidden");box.style.display="flex"}
  if(msg)msg.textContent=t;
  if(back)back.style.display="inline-block";
 }
 function expose(profile){
+ const splashMsg=document.getElementById("cq-startup-splash-msg");
+ if(splashMsg)splashMsg.innerHTML='Cargando datos<span class="cq-splash-dots"></span>';
  window._cqAuthProfile=profile;
  window._cqUsuarioActual=profile.nombre;
  try{localStorage.setItem("cq_usuario_actual",profile.nombre)}catch(e){}
@@ -10292,26 +10343,40 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 <script id="cq-no-startup-flash-runtime">
 (function(){
   let shown=false;
-  window.cqRevealGastosApp=function(){
+  const minSplashMs=420;
+
+  function finishReveal(){
     if(shown) return;
     shown=true;
-    requestAnimationFrame(function(){
-      document.documentElement.classList.remove('cq-boot-pending');
-    });
+    const splash=document.getElementById('cq-startup-splash');
+    document.documentElement.classList.remove('cq-boot-pending');
+    if(splash){
+      splash.classList.add('cq-splash-out');
+      setTimeout(function(){try{splash.remove()}catch(e){}},320);
+    }
+  }
+
+  window.cqRevealGastosApp=function(){
+    if(shown) return;
+    const started=Number(window.__cqBootStartedAt)||0;
+    const now=(window.performance&&performance.now)?performance.now():Date.now();
+    const elapsed=started?Math.max(0,now-started):minSplashMs;
+    const wait=Math.max(0,minSplashMs-elapsed);
+    setTimeout(function(){requestAnimationFrame(finishReveal)},wait);
   };
 
-  // Si Firebase no responde, no dejar la app oculta indefinidamente.
-  // En ese caso muestra el estado local ya renderizado.
-  setTimeout(function(){
-    if(!shown) window.cqRevealGastosApp();
-  },1800);
-
-  // Sin Firebase, el estado local es el estado definitivo de arranque.
+  // Si Firebase está desactivado, el estado local es el definitivo y se puede mostrar enseguida.
   setTimeout(function(){
     try{
       if(typeof modoFirebase!=='undefined' && !modoFirebase) window.cqRevealGastosApp();
     }catch(e){}
   },120);
+
+  // Respaldo: si la red/Firebase tarda demasiado, no dejar al usuario bloqueado.
+  // Se muestra el estado local recién después de varios segundos, evitando el flash viejo del arranque.
+  setTimeout(function(){
+    if(!shown) window.cqRevealGastosApp();
+  },6500);
 })();
 </script>
 
@@ -10441,5 +10506,210 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     }
     if(typeof renderAll === 'function') renderAll();
   };
+})();
+</script>
+
+
+
+<!-- FIX FINAL CQ: Reporte gastos - rubro, subrubro y obras funcionan junto con el período -->
+<script id="cq-fix-reporte-gastos-filtros-final-v1">
+(function(){
+  const KEY='cq_reporte_gastos_filtros_final_v1';
+  const st=window.CQ_REPORTE_GASTOS_FIX=window.CQ_REPORTE_GASTOS_FIX||{type:null,cats:[],subs:[]};
+
+  function norm(v){return String(v==null?'':v).trim();}
+  function subKey(v){
+    try{return typeof reporteSubrubroKey==='function'?reporteSubrubroKey(v):norm(v).toLowerCase();}
+    catch(e){return norm(v).toLowerCase();}
+  }
+  function load(){
+    try{
+      const x=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(x&&Array.isArray(x.cats)&&Array.isArray(x.subs)){st.cats=x.cats.map(String);st.subs=x.subs.map(String);}
+    }catch(e){}
+  }
+  function save(){
+    try{localStorage.setItem(KEY,JSON.stringify({cats:st.cats,subs:st.subs}));}catch(e){}
+  }
+  function catMap(){
+    const out={};
+    try{Object.entries(CAT_LABELS||{}).forEach(([k,v])=>out[norm(v)]=String(k));}catch(e){}
+    return out;
+  }
+  function selectedLabels(){
+    return [...document.querySelectorAll('#cq-rep-mf-list .cq-mf-row input[type="checkbox"]:checked')]
+      .map(cb=>cb.closest('.cq-mf-row')?.querySelector('span')?.textContent?.trim()||'')
+      .filter(Boolean);
+  }
+  function sanitize(){
+    try{
+      const validCats=new Set(Object.keys(CAT_LABELS||{}).map(String));
+      st.cats=st.cats.filter(x=>validCats.has(String(x)));
+      if(st.subs.length){
+        const allowed=new Set();
+        repSelectedObras().forEach(o=>{
+          const s=repGetState(o.id);
+          (s.gastos||[]).forEach(g=>{
+            if(isAcopioObra(o.id)&&(g.cat==='mo'||g.cat==='ext'))return;
+            if(st.cats.length&&!st.cats.includes(String(g.cat)))return;
+            allowed.add(subKey(reporteSubrubroVisible(g.subrubro||g.concepto||'Sin subrubro')));
+          });
+        });
+        st.subs=st.subs.filter(x=>allowed.has(subKey(x)));
+      }
+    }catch(e){}
+  }
+  function buttonSummary(vals,allText,labeler){
+    if(!vals.length)return allText;
+    const labs=labeler?labeler(vals):vals;
+    if(labs.length===1)return labs[0];
+    if(labs.length===2)return labs.join(' + ');
+    return labs.length+' seleccionados';
+  }
+  function updateButtons(){
+    sanitize();
+    const labels={};
+    try{Object.entries(CAT_LABELS||{}).forEach(([k,v])=>labels[String(k)]=String(v));}catch(e){}
+    const bCat=document.getElementById('cq-rep-cat-btn');
+    const bSub=document.getElementById('cq-rep-sub-btn');
+    if(bCat){
+      const txt=buttonSummary(st.cats,'Todos los rubros',a=>a.map(v=>labels[String(v)]||String(v)));
+      const span=bCat.querySelector('span');
+      bCat.firstChild.nodeValue=txt+' ';
+      if(span)span.textContent='⌄';
+    }
+    if(bSub){
+      const txt=buttonSummary(st.subs,'Todos los subrubros');
+      const span=bSub.querySelector('span');
+      bSub.firstChild.nodeValue=txt+' ';
+      if(span)span.textContent='⌄';
+    }
+  }
+
+  load();
+
+  /* Capturar el tipo de filtro que se abre. */
+  const oldOpen=window.cqOpenReporteMulti;
+  if(typeof oldOpen==='function'){
+    window.cqOpenReporteMulti=function(type){
+      st.type=type==='sub'?'sub':'cat';
+      const r=oldOpen.apply(this,arguments);
+      /* Hacer que el popup abra marcado según el estado final real. */
+      setTimeout(function(){
+        try{
+          const wanted=st.type==='cat'?st.cats:st.subs;
+          document.querySelectorAll('#cq-rep-mf-list .cq-mf-row').forEach(row=>{
+            const cb=row.querySelector('input[type="checkbox"]');
+            const lab=row.querySelector('span')?.textContent?.trim()||'';
+            if(!cb)return;
+            if(st.type==='cat'){
+              const map=catMap();
+              cb.checked=wanted.includes(map[lab]||lab);
+            }else cb.checked=wanted.some(v=>subKey(v)===subKey(lab));
+          });
+        }catch(e){}
+      },0);
+      return r;
+    };
+  }
+
+  /* Guardar la selección REAL antes de que cualquier override posterior renderice. */
+  const oldApply=window.cqApplyReporteMulti;
+  window.cqApplyReporteMulti=function(){
+    try{
+      const vals=selectedLabels();
+      if(st.type==='cat'){
+        const map=catMap();
+        st.cats=vals.map(v=>map[v]||v).filter(Boolean);
+        st.subs=[]; // al cambiar rubro, reiniciar subrubros incompatibles
+      }else if(st.type==='sub'){
+        st.subs=vals.slice();
+      }
+      sanitize();save();updateButtons();
+    }catch(e){console.warn('Filtro Reporte CQ:',e);}
+    let r;
+    if(typeof oldApply==='function'){
+      try{r=oldApply.apply(this,arguments);}catch(e){console.warn(e);}
+    }else if(typeof window.cqCloseReporteMulti==='function') window.cqCloseReporteMulti();
+    setTimeout(function(){
+      updateButtons();
+      if(typeof renderReporte==='function')renderReporte();
+    },0);
+    return r;
+  };
+
+  /* Filtro definitivo del Reporte. No depende de los selects nativos ocultos. */
+  window.repAdvancedGastos=function(filtrarMes=true){
+    sanitize();
+    const arr=[];
+    const useDate=filtrarMes!==false;
+    repSelectedObras().forEach(o=>{
+      const s=repGetState(o.id);
+      (s.gastos||[]).forEach(g=>{
+        if(isAcopioObra(o.id)&&(g.cat==='mo'||g.cat==='ext'))return;
+        const gsub=reporteSubrubroVisible(g.subrubro||g.concepto||'Sin subrubro');
+        if(useDate){
+          try{if(typeof matchDate==='function'&&!matchDate(g.fecha,'reporte'))return;}
+          catch(e){
+            const ym=document.getElementById('reporte-mes')?.value||'';
+            if(ym&&String(g.fecha||'').slice(0,7)!==ym)return;
+          }
+        }
+        if(st.cats.length&&!st.cats.includes(String(g.cat)))return;
+        if(st.subs.length&&!st.subs.some(x=>subKey(x)===subKey(gsub)))return;
+        arr.push({...g,obraId:o.id,obraLabel:o.label,obraShort:o.short,subrubro:gsub});
+      });
+    });
+    return arr;
+  };
+
+  /* Garantizar que los botones de obras disparen el reporte, incluso si otro script los redefinió. */
+  window.toggleReporteObra=function(id){
+    getReporteObrasSel();
+    if(reporteObrasSel.includes(id))reporteObrasSel=reporteObrasSel.filter(x=>x!==id);
+    else reporteObrasSel.push(id);
+    saveReporteObrasSel();
+    if(typeof renderReporteObrasChips==='function')renderReporteObrasChips();
+    if(typeof renderReporte==='function')renderReporte();
+  };
+  window.selectAllReporteObras=function(){
+    try{
+      const list=typeof activeObras==='function'?activeObras():(config.obras||[]).filter(o=>!o.archived);
+      reporteObrasSel=list.map(o=>o.id);
+      saveReporteObrasSel();
+      if(typeof renderReporteObrasChips==='function')renderReporteObrasChips();
+      renderReporte();
+    }catch(e){console.warn(e);}
+  };
+  window.clearReporteObras=function(){
+    reporteObrasSel=[];
+    saveReporteObrasSel();
+    if(typeof renderReporteObrasChips==='function')renderReporteObrasChips();
+    if(typeof renderReporte==='function')renderReporte();
+  };
+
+  /* Mes actual y Ver todo: asegurar funcionamiento con el selector múltiple de períodos actual. */
+  window.setReporteMesActual=function(){
+    const d=new Date(), y=String(d.getFullYear()), m=String(d.getMonth()+1).padStart(2,'0'), ym=y+'-'+m;
+    try{
+      if(window.CQ_MULTI_MONTH_V31){window.CQ_MULTI_MONTH_V31.reporte=[ym];localStorage.setItem('cq_multi_month_v31',JSON.stringify(window.CQ_MULTI_MONTH_V31));}
+      if(window.CQ_PERIOD_MULTI?.reporte){window.CQ_PERIOD_MULTI.reporte.years=[y];window.CQ_PERIOD_MULTI.reporte.months=[m];}
+    }catch(e){}
+    const input=document.getElementById('reporte-mes');if(input)input.value=ym;
+    if(typeof renderReporte==='function')renderReporte();
+  };
+  window.clearReporteMes=function(){
+    try{
+      if(window.CQ_MULTI_MONTH_V31){window.CQ_MULTI_MONTH_V31.reporte=[];localStorage.setItem('cq_multi_month_v31',JSON.stringify(window.CQ_MULTI_MONTH_V31));}
+      if(window.CQ_PERIOD_MULTI?.reporte){window.CQ_PERIOD_MULTI.reporte.years=[];window.CQ_PERIOD_MULTI.reporte.months=[];}
+    }catch(e){}
+    const input=document.getElementById('reporte-mes');if(input)input.value='';
+    if(typeof renderReporte==='function')renderReporte();
+  };
+
+  /* Al entrar al reporte, mantener etiquetas y selección consistentes. */
+  setTimeout(function(){
+    try{sanitize();updateButtons();if(typeof renderReporteObrasChips==='function')renderReporteObrasChips();}catch(e){}
+  },0);
 })();
 </script>
