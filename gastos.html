@@ -3161,6 +3161,19 @@ function addCuotaRow(valor='',mes=''){const list=document.getElementById('fin-cu
 function renderCuotasEditor(fin){const list=document.getElementById('fin-cuotas-list');if(!list)return;list.innerHTML='';const cuotas=normalizarCuotasDetalle(fin);if(cuotas.length)cuotas.forEach(c=>addCuotaRow(c));else addCuotaRow();updateCuotasTotalPreview()}
 function openModalFin(){const fin=getS().financiero||{};document.getElementById('fin-venta').value=fin.venta||'';document.getElementById('fin-venta-mes').value=fin.ventaMes||'';openModal('modal-fin');renderCuotasEditor(fin)}
 function saveFinanciero(){const fin=getS().financiero||{};fin.venta=parseFloat(document.getElementById('fin-venta').value)||0;fin.ventaMes=document.getElementById('fin-venta-mes').value||'';if(fin.venta>0&&!fin.ventaMes){alert('Seleccioná el mes del precio de venta inicial.');return}const rows=[...document.querySelectorAll('#fin-cuotas-list .cuota-row')];const cuotasDetalle=[];for(const row of rows){const monto=parseFloat(row.querySelector('.fin-cuota-input')?.value)||0;const mes=row.querySelector('.fin-cuota-mes')?.value||'';if(monto>0&&!mes){alert('Seleccioná el mes de cada cuota cargada.');return}if(monto>0)cuotasDetalle.push({monto,mes})}fin.cuotasDetalle=cuotasDetalle;fin.cuotas=cuotasDetalle.reduce((a,c)=>a+c.monto,0);getS().financiero=fin;persist();closeModal('modal-fin');renderAll()}
+// Convierte el nombre visible en un ID seguro para localStorage y Firebase.
+// Faltaba esta función y por eso el alta de una obra nueva se detenía al guardar.
+function slug(value){
+  const base=String(value??'')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g,'_')
+    .replace(/^_+|_+$/g,'');
+  return base||('obra_'+Date.now());
+}
+
 function saveObra(){const id=document.getElementById('obra-id-edit').value,label=document.getElementById('obra-label').value.trim(),short=document.getElementById('obra-short').value.trim();if(!label||!short){alert('Completá nombre y nombre corto');return}if(id){const o=config.obras.find(x=>x.id===id);o.label=label;o.short=short}else{const newId=slug(label);config.obras.push({id:newId,label,short});state[newId]=emptyState();curObra=newId;localStorage.setItem('gastos_cur_obra',curObra);persist()}persistConfig();closeModal('modal-obra');renderAll();subscribeObra()}
 function deleteObra(id){if(id==='oficina'){alert('La oficina queda fija para gastos generales.');return}if(config.obras.length===1){alert('Tiene que quedar al menos una obra');return}if(!confirm('¿Eliminar la obra del listado? No borra los datos de Firebase, pero deja de mostrarse.'))return;config.obras=config.obras.filter(o=>o.id!==id);if(curObra===id){curObra=config.obras[0].id;localStorage.setItem('gastos_cur_obra',curObra);subscribeObra()}persistConfig();renderAll()}
 function editCategory(cat){const actual=CAT_LABELS[cat]||cat;const nuevoRaw=prompt('Modificar nombre de categoría. Los gastos ya cargados conservarán su categoría y solo cambiará el nombre visible.',actual);if(nuevoRaw===null)return;const nuevo=nuevoRaw.trim();if(!nuevo){alert('El nombre de la categoría no puede quedar vacío.');return}if(nuevo===actual)return;if(!config.categoryLabels)config.categoryLabels={};config.categoryLabels[cat]=nuevo;CAT_LABELS[cat]=nuevo;persistConfig();renderAll();}
