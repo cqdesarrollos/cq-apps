@@ -13351,3 +13351,122 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   }
 }
 </style>
+
+<!-- CQ v20 · botones Costo por m² y Precio por m² en comparativo financiero -->
+<style id="cq-v20-metricas-m2-botones">
+#view-reporte-financiero .rep-fin-metric-btn.metric-costoM2{
+  background:#FFF5E9!important;
+  border-color:#E8C98F!important;
+  color:#956112!important;
+}
+#view-reporte-financiero .rep-fin-metric-btn.metric-precioM2{
+  background:#EEF6FF!important;
+  border-color:#B9D3EA!important;
+  color:#2E6D9F!important;
+}
+#view-reporte-financiero .rep-fin-metric-btn.metric-costoM2.active{
+  background:linear-gradient(135deg,#B47716,#D89A31)!important;
+  color:#fff!important;
+  border-color:#A96A0D!important;
+}
+#view-reporte-financiero .rep-fin-metric-btn.metric-precioM2.active{
+  background:linear-gradient(135deg,#2D6E9E,#4C91C5)!important;
+  color:#fff!important;
+  border-color:#2D6E9E!important;
+}
+#view-reporte-financiero .rep-fin-chart-shell.metric-costoM2 .rep-fin-fill{
+  background:linear-gradient(90deg,#E2AA4A,#B47716)!important;
+}
+#view-reporte-financiero .rep-fin-chart-shell.metric-precioM2 .rep-fin-fill{
+  background:linear-gradient(90deg,#6AA6D3,#2D6E9E)!important;
+}
+</style>
+<script id="cq-v20-metricas-m2-botones-js">
+(function(){
+  function m2Proyecto(r){
+    const fin=r?.fin||r?.s?.financiero||{};
+    return Math.max(0,parseFloat(fin.mts2TotalesProyecto ?? fin.m2TotalesProyecto ?? 0)||0);
+  }
+
+  const current=window.REP_FIN_METRICS||{};
+  const ordered={};
+  ['margen','totalIngresos','comision'].forEach(k=>{if(current[k])ordered[k]=current[k]});
+  ordered.costoM2={label:'Costo por m²',type:'usd'};
+  ordered.precioM2={label:'Precio por m²',type:'usd'};
+  Object.keys(current).forEach(k=>{if(!(k in ordered))ordered[k]=current[k]});
+  window.REP_FIN_METRICS=ordered;
+
+  const prevValue=window.repFinMetricValueRow || (typeof repFinMetricValueRow==='function'?repFinMetricValueRow:null);
+  window.repFinMetricValueRow=function(r,key){
+    const m2=m2Proyecto(r);
+    if(key==='costoM2') return m2>0 ? (Number(r?.direct?.costoTotal)||0)/m2 : NaN;
+    if(key==='precioM2') return m2>0 ? ((Number(r?.direct?.totalIngresos)||0)-(Number(r?.direct?.comision)||0))/m2 : NaN;
+    return prevValue?prevValue(r,key):0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow}catch(e){}
+})();
+</script>
+
+<!-- CQ v21 · completar y ordenar métricas del comparativo financiero según la tabla -->
+<script id="cq-v21-metricas-financieras-completas-js">
+(function(){
+  window.REP_FIN_METRICS = {
+    totalIngresos:{label:'Ingreso total',type:'usd'},
+    comision:{label:'Comisión total',type:'usd'},
+    costoTotal:{label:'Costo total',type:'usd'},
+    costoM2:{label:'Costo por m²',type:'usd'},
+    precioM2:{label:'Precio por m²',type:'usd'},
+    margen:{label:'Ganancia proyectos',type:'usd'},
+    margenPct:{label:'Margen %',type:'pct'},
+    costosFijos:{label:'Costos fijos prorrateados',type:'usd'},
+    resultadoNeto:{label:'Resultado neto',type:'usd'},
+    capitalMax:{label:'Capital máximo',type:'usd'},
+    roe:{label:'ROE',type:'pct'},
+    tirMensual:{label:'TIR mensual',type:'pct'},
+    tirAnual:{label:'TIR anual',type:'pct'},
+    payback:{label:'Payback',type:'payback'},
+    capitalCosto:{label:'Capital/Costo',type:'pct'}
+  };
+
+  function m2Proyecto(r){
+    const fin=r?.fin||r?.s?.financiero||{};
+    return Math.max(0,parseFloat(fin.mts2TotalesProyecto ?? fin.m2TotalesProyecto ?? 0)||0);
+  }
+
+  window.repFinMetricValueRow=function(r,key){
+    const direct=r?.direct||{};
+    const adjusted=r?.adjusted||{};
+    const m2=m2Proyecto(r);
+    if(key==='totalIngresos') return Number(direct.totalIngresos)||0;
+    if(key==='comision') return Number(direct.comision)||0;
+    if(key==='costoTotal') return Number(direct.costoTotal)||0;
+    if(key==='costoM2') return m2>0 ? (Number(direct.costoTotal)||0)/m2 : NaN;
+    if(key==='precioM2') return m2>0 ? ((Number(direct.totalIngresos)||0)-(Number(direct.comision)||0))/m2 : NaN;
+    if(key==='margen') return Number(direct.margen)||0;
+    if(key==='margenPct') return Number.isFinite(Number(r?.margenPct)) ? Number(r.margenPct) : NaN;
+    if(key==='costosFijos') return Number(r?.fixedCost)||0;
+    if(key==='resultadoNeto') return Number(r?.net)||0;
+    if(key==='capitalMax') return Number(adjusted.capitalMax)||0;
+    if(key==='roe') return Number.isFinite(Number(adjusted.roe)) ? Number(adjusted.roe) : NaN;
+    if(key==='tirMensual') return Number.isFinite(Number(adjusted.tirMensual)) ? Number(adjusted.tirMensual) : NaN;
+    if(key==='tirAnual') return Number.isFinite(Number(adjusted.tirAnual)) ? Number(adjusted.tirAnual) : NaN;
+    if(key==='payback') return Number.isFinite(Number(adjusted.payback)) ? Number(adjusted.payback) : NaN;
+    if(key==='capitalCosto') return Number.isFinite(Number(adjusted.capitalCosto)) ? Number(adjusted.capitalCosto) : NaN;
+    return 0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow}catch(e){}
+
+  const prevText=window.repFinMetricTextRow || (typeof repFinMetricTextRow==='function'?repFinMetricTextRow:null);
+  window.repFinMetricTextRow=function(v,key){
+    const meta=window.REP_FIN_METRICS[key]||{};
+    if(!Number.isFinite(Number(v))) return '—';
+    if(meta.type==='usd') return fmt(Number(v),'usd');
+    if(meta.type==='pct') return fmtPctFin(Number(v));
+    if(meta.type==='payback') return fmtPaybackFin(Number(v));
+    return prevText?prevText(v,key):String(v);
+  };
+  try{repFinMetricTextRow=window.repFinMetricTextRow}catch(e){}
+
+  if(!window.REP_FIN_METRICS[window.repFinMetricKey]) window.repFinMetricKey='margen';
+})();
+</script>
