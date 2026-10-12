@@ -2413,6 +2413,26 @@ html.cq-fast-1h-avance #cq-access-total{display:none!important}
 })();
 </script>
 
+
+<style id="cq-no-old-screen-flash">
+/* Evita mostrar una vista/localStorage viejo durante el arranque. */
+html.cq-app-booting body{background:#f5f7f6;}
+html.cq-app-booting #view-home,
+html.cq-app-booting #view-terminadas,
+html.cq-app-booting #view-constructor,
+html.cq-app-booting #view-avances,
+html.cq-app-booting #view-finanzas,
+html.cq-app-booting #view-reporte,
+html.cq-app-booting #obra-switch,
+html.cq-app-booting #firebase-mode-banner{display:none!important;}
+</style>
+<script id="cq-no-old-screen-flash-bootstrap">
+/* Se ejecuta antes de que el navegador pinte el body. */
+document.documentElement.classList.add('cq-app-booting');
+window.cqRevealInitialScreen=function(){
+  document.documentElement.classList.remove('cq-app-booting');
+};
+</script>
 </head>
 <body>
 
@@ -2510,7 +2530,6 @@ html.cq-fast-1h-avance #cq-access-total{display:none!important}
     <a class="history-btn" id="header-home-btn" href="index.html" title="Inicio" aria-label="Ir a inicio">⌂ Inicio</a>
     <button class="history-btn hist-icon" id="undo-btn" onclick="undoChange()" disabled title="Deshacer">↶</button>
     <button class="history-btn hist-icon" id="redo-btn" onclick="redoChange()" disabled title="Rehacer">↷</button>
-    <button class="history-btn" onclick="createRestorePoint()">💾 Punto</button>
     <button class="history-btn hist-icon restore-quick" id="restore-btn" onclick="restoreManualPoint()" disabled title="Restaurar">↺</button>
     <button class="history-btn" id="firebase-toggle-btn" onclick="toggleFirebaseMode()">🟢 Firebase ON</button>
     <button class="history-btn" id="backup-now-btn" onclick="backupNow()">💾 Backup ahora</button>
@@ -2525,7 +2544,7 @@ html.cq-fast-1h-avance #cq-access-total{display:none!important}
 <div class="obra-switch" id="obra-switch"></div>
 <div class="mode-banner" id="firebase-mode-banner">⚠️ Modo prueba activo — no lee ni guarda en Firebase. Los cambios quedan solo en este dispositivo.</div>
 
-<div id="view-home" class="home-view active">
+<div id="view-home" class="home-view">
   <div class="section-title" style="justify-content:space-between">
     <span>Constructores</span>
     <span class="home-main-actions" style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4620,17 +4639,23 @@ function renderFinanzas(){
 
   // Tabla semanas
   const table = document.getElementById('pagos-table');
-  table.innerHTML = `<thead><tr>
-    <th>Sem.</th><th>Etapa</th><th class="r">Pago máx.</th><th class="r">Devengado</th><th class="r">Saldo</th><th style="min-width:110px">Avance</th>
-  </tr></thead><tbody>`+
-  getSemanas().map(s=>{
+  const semanasFin = getSemanas();
+  let totalPagoMaxSemanas = 0;
+  let totalDevengadoSemanas = 0;
+  let totalSaldoSemanas = 0;
+
+  const filasSemanas = semanasFin.map(s=>{
     const {totalMonto,devengado,pctSem}=calcSemana(s);
-    const saldo=totalMonto-devengado;
+    const pagoMax = getPagoMax(s.num);
+    const saldo = pagoMax-devengado;
+    totalPagoMaxSemanas += pagoMax;
+    totalDevengadoSemanas += devengado;
+    totalSaldoSemanas += saldo;
     const done=pctSem>=0.99;
     return `<tr>
       <td class="mono" style="color:#A8BFA8">S${s.num}</td>
       <td style="font-size:11px;color:#4A6A50">${s.etapa}</td>
-      <td class="r mono">${fmt(getPagoMax(s.num))}</td>
+      <td class="r mono">${fmt(pagoMax)}</td>
       <td class="r mono" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(devengado)}</td>
       <td class="r mono" style="color:#A8BFA8">${fmt(saldo)}</td>
       <td>
@@ -4640,7 +4665,25 @@ function renderFinanzas(){
         </div>
       </td>
     </tr>`;
-  }).join('')+'</tbody>';
+  }).join('');
+
+  const avanceTotalSemanas = totalPagoMaxSemanas>0 ? totalDevengadoSemanas/totalPagoMaxSemanas : 0;
+  const avanceTotalPct = Math.max(0, Math.min(100, avanceTotalSemanas*100));
+
+  table.innerHTML = `<thead><tr>
+    <th>Sem.</th><th>Etapa</th><th class="r">Pago máx.</th><th class="r">Devengado</th><th class="r">Saldo</th><th style="min-width:110px">Avance</th>
+  </tr></thead><tbody>${filasSemanas}</tbody>
+  <tfoot><tr class="pagos-total-row">
+    <td></td>
+    <td class="pagos-total-label">TOTAL</td>
+    <td class="r mono pagos-total-num">${fmt(totalPagoMaxSemanas)}</td>
+    <td class="r mono pagos-total-num">${fmt(totalDevengadoSemanas)}</td>
+    <td class="r mono pagos-total-num">${fmt(totalSaldoSemanas)}</td>
+    <td class="pagos-total-avance">
+      <span class="mono pagos-total-pct">${avanceTotalPct.toFixed(0)}%</span>
+      <div class="pagos-total-bar"><div style="width:${avanceTotalPct.toFixed(0)}%"></div></div>
+    </td>
+  </tr></tfoot>`;
 }
 
 
@@ -5470,7 +5513,11 @@ async function initApp() {
       renderObraSwitch();
       renderKPIs();
       renderSemanas();
-      showHome();
+      /* Si Firebase todavía no está listo, mantenemos ocultas las vistas para no mostrar datos viejos. */
+      if(!isFirebaseEnabled() || window._dbReady){
+        showHome();
+        if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
+      }
       resetHistoryBase();
       appInitialized = true;
       if(isFirebaseEnabled()) setFirebaseStatus('Firebase: sincronizando…','sync');
@@ -5523,7 +5570,11 @@ async function initApp() {
   renderObraSwitch();
   renderKPIs();
   renderSemanas();
-  showHome();
+  /* Mostrar la pantalla recién cuando los datos iniciales ya están resueltos. */
+  if(!isFirebaseEnabled() || window._dbReady){
+    showHome();
+    if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
+  }
   resetHistoryBase();
   appInitialized = true;
 }
@@ -5537,7 +5588,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // Cuando Firebase termina de cargarse, sincroniza datos y refresca la pantalla.
 document.addEventListener('firebase-ready', () => initApp());
-setTimeout(() => { if(!appInitialized){ updateFirebaseModeUI(); renderObraSwitch(); renderKPIs(); renderSemanas(); showHome(); resetHistoryBase(); appInitialized=true; } }, 300);
+setTimeout(() => {
+  if(!appInitialized){ updateFirebaseModeUI(); renderObraSwitch(); renderKPIs(); renderSemanas(); showHome(); resetHistoryBase(); appInitialized=true; if(window.cqRevealInitialScreen) window.cqRevealInitialScreen(); }
+}, 300);
+/* Respaldo visual: si la conexión tarda demasiado, abrir limpio con el estado local ya renderizado. */
+setTimeout(() => {
+  if(document.documentElement.classList.contains('cq-app-booting')){
+    try{ showHome(); }catch(e){}
+    if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
+  }
+}, 2200);
 </script>
 
 <div class="modal-bg" id="modal-admin-obras">
@@ -9439,5 +9499,291 @@ body.cq-constructor-mode #tab-reporte{
   #view-avances .semana-monto{font-size:13.5px!important;line-height:1.2!important;}
   #view-avances .week-pending-badge{font-size:9.5px!important;padding:5px 7px!important;}
   #view-avances .chevron{font-size:14px!important;}
+}
+</style>
+
+
+<style id="cq-finanzas-phone-tablet-ajustes-v2">
+/* Ajustes solicitados:
+   1) Celular: agrandar letra y números en Finanzas.
+   2) Tablet: agrandar sólo los porcentajes del detalle por semana. */
+
+@media (max-width:700px){
+  #view-finanzas > .main-content{
+    padding:12px 10px 22px!important;
+  }
+
+  #view-finanzas .section-title,
+  #view-finanzas .section-title span{
+    font-size:11px!important;
+    line-height:1.2!important;
+    letter-spacing:.05em!important;
+  }
+
+  #view-finanzas .fuera-section{
+    margin-bottom:12px!important;
+    border-radius:12px!important;
+  }
+  #view-finanzas .fuera-header{
+    min-height:52px!important;
+    padding:10px 12px!important;
+    gap:8px!important;
+  }
+  #view-finanzas .fuera-title{
+    font-size:11.5px!important;
+    line-height:1.15!important;
+  }
+  #view-finanzas .fuera-subtitle{
+    font-size:8.8px!important;
+    line-height:1.22!important;
+    max-width:none!important;
+  }
+  #view-finanzas .fuera-saldo{
+    font-size:13px!important;
+  }
+
+  #view-finanzas .fin-grid{
+    gap:8px!important;
+  }
+  #view-finanzas .fin-card{
+    padding:10px!important;
+    border-radius:11px!important;
+  }
+  #view-finanzas .fin-card-title{
+    font-size:9px!important;
+    line-height:1.15!important;
+    margin-bottom:8px!important;
+    padding-bottom:6px!important;
+  }
+  #view-finanzas .fin-row{
+    min-height:28px!important;
+    padding:6px 0!important;
+    gap:8px!important;
+  }
+  #view-finanzas .fin-row-label{
+    font-size:8.8px!important;
+    line-height:1.15!important;
+  }
+  #view-finanzas .fin-row-val{
+    font-size:10.6px!important;
+    line-height:1.05!important;
+  }
+  #view-finanzas .fin-row.saldo .fin-row-label,
+  #view-finanzas .fin-row.saldo .fin-row-val,
+  #view-finanzas .fin-row.total .fin-row-label,
+  #view-finanzas .fin-row.total .fin-row-val{
+    font-size:11.4px!important;
+  }
+
+  #view-finanzas .pagos-table{
+    font-size:10px!important;
+  }
+  #view-finanzas .pagos-table th,
+  #view-finanzas #pagos-table th{
+    font-size:7.1px!important;
+    line-height:1.12!important;
+    padding:5px 4px!important;
+  }
+  #view-finanzas .pagos-table td,
+  #view-finanzas #pagos-table td{
+    font-size:8.9px!important;
+    line-height:1.15!important;
+    padding:5px 4px!important;
+    height:auto!important;
+  }
+  #view-finanzas .pagos-table td.mono,
+  #view-finanzas #pagos-table td.mono{
+    font-size:8.6px!important;
+  }
+  #view-finanzas #pagos-table td:nth-child(2){
+    font-size:8.7px!important;
+    line-height:1.15!important;
+  }
+  #view-finanzas #pagos-table td:last-child > span.mono{
+    display:inline-block!important;
+    font-size:9.8px!important;
+    font-weight:700!important;
+    margin-bottom:4px!important;
+  }
+  #view-finanzas #pagos-table td:last-child > div{
+    height:5px!important;
+    margin-top:3px!important;
+    border-radius:4px!important;
+  }
+
+  #view-finanzas .tag-af,
+  #view-finanzas .tag-ec{
+    min-height:20px!important;
+    padding:3px 6px!important;
+    border-radius:5px!important;
+    font-size:7px!important;
+  }
+  #view-finanzas .btn-mini-edit{
+    min-height:24px!important;
+    height:24px!important;
+    padding:3px 6px!important;
+    font-size:7px!important;
+  }
+  #view-finanzas .btn-danger-sm{
+    min-width:24px!important;
+    min-height:24px!important;
+    height:24px!important;
+    padding:3px 6px!important;
+    font-size:7px!important;
+  }
+}
+
+@media (orientation: landscape) and (min-width:700px) and (max-width:1900px) and (pointer:coarse){
+  #view-finanzas #pagos-table td:last-child > span.mono{
+    display:inline-block!important;
+    font-size:17px!important;
+    line-height:1!important;
+    font-weight:700!important;
+    margin-bottom:4px!important;
+  }
+  #view-finanzas #pagos-table td:last-child > div{
+    height:8px!important;
+    margin-top:5px!important;
+    border-radius:5px!important;
+  }
+}
+</style>
+
+
+<style id="cq-tablet-horizontal-header-visible-v3">
+/* Tablet horizontal: mantener visible el encabezado completo debajo de A CERTIFICAR. */
+@media (orientation: landscape) and (min-width:700px) and (max-width:1900px) and (pointer:coarse){
+  body:not(.cq-obra-mode) .header{
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    position:sticky!important;
+    top:42px!important;
+    z-index:9998!important;
+    min-height:58px!important;
+    height:58px!important;
+    padding:6px 12px!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:10px!important;
+  }
+  body:not(.cq-obra-mode) .header-left{
+    display:flex!important;
+    align-items:center!important;
+    min-width:0!important;
+    flex:1 1 auto!important;
+  }
+  body:not(.cq-obra-mode) .header-right{
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    align-items:center!important;
+    justify-content:flex-end!important;
+    gap:7px!important;
+    min-width:0!important;
+    flex:0 0 auto!important;
+  }
+  body:not(.cq-obra-mode) #header-home-btn{
+    display:inline-flex!important;
+    min-width:78px!important;
+    height:40px!important;
+    min-height:40px!important;
+    padding:0 12px!important;
+    align-items:center!important;
+    justify-content:center!important;
+    font-size:12px!important;
+    border-radius:10px!important;
+  }
+  body:not(.cq-obra-mode) .header .history-btn.hist-icon,
+  body:not(.cq-obra-mode) .header .restore-quick{
+    width:40px!important;
+    min-width:40px!important;
+    height:40px!important;
+    min-height:40px!important;
+    padding:0!important;
+    font-size:17px!important;
+    border-radius:10px!important;
+  }
+  body:not(.cq-obra-mode) #firebase-status{
+    min-width:76px!important;
+    height:40px!important;
+    min-height:40px!important;
+    padding:0 12px 0 27px!important;
+    font-size:11px!important;
+    border-radius:10px!important;
+  }
+  body:not(.cq-obra-mode) #firebase-status::before{
+    left:10px!important;
+    width:9px!important;
+    height:9px!important;
+  }
+}
+</style>
+
+<script id="cq-tablet-horizontal-scrolltop-v3">
+(function(){
+  function esTabletHorizontal(){
+    return window.matchMedia && window.matchMedia('(orientation: landscape) and (min-width:700px) and (max-width:1900px) and (pointer:coarse)').matches;
+  }
+  function arriba(){
+    if(!esTabletHorizontal()) return;
+    requestAnimationFrame(function(){ window.scrollTo(0,0); });
+    setTimeout(function(){ window.scrollTo(0,0); },60);
+  }
+  ['showHome','openConstructor','showTerminadas'].forEach(function(name){
+    var original=window[name];
+    if(typeof original!=='function') return;
+    window[name]=function(){
+      var r=original.apply(this,arguments);
+      arriba();
+      return r;
+    };
+  });
+  window.addEventListener('orientationchange',function(){ setTimeout(arriba,120); });
+})();
+</script>
+
+
+<style id="cq-finanzas-totales-semana-v5">
+#view-finanzas #pagos-table tfoot .pagos-total-row td{
+  background:#F1F7F3!important;
+  border-top:2px solid #2E7D5E!important;
+  border-bottom:none!important;
+  font-weight:900!important;
+  color:#234D3C!important;
+}
+#view-finanzas #pagos-table .pagos-total-label{
+  font-weight:900!important;
+  letter-spacing:.04em!important;
+  color:#23533F!important;
+}
+#view-finanzas #pagos-table .pagos-total-num{
+  color:#173F35!important;
+  font-weight:900!important;
+}
+#view-finanzas #pagos-table .pagos-total-pct{
+  display:inline-block!important;
+  color:#0A6E3A!important;
+  font-weight:900!important;
+}
+#view-finanzas #pagos-table .pagos-total-bar{
+  height:6px!important;
+  margin-top:4px!important;
+  background:#DCE9E0!important;
+  border-radius:999px!important;
+  overflow:hidden!important;
+}
+#view-finanzas #pagos-table .pagos-total-bar>div{
+  height:100%!important;
+  background:#0A6E3A!important;
+  border-radius:999px!important;
+}
+@media(max-width:700px){
+  #view-finanzas #pagos-table tfoot .pagos-total-row td{padding-top:8px!important;padding-bottom:8px!important;}
+  #view-finanzas #pagos-table .pagos-total-label{font-size:9px!important;}
+  #view-finanzas #pagos-table .pagos-total-num{font-size:9.4px!important;}
+  #view-finanzas #pagos-table .pagos-total-pct{font-size:10px!important;}
+}
+@media (orientation:landscape) and (min-width:700px) and (max-width:1900px) and (pointer:coarse){
+  #view-finanzas #pagos-table .pagos-total-pct{font-size:17px!important;}
 }
 </style>

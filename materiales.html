@@ -8638,6 +8638,43 @@ function aplicarIntegracion(ev){
 
   if(obraIdx<0||!mat) return false;
 
+  // CQ 06/10/2026 — RUBRO DE ORIGEN (Acopio/Pañol)
+  // Si el material automático quedó sin clasificación o en VARIOS, adoptar el
+  // subrubro que viene en la integración. Una edición manual del Catálogo gana
+  // siempre y nunca es sobrescrita por Acopio/Pañol.
+  (function(){
+    var origen=cqOrigenCargaNormalizado({origen:ev.source,sourceLabel:ev.sourceLabel,integrationId:ev.integrationId});
+    if(origen!=='acopio'&&origen!=='panol')return;
+
+    var manual=(state.categoriaManual&&state.categoriaManual[mat.id])
+      ||(state.catalogoManual&&state.catalogoManual[mat.id]&&state.catalogoManual[mat.id].manual!==false
+        ?state.catalogoManual[mat.id].categoria:'');
+    if(String(manual||'').trim())return;
+
+    var entrante=String(ev.materialCategory||ev.category||'').trim();
+    if(!entrante||/^varios$/i.test(entrante))return;
+
+    // Usar exclusivamente un subrubro que ya exista en Materiales/Gastos.
+    var destino=(CATS||[]).find(function(c){
+      return c&&!isCatDeleted(c.name)&&normalizarClaveIntegracion(c.name)===normalizarClaveIntegracion(entrante);
+    });
+    if(!destino)return;
+
+    var actual=String((state.matCategorias&&state.matCategorias[mat.id])||mat.catName||obtenerCategoriaMaterial(mat.id)||'').trim();
+    var sinClasificar=!actual||/^varios$/i.test(actual)||/sin subrubro/i.test(actual);
+    if(!sinClasificar)return;
+
+    if(!state.matCategorias)state.matCategorias={};
+    state.matCategorias[mat.id]=destino.name;
+    mat.catName=destino.name;
+    var extra=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
+    if(extra)extra.catName=destino.name;
+    var nuevo=(state.materialesNuevos||[]).find(function(x){return Number(x.id)===Number(mat.id);});
+    if(nuevo)nuevo.catName=destino.name;
+    try{moverMaterialACategoria(mat.id,destino.name);}catch(e){}
+    try{guardarMemoriaCategoriaMaterial(mat,destino.name);}catch(e){}
+  })();
+
   // Si se unificó por nombre y el catálogo todavía no tenía código,
   // copiar inmediatamente el código que viene de Acopio/Pañol/Caja.
   var codigoIntegracion=String(ev.materialCode||'').trim();
@@ -15392,6 +15429,433 @@ window.abrirGraficoDirecto = function(){
   applyAll();
 })();
 </script>
+
+<script id="cq-fix-nombres-rubros-origen-v2">
+(function(){
+  if(window.__cqFixNombresRubrosOrigenV2)return;
+  window.__cqFixNombresRubrosOrigenV2=true;
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  }
+  function origenValido(ev){
+    try{
+      var o=(typeof cqOrigenCargaNormalizado==='function')
+        ?cqOrigenCargaNormalizado({origen:ev.source,sourceLabel:ev.sourceLabel,integrationId:ev.integrationId})
+        :String(ev.source||ev.sourceLabel||'').toLowerCase();
+      return o==='acopio'||o==='panol';
+    }catch(e){ return false; }
+  }
+  function matById(id){
+    return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;
+  }
+  function categoriaCanonica(nombre){
+    var n=norm(nombre);
+    if(!n||n==='varios')return '';
+    var c=(CATS||[]).find(function(x){
+      return x && !isCatDeleted(x.name) && norm(x.name)===n;
+    });
+    return c?c.name:'';
+  }
+  function fijarNombreOrigen(mat,nombre){
+    nombre=String(nombre||'').trim();
+    if(!mat||!nombre)return false;
+    var id=Number(mat.id);
+
+    // Sólo una edición MANUAL REAL del nombre bloquea el nombre de origen.
+    if(state.nombreManualConfirmado && state.nombreManualConfirmado[id]===true)return false;
+
+    if(!state.matNombres)state.matNombres={};
+    state.matNombres[id]=nombre;
+    mat.mat=nombre;
+
+    (CATS||[]).forEach(function(c){
+      (c.items||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
+    });
+    (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x.id)===id)x.mat=nombre;});
+    (state.cargas||[]).forEach(function(c){if(Number(c.matId)===id)c.matName=nombre;});
+
+    // Evita que catalogoManual viejo restaure un nombre obsoleto en normalizeState().
+    if(state.catalogoManual && state.catalogoManual[id]){
+      state.catalogoManual[id].nombre=nombre;
+    }
+    return true;
+  }
+  function fijarRubroOrigen(mat,rubro){
+    if(!mat)return false;
+    var id=Number(mat.id);
+    var destino=categoriaCanonica(rubro);
+    if(!destino)return false;
+
+    // La categoría elegida manualmente en Materiales sigue teniendo prioridad.
+    var manual=String((state.categoriaManual&&state.categoriaManual[id])||'').trim();
+    if(manual)return false;
+
+    if(!state.matCategorias)state.matCategorias={};
+    state.matCategorias[id]=destino;
+    mat.catName=destino;
+
+    (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.catName=destino;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x.id)===id)x.catName=destino;});
+
+    // Si había un lock antiguo creado automáticamente, actualizarlo para que
+    // no vuelva a mandar el material a VARIOS.
+    if(state.catalogoManual && state.catalogoManual[id] && !state.categoriaManual?.[id]){
+      state.catalogoManual[id].categoria=destino;
+    }
+
+    try{if(typeof moverMaterialACategoria==='function')moverMaterialACategoria(id,destino);}catch(e){}
+    try{if(typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(mat,destino);}catch(e){}
+    return true;
+  }
+
+  // Registrar como manual el NOMBRE sólo cuando el usuario realmente lo cambia.
+  var guardarPrev=window.guardarNombreMat || (typeof guardarNombreMat==='function'?guardarNombreMat:null);
+  if(typeof guardarPrev==='function'){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var id=Number(selectedCargaMat);
+      var mAntes=matById(id);
+      var nombreAntes=mAntes?String(mAntes.mat||'').trim():'';
+      var nombreEl=document.getElementById('editar-mat-nombre-input');
+      var nombreNuevo=nombreEl?String(nombreEl.value||'').trim():'';
+      var cambioNombre=!!nombreNuevo && norm(nombreNuevo)!==norm(nombreAntes);
+
+      var r=await guardarPrev.apply(this,arguments);
+
+      if(cambioNombre){
+        if(!state.nombreManualConfirmado)state.nombreManualConfirmado={};
+        state.nombreManualConfirmado[id]=true;
+        if(!state.catalogoManual)state.catalogoManual={};
+        state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{},{
+          nombre:nombreNuevo,manual:true
+        });
+        var m=matById(id);
+        if(m){
+          if(!state.matNombres)state.matNombres={};
+          state.matNombres[id]=nombreNuevo;
+          m.mat=nombreNuevo;
+          (state.cargas||[]).forEach(function(c){if(Number(c.matId)===id)c.matName=nombreNuevo;});
+        }
+        try{if(typeof persist==='function')await persist();}catch(e){console.warn(e);}
+      }
+      return r;
+    };
+  }
+
+  // Después de la integración original, imponer únicamente los dos datos maestros
+  // que vienen de Acopio/Pañol: descripción exacta y rubro válido.
+  var aplicarPrev=window.aplicarIntegracion || (typeof aplicarIntegracion==='function'?aplicarIntegracion:null);
+  if(typeof aplicarPrev==='function'){
+    window.aplicarIntegracion=aplicarIntegracion=function(ev){
+      var r=aplicarPrev.apply(this,arguments);
+      if(!ev || ev.active===false || !origenValido(ev))return r;
+
+      var carga=(state.cargas||[]).find(function(c){
+        return String(c.integracionId||'')===String(ev.integrationId||'');
+      });
+      var mat=carga?matById(carga.matId):null;
+
+      // Respaldo: resolver por código si todavía no encontramos la carga.
+      if(!mat && ev.materialCode){
+        var cod=String(ev.materialCode||'').trim().toLowerCase();
+        mat=(ALL_MATS||[]).find(function(m){
+          return !isMatDeleted(m.id) && String(getMatCodigo(m)||'').trim().toLowerCase()===cod;
+        })||null;
+      }
+      if(!mat)return r;
+
+      var cambio=false;
+      if(String(ev.materialName||'').trim()){
+        cambio=fijarNombreOrigen(mat,ev.materialName)||cambio;
+      }
+      var rubro=String(ev.materialCategory||ev.category||'').trim();
+      if(rubro && !/^varios$/i.test(rubro)){
+        cambio=fijarRubroOrigen(mat,rubro)||cambio;
+      }
+
+      // Asegurar que la carga que acaba de entrar muestre el nombre maestro resultante.
+      if(carga)carga.matName=mat.mat;
+
+      return r||cambio;
+    };
+  }
+
+  console.log('CQ fix nombres/rubros origen v2 activo');
+})();
+</script>
+
+
+<script id="cq-maestro-unico-sin-reversion-v1">
+(function(){
+  if(window.__cqMaestroUnicoSinReversionV1)return;
+  window.__cqMaestroUnicoSinReversionV1=true;
+
+  function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  }
+  function matById(id){
+    return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;
+  }
+  function ensure(){
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.nombreManualConfirmado||typeof state.nombreManualConfirmado!=='object')state.nombreManualConfirmado={};
+    if(!state.matNombres||typeof state.matNombres!=='object')state.matNombres={};
+    if(!state.matCodigos||typeof state.matCodigos!=='object')state.matCodigos={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+  }
+
+  // Aplica los datos maestros a catálogo + TODOS los registros del artículo.
+  function aplicarMaestro(id,lock){
+    id=Number(id);
+    if(!Number.isFinite(id)||!lock)return false;
+    ensure();
+    var m=matById(id);
+    if(!m)return false;
+
+    var nombre=String(lock.nombre||m.mat||'').trim();
+    var codigo=String(lock.codigo!=null?lock.codigo:(state.matCodigos[id]||m.codigo||'')).trim();
+    var categoria=String(lock.categoria||state.matCategorias[id]||m.catName||'').trim();
+
+    if(nombre){
+      state.nombreManualConfirmado[id]=true;
+      state.matNombres[id]=nombre;
+      m.mat=nombre;
+    }
+    state.matCodigos[id]=codigo;
+    m.codigo=codigo;
+
+    if(categoria){
+      state.categoriaManual[id]=categoria;
+      state.matCategorias[id]=categoria;
+      m.catName=categoria;
+    }
+
+    (CATS||[]).forEach(function(c){
+      (c.items||[]).forEach(function(x){
+        if(Number(x.id)!==id)return;
+        if(nombre)x.mat=nombre;
+        x.codigo=codigo;
+        if(categoria)x.catName=categoria;
+      });
+    });
+    (state.extraMats||[]).forEach(function(x){
+      if(Number(x.id)!==id)return;
+      if(nombre)x.mat=nombre;
+      x.codigo=codigo;
+      if(categoria)x.catName=categoria;
+    });
+    (state.materialesNuevos||[]).forEach(function(x){
+      if(Number(x.id)!==id)return;
+      if(nombre)x.mat=nombre;
+      x.codigo=codigo;
+      if(categoria)x.catName=categoria;
+    });
+
+    // Histórico y movimientos automáticos: mismo matId = mismo nombre/código maestro.
+    (state.cargas||[]).forEach(function(c){
+      if(Number(c.matId)!==id)return;
+      if(nombre)c.matName=nombre;
+      if(codigo)c.matCode=codigo;
+    });
+
+    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{},{
+      nombre:nombre,
+      codigo:codigo,
+      categoria:categoria,
+      comentarios:lock.comentarios!=null?String(lock.comentarios||''):
+        String((state.catalogoManual[id]&&state.catalogoManual[id].comentarios)||m.comentarios||''),
+      manual:true,
+      updatedAt:new Date().toISOString()
+    });
+
+    try{
+      if(categoria&&typeof moverMaterialACategoria==='function')moverMaterialACategoria(id,categoria);
+      if(categoria&&typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(m,categoria);
+    }catch(e){}
+    return true;
+  }
+  window.cqAplicarMaestroMaterial=aplicarMaestro;
+
+  /*
+   * Guardado seguro corregido:
+   * conserva altas automáticas remotas, pero NO deja que el remoto reintroduzca
+   * nombre/rubro viejos para un material editado manualmente.
+   */
+  window.cqGuardarMaterialesSeguro = cqGuardarMaterialesSeguro = async function(extra){
+    if(!window._dbReady||!window._runTransaction)throw new Error('Firebase transaccional no disponible');
+    normalizeState();
+    ensure();
+
+    var ref=window._doc(window._db,'materiales','data_planilla_exacta_v4');
+    var local=clone(state);
+    extra=extra||{};
+
+    await window._runTransaction(window._db,async function(tx){
+      var snap=await tx.get(ref);
+      var remoto=snap.exists()?(snap.data()||{}):{};
+      var remCargas=Array.isArray(remoto.cargas)?remoto.cargas:[];
+      var locCargas=Array.isArray(local.cargas)?local.cargas:[];
+
+      function esAuto(c){
+        if(!c)return false;
+        if(c.automatico===true||c.integracionId)return true;
+        var o=String(c.origen||c.source||'').toLowerCase();
+        return o==='acopio'||o==='panol'||o==='caja_chica'||o==='cq_caja_gerencia'||o==='caja_gerencia';
+      }
+
+      var manuales=locCargas.filter(function(c){return !esAuto(c);});
+      var mapa={};
+      locCargas.filter(esAuto).forEach(function(c){
+        mapa[String(c.integracionId||('legacy_'+c.id))]=clone(c);
+      });
+      remCargas.filter(esAuto).forEach(function(c){
+        var k=String(c.integracionId||('legacy_'+c.id));
+        // Firebase aporta altas/movimientos; luego se imponen datos maestros locales.
+        mapa[k]=clone(c);
+      });
+
+      var locks=local.catalogoManual||{};
+      Object.keys(mapa).forEach(function(k){
+        var c=mapa[k];
+        var id=Number(c&&c.matId);
+        var lock=locks[id]||locks[String(id)];
+        if(!lock||lock.manual===false)return;
+        if(String(lock.nombre||'').trim())c.matName=String(lock.nombre).trim();
+        if(String(lock.codigo||'').trim())c.matCode=String(lock.codigo).trim();
+      });
+
+      local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
+
+      // Los mapas maestros locales también ganan sobre una copia remota antigua.
+      local.catalogoManual=clone(state.catalogoManual||{});
+      local.categoriaManual=clone(state.categoriaManual||{});
+      local.nombreManualConfirmado=clone(state.nombreManualConfirmado||{});
+      local.matNombres=clone(state.matNombres||{});
+      local.matCategorias=clone(state.matCategorias||{});
+      local.matCodigos=clone(state.matCodigos||{});
+
+      Object.keys(extra).forEach(function(k){local[k]=extra[k];});
+      local.updatedAt=new Date().toISOString();
+      tx.set(ref,local);
+    });
+
+    // Una sola lectura final.
+    var ver=await window._getDoc(ref);
+    if(ver.exists()){
+      var d=ver.data()||{};
+      delete d.updatedAt;
+      state=d;
+      normalizeState();
+      ensure();
+      Object.keys(state.catalogoManual||{}).forEach(function(id){
+        var lock=state.catalogoManual[id];
+        if(lock&&lock.manual!==false)aplicarMaestro(Number(id),lock);
+      });
+      localStorage.setItem(DB_KEY,JSON.stringify(state));
+    }
+    return true;
+  };
+
+  /*
+   * Edición de Catálogo: reemplaza toda la cadena de wrappers anteriores.
+   * Un click en Guardar = una modificación de estado + un único persist().
+   */
+  window.guardarNombreMat = guardarNombreMat = async function(){
+    var id=Number(selectedCargaMat);
+    var mat=matById(id);
+    if(!mat){try{closeEditarNombreMat();}catch(e){} return;}
+
+    var nombreEl=document.getElementById('editar-mat-nombre-input');
+    var codigoEl=document.getElementById('editar-mat-codigo');
+    var catEl=document.getElementById('editar-mat-cat');
+    var comentarioEl=document.getElementById('editar-mat-comentarios');
+
+    var nombre=nombreEl?String(nombreEl.value||'').trim():'';
+    var codigo=codigoEl?String(codigoEl.value||'').trim():'';
+    var categoria=catEl?String(catEl.value||'').trim():'';
+    var comentarios=comentarioEl?String(comentarioEl.value||'').trim():'';
+
+    if(!nombre){alert('Ingresá un nombre.');return;}
+    if(!categoria){alert('Seleccioná una categoría.');return;}
+
+    // Mantener la regla histórica especial de cemento.
+    if(id===7||codigo==='4816306010'||codigo==='4816306011'){
+      id=7; selectedCargaMat=7;
+      nombre='CEMENTO PORTLAND HOLCIM 25 KG';
+      codigo='4816306010';
+      categoria='Cemento';
+    }
+
+    var lock={nombre:nombre,codigo:codigo,categoria:categoria,comentarios:comentarios,manual:true};
+    aplicarMaestro(id,lock);
+
+    // Guardar comentarios también en el material activo.
+    mat=matById(id);
+    if(mat)mat.comentarios=comentarios;
+    (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.comentarios=comentarios;});
+    (CATS||[]).forEach(function(c){
+      (c.items||[]).forEach(function(x){if(Number(x.id)===id)x.comentarios=comentarios;});
+    });
+
+    localStorage.setItem(DB_KEY,JSON.stringify(state));
+    try{renderActive();}catch(e){}
+    try{renderCatalogo();}catch(e){}
+    try{renderReporte();}catch(e){}
+    try{closeEditarNombreMat();}catch(e){}
+
+    suppressRemoteUntil=Date.now()+2500;
+    try{
+      setSyncStatus('Firebase: guardando...');
+      await cqGuardarMaterialesSeguro();
+      await updateLastSync('guardó cambios');
+      setSyncStatus('Firebase: guardado','ok');
+      try{renderActive();}catch(e){}
+      try{renderCatalogo();}catch(e){}
+      try{renderReporte();}catch(e){}
+      try{showToast('✓ Material actualizado · nombre y rubro fijados');}catch(e){}
+    }catch(e){
+      console.warn('Guardado maestro Materiales',e);
+      setSyncStatus('Firebase: error','err');
+      try{showToast('⚠ No se pudo guardar en Firebase');}catch(_){}
+    }
+  };
+
+  /*
+   * La búsqueda masiva de códigos contra Acopio/Pañol era ejecutada en cada lectura
+   * completa y podía prolongar SYNC. Las integraciones en tiempo real ya traen código.
+   * Se conserva disponible sólo cuando se la fuerza manualmente con true.
+   */
+  if(typeof completarCodigosDesdeAcopioYPanol==='function'){
+    var completarCodigosOriginal=completarCodigosDesdeAcopioYPanol;
+    window.completarCodigosDesdeAcopioYPanol = completarCodigosDesdeAcopioYPanol = async function(forzar){
+      if(forzar===true)return completarCodigosOriginal(true);
+      return {actualizados:0,omitido:true};
+    };
+    window.completarCodigosDesdeAcopio=completarCodigosDesdeAcopioYPanol;
+  }
+
+  // Al terminar cualquier normalización, volver a imponer únicamente locks manuales,
+  // sin escribir Firebase ni iniciar otro ciclo de SYNC.
+  var normalizeFinal=normalizeState;
+  normalizeState=function(){
+    var r=normalizeFinal.apply(this,arguments);
+    ensure();
+    Object.keys(state.catalogoManual||{}).forEach(function(id){
+      var lock=state.catalogoManual[id];
+      if(lock&&lock.manual!==false)aplicarMaestro(Number(id),lock);
+    });
+    return r;
+  };
+
+  console.log('CQ Materiales: maestro único nombre/rubro + sync simplificado activo');
+})();
+</script>
+
 </body>
 </html>
 
@@ -16259,3 +16723,113 @@ body:has(#modal-reporte.open) #modal-reporte{
   setTimeout(instalar,300);
 })();
 </script>
+
+
+<style id="cq-tablet-horizontal-fullwidth-final">
+/* Tablet horizontal: aprovechar todo el ancho disponible en TODAS las solapas.
+   Solo cambia layout/estética; no toca Firebase ni lógica. */
+@media (min-width:768px) and (max-width:1600px) and (orientation:landscape){
+  html,body{
+    width:100%!important;
+    max-width:100%!important;
+    overflow-x:hidden!important;
+  }
+
+  /* Barra superior también a ancho de pantalla */
+  .hdr{
+    width:calc(100% - 12px)!important;
+    max-width:none!important;
+    margin:6px 6px 0!important;
+  }
+
+  /* Cargar / Reporte / Catálogo */
+  .view,
+  .view.active,
+  .main,
+  #view-carga,
+  #view-obras,
+  #view-catalogo{
+    box-sizing:border-box!important;
+    width:calc(100% - 12px)!important;
+    max-width:none!important;
+    margin-left:6px!important;
+    margin-right:6px!important;
+  }
+
+  .view.active{
+    margin-top:10px!important;
+    padding-left:14px!important;
+    padding-right:14px!important;
+  }
+
+  /* Contenido interno: no volver a limitar el ancho */
+  #view-carga .carga-form,
+  #view-carga .premium-hist,
+  #view-carga #carga-historial,
+  #view-obras .filter-row,
+  #view-obras #obras-content,
+  #view-catalogo .catalog-sticky-tools,
+  #view-catalogo #catalogo-content{
+    box-sizing:border-box!important;
+    width:100%!important;
+    max-width:none!important;
+  }
+
+  /* Reporte abierto: usar también todo el ancho de la tablet */
+  #modal-reporte .modal-xl,
+  #modal-reporte .reporte-section,
+  #modal-reporte #reporte-tabla-section,
+  #modal-reporte #reporte-grafico-section{
+    box-sizing:border-box!important;
+    width:100%!important;
+    max-width:none!important;
+  }
+}
+</style>
+
+
+<style id="cq-catalogo-tablet-fill-safe">
+/* Catálogo en tablet horizontal: aprovechar todo el ancho SIN tocar JS/Firebase. */
+@media (min-width:768px) and (max-width:1600px) and (orientation:landscape){
+  #view-catalogo #catalogo-content,
+  #view-catalogo #catalogo-content .card,
+  #view-catalogo #catalogo-content .tbl-wrap{
+    box-sizing:border-box!important;
+    width:100%!important;
+    max-width:none!important;
+  }
+
+  #view-catalogo #catalogo-content .tbl-wrap{
+    overflow-x:hidden!important;
+  }
+
+  #view-catalogo #catalogo-content .tbl-wrap table{
+    width:100%!important;
+    min-width:100%!important;
+    max-width:100%!important;
+    table-layout:fixed!important;
+    border-collapse:collapse!important;
+  }
+
+  #view-catalogo #catalogo-content table th:nth-child(1),
+  #view-catalogo #catalogo-content table td:nth-child(1){width:38%!important;}
+
+  #view-catalogo #catalogo-content table th:nth-child(2),
+  #view-catalogo #catalogo-content table td:nth-child(2){width:18%!important;}
+
+  #view-catalogo #catalogo-content table th:nth-child(3),
+  #view-catalogo #catalogo-content table td:nth-child(3){width:44%!important;}
+
+  #view-catalogo #catalogo-content table td:nth-child(1),
+  #view-catalogo #catalogo-content table td:nth-child(2),
+  #view-catalogo #catalogo-content table td:nth-child(3){
+    overflow:hidden!important;
+  }
+
+  #view-catalogo #catalogo-content table td:nth-child(3) > div{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+}
+</style>

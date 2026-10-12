@@ -1761,6 +1761,36 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
 }
 </style>
 
+
+<style id="cq-resultados-costos-fijos-v1">
+.cq-fixed-costs-box{margin:0 14px 14px;padding:14px;border:1px solid rgba(16,45,37,.12);border-radius:20px;background:linear-gradient(180deg,#fff,#f7f2e8);box-shadow:0 8px 22px rgba(16,45,37,.06)}
+.cq-fixed-costs-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
+.cq-fixed-costs-title span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;color:#6d7b73}
+.cq-fixed-costs-title b{display:block;font-size:15px;color:#173b32;margin-top:2px}
+.cq-fixed-costs-title small{max-width:180px;text-align:right;font-size:9px;color:#7a877f;line-height:1.3}
+.cq-fixed-costs-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.cq-fixed-costs-grid label{display:block;background:#fff;border:1px solid rgba(16,45,37,.09);border-radius:15px;padding:10px}
+.cq-fixed-costs-grid label>span{display:block;font-size:11px;font-weight:900;color:#173b32}
+.cq-fixed-costs-grid label>small{display:block;min-height:25px;font-size:8.5px;color:#78877f;line-height:1.25;margin:3px 0 7px}
+.cq-fixed-costs-grid input{width:100%;min-height:39px;border:1px solid rgba(16,45,37,.12);border-radius:11px;padding:8px;font:800 13px 'JetBrains Mono',monospace;color:#173b32;background:#faf7f0}
+.cq-fixed-result-lines{margin-top:11px;border-top:1px dashed rgba(16,45,37,.16);padding-top:8px}
+.cq-fixed-result-lines>div{display:flex;justify-content:space-between;gap:10px;padding:5px 2px;font-size:11px;color:#65756d}
+.cq-fixed-result-lines b{font-family:'JetBrains Mono',monospace;color:#173b32}
+.cq-fixed-result-lines .net{margin-top:4px;padding:10px;border-radius:13px;background:#e6f5ec;color:#15573f;font-size:12px;font-weight:900}
+.cq-fixed-result-lines .net b{font-size:15px;color:#15573f}
+.cq-fixed-result-lines .net.neg{background:#fce8e5;color:#a53f37}.cq-fixed-result-lines .net.neg b{color:#a53f37}
+@media(max-width:430px){.cq-fixed-costs-grid{grid-template-columns:1fr}.cq-fixed-costs-title{display:block}.cq-fixed-costs-title small{display:block;max-width:none;text-align:left;margin-top:4px}}
+</style>
+
+<style id="cq-resultados-tab-label-fix">
+.tabs .tab-btn[data-tab="comparar"]::after{content:"Resultados"!important}
+</style>
+
+<style id="cq-resultados-filtro-anio-v1">
+.cq-year-filter-box{margin:0 0 12px;padding:12px 13px;border-radius:18px;background:linear-gradient(180deg,#fff,#f6f1e7);border:1px solid rgba(16,45,37,.11);box-shadow:0 7px 18px rgba(16,45,37,.055)}
+.cq-year-filter-box label{display:block;margin-bottom:6px;font-size:9.5px;font-weight:900;letter-spacing:.075em;text-transform:uppercase;color:#6d7b73}
+.cq-year-filter-box select{width:100%;min-height:42px;padding:9px 11px;border-radius:13px;border:1px solid rgba(16,45,37,.13);background:#fff;color:#173b32;font:800 13px 'JetBrains Mono',monospace}
+</style>
 </head>
 <body>
 
@@ -1815,7 +1845,7 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
   <nav class="tabs">
     <button type="button" class="tab-btn active" data-tab="calc" onclick="cqRoeAbrirTab('calc')">Calcular</button>
     <button type="button" class="tab-btn" data-tab="obras" onclick="cqRoeAbrirTab('obras')">Proyectos</button>
-    <button type="button" class="tab-btn" data-tab="comparar" onclick="cqRoeAbrirTab('comparar')">Comparar</button>
+    <button type="button" class="tab-btn" data-tab="comparar" onclick="cqRoeAbrirTab('comparar')">Resultados</button>
   </nav>
 
   <main>
@@ -1871,8 +1901,14 @@ html.cq-fast-1h-roe-tir #cq-gerencia-only{display:none!important}
     <!-- ===================== TAB COMPARAR ===================== -->
     <section id="tab-comparar" class="tab-content">
       <div class="card">
-        <h2>Elegí las obras a comparar</h2>
-        <div class="compare-pick" id="compare-pick"></div>
+        <h2>Elegí uno o más proyectos</h2>
+        <div class="cq-year-filter-box">
+  <label for="cq-result-year">Filtrar resultados por año</label>
+  <select id="cq-result-year" onchange="cqRoeSetResultYear(this.value)">
+    <option value="todos">Todos los años</option>
+  </select>
+</div>
+<div class="compare-pick" id="compare-pick"></div>
       </div>
       <div id="compare-result"></div>
     </section>
@@ -1963,6 +1999,7 @@ try{
 function migrarObras(){
   let changed = false;
   obras.forEach(o=>{
+    if(o.anioVenta===undefined){ o.anioVenta=null; changed=true; }
     if(!o.costos){
       o.costos = repartoParejo(o.costoTotal, o.mes0).map(c=>({...c,manual:true}));
       changed = true;
@@ -1979,6 +2016,7 @@ function migrarObras(){
       });
     }
     (o.unidades||[]).forEach(u=>{
+      if(u.anioVenta===undefined || u.anioVenta===null){ u.anioVenta=Number(o.anioVenta)||null; changed=true; }
       // CQ: desde esta versión, Terminada también usa plan de pagos.
       // Si una obra histórica tenía solo "mesCobro", convertirla en una cuota única.
       if(u.tipo==='Terminada'){
@@ -2032,12 +2070,82 @@ function migrarObras(){
 }
 let editingId = null;
 let comparePicked = [];
+let cqRoeResultYear='todos';
+
+function cqRoeYearsDisponibles(){
+  return [...new Set(obras.flatMap(o=>(o.unidades||[]).map(u=>Number(u.anioVenta))).filter(y=>Number.isFinite(y)&&y>0))].sort((a,b)=>b-a);
+}
+function cqRoeObrasResultado(){
+  if(cqRoeResultYear==='todos') return obras;
+  const y=Number(cqRoeResultYear);
+  return obras.filter(o=>(o.unidades||[]).some(u=>Number(u.anioVenta)===y));
+}
+function cqRoeEscenarioPorAnio(o){
+  if(cqRoeResultYear==='todos') return o;
+  const y=Number(cqRoeResultYear);
+  const esc=JSON.parse(JSON.stringify(o));
+  const total=(esc.unidades||[]).length||1;
+  let incluidas=0;
+  (esc.unidades||[]).forEach(u=>{
+    if(Number(u.anioVenta)===y){ incluidas++; return; }
+    u.precio=0; u.cuotas=[]; u.comisionPct=0; u.comisionMes=0;
+  });
+  /* Para resultado anual, se imputa la proporción del costo del proyecto correspondiente
+     a las unidades vendidas ese año. El proyecto completo conserva intactos sus KPIs originales. */
+  const factor=incluidas/total;
+  esc.costos=(esc.costos||[]).map(c=>({...c,monto:(Number(c.monto)||0)*factor}));
+  esc.costoTotal=(Number(esc.costoTotal)||0)*factor;
+  return esc;
+}
+function cqRoeRenderYearFilter(){
+  const sel=document.getElementById('cq-result-year');
+  if(!sel)return;
+  const years=cqRoeYearsDisponibles();
+  if(cqRoeResultYear!=='todos'&&!years.includes(Number(cqRoeResultYear)))cqRoeResultYear='todos';
+  sel.innerHTML='<option value="todos">Todos los años</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  sel.value=String(cqRoeResultYear);
+}
+function cqRoeSetResultYear(v){
+  cqRoeResultYear=(v==='todos')?'todos':String(Number(v));
+  const permitidas=new Set(cqRoeObrasResultado().map(o=>String(o.id)));
+  comparePicked=comparePicked.filter(id=>permitidas.has(String(id)));
+  renderComparar();
+}
+
+const CQ_ROE_FIJOS_KEY='cq_roetir_costos_fijos_v2';
+let cqRoeCostosFijos={};
+try{
+  const _cf=JSON.parse(localStorage.getItem(CQ_ROE_FIJOS_KEY)||'null');
+  if(_cf&&typeof _cf==='object') cqRoeCostosFijos=_cf;
+  else {
+    const viejo=JSON.parse(localStorage.getItem('cq_roetir_costos_fijos_v1')||'null');
+    if(viejo&&typeof viejo==='object'&&(Number(viejo.estructura)||Number(viejo.impuestos))){
+      cqRoeCostosFijos[String(new Date().getFullYear())]={estructura:Number(viejo.estructura)||0,impuestos:Number(viejo.impuestos)||0};
+    }
+  }
+}catch(e){}
+function cqGuardarCostosFijosLocal(){ localStorage.setItem(CQ_ROE_FIJOS_KEY,JSON.stringify(cqRoeCostosFijos)); }
+function cqCostosFijosAnio(y){
+  if(y==='todos'||!y)return {estructura:0,impuestos:0};
+  const x=cqRoeCostosFijos[String(y)]||{};
+  return {estructura:Number(x.estructura)||0,impuestos:Number(x.impuestos)||0};
+}
+function cqSetCostoFijo(k,v){
+  if(!['estructura','impuestos'].includes(k)||cqRoeResultYear==='todos')return;
+  const y=String(cqRoeResultYear);
+  if(!cqRoeCostosFijos[y])cqRoeCostosFijos[y]={estructura:0,impuestos:0};
+  cqRoeCostosFijos[y][k]=Math.max(0,Number(v)||0);
+  cqGuardarCostosFijosLocal();
+  if(!__cqRoeApplyingRemote && typeof window.__cqRoeFirebaseSave==='function') window.__cqRoeFirebaseSave(cqRoeSnapshot()).catch(e=>console.warn('ROE/TIR costos fijos',e));
+  renderCompareResult();
+}
 
 function unidadDefault(){
   return {
     tipo:'Pozo',
     precio:0,
     comisionPct:2.5,
+    anioVenta:new Date().getFullYear(),
     cuotas:[],
     mesCobro:1,
     comisionMes:0
@@ -2063,7 +2171,8 @@ let __cqRoeApplyingRemote=false;
 function cqRoeSnapshot(){
   return {
     obras:JSON.parse(JSON.stringify(obras||[])),
-    indicadoresConfig:cqRoeCloneCfg(cqRoeIndicadoresConfig)
+    indicadoresConfig:cqRoeCloneCfg(cqRoeIndicadoresConfig),
+    costosFijos:JSON.parse(JSON.stringify(cqRoeCostosFijos||{}))
   };
 }
 function saveStorage(){
@@ -2100,6 +2209,12 @@ window.__cqRoeApplyRemote=function(data){
         cqRoeIndicadoresConfig=remoteCfg;
         localStorage.setItem(CQ_ROE_CFG_KEY,JSON.stringify(cqRoeIndicadoresConfig));
       }
+    }
+    if(data.costosFijos&&typeof data.costosFijos==='object'){
+      if('estructura' in data.costosFijos || 'impuestos' in data.costosFijos){
+        cqRoeCostosFijos[String(new Date().getFullYear())]={estructura:Number(data.costosFijos.estructura)||0,impuestos:Number(data.costosFijos.impuestos)||0};
+      }else{ cqRoeCostosFijos=JSON.parse(JSON.stringify(data.costosFijos)); }
+      cqGuardarCostosFijosLocal();
     }
 
     migrarObras();
@@ -2305,14 +2420,19 @@ function cellSpan(text, color){ return `<span class="cell-${color}">${text}</spa
 
 const COLOR_HEX = { green:'#3E7D5C', yellow:'#B8843A', red:'#A8503F', gray:'#8E8A80' };
 const INDICADORES_CHART = {
-  'Ganancia':       { get:r=>r.ganancia,      isPct:false, isMonths:false, band:null },
-  'Ingreso total':  { get:r=>r.ingresoTotal,  isPct:false, isMonths:false, band:null },
-  'Capital máximo': { get:r=>r.capitalMaximo, isPct:false, isMonths:false, band:bandCapitalInvertido },
-  'ROE':            { get:r=>r.roe,           isPct:true,  isMonths:false, band:bandROE },
-  'TIR anual':      { get:r=>r.tirAnual,      isPct:true,  isMonths:false, band:bandTirAnual },
-  'TIR mensual':    { get:r=>r.tirMensual,    isPct:true,  isMonths:false, band:bandTirMensual },
-  'Payback':        { get:r=>r.payback,       isPct:false, isMonths:true,  band:bandPayback },
-  'Capital/Costo':  { get:r=>r.capitalCosto,  isPct:true,  isMonths:false, band:bandCapitalCosto },
+  'Ingreso total':        { get:r=>r.ingresoTotal,  isPct:false, isMonths:false, band:null },
+  'Comisión total':       { get:r=>r.comisionTotal, isPct:false, isMonths:false, band:null },
+  'Costo total':          { get:r=>r.costoTotal,    isPct:false, isMonths:false, band:null },
+  'Ganancia proyectos':   { get:r=>r.ganancia,      isPct:false, isMonths:false, band:null },
+  'Estructura operativa': { get:(r,d)=>cqRoeCostoFijoImputadoProyecto(d.o,'estructura'), isPct:false, isMonths:false, band:null },
+  'Impuestos':            { get:(r,d)=>cqRoeCostoFijoImputadoProyecto(d.o,'impuestos'),  isPct:false, isMonths:false, band:null },
+  'Resultado neto':       { get:(r,d)=>(Number(r.ganancia)||0)-cqRoeCostoFijoImputadoProyecto(d.o,'estructura')-cqRoeCostoFijoImputadoProyecto(d.o,'impuestos'), isPct:false, isMonths:false, band:null },
+  'Capital máximo':       { get:r=>r.capitalMaximo, isPct:false, isMonths:false, band:bandCapitalInvertido },
+  'ROE':                  { get:r=>r.roe,           isPct:true,  isMonths:false, band:bandROE },
+  'TIR mensual':          { get:r=>r.tirMensual,    isPct:true,  isMonths:false, band:bandTirMensual },
+  'TIR anual':            { get:r=>r.tirAnual,      isPct:true,  isMonths:false, band:bandTirAnual },
+  'Payback':              { get:r=>r.payback,       isPct:false, isMonths:true,  band:bandPayback },
+  'Capital/Costo':        { get:r=>r.capitalCosto,  isPct:true,  isMonths:false, band:bandCapitalCosto },
 };
 let chartIndicador = 'Ganancia';
 let chartInstance = null;
@@ -2336,12 +2456,12 @@ function renderCompareChart(datos){
 
   const def = INDICADORES_CHART[chartIndicador];
   const labels = datos.map(d=>d.o.nombre||'—');
-  const raw = datos.map(d=>def.get(d.r));
+  const raw = datos.map(d=>def.get(d.r,d));
   const values = raw.map(v=> v==null ? 0 : (def.isPct ? v*100 : v));
   const isMobile = window.innerWidth <= 560;
 
   const colors = datos.map(d=>{
-    const v = def.get(d.r);
+    const v = def.get(d.r,d);
     return def.band ? COLOR_HEX[def.band(v).color] : '#236450';
   });
 
@@ -2563,6 +2683,12 @@ function renderUnidad(idx){
         <label>% comisión</label>
         <input type="number" step="0.1" value="${u.comisionPct||''}" onchange="updU(${idx},'comisionPct',this.value)">
       </div>
+    </div>
+
+    <div class="field">
+      <label>Año de venta de la Unidad ${idx+1}</label>
+      <input type="number" min="2000" max="2100" step="1" value="${u.anioVenta||''}" placeholder="${new Date().getFullYear()}" onchange="updU(${idx},'anioVenta',this.value)">
+      <div class="hint">Cada unidad puede venderse en un año distinto.</div>
     </div>
 
     <div class="cuotas-head-cq">
@@ -3114,6 +3240,7 @@ function renderObras(){
               ${cqCompareProjectTag(o)}
             </div>
             <div class="cq-proyecto-mini">
+              <span>Ventas <b>${(o.unidades||[]).map((u,i)=>'U'+(i+1)+' '+(u.anioVenta||'—')).join(' · ')}</b></span>
               <span>Ganancia <b>${fmtMoney(r.ganancia)}</b></span>
               <span>ROE <b>${fmtPct(r.roe)}</b></span>
             </div>
@@ -3297,7 +3424,7 @@ function cqCompareProjectTag(o){
 
 
 function cqCompararElegirTodas(){
-  comparePicked = obras.map(o=>o.id);
+  comparePicked = cqRoeObrasResultado().map(o=>o.id);
   renderComparar();
 }
 
@@ -3307,13 +3434,21 @@ function cqCompararBorrarSeleccion(){
 }
 function renderComparar(){
   const pickWrap = document.getElementById('compare-pick');
+  cqRoeRenderYearFilter();
+  const obrasResultado=cqRoeObrasResultado();
   if(!obras.length){
-    pickWrap.innerHTML = `<div class="empty-state" style="padding:20px;"><p>Guardá al menos 2 proyectos para comparar.</p></div>`;
+    pickWrap.innerHTML = `<div class="empty-state" style="padding:20px;"><p>Guardá al menos un proyecto para ver resultados.</p></div>`;
     document.getElementById('compare-result').innerHTML='';
     return;
   }
 
-  const ordenadas=cqCompareOrdenadas(obras);
+  if(!obrasResultado.length){
+    pickWrap.innerHTML=`<div class="empty-state" style="padding:20px;"><p>No hay unidades vendidas en ${cqRoeResultYear}.</p></div>`;
+    document.getElementById('compare-result').innerHTML='';
+    return;
+  }
+
+  const ordenadas=cqCompareOrdenadas(obrasResultado);
 
   pickWrap.innerHTML = `
     <div class="cq-compare-selector-head">
@@ -3361,8 +3496,8 @@ let cqChartOrdenDesc = true;
 function cqOrdenarDatosGrafico(datos){
   const def = INDICADORES_CHART[chartIndicador];
   return (datos||[]).slice().sort((a,b)=>{
-    const av = def && def.get ? def.get(a.r) : null;
-    const bv = def && def.get ? def.get(b.r) : null;
+    const av = def && def.get ? def.get(a.r,a) : null;
+    const bv = def && def.get ? def.get(b.r,b) : null;
 
     const aOk = av!==null && av!==undefined && isFinite(Number(av));
     const bOk = bv!==null && bv!==undefined && isFinite(Number(bv));
@@ -3381,12 +3516,46 @@ function cqInvertirOrdenGrafico(){
   renderCompareResult();
 }
 
+/* CQ: prorrateo anual de estructura/impuestos entre proyectos vendidos en cada año.
+   Cada proyecto cuenta una sola vez por año, aunque tenga U1/U2 vendidas ese mismo año. */
+function cqRoeAniosVentaProyecto(o){
+  return [...new Set((o&&o.unidades||[]).map(u=>Number(u.anioVenta)).filter(y=>Number.isFinite(y)&&y>0))];
+}
+function cqRoeProyectosVendidosEnAnio(y){
+  y=Number(y);
+  return (obras||[]).filter(o=>(o.unidades||[]).some(u=>Number(u.anioVenta)===y));
+}
+function cqRoeCostoFijoImputadoProyecto(o,k){
+  if(!o||!['estructura','impuestos'].includes(k))return 0;
+  const years = cqRoeResultYear==='todos'
+    ? cqRoeAniosVentaProyecto(o)
+    : [Number(cqRoeResultYear)];
+  return years.reduce((acc,y)=>{
+    if(!(o.unidades||[]).some(u=>Number(u.anioVenta)===Number(y)))return acc;
+    const vendidos=cqRoeProyectosVendidosEnAnio(y);
+    if(!vendidos.length)return acc;
+    const fijo=cqCostosFijosAnio(y);
+    return acc + (Number(fijo[k])||0)/vendidos.length;
+  },0);
+}
+function cqRoeCostosFijosAnualesIncluidos(){
+  const years = cqRoeResultYear==='todos'
+    ? cqRoeYearsDisponibles()
+    : [Number(cqRoeResultYear)];
+  return years.reduce((a,y)=>{
+    const f=cqCostosFijosAnio(y);
+    a.estructura+=(Number(f.estructura)||0);
+    a.impuestos+=(Number(f.impuestos)||0);
+    return a;
+  },{estructura:0,impuestos:0});
+}
+
 function renderCompareResult(){
   const wrap = document.getElementById('compare-result');
-  const picked = cqCompareOrdenadas(obras.filter(o=>comparePicked.includes(o.id)));
-  if(picked.length<2){ wrap.innerHTML=''; return; }
+  const picked = cqCompareOrdenadas(cqRoeObrasResultado().filter(o=>comparePicked.includes(o.id)));
+  if(picked.length<1){ wrap.innerHTML=''; return; }
 
-  const datos = picked.map(o=>({o, r:computeResultados(o)}));
+  const datos = picked.map(o=>({o, r:computeResultados(cqRoeEscenarioPorAnio(o))}));
   const datosGrafico = cqOrdenarDatosGrafico(datos);
   const validNums = arr => arr.filter(v=>v!==null && v!==undefined && isFinite(Number(v))).map(Number);
   const avgRaw = key => {
@@ -3401,6 +3570,19 @@ function renderCompareResult(){
     ganancia: sumMoney('ganancia'),
     capitalMaximo: sumMoney('capitalMaximo')
   };
+  // Totales anuales cargados (sirven de base); en resultados se imputa a cada proyecto
+  // según la cantidad TOTAL de proyectos vendidos en ese mismo año.
+  const _cfAnio=cqRoeResultYear==='todos' ? cqRoeCostosFijosAnualesIncluidos() : cqCostosFijosAnio(cqRoeResultYear);
+  const costosFijosEstructura=Number(_cfAnio.estructura)||0;
+  const costosFijosImpuestos=Number(_cfAnio.impuestos)||0;
+  const imputaciones=datos.map(d=>({
+    estructura:cqRoeCostoFijoImputadoProyecto(d.o,'estructura'),
+    impuestos:cqRoeCostoFijoImputadoProyecto(d.o,'impuestos')
+  }));
+  const costosFijosEstructuraSeleccionados=imputaciones.reduce((a,x)=>a+x.estructura,0);
+  const costosFijosImpuestosSeleccionados=imputaciones.reduce((a,x)=>a+x.impuestos,0);
+  const costosFijosTotal=costosFijosEstructuraSeleccionados+costosFijosImpuestosSeleccionados;
+  const resultadoNeto=sums.ganancia-costosFijosTotal;
   const avgs = {
     roe: avgRaw('roe'),
     tirMensual: avgRaw('tirMensual'),
@@ -3410,10 +3592,14 @@ function renderCompareResult(){
   };
 
   const rows = [
+    ['Año de venta', 'anioVenta', d=>(d.o.unidades||[]).map((u,i)=>'U'+(i+1)+': '+(u.anioVenta||'—')).join(' · '), false, '—', 'Dato'],
     ['Ingreso total', 'ingresoTotal', d=>fmtMoney(d.r.ingresoTotal), true, fmtMoney(sums.ingresoTotal), 'Total'],
     ['Comisión total', 'comisionTotal', d=>fmtMoney(d.r.comisionTotal), true, fmtMoney(sums.comisionTotal), 'Total'],
     ['Costo total', 'costoTotal', d=>fmtMoney(d.r.costoTotal), true, fmtMoney(sums.costoTotal), 'Total'],
-    ['Ganancia', 'ganancia', d=>fmtMoney(d.r.ganancia), true, fmtMoney(sums.ganancia), 'Total'],
+    ['Ganancia proyectos', 'ganancia', d=>fmtMoney(d.r.ganancia), true, fmtMoney(sums.ganancia), 'Total'],
+    ['Estructura operativa', 'fijoEstructura', d=>'− '+fmtMoney(cqRoeCostoFijoImputadoProyecto(d.o,'estructura')), true, '− '+fmtMoney(costosFijosEstructuraSeleccionados), 'Imputado'],
+    ['Impuestos', 'fijoImpuestos', d=>'− '+fmtMoney(cqRoeCostoFijoImputadoProyecto(d.o,'impuestos')), true, '− '+fmtMoney(costosFijosImpuestosSeleccionados), 'Imputado'],
+    ['Resultado neto', 'resultadoNeto', d=>fmtMoney((Number(d.r.ganancia)||0)-cqRoeCostoFijoImputadoProyecto(d.o,'estructura')-cqRoeCostoFijoImputadoProyecto(d.o,'impuestos')), true, fmtMoney(resultadoNeto), 'Final'],
     ['Capital máximo', 'capitalMaximo', d=>cellSpan(fmtMoney(d.r.capitalMaximo), bandCapitalInvertido(d.r.capitalMaximo).color), true, cellSpan(fmtMoney(sums.capitalMaximo), bandCapitalInvertido(sums.capitalMaximo).color), 'Total'],
     ['ROE', 'roe', d=>cellSpan(fmtPct(d.r.roe), bandROE(d.r.roe).color), false, cellSpan(fmtPct(avgs.roe), bandROE(avgs.roe).color), 'Prom.'],
     ['TIR mensual', 'tirMensual', d=>cellSpan(fmtPct(d.r.tirMensual), bandTirMensual(d.r.tirMensual).color), false, cellSpan(fmtPct(avgs.tirMensual), bandTirMensual(avgs.tirMensual).color), 'Prom.'],
@@ -3427,7 +3613,7 @@ function renderCompareResult(){
       <div class="cq-compare-summary-head">
         <div>
           <div class="cq-compare-summary-kicker">RESUMEN</div>
-          <h2>Proyectos comparados</h2>
+          <h2>Resultados seleccionados</h2>
         </div>
         <div class="cq-compare-summary-count">${datos.length}</div>
       </div>
@@ -3437,6 +3623,27 @@ function renderCompareResult(){
         <div class="compare-sum-card gain"><div class="lbl">Ganancia total</div><div class="val">${fmtMoney(sums.ganancia)}</div></div>
         <div class="compare-sum-card cap"><div class="lbl">Capital máximo</div><div class="val">${fmtMoney(sums.capitalMaximo)}</div></div>
       </div>
+
+      <div class="cq-fixed-costs-box">
+        <div class="cq-fixed-costs-title">
+          <div><span>COSTOS FIJOS ${cqRoeResultYear==='todos'?'':cqRoeResultYear}</span><b>${cqRoeResultYear==='todos'?'Elegí un año para cargarlos':'Anuales · prorrateados entre los proyectos vendidos ese año'}</b></div>
+          <small>Se imputan por partes iguales a cada proyecto vendido en el año. ROE/TIR individual no se modifica.</small>
+        </div>
+        <div class="cq-fixed-costs-grid">
+          <label><span>Estructura operativa</span><small>Oficina · empleados · marketing · administración</small>
+            <input type="number" min="0" value="${costosFijosEstructura||''}" placeholder="0" ${cqRoeResultYear==='todos'?'disabled':''} onchange="cqSetCostoFijo('estructura',this.value)">
+          </label>
+          <label><span>Impuestos</span><small>Carga impositiva general</small>
+            <input type="number" min="0" value="${costosFijosImpuestos||''}" placeholder="0" ${cqRoeResultYear==='todos'?'disabled':''} onchange="cqSetCostoFijo('impuestos',this.value)">
+          </label>
+        </div>
+        <div class="cq-fixed-result-lines">
+          <div><span>Ganancia proyectos</span><b>${fmtMoney(sums.ganancia)}</b></div>
+          <div><span>Costos fijos imputados a la selección</span><b>− ${fmtMoney(costosFijosTotal)}</b></div>
+          <div class="net ${resultadoNeto<0?'neg':''}"><span>Resultado neto</span><b>${fmtMoney(resultadoNeto)}</b></div>
+        </div>
+      </div>
+
       <div class="compare-summary-grid avg-grid">
         <div class="compare-sum-card avg"><div class="lbl">ROE promedio</div><div class="val">${fmtPct(avgs.roe)}</div></div>
         <div class="compare-sum-card avg"><div class="lbl">TIR anual prom.</div><div class="val">${fmtPct(avgs.tirAnual)}</div></div>
@@ -3448,9 +3655,9 @@ function renderCompareResult(){
     <div class="compare-chart-card cq-chart-premium">
       <div class="compare-chart-head cq-chart-head-orderable">
         <div>
-          <div class="cq-chart-kicker">COMPARACIÓN VISUAL</div>
+          <div class="cq-chart-kicker">RESULTADOS VISUALES</div>
           <h2>${chartIndicador}</h2>
-          <div class="compare-chart-sub">Ordenado automáticamente por el indicador seleccionado.</div>
+          <div class="compare-chart-sub">Visualización de los proyectos seleccionados.</div>
         </div>
         <button type="button" class="cq-chart-order-btn" onclick="cqInvertirOrdenGrafico()" title="Invertir orden">
           <span class="cq-chart-order-arrow">${cqChartOrdenDesc?'↓':'↑'}</span>
@@ -3472,7 +3679,7 @@ function renderCompareResult(){
       <div class="cq-compare-table-head">
         <div>
           <div class="cq-compare-summary-kicker">DETALLE</div>
-          <h2>Cuadro comparativo</h2>
+          <h2>Cuadro final de resultados</h2>
         </div>
       </div>
       <div class="table-wrap">
