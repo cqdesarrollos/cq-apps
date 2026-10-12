@@ -9693,7 +9693,7 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 
   /* Reporte financiero: períodos exactos para ventas; costos fijos siempre anual por años elegidos */
   function finPeriods(){return periods('reporte-financiero')}
-  function finYears(){const p=finPeriods();return [...new Set((p.length?p:allYear(curY())).map(x=>x.slice(0,4)))].sort()}
+  function finYears(){const p=finPeriods();if(p.length)return [...new Set(p.map(x=>x.slice(0,4)))].sort();return availableYears('reporte-financiero').sort()}
   function sold(fin,annual){const u=cqFinUnits(fin),p=finPeriods(),ys=finYears();return ['A','B'].filter(k=>{const d=String(u[k]?.fechaVenta||'');if(!u[k]?.etapa||!d)return false;if(annual)return ys.includes(d.slice(0,4));return !p.length||p.includes(d.slice(0,7))}).length}
   officeFixedCostInfo=function(){const ys=finYears(),g=(repGetState('oficina').gastos||[]).filter(x=>ys.includes(String(x.fecha||'').slice(0,4))),total=g.reduce((a,x)=>a+toUSD(x.monto,x.moneda,x.tc),0),byMonth={};g.forEach(x=>{const ym=String(x.fecha||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(ym))byMonth[ym]=(byMonth[ym]||0)+toUSD(x.monto,x.moneda,x.tc)});let units=0;config.obras.forEach(o=>{if(!isObraSimple(o.id))units+=sold(repGetState(o.id).financiero||{},true)});return{total,byMonth,units,perUnit:units?total/units:0}};
   function allocFixed(ys,share){const out=[];(repGetState('oficina').gastos||[]).forEach((g,i)=>{if(!ys.includes(String(g.fecha||'').slice(0,4)))return;const usd=toUSD(g.monto,g.moneda,g.tc)*share;if(usd)out.push({id:'fixed31_'+i,fecha:g.fecha,cat:'ofi',subrubro:'Costos fijos prorrateados',moneda:'usd',monto:usd,tc:1,tipoMovimiento:g.tipoMovimiento||'gasto'})});return out}
@@ -9972,6 +9972,11 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
           pb=rows.map(r=>r.adjusted.payback),
           cc=rows.map(r=>r.adjusted.capitalCosto),
           units=rows.map(r=>r.soldYear);
+    const selectedPeriods=window.CQ_MULTI_MONTH_V31?.['reporte-financiero']||[];
+    const selectedYears=new Set(selectedPeriods.map(v=>String(v).slice(0,4)));
+    const monthShort=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const fmtSaleMonth=d=>{const s=String(d||''),y=s.slice(0,4),m=parseInt(s.slice(5,7),10);return /^\d{4}-\d{2}/.test(s)&&m>=1&&m<=12?`${monthShort[m-1]} ${y}`:''};
+    const unitCells=rows.map(r=>{const u=cqFinUnits(r.fin||{});const dates=['A','B'].map(k=>u[k]).filter(x=>x?.etapa&&x?.fechaVenta&&(!selectedPeriods.length||selectedYears.has(String(x.fechaVenta).slice(0,4)))).map(x=>String(x.fechaVenta)).sort().map(fmtSaleMonth).filter(Boolean);return{html:`<span class="rep-fin-unit-inline"><strong>${r.soldYear}</strong>${dates.length?`<small>${dates.join(' · ')}</small>`:''}</span>`}});
     const moneyArr=a=>a.map(v=>fmtMoney(v));
     const pctArr=a=>a.map(v=>fmtPctFin(v));
     const pbArr=a=>a.map(v=>fmtPaybackFin(v));
@@ -9981,11 +9986,39 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     const tirABadges=tira.map(v=>badge('tirAnual',v,fmtPctFin(v)));
     const paybackBadges=pb.map(v=>badge('payback',v,fmtPaybackFin(v)));
     const capCostoBadges=cc.map(v=>badge('capitalCosto',v,fmtPctFin(v)));
-    return `<div class="rep-fin-pivot-wrap"><table class="rep-fin-pivot"><thead><tr><th>Indicador</th>${rows.map(r=>`<th>${r.o.short||r.o.label}</th>`).join('')}<th class="rep-total-col">TOTAL / PROM.</th></tr></thead><tbody>${g('Ventas y costos')}${row('Unidades vendidas',units.map(v=>String(v)),String(sum(units))+' un.')}${row('Ingreso total',moneyArr(ingreso),fmtMoney(sum(ingreso)))}${row('Comisión total',moneyArr(com),fmtMoney(sum(com)))}${row('Costo total',moneyArr(cost),fmtMoney(sum(cost)))}${row('Ganancia proyectos',moneyArr(gan),fmtMoney(sum(gan)),sum(gan)>=0?'good':'bad','rep-row-soft-gan')}${row('Margen %',pctArr(margPct),fmtPctFin(finAvg(margPct)),'avg','rep-row-soft-margen')}${g('Costos fijos y resultado neto')}${row('Costos fijos prorrateados',moneyArr(fix),fmtMoney(sum(fix)))}${row('Resultado neto',moneyArr(net),fmtMoney(sum(net)),sum(net)>=0?'good':'bad','rep-row-soft-neto')}${g('Capital y retorno')}${row('Capital máximo',capBadges,fmtMoney(sum(cap)))}${row('ROE',roeBadges,fmtPctFin(finAvg(roe)),'avg')}${row('TIR mensual',tirMBadges,fmtPctFin(finAvg(tirm)),'avg')}${row('TIR anual',tirABadges,fmtPctFin(finAvg(tira)),'avg')}${row('Payback',paybackBadges,fmtPaybackFin(finAvg(pb)),'avg')}${row('Capital/Costo',capCostoBadges,fmtPctFin(finAvg(cc)),'avg')}</tbody></table></div><div class="rep-fin-scroll-note">En el teléfono se ve la primera columna y podés deslizar hacia la derecha para ver las obras.</div>`;
+    return `<div class="rep-fin-pivot-wrap"><table class="rep-fin-pivot"><thead><tr><th>Indicador</th>${rows.map(r=>`<th>${r.o.short||r.o.label}</th>`).join('')}<th class="rep-total-col">TOTAL / PROM.</th></tr></thead><tbody>${g('Ventas y costos')}${row('Unidades vendidas',unitCells,String(sum(units))+' un.')}${row('Ingreso total',moneyArr(ingreso),fmtMoney(sum(ingreso)))}${row('Comisión total',moneyArr(com),fmtMoney(sum(com)))}${row('Costo total',moneyArr(cost),fmtMoney(sum(cost)))}${row('Ganancia proyectos',moneyArr(gan),fmtMoney(sum(gan)),sum(gan)>=0?'good':'bad','rep-row-soft-gan')}${row('Margen %',pctArr(margPct),fmtPctFin(finAvg(margPct)),'avg','rep-row-soft-margen')}${g('Costos fijos y resultado neto')}${row('Costos fijos prorrateados',moneyArr(fix),fmtMoney(sum(fix)))}${row('Resultado neto',moneyArr(net),fmtMoney(sum(net)),sum(net)>=0?'good':'bad','rep-row-soft-neto')}${g('Capital y retorno')}${row('Capital máximo',capBadges,fmtMoney(sum(cap)))}${row('ROE',roeBadges,fmtPctFin(finAvg(roe)),'avg')}${row('TIR mensual',tirMBadges,fmtPctFin(finAvg(tirm)),'avg')}${row('TIR anual',tirABadges,fmtPctFin(finAvg(tira)),'avg')}${row('Payback',paybackBadges,fmtPaybackFin(finAvg(pb)),'avg')}${row('Capital/Costo',capCostoBadges,fmtPctFin(finAvg(cc)),'avg')}</tbody></table></div><div class="rep-fin-scroll-note">En el teléfono se ve la primera columna y podés deslizar hacia la derecha para ver las obras.</div>`;
   };
 })();
 </script>
 
+<style id="cq-fin-sale-dates-v39">
+/* Fecha de venta junto a Unidades vendidas, en formato mes/año. */
+#view-reporte-financiero .rep-fin-unit-inline{
+  display:inline-flex;
+  align-items:baseline;
+  justify-content:flex-end;
+  gap:7px;
+  flex-wrap:wrap;
+  max-width:100%;
+}
+#view-reporte-financiero .rep-fin-unit-inline strong{
+  font:inherit;
+  color:inherit;
+}
+#view-reporte-financiero .rep-fin-unit-inline small{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:9px;
+  line-height:1.15;
+  font-weight:800;
+  color:#8AA095;
+  white-space:nowrap;
+  letter-spacing:.01em;
+}
+@media(max-width:650px){
+  #view-reporte-financiero .rep-fin-unit-inline{gap:4px;}
+  #view-reporte-financiero .rep-fin-unit-inline small{font-size:8.5px;}
+}
+</style>
 
 <style id="cq-v36-rule-persistence-and-highlight">
 /* Ganancia / Margen / Resultado: solo color en texto y números, sin pintar la celda */
