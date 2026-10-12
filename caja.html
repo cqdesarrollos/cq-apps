@@ -3810,15 +3810,19 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     });
   }
 
-  // Cargar primero TC de Gerencia al abrir un movimiento nuevo.
+  // Abrir el formulario SIN bloquear los botones por una lectura remota del TC.
+  // El TC de Caja Gerencia se refresca en segundo plano y, si responde, actualiza el campo.
   const prevOpen=window.openMovement;
   window.openMovement=async function(type,id=''){
     bindTc();
 
-    // Para cualquier movimiento nuevo (salida o ingreso), refrescar desde Gerencia ANTES de abrir.
     if(!id){
       cqTcUsuarioEditando=false;
-      await cargarTcGerenciaEnFormulario(true);
+      // No usar await acá: una lectura lenta/offline de Firebase no debe dejar
+      // muertos los botones Registrar salida / Registrar ingreso.
+      cargarTcGerenciaEnFormulario(true).catch(function(e){
+        console.warn('Caja Chica · TC en segundo plano',e);
+      });
     }
 
     const r=await prevOpen(type,id);
@@ -3829,7 +3833,10 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
       setTcForm(Number(m.tc),'movimiento');
     }else{
       cqTcUsuarioEditando=false;
-      await cargarTcGerenciaEnFormulario(true);
+      // El modal ya está abierto: refrescar sin bloquear la interacción.
+      cargarTcGerenciaEnFormulario(true).catch(function(e){
+        console.warn('Caja Chica · actualización TC en segundo plano',e);
+      });
     }
 
     // El TC se puede revisar/modificar tanto en salida como en ingreso.
