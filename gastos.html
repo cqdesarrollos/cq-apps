@@ -3161,6 +3161,19 @@ function addCuotaRow(valor='',mes=''){const list=document.getElementById('fin-cu
 function renderCuotasEditor(fin){const list=document.getElementById('fin-cuotas-list');if(!list)return;list.innerHTML='';const cuotas=normalizarCuotasDetalle(fin);if(cuotas.length)cuotas.forEach(c=>addCuotaRow(c));else addCuotaRow();updateCuotasTotalPreview()}
 function openModalFin(){const fin=getS().financiero||{};document.getElementById('fin-venta').value=fin.venta||'';document.getElementById('fin-venta-mes').value=fin.ventaMes||'';openModal('modal-fin');renderCuotasEditor(fin)}
 function saveFinanciero(){const fin=getS().financiero||{};fin.venta=parseFloat(document.getElementById('fin-venta').value)||0;fin.ventaMes=document.getElementById('fin-venta-mes').value||'';if(fin.venta>0&&!fin.ventaMes){alert('Seleccioná el mes del precio de venta inicial.');return}const rows=[...document.querySelectorAll('#fin-cuotas-list .cuota-row')];const cuotasDetalle=[];for(const row of rows){const monto=parseFloat(row.querySelector('.fin-cuota-input')?.value)||0;const mes=row.querySelector('.fin-cuota-mes')?.value||'';if(monto>0&&!mes){alert('Seleccioná el mes de cada cuota cargada.');return}if(monto>0)cuotasDetalle.push({monto,mes})}fin.cuotasDetalle=cuotasDetalle;fin.cuotas=cuotasDetalle.reduce((a,c)=>a+c.monto,0);getS().financiero=fin;persist();closeModal('modal-fin');renderAll()}
+// Convierte el nombre visible en un ID seguro para localStorage y Firebase.
+// Faltaba esta función y por eso el alta de una obra nueva se detenía al guardar.
+function slug(value){
+  const base=String(value??'')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g,'_')
+    .replace(/^_+|_+$/g,'');
+  return base||('obra_'+Date.now());
+}
+
 function saveObra(){const id=document.getElementById('obra-id-edit').value,label=document.getElementById('obra-label').value.trim(),short=document.getElementById('obra-short').value.trim();if(!label||!short){alert('Completá nombre y nombre corto');return}if(id){const o=config.obras.find(x=>x.id===id);o.label=label;o.short=short}else{const newId=slug(label);config.obras.push({id:newId,label,short});state[newId]=emptyState();curObra=newId;localStorage.setItem('gastos_cur_obra',curObra);persist()}persistConfig();closeModal('modal-obra');renderAll();subscribeObra()}
 function deleteObra(id){if(id==='oficina'){alert('La oficina queda fija para gastos generales.');return}if(config.obras.length===1){alert('Tiene que quedar al menos una obra');return}if(!confirm('¿Eliminar la obra del listado? No borra los datos de Firebase, pero deja de mostrarse.'))return;config.obras=config.obras.filter(o=>o.id!==id);if(curObra===id){curObra=config.obras[0].id;localStorage.setItem('gastos_cur_obra',curObra);subscribeObra()}persistConfig();renderAll()}
 function editCategory(cat){const actual=CAT_LABELS[cat]||cat;const nuevoRaw=prompt('Modificar nombre de categoría. Los gastos ya cargados conservarán su categoría y solo cambiará el nombre visible.',actual);if(nuevoRaw===null)return;const nuevo=nuevoRaw.trim();if(!nuevo){alert('El nombre de la categoría no puede quedar vacío.');return}if(nuevo===actual)return;if(!config.categoryLabels)config.categoryLabels={};config.categoryLabels[cat]=nuevo;CAT_LABELS[cat]=nuevo;persistConfig();renderAll();}
@@ -9609,10 +9622,18 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 .cq-mm-body{overflow:auto;padding:12px 14px 14px}
 .cq-mm-year{margin-bottom:14px}
 .cq-mm-year-title{font-size:11px;font-weight:900;color:#658574;letter-spacing:.06em;margin:0 0 7px 2px}
+.cq-mm-year-title-select{display:flex;align-items:center;min-height:24px}
+.cq-mm-year-check{display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:#416C5A;font-size:12px;font-weight:900;letter-spacing:.04em}
+.cq-mm-year-check input{width:17px;height:17px;accent-color:#0A8C63;cursor:pointer}
+.cq-mm-year-check span{line-height:1}
 .cq-mm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .cq-mm-opt{display:flex;align-items:center;gap:7px;padding:9px 10px;border:1px solid #E2EBE4;border-radius:11px;background:#FBFDFC;color:#29483E;font-size:10.5px;font-weight:700;cursor:pointer}
 .cq-mm-opt input{width:15px;height:15px;accent-color:#0A8C63}
 .cq-mm-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;border-top:1px solid #E8EFEA;background:#FCFDFC}
+.cq-mm-ft button:first-child{background:#F4F6F5!important;border-color:#D2DDD7!important;color:#5F746A!important}
+.cq-mm-ft button:last-child{background:#E8F8F0!important;border-color:#8FD8B8!important;color:#087B50!important;box-shadow:0 3px 8px rgba(8,123,80,.08)!important}
+.cq-mm-ft button:first-child:hover{background:#ECEFED!important}
+.cq-mm-ft button:last-child:hover{background:#DDF4E9!important}
 
 @media(max-width:650px){
   .cq-monthmulti{min-width:0!important;width:100%;height:36px;min-height:36px;padding:0 9px;gap:6px}
@@ -9650,10 +9671,12 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
   function availableYears(tab){const set=new Set([curY()]);if(tab==='gastos'||tab==='resumen'){(getS().gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)})}else if(tab==='reporte'){(config.obras||[]).forEach(o=>(repGetState(o.id).gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)}))}else{(repGetState('oficina').gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)});(config.obras||[]).forEach(o=>{if(isObraSimple(o.id))return;const u=cqFinUnits(repGetState(o.id).financiero||{});['A','B'].forEach(k=>{[u[k].fechaVenta,u[k].ventaMes,...(u[k].cuotasDetalle||[]).map(c=>c.mes)].forEach(v=>{const y=String(v||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)})})})}return [...set].sort((a,b)=>b.localeCompare(a))}
   function ensureModal(){if(document.getElementById('cq-mm-bg'))return;const d=document.createElement('div');d.id='cq-mm-bg';d.className='cq-mm-bg';d.innerHTML='<div class="cq-mm-modal" onclick="event.stopPropagation()"><div class="cq-mm-hd"><div class="cq-mm-title">Seleccionar meses</div><button type="button" class="cq-mm-close" onclick="cqMMClose()">×</button></div><div class="cq-mm-tools"><button type="button" onclick="cqMMAll()">Seleccionar todos</button><button type="button" onclick="cqMMNone()">Ver todo</button></div><div class="cq-mm-body" id="cq-mm-body"></div><div class="cq-mm-ft"><button type="button" onclick="cqMMClose()">Cancelar</button><button type="button" onclick="cqMMApply()">Aplicar</button></div></div>';d.addEventListener('click',e=>{if(e.target===d)window.cqMMClose()});document.body.appendChild(d)}
   let active='gastos';
-  window.cqMMOpen=function(tab){ensureModal();active=tab;const sel=new Set(periods(tab));document.getElementById('cq-mm-body').innerHTML=availableYears(tab).map(y=>`<section class="cq-mm-year"><div class="cq-mm-year-title">${y}</div><div class="cq-mm-grid">${M.map(([m,n])=>{const v=`${y}-${m}`;return `<label class="cq-mm-opt"><input type="checkbox" value="${v}" ${sel.has(v)?'checked':''}><span>${n}</span></label>`}).join('')}</div></section>`).join('');document.getElementById('cq-mm-bg').classList.add('open')};
+  window.cqMMOpen=function(tab){ensureModal();active=tab;const sel=new Set(periods(tab));const ys=availableYears(tab);document.getElementById('cq-mm-body').innerHTML=ys.map(y=>{const yearHeader=(tab==='resumen'||tab==='reporte-financiero')?`<div class="cq-mm-year-title cq-mm-year-title-select"><label class="cq-mm-year-check"><input type="checkbox" class="cq-mm-year-master" data-year="${y}" value="${y}" onchange="cqMMToggleYear('${y}',this)"><span>${y}</span></label></div>`:`<div class="cq-mm-year-title">${y}</div>`;return `<section class="cq-mm-year">${yearHeader}<div class="cq-mm-grid">${M.map(([m,n])=>{const v=`${y}-${m}`;return `<label class="cq-mm-opt"><input type="checkbox" data-year="${y}" value="${v}" ${sel.has(v)?'checked':''} ${(tab==='resumen'||tab==='reporte-financiero')?`onchange="cqMMSyncYear('${y}')"`:''}><span>${n}</span></label>`}).join('')}</div></section>`}).join('');if(tab==='resumen'||tab==='reporte-financiero')ys.forEach(y=>window.cqMMSyncYear(y));document.getElementById('cq-mm-bg').classList.add('open')};
+  window.cqMMToggleYear=function(y,master){document.querySelectorAll(`#cq-mm-body input[type="checkbox"][data-year="${y}"]:not(.cq-mm-year-master)`).forEach(i=>i.checked=!!master.checked);master.indeterminate=false};
+  window.cqMMSyncYear=function(y){const master=document.querySelector(`#cq-mm-body .cq-mm-year-master[data-year="${y}"]`);if(!master)return;const ms=[...document.querySelectorAll(`#cq-mm-body input[type="checkbox"][data-year="${y}"]:not(.cq-mm-year-master)`)];const n=ms.filter(i=>i.checked).length;master.checked=n===ms.length&&ms.length>0;master.indeterminate=n>0&&n<ms.length};
   window.cqMMClose=function(){document.getElementById('cq-mm-bg')?.classList.remove('open')};
-  window.cqMMAll=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>i.checked=true)};
-  window.cqMMNone=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>i.checked=false)};
+  window.cqMMAll=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>{i.checked=true;i.indeterminate=false})};
+  window.cqMMNone=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>{i.checked=false;i.indeterminate=false})};
   window.cqMMApply=function(){S[active]=uniq([...document.querySelectorAll('#cq-mm-body input[type=checkbox]:checked')].map(i=>i.value));save();window.cqMMClose();updateLabels();rerender(active)};
   function button(tab){return `<button type="button" class="cq-monthmulti" id="cq-mm-${tab}" onclick="cqMMOpen('${tab}')"><span class="cq-mm-label">Mes</span><span class="cq-mm-value">${label(tab)}</span><span class="cq-mm-cal">▣</span></button>`}
   function install(){
@@ -9680,7 +9703,7 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 
   /* Reporte financiero: períodos exactos para ventas; costos fijos siempre anual por años elegidos */
   function finPeriods(){return periods('reporte-financiero')}
-  function finYears(){const p=finPeriods();return [...new Set((p.length?p:allYear(curY())).map(x=>x.slice(0,4)))].sort()}
+  function finYears(){const p=finPeriods();if(p.length)return [...new Set(p.map(x=>x.slice(0,4)))].sort();return availableYears('reporte-financiero').sort()}
   function sold(fin,annual){const u=cqFinUnits(fin),p=finPeriods(),ys=finYears();return ['A','B'].filter(k=>{const d=String(u[k]?.fechaVenta||'');if(!u[k]?.etapa||!d)return false;if(annual)return ys.includes(d.slice(0,4));return !p.length||p.includes(d.slice(0,7))}).length}
   officeFixedCostInfo=function(){const ys=finYears(),g=(repGetState('oficina').gastos||[]).filter(x=>ys.includes(String(x.fecha||'').slice(0,4))),total=g.reduce((a,x)=>a+toUSD(x.monto,x.moneda,x.tc),0),byMonth={};g.forEach(x=>{const ym=String(x.fecha||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(ym))byMonth[ym]=(byMonth[ym]||0)+toUSD(x.monto,x.moneda,x.tc)});let units=0;config.obras.forEach(o=>{if(!isObraSimple(o.id))units+=sold(repGetState(o.id).financiero||{},true)});return{total,byMonth,units,perUnit:units?total/units:0}};
   function allocFixed(ys,share){const out=[];(repGetState('oficina').gastos||[]).forEach((g,i)=>{if(!ys.includes(String(g.fecha||'').slice(0,4)))return;const usd=toUSD(g.monto,g.moneda,g.tc)*share;if(usd)out.push({id:'fixed31_'+i,fecha:g.fecha,cat:'ofi',subrubro:'Costos fijos prorrateados',moneda:'usd',monto:usd,tc:1,tipoMovimiento:g.tipoMovimiento||'gasto'})});return out}
@@ -9959,6 +9982,7 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
           pb=rows.map(r=>r.adjusted.payback),
           cc=rows.map(r=>r.adjusted.capitalCosto),
           units=rows.map(r=>r.soldYear);
+    const unitCells=rows.map(r=>String(r.soldYear));
     const moneyArr=a=>a.map(v=>fmtMoney(v));
     const pctArr=a=>a.map(v=>fmtPctFin(v));
     const pbArr=a=>a.map(v=>fmtPaybackFin(v));
@@ -9968,11 +9992,14 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     const tirABadges=tira.map(v=>badge('tirAnual',v,fmtPctFin(v)));
     const paybackBadges=pb.map(v=>badge('payback',v,fmtPaybackFin(v)));
     const capCostoBadges=cc.map(v=>badge('capitalCosto',v,fmtPctFin(v)));
-    return `<div class="rep-fin-pivot-wrap"><table class="rep-fin-pivot"><thead><tr><th>Indicador</th>${rows.map(r=>`<th>${r.o.short||r.o.label}</th>`).join('')}<th class="rep-total-col">TOTAL / PROM.</th></tr></thead><tbody>${g('Ventas y costos')}${row('Unidades vendidas',units.map(v=>String(v)),String(sum(units))+' un.')}${row('Ingreso total',moneyArr(ingreso),fmtMoney(sum(ingreso)))}${row('Comisión total',moneyArr(com),fmtMoney(sum(com)))}${row('Costo total',moneyArr(cost),fmtMoney(sum(cost)))}${row('Ganancia proyectos',moneyArr(gan),fmtMoney(sum(gan)),sum(gan)>=0?'good':'bad','rep-row-soft-gan')}${row('Margen %',pctArr(margPct),fmtPctFin(finAvg(margPct)),'avg','rep-row-soft-margen')}${g('Costos fijos y resultado neto')}${row('Costos fijos prorrateados',moneyArr(fix),fmtMoney(sum(fix)))}${row('Resultado neto',moneyArr(net),fmtMoney(sum(net)),sum(net)>=0?'good':'bad','rep-row-soft-neto')}${g('Capital y retorno')}${row('Capital máximo',capBadges,fmtMoney(sum(cap)))}${row('ROE',roeBadges,fmtPctFin(finAvg(roe)),'avg')}${row('TIR mensual',tirMBadges,fmtPctFin(finAvg(tirm)),'avg')}${row('TIR anual',tirABadges,fmtPctFin(finAvg(tira)),'avg')}${row('Payback',paybackBadges,fmtPaybackFin(finAvg(pb)),'avg')}${row('Capital/Costo',capCostoBadges,fmtPctFin(finAvg(cc)),'avg')}</tbody></table></div><div class="rep-fin-scroll-note">En el teléfono se ve la primera columna y podés deslizar hacia la derecha para ver las obras.</div>`;
+    return `<div class="rep-fin-pivot-wrap"><table class="rep-fin-pivot"><thead><tr><th>Indicador</th>${rows.map(r=>`<th>${r.o.short||r.o.label}</th>`).join('')}<th class="rep-total-col">TOTAL / PROM.</th></tr></thead><tbody>${g('Ventas y costos')}${row('Unidades vendidas',unitCells,String(sum(units))+' un.')}${row('Ingreso total',moneyArr(ingreso),fmtMoney(sum(ingreso)))}${row('Comisión total',moneyArr(com),fmtMoney(sum(com)))}${row('Costo total',moneyArr(cost),fmtMoney(sum(cost)))}${row('Ganancia proyectos',moneyArr(gan),fmtMoney(sum(gan)),sum(gan)>=0?'good':'bad','rep-row-soft-gan')}${row('Margen %',pctArr(margPct),fmtPctFin(finAvg(margPct)),'avg','rep-row-soft-margen')}${g('Costos fijos y resultado neto')}${row('Costos fijos prorrateados',moneyArr(fix),fmtMoney(sum(fix)))}${row('Resultado neto',moneyArr(net),fmtMoney(sum(net)),sum(net)>=0?'good':'bad','rep-row-soft-neto')}${g('Capital y retorno')}${row('Capital máximo',capBadges,fmtMoney(sum(cap)))}${row('ROE',roeBadges,fmtPctFin(finAvg(roe)),'avg')}${row('TIR mensual',tirMBadges,fmtPctFin(finAvg(tirm)),'avg')}${row('TIR anual',tirABadges,fmtPctFin(finAvg(tira)),'avg')}${row('Payback',paybackBadges,fmtPaybackFin(finAvg(pb)),'avg')}${row('Capital/Costo',capCostoBadges,fmtPctFin(finAvg(cc)),'avg')}</tbody></table></div><div class="rep-fin-scroll-note">En el teléfono se ve la primera columna y podés deslizar hacia la derecha para ver las obras.</div>`;
   };
 })();
 </script>
 
+<style id="cq-fin-sale-dates-v39">
+/* Fechas quitadas del cuadro de unidades vendidas. */
+</style>
 
 <style id="cq-v36-rule-persistence-and-highlight">
 /* Ganancia / Margen / Resultado: solo color en texto y números, sin pintar la celda */
@@ -10586,6 +10613,307 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     });
   };
   try{renderReporte=window.renderReporte;}catch(e){}
+})();
+</script>
+
+
+
+<script id="cq-ver-todo-final-fix-v40">
+(function(){
+  function saveMulti(){
+    try{localStorage.setItem('cq_multi_month_v31',JSON.stringify(window.CQ_MULTI_MONTH_V31||{}));}catch(e){}
+  }
+  const prevNone=window.cqMMNone;
+  window.cqMMNone=function(){
+    if(typeof prevNone==='function')prevNone();
+    document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>i.checked=false);
+  };
+  const prevApply=window.cqMMApply;
+  window.cqMMApply=function(){
+    if(typeof prevApply==='function')return prevApply();
+  };
+  // Keep empty selection as true "Ver todo": no fallback to current year.
+  try{
+    const oldFinYearsSelected=window.finYearsSelected;
+    window.finYearsSelected=function(){
+      const p=window.CQ_MULTI_MONTH_V31?.['reporte-financiero']||[];
+      if(p.length)return [...new Set(p.map(v=>String(v).slice(0,4)))].sort();
+      if(typeof availableYears==='function')return availableYears('reporte-financiero').sort();
+      if(typeof oldFinYearsSelected==='function')return oldFinYearsSelected();
+      return [];
+    };
+  }catch(e){}
+})();
+</script>
+
+
+
+
+<!-- CQ FINAL · Prorrateo de costos fijos por año + selección de obras no bloqueante -->
+<script id="cq-final-fixed-cost-per-year-and-fast-obras">
+(function(){
+  /* ================================================================
+     1) COSTOS FIJOS: cada año se reparte SOLO entre ventas de ese año
+     ================================================================ */
+  function cqOfficeSelectedFinal(){
+    try{return (repSelectedObras()||[]).some(o=>o && o.id==='oficina');}
+    catch(e){return false;}
+  }
+
+  function cqFinPeriodsFinal(){
+    try{
+      const p=window.CQ_MULTI_MONTH_V31?.['reporte-financiero'];
+      return Array.isArray(p)?p.map(String).filter(v=>/^\d{4}-\d{2}$/.test(v)):[];
+    }catch(e){return [];}
+  }
+  function cqFinSelectedYearsFinal(){
+    const p=cqFinPeriodsFinal();
+    if(p.length)return [...new Set(p.map(v=>v.slice(0,4)))].sort();
+    /* Ver todo: reunir todos los años realmente disponibles, sin volver al año actual. */
+    const set=new Set();
+    try{(repGetState('oficina').gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y);});}catch(e){}
+    try{(config.obras||[]).forEach(o=>{
+      if(o.id==='oficina'||o.id==='acopio')return;
+      const fin=repGetState(o.id).financiero||{};
+      cqSoldDatesFinal(fin).forEach(d=>set.add(d.slice(0,4)));
+    });}catch(e){}
+    if(!set.size)set.add(String(new Date().getFullYear()));
+    return [...set].sort();
+  }
+
+  function cqSoldDatesFinal(fin){
+    let u={};
+    try{u=typeof cqFinUnits==='function'?cqFinUnits(fin||{}):unidadesFin(fin||{});}catch(e){u={};}
+    return ['A','B'].map(k=>u?.[k]).filter(x=>x && x.etapa && /^\d{4}-\d{2}/.test(String(x.fechaVenta||''))).map(x=>String(x.fechaVenta));
+  }
+
+  function cqFixedInfoByYearFinal(){
+    const years=cqFinSelectedYearsFinal();
+    if(!cqOfficeSelectedFinal()){
+      return {total:0,byMonth:{},units:0,perUnit:0,enabled:false,years:years,yearData:{}};
+    }
+
+    const office=(repGetState('oficina').gastos||[]);
+    const yearData={};
+    years.forEach(y=>yearData[y]={year:y,total:0,units:0,perUnit:0,byMonth:{}});
+
+    office.forEach(g=>{
+      const y=String(g.fecha||'').slice(0,4);
+      if(!years.includes(y))return;
+      if(!yearData[y])yearData[y]={year:y,total:0,units:0,perUnit:0,byMonth:{}};
+      const usd=toUSD(g.monto,g.moneda,g.tc)||0;
+      yearData[y].total+=usd;
+      const ym=String(g.fecha||'').slice(0,7);
+      if(/^\d{4}-\d{2}$/.test(ym))yearData[y].byMonth[ym]=(yearData[y].byMonth[ym]||0)+usd;
+    });
+
+    /* Denominador independiente por año: TODAS las unidades vendidas ese año. */
+    (config.obras||[]).forEach(o=>{
+      try{if(typeof isObraSimple==='function' && isObraSimple(o.id))return;}catch(e){}
+      if(o.id==='oficina'||o.id==='acopio')return;
+      const fin=repGetState(o.id).financiero||{};
+      cqSoldDatesFinal(fin).forEach(d=>{
+        const y=d.slice(0,4);
+        if(yearData[y])yearData[y].units++;
+      });
+    });
+
+    Object.values(yearData).forEach(d=>d.perUnit=d.units?d.total/d.units:0);
+    const costYears=Object.values(yearData).filter(d=>Math.abs(d.total)>0.000001);
+    const total=costYears.reduce((a,d)=>a+d.total,0);
+    const units=costYears.reduce((a,d)=>a+d.units,0);
+    const byMonth={};
+    costYears.forEach(d=>Object.entries(d.byMonth).forEach(([ym,v])=>byMonth[ym]=(byMonth[ym]||0)+v));
+    return {total,byMonth,units,perUnit:units?total/units:0,enabled:true,years,yearData};
+  }
+
+  function cqProjectFixedFinal(fin,info){
+    const counts={};
+    cqSoldDatesFinal(fin).forEach(d=>{
+      const y=d.slice(0,4);
+      if(info.yearData?.[y])counts[y]=(counts[y]||0)+1;
+    });
+    let fixedCost=0;
+    Object.entries(counts).forEach(([y,n])=>{
+      const yd=info.yearData[y];
+      if(yd && yd.total && yd.units)fixedCost+=yd.perUnit*n;
+    });
+    return {fixedCost,counts};
+  }
+
+  function cqAllocatedFixedGastosFinal(info,counts){
+    const out=[];
+    const office=repGetState('oficina').gastos||[];
+    office.forEach((g,i)=>{
+      const y=String(g.fecha||'').slice(0,4), yd=info.yearData?.[y], own=counts[y]||0;
+      if(!yd || !yd.total || !yd.units || !own)return;
+      const share=own/yd.units;
+      const usd=(toUSD(g.monto,g.moneda,g.tc)||0)*share;
+      if(!usd)return;
+      out.push({id:'fixed_year_'+y+'_'+i,fecha:g.fecha,cat:'ofi',subrubro:'Costos fijos prorrateados',moneda:'usd',monto:usd,tc:1,tipoMovimiento:g.tipoMovimiento||'gasto'});
+    });
+    return out;
+  }
+
+  window.officeFixedCostInfo=cqFixedInfoByYearFinal;
+  try{officeFixedCostInfo=window.officeFixedCostInfo;}catch(e){}
+
+  window.repFinRowsData=function(){
+    const fixed=cqFixedInfoByYearFinal();
+    let ys=[];try{ys=cqFinSelectedYearsFinal();}catch(e){}
+    const p=cqFinPeriodsFinal();
+    const obras=repSelectedObras().filter(o=>{
+      try{return !(typeof isObraSimple==='function'&&isObraSimple(o.id));}catch(e){return true;}
+    });
+
+    return obras.map(o=>{
+      const s=repGetState(o.id),fin=s.financiero||{},has=tieneVentasCargadas(fin);
+      const dates=cqSoldDatesFinal(fin);
+      const soldYear=dates.filter(d=>ys.includes(d.slice(0,4))).length;
+      const soldPeriod=dates.filter(d=>!p.length||p.includes(d.slice(0,7))).length;
+      if(has&&p.length&&soldPeriod===0)return null;
+      if(has&&!p.length&&soldYear===0)return null;
+
+      const alloc=cqProjectFixedFinal(fin,fixed);
+      const fixedCost=alloc.fixedCost;
+      const direct=calcularMetricasFinancieras(fin,s.gastos||[]);
+      const adjusted=calcularMetricasFinancieras(fin,[...(s.gastos||[]),...cqAllocatedFixedGastosFinal(fixed,alloc.counts)]);
+      const net=direct.margen-fixedCost;
+      const margenPct=direct.totalIngresos?direct.margen/direct.totalIngresos:null;
+      return{o,s,fin,direct,adjusted,fixedCost,net,margenPct,soldYear,soldPeriod,legacy:!has};
+    }).filter(Boolean);
+  };
+  try{repFinRowsData=window.repFinRowsData;}catch(e){}
+
+  /* Ajustar la leyenda para que no sugiera un prorrateo cruzado entre años. */
+  const cqPrevFinRenderFinal=window.renderReporteFinancieroComparativo;
+  if(typeof cqPrevFinRenderFinal==='function'){
+    window.renderReporteFinancieroComparativo=function(){
+      const r=cqPrevFinRenderFinal.apply(this,arguments);
+      try{
+        const info=cqFixedInfoByYearFinal();
+        const note=document.querySelector('#reporte-financiero .rep-fin-fixed-note');
+        if(note && info.enabled){
+          const parts=Object.values(info.yearData||{}).filter(d=>Math.abs(d.total)>0.000001).sort((a,b)=>a.year.localeCompare(b.year)).map(d=>
+            `<strong>${d.year}:</strong> ${fmt(d.total,'usd')} ÷ ${d.units} un. = ${d.units?fmt(d.perUnit,'usd'):'U$S 0'} por unidad`
+          );
+          if(parts.length)note.innerHTML=`<strong>Costos fijos prorrateados por año:</strong> ${parts.join(' &nbsp;·&nbsp; ')}. Cada costo fijo se imputa únicamente a unidades vendidas en su mismo año.`;
+        }
+      }catch(e){console.warn('Detalle prorrateo anual:',e);}
+      return r;
+    };
+    try{renderReporteFinancieroComparativo=window.renderReporteFinancieroComparativo;}catch(e){}
+  }
+
+  /* ================================================================
+     2) REPORTE GASTOS: selección de obras realmente inmediata
+     ================================================================ */
+  let cqFastHeavyUntil=0;
+  const cqHeavyTimers={};
+
+  function cqWrapHeavy(name,delay){
+    const original=window[name];
+    if(typeof original!=='function'||original._cqDeferredHeavy)return;
+    const wrapped=function(){
+      const args=arguments,ctx=this;
+      if(Date.now()<cqFastHeavyUntil){
+        clearTimeout(cqHeavyTimers[name]);
+        cqHeavyTimers[name]=setTimeout(()=>{
+          try{
+            if('requestIdleCallback' in window)requestIdleCallback(()=>original.apply(ctx,args),{timeout:450});
+            else original.apply(ctx,args);
+          }catch(e){console.warn(name,e);}
+        },160);
+        return;
+      }
+      return original.apply(ctx,args);
+    };
+    wrapped._cqDeferredHeavy=true;
+    window[name]=wrapped;
+    try{eval(name+' = window[name]');}catch(e){}
+  }
+
+  /* La tabla de subrubros es la parte más pesada; semáforo y mensual también se difieren al tocar obras. */
+  cqWrapHeavy('renderRankingProveedores',180);
+  cqWrapHeavy('renderSemaforoPresupuesto',120);
+  cqWrapHeavy('renderComparativoMensualExtra',120);
+
+  function cqActiveReportObrasFinal(){
+    try{return typeof activeObras==='function'?activeObras():(config.obras||[]).filter(o=>!o.archived);}catch(e){return config.obras||[];}
+  }
+  function cqButtonObraIdFinal(btn){
+    if(btn.dataset.cqObraId)return btn.dataset.cqObraId;
+    const oc=btn.getAttribute('onclick')||'';
+    const m=oc.match(/toggleReporteObra\(['\"]([^'\"]+)['\"]\)/);
+    if(m){btn.dataset.cqObraId=m[1];return m[1];}
+    const list=cqActiveReportObrasFinal(),buttons=[...document.querySelectorAll('#reporte-obras-chips .rep-obra-chip:not(.rep-archive-toggle)')],i=buttons.indexOf(btn);
+    return i>=0&&list[i]?list[i].id:'';
+  }
+  function cqSetButtonVisualFinal(btn,on){
+    btn.classList.toggle('active',!!on);
+    btn.classList.toggle('cq-fast-selected',!!on);
+    btn.setAttribute('aria-pressed',on?'true':'false');
+  }
+  function cqCommitObraFinal(id,on){
+    if(typeof getReporteObrasSel==='function')getReporteObrasSel();
+    if(!Array.isArray(reporteObrasSel))reporteObrasSel=[];
+    reporteObrasSel=reporteObrasSel.filter(x=>x!==id);
+    if(on)reporteObrasSel.push(id);
+    if(typeof saveReporteObrasSel==='function')saveReporteObrasSel();
+  }
+
+  let cqReportTimerFinal=0;
+  function cqScheduleReportFinal(){
+    clearTimeout(cqReportTimerFinal);
+    cqFastHeavyUntil=Date.now()+1300;
+    cqReportTimerFinal=setTimeout(()=>{
+      /* Dos frames completos garantizan que el tilde/color se vea ANTES del cálculo. */
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        try{if(typeof renderReporte==='function')renderReporte();}catch(e){console.warn('Reporte gastos:',e);}
+      }));
+    },35);
+  }
+
+  function cqInstallFastDelegationFinal(){
+    const box=document.getElementById('reporte-obras-chips');
+    if(!box||box.dataset.cqFastDelegation==='1')return;
+    box.dataset.cqFastDelegation='1';
+
+    /* pointerdown ocurre antes del click: la respuesta visual no espera ningún cálculo. */
+    box.addEventListener('pointerdown',function(ev){
+      const btn=ev.target.closest?.('.rep-obra-chip:not(.rep-archive-toggle)');if(!btn||!box.contains(btn))return;
+      const id=cqButtonObraIdFinal(btn);if(!id)return;
+      let sel=[];try{sel=getReporteObrasSel();}catch(e){}
+      const desired=!sel.includes(id);
+      btn.dataset.cqDesired=desired?'1':'0';
+      cqSetButtonVisualFinal(btn,desired);
+    },true);
+
+    /* Capturamos el click para que el onclick inline antiguo NO lance el render pesado. */
+    box.addEventListener('click',function(ev){
+      const btn=ev.target.closest?.('.rep-obra-chip:not(.rep-archive-toggle)');if(!btn||!box.contains(btn))return;
+      ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();
+      const id=cqButtonObraIdFinal(btn);if(!id)return;
+      let sel=[];try{sel=getReporteObrasSel();}catch(e){}
+      const desired=btn.dataset.cqDesired===''||btn.dataset.cqDesired==null?!sel.includes(id):btn.dataset.cqDesired==='1';
+      delete btn.dataset.cqDesired;
+      cqCommitObraFinal(id,desired);
+      cqSetButtonVisualFinal(btn,desired);
+      cqScheduleReportFinal();
+    },true);
+  }
+
+  const cqOldRenderChipsFinal=window.renderReporteObrasChips;
+  if(typeof cqOldRenderChipsFinal==='function'){
+    window.renderReporteObrasChips=function(){
+      const r=cqOldRenderChipsFinal.apply(this,arguments);
+      setTimeout(cqInstallFastDelegationFinal,0);
+      return r;
+    };
+    try{renderReporteObrasChips=window.renderReporteObrasChips;}catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(cqInstallFastDelegationFinal,0));
+  setTimeout(cqInstallFastDelegationFinal,0);
 })();
 </script>
 
@@ -12598,3 +12926,964 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   }
 }
 </style>
+
+
+<!-- CQ v14 · m² totales + costo/precio por m² en Resumen financiero -->
+<style id="cq-v14-m2-resumen-financiero">
+/* Campo nuevo en Venta por unidad, antes de Presupuesto por obra */
+#modal-fin .fin-metros-top{
+  margin-bottom:10px!important;
+  padding:10px 12px!important;
+  border:1px solid #D9E7F2!important;
+  border-radius:12px!important;
+  background:#F5FAFE!important;
+  box-shadow:inset 4px 0 0 #4D93CC!important;
+}
+#modal-fin .fin-metros-top .ttl{
+  font-size:12px!important;
+  font-weight:900!important;
+  color:#2F6FA3!important;
+  margin-bottom:6px!important;
+  letter-spacing:.01em!important;
+}
+#modal-fin .fin-metros-top input{
+  box-sizing:border-box!important;
+  width:100%!important;
+  border:1px solid #CFE0ED!important;
+  border-radius:10px!important;
+  padding:10px 11px!important;
+  font-size:13px!important;
+  font-family:'Space Grotesk',sans-serif!important;
+  color:#1C2B22!important;
+  background:#fff!important;
+}
+#modal-fin .fin-metros-top .help{
+  margin-top:5px!important;
+  font-size:9.5px!important;
+  color:#7891A2!important;
+  line-height:1.25!important;
+}
+
+/* Fila M² en el resumen, por encima de Presupuesto por obra */
+#view-resumen .fin-m2-row{
+  background:#F5FAFE!important;
+  border-left:4px solid #4D93CC!important;
+  padding-left:12px!important;
+}
+#view-resumen .fin-m2-row .fin-lbl{
+  color:#2F6FA3!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-row .fin-val{
+  color:#245B86!important;
+  font-size:15px!important;
+  font-weight:900!important;
+}
+
+/* Bloque nuevo debajo de Costo total */
+#view-resumen .fin-m2-metrics-region{
+  margin:8px 0!important;
+  border:1px solid #DCEAE4!important;
+  border-radius:12px!important;
+  overflow:hidden!important;
+  background:#FBFDFC!important;
+  box-shadow:inset 4px 0 0 #2E8C6A!important;
+}
+#view-resumen .fin-m2-region-title{
+  padding:7px 12px!important;
+  background:#EFF8F4!important;
+  border-bottom:1px solid #DCEAE4!important;
+  color:#2A755B!important;
+  font-size:9px!important;
+  line-height:1!important;
+  font-weight:900!important;
+  letter-spacing:.075em!important;
+  text-transform:uppercase!important;
+}
+#view-resumen .fin-m2-metrics-region .fin-row{
+  margin:0!important;
+  padding:9px 12px!important;
+}
+#view-resumen .fin-m2-cost .fin-lbl{
+  color:#A06B18!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-cost .fin-val{
+  color:#8A5B13!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-price .fin-lbl{
+  color:#2F6FA3!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-price .fin-val{
+  color:#245B86!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-formula-note{
+  padding:0 12px 8px!important;
+  color:#8A9E93!important;
+  font-size:8.5px!important;
+  line-height:1.25!important;
+}
+
+@media(max-width:799px) and (any-pointer:coarse){
+  #view-resumen .fin-m2-row{padding-left:10px!important;}
+  #view-resumen .fin-m2-row .fin-val{font-size:13px!important;}
+  #view-resumen .fin-m2-metrics-region .fin-row{padding:8px 10px!important;}
+  #view-resumen .fin-m2-region-title{padding:6px 10px!important;font-size:8.3px!important;}
+}
+</style>
+
+<script id="cq-v14-m2-resumen-financiero-js">
+(function(){
+  function finActual(){
+    try{return (typeof getS==='function' && getS()) ? (getS().financiero||{}) : {};}
+    catch(e){return {};}
+  }
+  function m2Actual(){
+    const fin=finActual();
+    return Math.max(0,parseFloat(fin.mts2TotalesProyecto ?? fin.m2TotalesProyecto ?? 0)||0);
+  }
+  function fmtM2(v){
+    const n=Number(v)||0;
+    return n ? n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2})+' m²' : '—';
+  }
+  function fmtUSD(v){
+    try{return typeof fmt==='function' ? fmt(v,'usd') : 'U$S '+(Number(v)||0).toLocaleString('es-AR',{maximumFractionDigits:0});}
+    catch(e){return 'U$S '+(Number(v)||0).toLocaleString('es-AR',{maximumFractionDigits:0});}
+  }
+
+  function ensureMetrosField(){
+    const body=document.querySelector('#modal-fin .mbody');
+    if(!body)return;
+    let box=document.getElementById('fin-metros-proyecto-wrap');
+    if(!box){
+      box=document.createElement('div');
+      box.id='fin-metros-proyecto-wrap';
+      box.className='fin-metros-top';
+      box.innerHTML='<div class="ttl">Mts² totales proyecto</div><input type="number" id="fin-metros-proyecto" min="0" step="0.01" placeholder="Ej: 140"><div class="help">Se usa para calcular automáticamente costo por m² y precio por m².</div>';
+      const presupuesto=body.querySelector('.fin-presupuesto-top,.fin-presupuesto-wrap');
+      if(presupuesto)body.insertBefore(box,presupuesto);
+      else body.insertBefore(box,body.firstChild);
+    }
+    const inp=document.getElementById('fin-metros-proyecto');
+    if(inp && document.activeElement!==inp)inp.value=m2Actual()||'';
+  }
+
+  function injectResumenM2(){
+    const card=document.querySelector('#view-resumen .fin-card-resumen-unico');
+    if(!card)return;
+    card.querySelectorAll('.fin-m2-row,.fin-m2-metrics-region').forEach(el=>el.remove());
+
+    const fin=finActual();
+    const m2=m2Actual();
+
+    const row=document.createElement('div');
+    row.className='fin-row fin-m2-row';
+    row.innerHTML='<span class="fin-lbl">Mts² totales proyecto</span><span class="fin-val">'+fmtM2(m2)+'</span>';
+    const presupuesto=card.querySelector('.fin-presupuesto-row');
+    const kpi=card.querySelector('.kpi-lbl');
+    if(presupuesto)card.insertBefore(row,presupuesto);
+    else if(kpi)kpi.insertAdjacentElement('afterend',row);
+    else card.insertBefore(row,card.firstChild);
+
+    let metricas=null;
+    try{metricas=calcularMetricasFinancieras(fin,(getS().gastos||[]));}catch(e){}
+    const costo=metricas ? (Number(metricas.costoTotal)||0) : 0;
+    const ingreso=metricas ? (Number(metricas.totalIngresos)||0) : 0;
+    const comision=metricas ? (Number(metricas.comision)||0) : 0;
+    const costoM2=m2>0 ? costo/m2 : null;
+    const precioM2=m2>0 ? (ingreso-comision)/m2 : null;
+
+    const region=document.createElement('div');
+    region.className='fin-m2-metrics-region';
+    region.innerHTML='<div class="fin-m2-region-title">Valores por m²</div>'+
+      '<div class="fin-row fin-m2-cost"><span class="fin-lbl">Costo por m²</span><span class="fin-val">'+(costoM2===null?'—':fmtUSD(costoM2))+'</span></div>'+
+      '<div class="fin-row fin-m2-price"><span class="fin-lbl">Precio por m²</span><span class="fin-val">'+(precioM2===null?'—':fmtUSD(precioM2))+'</span></div>'+
+      '<div class="fin-m2-formula-note">Costo = costo total / m² · Precio = (ingreso total − comisión) / m²</div>';
+
+    const costoDetails=[...card.querySelectorAll('details.fin-collapse')].find(d=>(d.querySelector('summary')?.textContent||'').toLowerCase().includes('costo total'));
+    if(costoDetails)costoDetails.insertAdjacentElement('afterend',region);
+    else{
+      const margen=card.querySelector('.fin-highlight');
+      if(margen)card.insertBefore(region,margen); else card.appendChild(region);
+    }
+  }
+
+  /* El modal se reconstruye cada vez: insertar el campo después de la preparación existente. */
+  const prevPrepare=window.cqPrepareFinModal;
+  if(typeof prevPrepare==='function'){
+    window.cqPrepareFinModal=function(){
+      const out=prevPrepare.apply(this,arguments);
+      ensureMetrosField();
+      return out;
+    };
+    try{cqPrepareFinModal=window.cqPrepareFinModal;}catch(e){}
+  }
+
+  const prevOpen=window.openModalFin;
+  if(typeof prevOpen==='function'){
+    window.openModalFin=function(){
+      const out=prevOpen.apply(this,arguments);
+      ensureMetrosField();
+      const inp=document.getElementById('fin-metros-proyecto');
+      if(inp)inp.value=m2Actual()||'';
+      return out;
+    };
+    try{openModalFin=window.openModalFin;}catch(e){}
+  }
+
+  const prevSave=window.saveFinanciero;
+  if(typeof prevSave==='function'){
+    window.saveFinanciero=function(){
+      try{
+        const fin=finActual();
+        const inp=document.getElementById('fin-metros-proyecto');
+        if(inp)fin.mts2TotalesProyecto=Math.max(0,parseFloat(inp.value)||0);
+        if(typeof getS==='function')getS().financiero=fin;
+      }catch(e){}
+      return prevSave.apply(this,arguments);
+    };
+    try{saveFinanciero=window.saveFinanciero;}catch(e){}
+  }
+
+  const prevRender=window.renderResumen;
+  if(typeof prevRender==='function'){
+    window.renderResumen=function(){
+      const out=prevRender.apply(this,arguments);
+      injectResumenM2();
+      requestAnimationFrame(injectResumenM2);
+      setTimeout(injectResumenM2,0);
+      return out;
+    };
+    try{renderResumen=window.renderResumen;}catch(e){}
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    setTimeout(function(){
+      if(document.getElementById('view-resumen')?.classList.contains('active'))injectResumenM2();
+    },0);
+  });
+})();
+</script>
+
+
+<!-- CQ v15 · ajuste visual m² + costo/precio por m² en Reporte financiero -->
+<style id="cq-v15-m2-ajuste-y-reporte">
+/* Separar apenas el texto de la barra lateral, sin ensanchar visualmente el bloque */
+#view-resumen .fin-m2-row .fin-lbl{
+  padding-left:7px!important;
+}
+#view-resumen .fin-m2-metrics-region .fin-row .fin-lbl{
+  padding-left:7px!important;
+}
+#view-resumen .fin-m2-row{
+  padding-right:14px!important;
+}
+#view-resumen .fin-m2-metrics-region .fin-row{
+  padding-right:14px!important;
+}
+
+/* Nuevas filas en Reporte financiero */
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-cost th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-cost td{
+  color:#8A6118!important;
+  font-weight:850!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-price th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-price td{
+  color:#2F6FA3!important;
+  font-weight:850!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-cost th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-price th{
+  padding-left:18px!important;
+}
+</style>
+
+<script id="cq-v15-m2-reporte-financiero-js">
+(function(){
+  const prevPivot=window.repFinPivot;
+  if(typeof prevPivot!=='function')return;
+
+  function m2FromRow(r){
+    const fin=r?.fin||r?.s?.financiero||{};
+    return Math.max(0,parseFloat(fin.mts2TotalesProyecto ?? fin.m2TotalesProyecto ?? 0)||0);
+  }
+  function money(v){
+    try{return typeof fmt==='function'?fmt(v,'usd'):'U$S '+Math.round(Number(v)||0).toLocaleString('es-AR');}
+    catch(e){return 'U$S '+Math.round(Number(v)||0).toLocaleString('es-AR');}
+  }
+  function esc(v){
+    return String(v??'').replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]});
+  }
+  function metricRow(label,vals,total,rowClass){
+    return '<tr class="'+rowClass+'"><th>'+esc(label)+'</th>'+vals.map(v=>'<td>'+esc(v)+'</td>').join('')+'<td class="rep-total-col">'+esc(total)+'</td></tr>';
+  }
+
+  window.repFinPivot=function(rows){
+    let html=prevPivot.apply(this,arguments);
+    if(!Array.isArray(rows)||!rows.length)return html;
+
+    let totalM2=0,totalCosto=0,totalPrecioBase=0;
+    const costoVals=[];
+    const precioVals=[];
+
+    rows.forEach(function(r){
+      const m2=m2FromRow(r);
+      const costo=Number(r?.direct?.costoTotal)||0;
+      const ingreso=Number(r?.direct?.totalIngresos)||0;
+      const comision=Number(r?.direct?.comision)||0;
+      if(m2>0){
+        costoVals.push(money(costo/m2));
+        precioVals.push(money((ingreso-comision)/m2));
+        totalM2+=m2;
+        totalCosto+=costo;
+        totalPrecioBase+=(ingreso-comision);
+      }else{
+        costoVals.push('—');
+        precioVals.push('—');
+      }
+    });
+
+    const totalCostoM2=totalM2>0?money(totalCosto/totalM2):'—';
+    const totalPrecioM2=totalM2>0?money(totalPrecioBase/totalM2):'—';
+    const extra=metricRow('Costo por m²',costoVals,totalCostoM2,'rep-row-m2-cost')+
+                metricRow('Precio por m²',precioVals,totalPrecioM2,'rep-row-m2-price');
+
+    const re=/(<tr[^>]*>\s*<th>Costo total<\/th>[\s\S]*?<\/tr>)/i;
+    if(re.test(html))html=html.replace(re,'$1'+extra);
+    return html;
+  };
+  try{repFinPivot=window.repFinPivot;}catch(e){}
+})();
+</script>
+
+
+<style id="cq-subrubro-trend-v1">
+/* Reporte gastos · evolución de un subrubro entre obras */
+#view-reporte .cq-subtrend-shell{
+  margin:0 0 14px 0;
+  border-bottom:1px solid #E6EFE9;
+  background:linear-gradient(180deg,#FBFEFC 0%,#F7FBF8 100%);
+}
+#view-reporte .cq-subtrend-toolbar{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:14px;
+  padding:15px 16px 11px;
+  flex-wrap:wrap;
+}
+#view-reporte .cq-subtrend-title{
+  font-size:12px;
+  font-weight:950;
+  color:#183C32;
+  letter-spacing:.01em;
+}
+#view-reporte .cq-subtrend-sub{
+  margin-top:3px;
+  font-size:10.5px;
+  color:#789086;
+  line-height:1.35;
+}
+#view-reporte .cq-subtrend-field{
+  min-width:230px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+#view-reporte .cq-subtrend-field label{
+  font-size:9px;
+  font-weight:900;
+  color:#799087;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+}
+#view-reporte .cq-subtrend-field select{
+  width:100%;
+  min-height:38px;
+  border:1px solid #CFE1D6;
+  border-radius:10px;
+  background:#fff;
+  color:#173E31;
+  padding:7px 32px 7px 11px;
+  font:800 12px 'Space Grotesk',sans-serif;
+  outline:none;
+  box-shadow:0 2px 8px rgba(28,61,53,.05);
+}
+#view-reporte .cq-subtrend-field select:focus{border-color:#11A66F;box-shadow:0 0 0 3px rgba(17,166,111,.10)}
+#view-reporte .cq-subtrend-chart-wrap{
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:0 10px 10px;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+}
+#view-reporte .cq-subtrend-svg{
+  display:block;
+  height:315px;
+  max-width:none;
+  background:#fff;
+  border:1px solid #E3ECE7;
+  border-radius:14px;
+  box-shadow:0 3px 12px rgba(24,60,50,.05);
+}
+#view-reporte .cq-subtrend-empty{
+  margin:0 16px 15px;
+  padding:24px 14px;
+  text-align:center;
+  border:1px dashed #D5E4DA;
+  border-radius:12px;
+  color:#879B91;
+  font-size:11px;
+  background:#fff;
+}
+#view-reporte .cq-subtrend-footer{
+  padding:0 16px 14px;
+  font-size:10px;
+  color:#8A9B93;
+  line-height:1.4;
+}
+@media(max-width:650px){
+  #view-reporte .cq-subtrend-toolbar{padding:13px 12px 10px;gap:10px}
+  #view-reporte .cq-subtrend-field{width:100%;min-width:0}
+  #view-reporte .cq-subtrend-chart-wrap{padding:0 7px 9px}
+  #view-reporte .cq-subtrend-svg{height:292px}
+  #view-reporte .cq-subtrend-footer{padding:0 12px 12px}
+}
+</style>
+
+<script id="cq-subrubro-trend-v1-js">
+(function(){
+  const prevRenderRanking = window.renderRankingProveedores;
+
+  function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function key(v){
+    try{return typeof reporteSubrubroKey==='function'?reporteSubrubroKey(v):String(v||'').trim().toLocaleLowerCase('es');}
+    catch(e){return String(v||'').trim().toLowerCase();}
+  }
+  function label(v){
+    try{return typeof reporteSubrubroVisible==='function'?reporteSubrubroVisible(v):String(v||'Sin subrubro');}
+    catch(e){return String(v||'Sin subrubro');}
+  }
+  function usd(g){
+    try{return typeof repUSD==='function'?Number(repUSD(g))||0:Number(toUSD(g.monto,g.moneda,g.tc))||0;}
+    catch(e){return 0;}
+  }
+  function money(v){
+    try{return typeof fmt==='function'?fmt(v,'usd'):'U$S '+Math.round(v).toLocaleString('es-AR');}
+    catch(e){return 'U$S '+Math.round(v).toLocaleString('es-AR');}
+  }
+  function compact(v){
+    const n=Math.abs(Number(v)||0),sgn=(Number(v)||0)<0?'-':'';
+    if(n>=1000000)return sgn+'U$S '+(n/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'M';
+    if(n>=1000)return sgn+'U$S '+(n/1000).toLocaleString('es-AR',{maximumFractionDigits:1})+'k';
+    return sgn+'U$S '+Math.round(n).toLocaleString('es-AR');
+  }
+  function niceMax(v){
+    v=Math.max(0,Number(v)||0);if(v<=0)return 1;
+    const p=Math.pow(10,Math.floor(Math.log10(v)));
+    const u=v/p;
+    let n=u<=1?1:u<=2?2:u<=2.5?2.5:u<=5?5:10;
+    if(n*p<v)n=(n===1?2:n===2?2.5:n===2.5?5:n===5?10:20);
+    return n*p;
+  }
+
+  function sourceData(){
+    let gastos=[];
+    try{gastos=typeof repAdvancedGastos==='function'?repAdvancedGastos(true):[];}catch(e){}
+    let obras=[];
+    try{obras=typeof repSelectedObras==='function'?repSelectedObras():[];}catch(e){}
+    return {gastos:Array.isArray(gastos)?gastos:[],obras:Array.isArray(obras)?obras:[]};
+  }
+
+  function buildOptions(gastos){
+    const map=new Map();
+    gastos.forEach(g=>{
+      const l=label(g.subrubro||g.concepto||'Sin subrubro'),k=key(l);
+      if(!map.has(k))map.set(k,{key:k,label:l,total:0});
+      map.get(k).total+=usd(g);
+    });
+    return [...map.values()].sort((a,b)=>String(a.label).localeCompare(String(b.label),'es',{sensitivity:'base'}));
+  }
+
+  function renderShell(){
+    const el=document.getElementById('reporte-proveedores');
+    if(!el)return;
+    const existing=el.querySelector('.cq-subtrend-shell');if(existing)existing.remove();
+    const {gastos,obras}=sourceData();
+    if(!gastos.length||!obras.length)return;
+    const opts=buildOptions(gastos);
+    if(!opts.length)return;
+
+    let selected=String(window._cqSubtrendSelected||'');
+    if(!opts.some(o=>o.key===selected)){
+      let top='';
+      try{const s=document.getElementById('reporte-sub-filter')?.value||'';if(s&&s!=='all')top=key(s);}catch(e){}
+      if(top&&opts.some(o=>o.key===top))selected=top;
+      else selected=[...opts].sort((a,b)=>b.total-a.total)[0].key;
+      window._cqSubtrendSelected=selected;
+    }
+
+    const shell=document.createElement('div');shell.className='cq-subtrend-shell';
+    shell.innerHTML=`<div class="cq-subtrend-toolbar"><div><div class="cq-subtrend-title">Evolución por subrubro</div><div class="cq-subtrend-sub">Compará el mismo concepto entre las obras seleccionadas.</div></div><div class="cq-subtrend-field"><label>Subrubro a graficar</label><select id="cq-subtrend-select" onchange="cqSubtrendSelect(this.value)">${opts.map(o=>`<option value="${esc(o.key)}" ${o.key===selected?'selected':''}>${esc(o.label)}</option>`).join('')}</select></div></div><div id="cq-subtrend-chart"></div><div class="cq-subtrend-footer">Cada punto muestra el gasto acumulado del subrubro en esa obra, respetando los filtros de período, rubro y obras del reporte.</div>`;
+    el.insertBefore(shell,el.firstChild);
+    renderChart();
+  }
+
+  function renderChart(){
+    const box=document.getElementById('cq-subtrend-chart');if(!box)return;
+    const {gastos,obras}=sourceData();
+    const selected=String(window._cqSubtrendSelected||'');
+    const relevant=gastos.filter(g=>key(label(g.subrubro||g.concepto||'Sin subrubro'))===selected);
+    const selectedLabel=label(relevant[0]?.subrubro||relevant[0]?.concepto||document.querySelector('#cq-subtrend-select option:checked')?.textContent||'Subrubro');
+    const vals=obras.map(o=>({obra:o, value:relevant.filter(g=>g.obraId===o.id).reduce((a,g)=>a+usd(g),0)}));
+    if(!vals.length){box.innerHTML='<div class="cq-subtrend-empty">No hay obras seleccionadas para graficar.</div>';return;}
+
+    const W=Math.max(720,120+vals.length*105),H=315;
+    const m={l:78,r:30,t:42,b:66},pw=W-m.l-m.r,ph=H-m.t-m.b;
+    const maxVal=Math.max(...vals.map(x=>x.value),0),yMax=niceMax(maxVal*1.08);
+    const step=vals.length>1?pw/(vals.length-1):0;
+    const x=i=>m.l+(vals.length===1?pw/2:i*step);
+    const y=v=>m.t+ph-(Math.max(0,v)/yMax)*ph;
+    const pts=vals.map((d,i)=>({x:x(i),y:y(d.value),...d}));
+    const line=pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');
+    const area=pts.length?`M ${pts[0].x.toFixed(1)} ${(m.t+ph).toFixed(1)} `+pts.map(p=>`L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')+` L ${pts[pts.length-1].x.toFixed(1)} ${(m.t+ph).toFixed(1)} Z`:'';
+    const ticks=4;
+    let grid='';
+    for(let i=0;i<=ticks;i++){
+      const v=yMax*(ticks-i)/ticks,yy=m.t+ph*i/ticks;
+      grid+=`<line x1="${m.l}" y1="${yy}" x2="${W-m.r}" y2="${yy}" stroke="#E7EFEA" stroke-width="1"/><text x="${m.l-12}" y="${yy+4}" text-anchor="end" font-size="10" font-family="Space Grotesk, sans-serif" fill="#84988E">${esc(compact(v))}</text>`;
+    }
+    const labels=pts.map((p,i)=>{
+      const nm=p.obra.short||p.obra.label||'';
+      const valY=Math.max(m.t+13,p.y-11);
+      return `<line x1="${p.x}" y1="${m.t+ph}" x2="${p.x}" y2="${m.t+ph+5}" stroke="#BFCFC6"/><text x="${p.x}" y="${H-31}" text-anchor="middle" font-size="11" font-weight="800" font-family="Space Grotesk, sans-serif" fill="#294B40">${esc(nm)}</text><text x="${p.x}" y="${valY}" text-anchor="middle" font-size="10.5" font-weight="900" font-family="JetBrains Mono, monospace" fill="#0B7350">${esc(compact(p.value))}</text><circle cx="${p.x}" cy="${p.y}" r="5.5" fill="#00B879" stroke="#fff" stroke-width="3"><title>${esc(nm+': '+money(p.value))}</title></circle>`;
+    }).join('');
+    const total=vals.reduce((a,d)=>a+d.value,0);
+    box.innerHTML=`<div class="cq-subtrend-chart-wrap"><svg class="cq-subtrend-svg" style="width:${W}px" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución de ${esc(selectedLabel)} por obra"><defs><linearGradient id="cqSubtrendArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00B879" stop-opacity=".20"/><stop offset="100%" stop-color="#00B879" stop-opacity=".02"/></linearGradient></defs><text x="${m.l}" y="24" font-size="13" font-weight="900" font-family="Space Grotesk, sans-serif" fill="#173E31">${esc(selectedLabel)}</text><text x="${W-m.r}" y="24" text-anchor="end" font-size="10.5" font-weight="800" font-family="Space Grotesk, sans-serif" fill="#789086">Total ${esc(money(total))}</text>${grid}<path d="${area}" fill="url(#cqSubtrendArea)"/><path d="${line}" fill="none" stroke="#00A86B" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>${labels}</svg></div>`;
+  }
+
+  window.cqSubtrendSelect=function(v){window._cqSubtrendSelected=String(v||'');renderChart();};
+
+  window.renderRankingProveedores=function(){
+    if(typeof prevRenderRanking==='function')prevRenderRanking.apply(this,arguments);
+    renderShell();
+  };
+  try{renderRankingProveedores=window.renderRankingProveedores;}catch(e){}
+
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{try{renderShell()}catch(e){}},0));
+})();
+</script>
+<style id="cq-subrubro-trend-v2">
+/* Reporte gastos · evolución múltiple de subrubros */
+#view-reporte .cq-subtrend-shell{width:100%!important;max-width:none!important;}
+#view-reporte .cq-subtrend-toolbar{align-items:flex-start!important;}
+#view-reporte .cq-subtrend-field{min-width:290px!important;max-width:430px;width:min(430px,100%);}
+#view-reporte .cq-subtrend-multi{position:relative;width:100%;}
+#view-reporte .cq-subtrend-multi-btn{
+  width:100%;min-height:42px;border:1px solid #CFE1D6;border-radius:11px;background:#fff;
+  color:#173E31;padding:8px 11px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font:850 12px 'Space Grotesk',sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(28,61,53,.05);text-align:left;
+}
+#view-reporte .cq-subtrend-multi-btn:hover{border-color:#11A66F;background:#FBFEFC;}
+#view-reporte .cq-subtrend-multi-btn .arrow{font-size:12px;color:#70887D;flex:0 0 auto;}
+#view-reporte .cq-subtrend-menu{
+  display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:70;width:min(390px,88vw);max-height:330px;
+  overflow:auto;background:#fff;border:1px solid #D7E5DC;border-radius:13px;box-shadow:0 14px 34px rgba(20,55,44,.18);padding:8px;
+}
+#view-reporte .cq-subtrend-menu.open{display:block;}
+#view-reporte .cq-subtrend-menu-actions{display:flex;gap:7px;padding:3px 3px 8px;position:sticky;top:0;background:#fff;z-index:2;}
+#view-reporte .cq-subtrend-menu-actions button{border:1px solid #D8E6DD;background:#F8FBF9;color:#31594A;border-radius:9px;padding:6px 10px;font:800 10px 'Space Grotesk',sans-serif;cursor:pointer;}
+#view-reporte .cq-subtrend-option{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:9px;font-size:11.5px;font-weight:750;color:#294B40;cursor:pointer;}
+#view-reporte .cq-subtrend-option:hover{background:#F1F8F4;}
+#view-reporte .cq-subtrend-option input{width:16px;height:16px;accent-color:#0AA56C;flex:0 0 auto;}
+#view-reporte .cq-subtrend-legend{display:flex;flex-wrap:wrap;gap:8px 12px;padding:0 14px 10px;}
+#view-reporte .cq-subtrend-legend-item{display:inline-flex;align-items:center;gap:7px;border:1px solid #E1EAE5;background:#fff;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:850;color:#35584B;}
+#view-reporte .cq-subtrend-legend-line{width:20px;height:3px;border-radius:99px;display:inline-block;}
+#view-reporte .cq-subtrend-chart-wrap{width:100%!important;max-width:none!important;padding:0 10px 10px!important;box-sizing:border-box;}
+#view-reporte .cq-subtrend-svg{width:auto;max-width:none!important;}
+#view-reporte .cq-subtrend-empty{margin-top:0!important;}
+@media (min-width:700px) and (max-width:1400px) and (orientation:landscape){
+  #view-reporte{width:100vw!important;max-width:none!important;margin:0!important;padding-left:8px!important;padding-right:8px!important;box-sizing:border-box!important;}
+  #view-reporte .rep-card,#view-reporte .rep-card-full,#view-reporte #reporte-proveedores{width:100%!important;max-width:none!important;}
+  #view-reporte .cq-subtrend-shell{width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important;}
+  #view-reporte .cq-subtrend-chart-wrap{padding-left:4px!important;padding-right:4px!important;overflow-x:hidden!important;width:100%!important;max-width:100%!important;}
+  #view-reporte .cq-subtrend-svg{height:350px!important;width:100%!important;max-width:100%!important;display:block!important;}
+}
+@media(max-width:650px){
+  #view-reporte .cq-subtrend-field{width:100%!important;max-width:none!important;min-width:0!important;}
+  #view-reporte .cq-subtrend-menu{left:0;right:auto;width:100%;max-height:300px;}
+  #view-reporte .cq-subtrend-legend{padding-left:10px;padding-right:10px;}
+}
+</style>
+<script id="cq-subrubro-trend-v2-js">
+(function(){
+  const prevRankingV2=window.renderRankingProveedores;
+  const COLORS=['#00A86B','#2E7BEF','#E58A16','#8A5CF6','#E04B4B','#159AA8','#C28A0E','#D45AA8','#667085','#7A9E45'];
+  function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function skey(v){try{return typeof reporteSubrubroKey==='function'?reporteSubrubroKey(v):String(v||'').trim().toLocaleLowerCase('es');}catch(e){return String(v||'').trim().toLowerCase();}}
+  function slabel(v){try{return typeof reporteSubrubroVisible==='function'?reporteSubrubroVisible(v):String(v||'Sin subrubro');}catch(e){return String(v||'Sin subrubro');}}
+  function susd(g){try{return typeof repUSD==='function'?Number(repUSD(g))||0:Number(toUSD(g.monto,g.moneda,g.tc))||0;}catch(e){return 0;}}
+  function smoney(v){try{return typeof fmt==='function'?fmt(v,'usd'):'U$S '+Math.round(v).toLocaleString('es-AR');}catch(e){return 'U$S '+Math.round(v).toLocaleString('es-AR');}}
+  function compact(v){const n=Math.abs(Number(v)||0),sgn=(Number(v)||0)<0?'-':'';if(n>=1000000)return sgn+'U$S '+(n/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'M';if(n>=1000)return sgn+'U$S '+(n/1000).toLocaleString('es-AR',{maximumFractionDigits:1})+'k';return sgn+'U$S '+Math.round(n).toLocaleString('es-AR');}
+  function niceMax(v){v=Math.max(0,Number(v)||0);if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v))),u=v/p;let n=u<=1?1:u<=2?2:u<=2.5?2.5:u<=5?5:10;if(n*p<v)n=(n===1?2:n===2?2.5:n===2.5?5:n===5?10:20);return n*p;}
+  function source(){let gastos=[],obras=[];try{gastos=typeof repAdvancedGastos==='function'?repAdvancedGastos(true):[];}catch(e){}try{obras=typeof repSelectedObras==='function'?repSelectedObras():[];}catch(e){}return{gastos:Array.isArray(gastos)?gastos:[],obras:Array.isArray(obras)?obras:[]};}
+  function options(gastos){const m=new Map();gastos.forEach(g=>{const l=slabel(g.subrubro||g.concepto||'Sin subrubro'),k=skey(l);if(!m.has(k))m.set(k,{key:k,label:l,total:0});m.get(k).total+=susd(g);});return[...m.values()].sort((a,b)=>String(a.label).localeCompare(String(b.label),'es',{sensitivity:'base'}));}
+  function selectedValid(opts){let arr=Array.isArray(window._cqSubtrendSelectedMulti)?window._cqSubtrendSelectedMulti.map(String):[];if(!arr.length&&window._cqSubtrendSelected)arr=[String(window._cqSubtrendSelected)];arr=arr.filter(k=>opts.some(o=>o.key===k));if(!arr.length&&opts.length){let top=opts.slice().sort((a,b)=>b.total-a.total)[0]?.key;if(top)arr=[top];}window._cqSubtrendSelectedMulti=arr;return arr;}
+  function summaryText(arr,opts){if(!arr.length)return'Seleccioná subrubros';if(arr.length===1)return opts.find(o=>o.key===arr[0])?.label||'1 subrubro';return arr.length+' subrubros seleccionados';}
+  function renderShellV2(){
+    const el=document.getElementById('reporte-proveedores');if(!el)return;
+    el.querySelectorAll('.cq-subtrend-shell').forEach(n=>n.remove());
+    const {gastos,obras}=source();if(!gastos.length||!obras.length)return;
+    const opts=options(gastos);if(!opts.length)return;const selected=selectedValid(opts);
+    const shell=document.createElement('div');shell.className='cq-subtrend-shell';shell.dataset.version='2';
+    shell.innerHTML=`<div class="cq-subtrend-toolbar"><div><div class="cq-subtrend-title">Evolución por subrubro</div><div class="cq-subtrend-sub">Seleccioná uno o varios conceptos y compará su evolución entre las obras.</div></div><div class="cq-subtrend-field"><label>Subrubros a graficar</label><div class="cq-subtrend-multi"><button type="button" class="cq-subtrend-multi-btn" onclick="cqSubtrendToggleMenu(event)"><span id="cq-subtrend-summary">${esc(summaryText(selected,opts))}</span><span class="arrow">▾</span></button><div class="cq-subtrend-menu" id="cq-subtrend-menu"><div class="cq-subtrend-menu-actions"><button type="button" onclick="cqSubtrendSetAll(true)">Todos</button><button type="button" onclick="cqSubtrendSetAll(false)">Limpiar</button></div>${opts.map(o=>`<label class="cq-subtrend-option"><input type="checkbox" value="${esc(o.key)}" ${selected.includes(o.key)?'checked':''} onchange="cqSubtrendToggleKey(this.value,this.checked)"><span>${esc(o.label)}</span></label>`).join('')}</div></div></div></div><div id="cq-subtrend-legend" class="cq-subtrend-legend"></div><div id="cq-subtrend-chart"></div><div class="cq-subtrend-footer">Cada línea corresponde a un subrubro y cada punto muestra su gasto acumulado en esa obra, respetando los filtros activos del reporte.</div>`;
+    el.insertBefore(shell,el.firstChild);renderChartV2();
+  }
+  function renderChartV2(){
+    const box=document.getElementById('cq-subtrend-chart'),legend=document.getElementById('cq-subtrend-legend');if(!box)return;
+    const {gastos,obras}=source(),opts=options(gastos),sel=selectedValid(opts);
+    const sum=document.getElementById('cq-subtrend-summary');if(sum)sum.textContent=summaryText(sel,opts);
+    document.querySelectorAll('#cq-subtrend-menu input[type="checkbox"]').forEach(cb=>cb.checked=sel.includes(cb.value));
+    if(!sel.length){if(legend)legend.innerHTML='';box.innerHTML='<div class="cq-subtrend-empty">Seleccioná al menos un subrubro para graficar.</div>';return;}
+    const series=sel.map((k,idx)=>{const op=opts.find(o=>o.key===k)||{label:k};const rel=gastos.filter(g=>skey(slabel(g.subrubro||g.concepto||'Sin subrubro'))===k);const vals=obras.map(o=>({obra:o,value:rel.filter(g=>g.obraId===o.id).reduce((a,g)=>a+susd(g),0)}));return{key:k,label:op.label,color:COLORS[idx%COLORS.length],vals,total:vals.reduce((a,d)=>a+d.value,0)};});
+    if(legend)legend.innerHTML=series.map(s=>`<span class="cq-subtrend-legend-item"><span class="cq-subtrend-legend-line" style="background:${s.color}"></span><span>${esc(s.label)}</span><span style="color:#7C9087;font-family:'JetBrains Mono',monospace">${esc(smoney(s.total))}</span></span>`).join('');
+    const cw=Math.floor(box.getBoundingClientRect().width||box.parentElement?.getBoundingClientRect().width||0);const tablet=window.innerWidth>=700&&window.innerWidth<=1400&&window.innerWidth>window.innerHeight;const minByPoints=120+obras.length*105;const W=tablet?Math.max(680,cw-8):(window.innerWidth<=650?Math.max(720,minByPoints):Math.max(760,cw-12)),H=tablet?350:325;
+    const m={l:96,r:28,t:54,b:66},pw=W-m.l-m.r,ph=H-m.t-m.b;const all=series.flatMap(s=>s.vals.map(v=>v.value));const maxVal=Math.max(...all,0),yMax=niceMax(maxVal*1.10);const step=obras.length>1?pw/(obras.length-1):0;const x=i=>m.l+(obras.length===1?pw/2:i*step),y=v=>m.t+ph-(Math.max(0,v)/yMax)*ph;
+    let grid='';for(let i=0;i<=4;i++){const v=yMax*(4-i)/4,yy=m.t+ph*i/4;grid+=`<line x1="${m.l}" y1="${yy}" x2="${W-m.r}" y2="${yy}" stroke="#E7EFEA" stroke-width="1"/><text x="${m.l-12}" y="${yy+4}" text-anchor="end" font-size="10" font-family="Space Grotesk, sans-serif" fill="#84988E">${esc(smoney(v))}</text>`;}
+    const xlabels=obras.map((o,i)=>`<line x1="${x(i)}" y1="${m.t+ph}" x2="${x(i)}" y2="${m.t+ph+5}" stroke="#BFCFC6"/><text x="${x(i)}" y="${H-31}" text-anchor="middle" font-size="11" font-weight="800" font-family="Space Grotesk, sans-serif" fill="#294B40">${esc(o.short||o.label||'')}</text>`).join('');
+    const paths=series.map((s,si)=>{const pts=s.vals.map((d,i)=>({x:x(i),y:y(d.value),...d}));const d=pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');const dots=pts.map((p,pi)=>{const name=p.obra.short||p.obra.label||'';const lift=12+(si%4)*13;const isFirst=pi===0,isLast=pi===pts.length-1;const labelX=p.x+(isFirst?7:(isLast?-7:0));const labelAnchor=isFirst?'start':(isLast?'end':'middle');const valueLabel=`<text x="${labelX}" y="${Math.max(m.t+13,p.y-lift)}" text-anchor="${labelAnchor}" font-size="9.6" font-weight="900" font-family="JetBrains Mono, monospace" fill="${s.color}" paint-order="stroke" stroke="#fff" stroke-width="4" stroke-linejoin="round">${esc(smoney(p.value))}</text>`;return valueLabel+`<circle cx="${p.x}" cy="${p.y}" r="5.3" fill="${s.color}" stroke="#fff" stroke-width="2.7"><title>${esc(s.label+' · '+name+': '+smoney(p.value))}</title></circle>`;}).join('');return`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;}).join('');
+    const title=series.length===1?series[0].label:'Comparación de '+series.length+' subrubros';
+    box.innerHTML=`<div class="cq-subtrend-chart-wrap"><svg class="cq-subtrend-svg" style="width:${W}px" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)} por obra"><text x="${m.l}" y="26" font-size="13" font-weight="900" font-family="Space Grotesk, sans-serif" fill="#173E31">${esc(title)}</text>${grid}${paths}${xlabels}</svg></div>`;
+  }
+  window.cqSubtrendToggleMenu=function(ev){ev&&ev.stopPropagation();document.getElementById('cq-subtrend-menu')?.classList.toggle('open');};
+  window.cqSubtrendToggleKey=function(k,on){let arr=Array.isArray(window._cqSubtrendSelectedMulti)?window._cqSubtrendSelectedMulti.slice():[];arr=arr.filter(x=>x!==k);if(on)arr.push(k);window._cqSubtrendSelectedMulti=arr;renderChartV2();};
+  window.cqSubtrendSetAll=function(on){const {gastos}=source(),opts=options(gastos);window._cqSubtrendSelectedMulti=on?opts.map(o=>o.key):[];renderChartV2();};
+  document.addEventListener('click',e=>{if(!e.target.closest?.('.cq-subtrend-multi'))document.getElementById('cq-subtrend-menu')?.classList.remove('open');});
+  window.renderRankingProveedores=function(){if(typeof prevRankingV2==='function')prevRankingV2.apply(this,arguments);renderShellV2();};
+  try{renderRankingProveedores=window.renderRankingProveedores;}catch(e){}
+  let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(document.querySelector('.cq-subtrend-shell[data-version="2"]'))renderChartV2();},120);});
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{try{renderShellV2()}catch(e){}},20));
+})();
+</script>
+
+<style id="cq-tablet-reporte-gastos-legibilidad-v1">
+/* Tablet horizontal · Reporte gastos: más legible sin perder ancho completo */
+@media (min-width:700px) and (max-width:1400px) and (orientation:landscape){
+  /* Encabezado y selector del gráfico */
+  #view-reporte .cq-subtrend-title{font-size:16px!important;}
+  #view-reporte .cq-subtrend-sub{font-size:12.5px!important;line-height:1.35!important;}
+  #view-reporte .cq-subtrend-field label{font-size:11.5px!important;}
+  #view-reporte .cq-subtrend-multi-btn{font-size:13.5px!important;min-height:46px!important;padding:9px 13px!important;}
+
+  /* Leyenda */
+  #view-reporte .cq-subtrend-legend{gap:10px 14px!important;padding-top:4px!important;padding-bottom:12px!important;}
+  #view-reporte .cq-subtrend-legend-item{font-size:12.5px!important;padding:7px 11px!important;gap:8px!important;}
+  #view-reporte .cq-subtrend-legend-line{width:25px!important;height:4px!important;}
+
+  /* Gráfico: valores, ejes y nombres de obras */
+  #view-reporte .cq-subtrend-svg text[font-size="9.6"]{font-size:11.8px!important;}
+  #view-reporte .cq-subtrend-svg text[font-size="10"]{font-size:12px!important;}
+  #view-reporte .cq-subtrend-svg text[font-size="11"]{font-size:13px!important;}
+  #view-reporte .cq-subtrend-svg text[font-size="13"]{font-size:15px!important;}
+  #view-reporte .cq-subtrend-svg{height:385px!important;}
+  #view-reporte .cq-subtrend-footer{font-size:11.5px!important;line-height:1.35!important;padding:10px 14px 12px!important;}
+
+  /* Tabla de comparación por subrubro */
+  #view-reporte #reporte-proveedores .cq-rep-subcompare-note{
+    font-size:12px!important;
+    padding:10px 14px!important;
+  }
+  #view-reporte #reporte-proveedores .cq-clean-table th{
+    font-size:12.5px!important;
+    padding:13px 9px!important;
+    line-height:1.2!important;
+  }
+  #view-reporte #reporte-proveedores .cq-clean-table td{
+    font-size:13.5px!important;
+    padding:13px 9px!important;
+    line-height:1.22!important;
+  }
+  #view-reporte #reporte-proveedores .cq-clean-table .obra-name{
+    font-size:13.5px!important;
+    font-weight:800!important;
+  }
+  #view-reporte #reporte-proveedores .cq-clean-table .money{
+    font-size:13.5px!important;
+    font-weight:750!important;
+  }
+  #view-reporte #reporte-proveedores .cq-clean-table .total-row td{
+    font-size:14px!important;
+    font-weight:900!important;
+  }
+}
+</style>
+
+<!-- CQ v20 · botones Costo por m² y Precio por m² en comparativo financiero -->
+<style id="cq-v20-metricas-m2-botones">
+#view-reporte-financiero .rep-fin-metric-btn.metric-costoM2{
+  background:#FFF5E9!important;
+  border-color:#E8C98F!important;
+  color:#956112!important;
+}
+#view-reporte-financiero .rep-fin-metric-btn.metric-precioM2{
+  background:#EEF6FF!important;
+  border-color:#B9D3EA!important;
+  color:#2E6D9F!important;
+}
+#view-reporte-financiero .rep-fin-metric-btn.metric-costoM2.active{
+  background:linear-gradient(135deg,#B47716,#D89A31)!important;
+  color:#fff!important;
+  border-color:#A96A0D!important;
+}
+#view-reporte-financiero .rep-fin-metric-btn.metric-precioM2.active{
+  background:linear-gradient(135deg,#2D6E9E,#4C91C5)!important;
+  color:#fff!important;
+  border-color:#2D6E9E!important;
+}
+#view-reporte-financiero .rep-fin-chart-shell.metric-costoM2 .rep-fin-fill{
+  background:linear-gradient(90deg,#E2AA4A,#B47716)!important;
+}
+#view-reporte-financiero .rep-fin-chart-shell.metric-precioM2 .rep-fin-fill{
+  background:linear-gradient(90deg,#6AA6D3,#2D6E9E)!important;
+}
+</style>
+<script id="cq-v20-metricas-m2-botones-js">
+(function(){
+  function m2Proyecto(r){
+    const fin=r?.fin||r?.s?.financiero||{};
+    return Math.max(0,parseFloat(fin.mts2TotalesProyecto ?? fin.m2TotalesProyecto ?? 0)||0);
+  }
+
+  const current=window.REP_FIN_METRICS||{};
+  const ordered={};
+  ['margen','totalIngresos','comision'].forEach(k=>{if(current[k])ordered[k]=current[k]});
+  ordered.costoM2={label:'Costo por m²',type:'usd'};
+  ordered.precioM2={label:'Precio por m²',type:'usd'};
+  Object.keys(current).forEach(k=>{if(!(k in ordered))ordered[k]=current[k]});
+  window.REP_FIN_METRICS=ordered;
+
+  const prevValue=window.repFinMetricValueRow || (typeof repFinMetricValueRow==='function'?repFinMetricValueRow:null);
+  window.repFinMetricValueRow=function(r,key){
+    const m2=m2Proyecto(r);
+    if(key==='costoM2') return m2>0 ? (Number(r?.direct?.costoTotal)||0)/m2 : NaN;
+    if(key==='precioM2') return m2>0 ? ((Number(r?.direct?.totalIngresos)||0)-(Number(r?.direct?.comision)||0))/m2 : NaN;
+    return prevValue?prevValue(r,key):0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow}catch(e){}
+})();
+</script>
+
+<!-- CQ v21 · completar y ordenar métricas del comparativo financiero según la tabla -->
+<script id="cq-v21-metricas-financieras-completas-js">
+(function(){
+  window.REP_FIN_METRICS = {
+    totalIngresos:{label:'Ingreso total',type:'usd'},
+    comision:{label:'Comisión total',type:'usd'},
+    costoTotal:{label:'Costo total',type:'usd'},
+    costoM2:{label:'Costo por m²',type:'usd'},
+    precioM2:{label:'Precio por m²',type:'usd'},
+    margen:{label:'Ganancia proyectos',type:'usd'},
+    margenPct:{label:'Margen %',type:'pct'},
+    costosFijos:{label:'Costos fijos prorrateados',type:'usd'},
+    resultadoNeto:{label:'Resultado neto',type:'usd'},
+    capitalMax:{label:'Capital máximo',type:'usd'},
+    roe:{label:'ROE',type:'pct'},
+    tirMensual:{label:'TIR mensual',type:'pct'},
+    tirAnual:{label:'TIR anual',type:'pct'},
+    payback:{label:'Payback',type:'payback'},
+    capitalCosto:{label:'Capital/Costo',type:'pct'}
+  };
+
+  function m2Proyecto(r){
+    const fin=r?.fin||r?.s?.financiero||{};
+    return Math.max(0,parseFloat(fin.mts2TotalesProyecto ?? fin.m2TotalesProyecto ?? 0)||0);
+  }
+
+  window.repFinMetricValueRow=function(r,key){
+    const direct=r?.direct||{};
+    const adjusted=r?.adjusted||{};
+    const m2=m2Proyecto(r);
+    if(key==='totalIngresos') return Number(direct.totalIngresos)||0;
+    if(key==='comision') return Number(direct.comision)||0;
+    if(key==='costoTotal') return Number(direct.costoTotal)||0;
+    if(key==='costoM2') return m2>0 ? (Number(direct.costoTotal)||0)/m2 : NaN;
+    if(key==='precioM2') return m2>0 ? ((Number(direct.totalIngresos)||0)-(Number(direct.comision)||0))/m2 : NaN;
+    if(key==='margen') return Number(direct.margen)||0;
+    if(key==='margenPct') return Number.isFinite(Number(r?.margenPct)) ? Number(r.margenPct) : NaN;
+    if(key==='costosFijos') return Number(r?.fixedCost)||0;
+    if(key==='resultadoNeto') return Number(r?.net)||0;
+    if(key==='capitalMax') return Number(adjusted.capitalMax)||0;
+    if(key==='roe') return Number.isFinite(Number(adjusted.roe)) ? Number(adjusted.roe) : NaN;
+    if(key==='tirMensual') return Number.isFinite(Number(adjusted.tirMensual)) ? Number(adjusted.tirMensual) : NaN;
+    if(key==='tirAnual') return Number.isFinite(Number(adjusted.tirAnual)) ? Number(adjusted.tirAnual) : NaN;
+    if(key==='payback') return Number.isFinite(Number(adjusted.payback)) ? Number(adjusted.payback) : NaN;
+    if(key==='capitalCosto') return Number.isFinite(Number(adjusted.capitalCosto)) ? Number(adjusted.capitalCosto) : NaN;
+    return 0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow}catch(e){}
+
+  const prevText=window.repFinMetricTextRow || (typeof repFinMetricTextRow==='function'?repFinMetricTextRow:null);
+  window.repFinMetricTextRow=function(v,key){
+    const meta=window.REP_FIN_METRICS[key]||{};
+    if(!Number.isFinite(Number(v))) return '—';
+    if(meta.type==='usd') return fmt(Number(v),'usd');
+    if(meta.type==='pct') return fmtPctFin(Number(v));
+    if(meta.type==='payback') return fmtPaybackFin(Number(v));
+    return prevText?prevText(v,key):String(v);
+  };
+  try{repFinMetricTextRow=window.repFinMetricTextRow}catch(e){}
+
+  if(!window.REP_FIN_METRICS[window.repFinMetricKey]) window.repFinMetricKey='margen';
+})();
+</script>
+
+<!-- CQ v22 · colores métricas comparativo + gráfico subrubros más legible en tablet -->
+<style id="cq-v22-colores-metricas-y-tablet-chart">
+/* Reporte financiero · todos los botones del comparativo con color suave */
+#view-reporte-financiero .rep-fin-metric-btn.metric-totalIngresos{background:#EEF8F4!important;border-color:#B8DCCD!important;color:#2B755C!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-comision{background:#FFF4F1!important;border-color:#EEC5BC!important;color:#A35145!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-costoTotal{background:#F5F2FB!important;border-color:#D3C8E8!important;color:#69548F!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-costoM2{background:#FFF5E9!important;border-color:#E8C98F!important;color:#956112!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-precioM2{background:#EEF6FF!important;border-color:#B9D3EA!important;color:#2E6D9F!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-margen{background:#EEF8F0!important;border-color:#B9D9C1!important;color:#35734A!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-margenPct{background:#F1F7FB!important;border-color:#C5D8E5!important;color:#426E8A!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-costosFijos{background:#FFF8E8!important;border-color:#E8D5A5!important;color:#8B6C1C!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-resultadoNeto{background:#EFF8F5!important;border-color:#B8DCCF!important;color:#2A715C!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-capitalMax{background:#F3F4FA!important;border-color:#CED2E4!important;color:#59627F!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-roe{background:#EEF8F6!important;border-color:#B7DAD3!important;color:#2C7468!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-tirMensual{background:#F1F5FC!important;border-color:#C4D2E8!important;color:#4D678D!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-tirAnual{background:#EEF8F5!important;border-color:#BADDD0!important;color:#2F7862!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-payback{background:#FFF8EA!important;border-color:#E7D39C!important;color:#8C6B1A!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-capitalCosto{background:#F7F2FA!important;border-color:#DAC8E4!important;color:#77578B!important;}
+
+/* Activo: conservar identidad del botón pero con lectura fuerte */
+#view-reporte-financiero .rep-fin-metric-btn.active{color:#fff!important;box-shadow:0 5px 12px rgba(31,68,56,.14)!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-totalIngresos.active{background:linear-gradient(135deg,#2E8A69,#52A984)!important;border-color:#2E8A69!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-comision.active{background:linear-gradient(135deg,#A95A4E,#C9776B)!important;border-color:#A95A4E!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-costoTotal.active{background:linear-gradient(135deg,#69548F,#8B75B1)!important;border-color:#69548F!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-margen.active{background:linear-gradient(135deg,#35734A,#56A06B)!important;border-color:#35734A!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-margenPct.active{background:linear-gradient(135deg,#426E8A,#6692AE)!important;border-color:#426E8A!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-costosFijos.active{background:linear-gradient(135deg,#8B6C1C,#B49439)!important;border-color:#8B6C1C!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-resultadoNeto.active{background:linear-gradient(135deg,#2A715C,#4C9A82)!important;border-color:#2A715C!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-capitalMax.active{background:linear-gradient(135deg,#59627F,#7C86A4)!important;border-color:#59627F!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-roe.active{background:linear-gradient(135deg,#2C7468,#50A093)!important;border-color:#2C7468!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-tirMensual.active{background:linear-gradient(135deg,#4D678D,#7189AC)!important;border-color:#4D678D!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-tirAnual.active{background:linear-gradient(135deg,#2F7862,#55A087)!important;border-color:#2F7862!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-payback.active{background:linear-gradient(135deg,#8C6B1A,#B39135)!important;border-color:#8C6B1A!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-capitalCosto.active{background:linear-gradient(135deg,#77578B,#9975AA)!important;border-color:#77578B!important;}
+
+/* Tablet horizontal · gráfico de subrubros: números claramente más grandes */
+@media (min-width:700px) and (max-width:1400px) and (orientation:landscape){
+  #view-reporte .cq-subtrend-svg text[font-size="9.6"]{font-size:18px!important;font-weight:900!important;}
+  #view-reporte .cq-subtrend-svg text[font-size="10"]{font-size:16px!important;font-weight:800!important;}
+  #view-reporte .cq-subtrend-svg text[font-size="11"]{font-size:17px!important;font-weight:900!important;}
+  #view-reporte .cq-subtrend-svg text[font-size="13"]{font-size:18px!important;font-weight:900!important;}
+  #view-reporte .cq-subtrend-svg{height:410px!important;}
+  #view-reporte .cq-subtrend-legend-item{font-size:14px!important;}
+  #view-reporte .cq-subtrend-title{font-size:18px!important;}
+  #view-reporte .cq-subtrend-sub{font-size:14px!important;}
+}
+</style>
+
+<!-- CQ FINAL · Reporte gastos: selección de obras inmediata y render liviano -->
+<style id="cq-fast-obras-final-style">
+#view-reporte #reporte-obras-chips .rep-obra-chip{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+#view-reporte #reporte-obras-chips .rep-obra-chip.cq-fast-selected{
+  transition:none!important;
+}
+</style>
+<script id="cq-fast-obras-final">
+(function(){
+  /*
+    Al cambiar sólo la selección de obras NO hace falta reconstruir el combo de
+    rubros/subrubros. Esa reconstrucción recorre todos los gastos y era el punto
+    más costoso del clic. La salteamos una sola vez y mantenemos intacto el resto.
+  */
+  const rawInitReporteFilters = window.initReporteFilters;
+  let skipNextFilterInit = false;
+  if(typeof rawInitReporteFilters === 'function'){
+    window.initReporteFilters = function(){
+      if(skipNextFilterInit){
+        skipNextFilterInit = false;
+        return;
+      }
+      return rawInitReporteFilters.apply(this, arguments);
+    };
+    try{ initReporteFilters = window.initReporteFilters; }catch(e){}
+  }
+
+  let renderTimer = 0;
+
+  function reporteVisibleObras(){
+    try{
+      if(typeof activeObras === 'function') return activeObras();
+      return (config.obras||[]).filter(o=>!o.archived);
+    }catch(e){
+      return (window.config?.obras||[]).filter(o=>!o.archived);
+    }
+  }
+
+  function paintSelectionNow(){
+    const selected = new Set(Array.isArray(reporteObrasSel) ? reporteObrasSel : []);
+    const obras = reporteVisibleObras();
+    const buttons = document.querySelectorAll('#reporte-obras-chips .rep-obra-chip:not(.rep-archive-toggle)');
+    buttons.forEach((btn,i)=>{
+      const obra = obras[i];
+      if(!obra) return;
+      const on = selected.has(obra.id);
+      btn.classList.toggle('active', on);
+      btn.classList.toggle('cq-fast-selected', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function scheduleLightReporteRefresh(){
+    clearTimeout(renderTimer);
+    /*
+      90 ms deja al navegador pintar primero el botón. Si el usuario marca
+      varias obras seguidas, sólo se recalcula una vez al terminar la tanda.
+    */
+    renderTimer = setTimeout(function(){
+      skipNextFilterInit = true;
+      try{
+        if(typeof renderReporte === 'function') renderReporte();
+      }catch(e){
+        skipNextFilterInit = false;
+        console.warn('Reporte gastos · refresco de obras:', e);
+      }
+    },90);
+  }
+
+  window.toggleReporteObra = function(id){
+    try{
+      if(typeof getReporteObrasSel === 'function') getReporteObrasSel();
+      if(!Array.isArray(reporteObrasSel)) reporteObrasSel = [];
+
+      if(reporteObrasSel.includes(id)){
+        reporteObrasSel = reporteObrasSel.filter(x=>x!==id);
+      }else{
+        reporteObrasSel.push(id);
+      }
+
+      if(typeof saveReporteObrasSel === 'function') saveReporteObrasSel();
+
+      /* Feedback visual inmediato: no reconstruye DOM ni espera al reporte. */
+      paintSelectionNow();
+
+      /* El cálculo pesado queda desacoplado del clic. */
+      scheduleLightReporteRefresh();
+    }catch(e){
+      console.warn('Selección rápida de obra:',e);
+      try{ if(typeof renderReporte === 'function') renderReporte(); }catch(_e){}
+    }
+  };
+  try{ toggleReporteObra = window.toggleReporteObra; }catch(e){}
+})();
+</script>
