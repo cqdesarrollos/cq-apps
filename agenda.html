@@ -1729,14 +1729,23 @@ function normalizar(){
 }
 async function persist(){
   normalizar();
-  if(!window.FB){localStorage.setItem('cq_agenda_socios_fallback',JSON.stringify(state));return}
+  if(!window.FB){
+    localStorage.setItem('cq_agenda_socios_fallback',JSON.stringify(state));
+    return false;
+  }
   try{
     setSync('Guardando');
     suppressUntil=Date.now()+900;
     state.updatedAt=new Date().toISOString();
     await FB.setDoc(FB.doc(FB.db,COL,DOC),JSON.parse(JSON.stringify(state)));
     setSync('Sincronizado','ok');
-  }catch(e){console.warn(e);setSync('Error','err');toast('No se pudo guardar en Firebase',true)}
+    return true;
+  }catch(e){
+    console.warn(e);
+    setSync('Error','err');
+    toast('No se pudo guardar en Firebase',true);
+    return false;
+  }
 }
 async function startFB(){
   if(!window.FB)return;
@@ -1867,8 +1876,8 @@ function taskHTML(t){
       </div>
     </div>
     <div class="task-actions">
-      <button class="icon-btn task-edit-btn" onclick="abrirTarea('${t.id}')" aria-label="Editar">✎</button>
-      <button class="icon-btn danger" onclick="borrarTarea('${t.id}')" aria-label="Eliminar">⌫</button>
+      <button class="icon-btn task-edit-btn" onclick="abrirTarea('${t.id}')" aria-label="Editar" title="Editar tarea">✎</button>
+      <button class="icon-btn danger" onclick="borrarTarea('${t.id}')" aria-label="Eliminar definitivamente" title="${t.estado==='finalizada'?'Eliminar definitivamente':'Eliminar tarea'}">🗑️</button>
     </div>
   </article>`
 }
@@ -1970,8 +1979,29 @@ async function toggleTask(id){
   renderAll();await persist()
 }
 async function borrarTarea(id){
-  const t=state.tareas.find(x=>x.id===id);if(!t||!confirm(`¿Eliminar "${t.titulo}"?`))return;
-  state.tareas=state.tareas.filter(x=>x.id!==id);renderAll();await persist();toast('Tarea eliminada')
+  const t=state.tareas.find(x=>x.id===id);if(!t)return;
+  const esFinalizada=t.estado==='finalizada';
+  const mensaje=esFinalizada
+    ? `¿Eliminar definitivamente la tarea finalizada "${t.titulo}"?\n\nEsta acción no se puede deshacer.`
+    : `¿Eliminar la tarea "${t.titulo}"?\n\nEsta acción no se puede deshacer.`;
+  if(!confirm(mensaje))return;
+
+  if(!window.FB){
+    toast('Esperá a que Firebase figure conectado para eliminar definitivamente',true);
+    return;
+  }
+
+  const anterior=[...state.tareas];
+  state.tareas=state.tareas.filter(x=>x.id!==id);
+  renderAll();
+  const ok=await persist();
+  if(!ok){
+    state.tareas=anterior;
+    renderAll();
+    toast('No se pudo eliminar. La tarea se restauró.',true);
+    return;
+  }
+  toast(esFinalizada?'Tarea eliminada definitivamente':'Tarea eliminada');
 }
 
 function moverMes(d){monthCursor.setMonth(monthCursor.getMonth()+d);renderCalendar()}
