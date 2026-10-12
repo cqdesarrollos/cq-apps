@@ -10647,6 +10647,276 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 </script>
 
 
+
+
+<!-- CQ FINAL · Prorrateo de costos fijos por año + selección de obras no bloqueante -->
+<script id="cq-final-fixed-cost-per-year-and-fast-obras">
+(function(){
+  /* ================================================================
+     1) COSTOS FIJOS: cada año se reparte SOLO entre ventas de ese año
+     ================================================================ */
+  function cqOfficeSelectedFinal(){
+    try{return (repSelectedObras()||[]).some(o=>o && o.id==='oficina');}
+    catch(e){return false;}
+  }
+
+  function cqFinPeriodsFinal(){
+    try{
+      const p=window.CQ_MULTI_MONTH_V31?.['reporte-financiero'];
+      return Array.isArray(p)?p.map(String).filter(v=>/^\d{4}-\d{2}$/.test(v)):[];
+    }catch(e){return [];}
+  }
+  function cqFinSelectedYearsFinal(){
+    const p=cqFinPeriodsFinal();
+    if(p.length)return [...new Set(p.map(v=>v.slice(0,4)))].sort();
+    /* Ver todo: reunir todos los años realmente disponibles, sin volver al año actual. */
+    const set=new Set();
+    try{(repGetState('oficina').gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y);});}catch(e){}
+    try{(config.obras||[]).forEach(o=>{
+      if(o.id==='oficina'||o.id==='acopio')return;
+      const fin=repGetState(o.id).financiero||{};
+      cqSoldDatesFinal(fin).forEach(d=>set.add(d.slice(0,4)));
+    });}catch(e){}
+    if(!set.size)set.add(String(new Date().getFullYear()));
+    return [...set].sort();
+  }
+
+  function cqSoldDatesFinal(fin){
+    let u={};
+    try{u=typeof cqFinUnits==='function'?cqFinUnits(fin||{}):unidadesFin(fin||{});}catch(e){u={};}
+    return ['A','B'].map(k=>u?.[k]).filter(x=>x && x.etapa && /^\d{4}-\d{2}/.test(String(x.fechaVenta||''))).map(x=>String(x.fechaVenta));
+  }
+
+  function cqFixedInfoByYearFinal(){
+    const years=cqFinSelectedYearsFinal();
+    if(!cqOfficeSelectedFinal()){
+      return {total:0,byMonth:{},units:0,perUnit:0,enabled:false,years:years,yearData:{}};
+    }
+
+    const office=(repGetState('oficina').gastos||[]);
+    const yearData={};
+    years.forEach(y=>yearData[y]={year:y,total:0,units:0,perUnit:0,byMonth:{}});
+
+    office.forEach(g=>{
+      const y=String(g.fecha||'').slice(0,4);
+      if(!years.includes(y))return;
+      if(!yearData[y])yearData[y]={year:y,total:0,units:0,perUnit:0,byMonth:{}};
+      const usd=toUSD(g.monto,g.moneda,g.tc)||0;
+      yearData[y].total+=usd;
+      const ym=String(g.fecha||'').slice(0,7);
+      if(/^\d{4}-\d{2}$/.test(ym))yearData[y].byMonth[ym]=(yearData[y].byMonth[ym]||0)+usd;
+    });
+
+    /* Denominador independiente por año: TODAS las unidades vendidas ese año. */
+    (config.obras||[]).forEach(o=>{
+      try{if(typeof isObraSimple==='function' && isObraSimple(o.id))return;}catch(e){}
+      if(o.id==='oficina'||o.id==='acopio')return;
+      const fin=repGetState(o.id).financiero||{};
+      cqSoldDatesFinal(fin).forEach(d=>{
+        const y=d.slice(0,4);
+        if(yearData[y])yearData[y].units++;
+      });
+    });
+
+    Object.values(yearData).forEach(d=>d.perUnit=d.units?d.total/d.units:0);
+    const costYears=Object.values(yearData).filter(d=>Math.abs(d.total)>0.000001);
+    const total=costYears.reduce((a,d)=>a+d.total,0);
+    const units=costYears.reduce((a,d)=>a+d.units,0);
+    const byMonth={};
+    costYears.forEach(d=>Object.entries(d.byMonth).forEach(([ym,v])=>byMonth[ym]=(byMonth[ym]||0)+v));
+    return {total,byMonth,units,perUnit:units?total/units:0,enabled:true,years,yearData};
+  }
+
+  function cqProjectFixedFinal(fin,info){
+    const counts={};
+    cqSoldDatesFinal(fin).forEach(d=>{
+      const y=d.slice(0,4);
+      if(info.yearData?.[y])counts[y]=(counts[y]||0)+1;
+    });
+    let fixedCost=0;
+    Object.entries(counts).forEach(([y,n])=>{
+      const yd=info.yearData[y];
+      if(yd && yd.total && yd.units)fixedCost+=yd.perUnit*n;
+    });
+    return {fixedCost,counts};
+  }
+
+  function cqAllocatedFixedGastosFinal(info,counts){
+    const out=[];
+    const office=repGetState('oficina').gastos||[];
+    office.forEach((g,i)=>{
+      const y=String(g.fecha||'').slice(0,4), yd=info.yearData?.[y], own=counts[y]||0;
+      if(!yd || !yd.total || !yd.units || !own)return;
+      const share=own/yd.units;
+      const usd=(toUSD(g.monto,g.moneda,g.tc)||0)*share;
+      if(!usd)return;
+      out.push({id:'fixed_year_'+y+'_'+i,fecha:g.fecha,cat:'ofi',subrubro:'Costos fijos prorrateados',moneda:'usd',monto:usd,tc:1,tipoMovimiento:g.tipoMovimiento||'gasto'});
+    });
+    return out;
+  }
+
+  window.officeFixedCostInfo=cqFixedInfoByYearFinal;
+  try{officeFixedCostInfo=window.officeFixedCostInfo;}catch(e){}
+
+  window.repFinRowsData=function(){
+    const fixed=cqFixedInfoByYearFinal();
+    let ys=[];try{ys=cqFinSelectedYearsFinal();}catch(e){}
+    const p=cqFinPeriodsFinal();
+    const obras=repSelectedObras().filter(o=>{
+      try{return !(typeof isObraSimple==='function'&&isObraSimple(o.id));}catch(e){return true;}
+    });
+
+    return obras.map(o=>{
+      const s=repGetState(o.id),fin=s.financiero||{},has=tieneVentasCargadas(fin);
+      const dates=cqSoldDatesFinal(fin);
+      const soldYear=dates.filter(d=>ys.includes(d.slice(0,4))).length;
+      const soldPeriod=dates.filter(d=>!p.length||p.includes(d.slice(0,7))).length;
+      if(has&&p.length&&soldPeriod===0)return null;
+      if(has&&!p.length&&soldYear===0)return null;
+
+      const alloc=cqProjectFixedFinal(fin,fixed);
+      const fixedCost=alloc.fixedCost;
+      const direct=calcularMetricasFinancieras(fin,s.gastos||[]);
+      const adjusted=calcularMetricasFinancieras(fin,[...(s.gastos||[]),...cqAllocatedFixedGastosFinal(fixed,alloc.counts)]);
+      const net=direct.margen-fixedCost;
+      const margenPct=direct.totalIngresos?direct.margen/direct.totalIngresos:null;
+      return{o,s,fin,direct,adjusted,fixedCost,net,margenPct,soldYear,soldPeriod,legacy:!has};
+    }).filter(Boolean);
+  };
+  try{repFinRowsData=window.repFinRowsData;}catch(e){}
+
+  /* Ajustar la leyenda para que no sugiera un prorrateo cruzado entre años. */
+  const cqPrevFinRenderFinal=window.renderReporteFinancieroComparativo;
+  if(typeof cqPrevFinRenderFinal==='function'){
+    window.renderReporteFinancieroComparativo=function(){
+      const r=cqPrevFinRenderFinal.apply(this,arguments);
+      try{
+        const info=cqFixedInfoByYearFinal();
+        const note=document.querySelector('#reporte-financiero .rep-fin-fixed-note');
+        if(note && info.enabled){
+          const parts=Object.values(info.yearData||{}).filter(d=>Math.abs(d.total)>0.000001).sort((a,b)=>a.year.localeCompare(b.year)).map(d=>
+            `<strong>${d.year}:</strong> ${fmt(d.total,'usd')} ÷ ${d.units} un. = ${d.units?fmt(d.perUnit,'usd'):'U$S 0'} por unidad`
+          );
+          if(parts.length)note.innerHTML=`<strong>Costos fijos prorrateados por año:</strong> ${parts.join(' &nbsp;·&nbsp; ')}. Cada costo fijo se imputa únicamente a unidades vendidas en su mismo año.`;
+        }
+      }catch(e){console.warn('Detalle prorrateo anual:',e);}
+      return r;
+    };
+    try{renderReporteFinancieroComparativo=window.renderReporteFinancieroComparativo;}catch(e){}
+  }
+
+  /* ================================================================
+     2) REPORTE GASTOS: selección de obras realmente inmediata
+     ================================================================ */
+  let cqFastHeavyUntil=0;
+  const cqHeavyTimers={};
+
+  function cqWrapHeavy(name,delay){
+    const original=window[name];
+    if(typeof original!=='function'||original._cqDeferredHeavy)return;
+    const wrapped=function(){
+      const args=arguments,ctx=this;
+      if(Date.now()<cqFastHeavyUntil){
+        clearTimeout(cqHeavyTimers[name]);
+        cqHeavyTimers[name]=setTimeout(()=>{
+          try{
+            if('requestIdleCallback' in window)requestIdleCallback(()=>original.apply(ctx,args),{timeout:450});
+            else original.apply(ctx,args);
+          }catch(e){console.warn(name,e);}
+        },160);
+        return;
+      }
+      return original.apply(ctx,args);
+    };
+    wrapped._cqDeferredHeavy=true;
+    window[name]=wrapped;
+    try{eval(name+' = window[name]');}catch(e){}
+  }
+
+  /* La tabla de subrubros es la parte más pesada; semáforo y mensual también se difieren al tocar obras. */
+  cqWrapHeavy('renderRankingProveedores',180);
+  cqWrapHeavy('renderSemaforoPresupuesto',120);
+  cqWrapHeavy('renderComparativoMensualExtra',120);
+
+  function cqActiveReportObrasFinal(){
+    try{return typeof activeObras==='function'?activeObras():(config.obras||[]).filter(o=>!o.archived);}catch(e){return config.obras||[];}
+  }
+  function cqButtonObraIdFinal(btn){
+    if(btn.dataset.cqObraId)return btn.dataset.cqObraId;
+    const oc=btn.getAttribute('onclick')||'';
+    const m=oc.match(/toggleReporteObra\(['\"]([^'\"]+)['\"]\)/);
+    if(m){btn.dataset.cqObraId=m[1];return m[1];}
+    const list=cqActiveReportObrasFinal(),buttons=[...document.querySelectorAll('#reporte-obras-chips .rep-obra-chip:not(.rep-archive-toggle)')],i=buttons.indexOf(btn);
+    return i>=0&&list[i]?list[i].id:'';
+  }
+  function cqSetButtonVisualFinal(btn,on){
+    btn.classList.toggle('active',!!on);
+    btn.classList.toggle('cq-fast-selected',!!on);
+    btn.setAttribute('aria-pressed',on?'true':'false');
+  }
+  function cqCommitObraFinal(id,on){
+    if(typeof getReporteObrasSel==='function')getReporteObrasSel();
+    if(!Array.isArray(reporteObrasSel))reporteObrasSel=[];
+    reporteObrasSel=reporteObrasSel.filter(x=>x!==id);
+    if(on)reporteObrasSel.push(id);
+    if(typeof saveReporteObrasSel==='function')saveReporteObrasSel();
+  }
+
+  let cqReportTimerFinal=0;
+  function cqScheduleReportFinal(){
+    clearTimeout(cqReportTimerFinal);
+    cqFastHeavyUntil=Date.now()+1300;
+    cqReportTimerFinal=setTimeout(()=>{
+      /* Dos frames completos garantizan que el tilde/color se vea ANTES del cálculo. */
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        try{if(typeof renderReporte==='function')renderReporte();}catch(e){console.warn('Reporte gastos:',e);}
+      }));
+    },35);
+  }
+
+  function cqInstallFastDelegationFinal(){
+    const box=document.getElementById('reporte-obras-chips');
+    if(!box||box.dataset.cqFastDelegation==='1')return;
+    box.dataset.cqFastDelegation='1';
+
+    /* pointerdown ocurre antes del click: la respuesta visual no espera ningún cálculo. */
+    box.addEventListener('pointerdown',function(ev){
+      const btn=ev.target.closest?.('.rep-obra-chip:not(.rep-archive-toggle)');if(!btn||!box.contains(btn))return;
+      const id=cqButtonObraIdFinal(btn);if(!id)return;
+      let sel=[];try{sel=getReporteObrasSel();}catch(e){}
+      const desired=!sel.includes(id);
+      btn.dataset.cqDesired=desired?'1':'0';
+      cqSetButtonVisualFinal(btn,desired);
+    },true);
+
+    /* Capturamos el click para que el onclick inline antiguo NO lance el render pesado. */
+    box.addEventListener('click',function(ev){
+      const btn=ev.target.closest?.('.rep-obra-chip:not(.rep-archive-toggle)');if(!btn||!box.contains(btn))return;
+      ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();
+      const id=cqButtonObraIdFinal(btn);if(!id)return;
+      let sel=[];try{sel=getReporteObrasSel();}catch(e){}
+      const desired=btn.dataset.cqDesired===''||btn.dataset.cqDesired==null?!sel.includes(id):btn.dataset.cqDesired==='1';
+      delete btn.dataset.cqDesired;
+      cqCommitObraFinal(id,desired);
+      cqSetButtonVisualFinal(btn,desired);
+      cqScheduleReportFinal();
+    },true);
+  }
+
+  const cqOldRenderChipsFinal=window.renderReporteObrasChips;
+  if(typeof cqOldRenderChipsFinal==='function'){
+    window.renderReporteObrasChips=function(){
+      const r=cqOldRenderChipsFinal.apply(this,arguments);
+      setTimeout(cqInstallFastDelegationFinal,0);
+      return r;
+    };
+    try{renderReporteObrasChips=window.renderReporteObrasChips;}catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(cqInstallFastDelegationFinal,0));
+  setTimeout(cqInstallFastDelegationFinal,0);
+})();
+</script>
+
 </body>
 </html>
 
@@ -13518,3 +13788,102 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   #view-reporte .cq-subtrend-sub{font-size:14px!important;}
 }
 </style>
+
+<!-- CQ FINAL · Reporte gastos: selección de obras inmediata y render liviano -->
+<style id="cq-fast-obras-final-style">
+#view-reporte #reporte-obras-chips .rep-obra-chip{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+#view-reporte #reporte-obras-chips .rep-obra-chip.cq-fast-selected{
+  transition:none!important;
+}
+</style>
+<script id="cq-fast-obras-final">
+(function(){
+  /*
+    Al cambiar sólo la selección de obras NO hace falta reconstruir el combo de
+    rubros/subrubros. Esa reconstrucción recorre todos los gastos y era el punto
+    más costoso del clic. La salteamos una sola vez y mantenemos intacto el resto.
+  */
+  const rawInitReporteFilters = window.initReporteFilters;
+  let skipNextFilterInit = false;
+  if(typeof rawInitReporteFilters === 'function'){
+    window.initReporteFilters = function(){
+      if(skipNextFilterInit){
+        skipNextFilterInit = false;
+        return;
+      }
+      return rawInitReporteFilters.apply(this, arguments);
+    };
+    try{ initReporteFilters = window.initReporteFilters; }catch(e){}
+  }
+
+  let renderTimer = 0;
+
+  function reporteVisibleObras(){
+    try{
+      if(typeof activeObras === 'function') return activeObras();
+      return (config.obras||[]).filter(o=>!o.archived);
+    }catch(e){
+      return (window.config?.obras||[]).filter(o=>!o.archived);
+    }
+  }
+
+  function paintSelectionNow(){
+    const selected = new Set(Array.isArray(reporteObrasSel) ? reporteObrasSel : []);
+    const obras = reporteVisibleObras();
+    const buttons = document.querySelectorAll('#reporte-obras-chips .rep-obra-chip:not(.rep-archive-toggle)');
+    buttons.forEach((btn,i)=>{
+      const obra = obras[i];
+      if(!obra) return;
+      const on = selected.has(obra.id);
+      btn.classList.toggle('active', on);
+      btn.classList.toggle('cq-fast-selected', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function scheduleLightReporteRefresh(){
+    clearTimeout(renderTimer);
+    /*
+      90 ms deja al navegador pintar primero el botón. Si el usuario marca
+      varias obras seguidas, sólo se recalcula una vez al terminar la tanda.
+    */
+    renderTimer = setTimeout(function(){
+      skipNextFilterInit = true;
+      try{
+        if(typeof renderReporte === 'function') renderReporte();
+      }catch(e){
+        skipNextFilterInit = false;
+        console.warn('Reporte gastos · refresco de obras:', e);
+      }
+    },90);
+  }
+
+  window.toggleReporteObra = function(id){
+    try{
+      if(typeof getReporteObrasSel === 'function') getReporteObrasSel();
+      if(!Array.isArray(reporteObrasSel)) reporteObrasSel = [];
+
+      if(reporteObrasSel.includes(id)){
+        reporteObrasSel = reporteObrasSel.filter(x=>x!==id);
+      }else{
+        reporteObrasSel.push(id);
+      }
+
+      if(typeof saveReporteObrasSel === 'function') saveReporteObrasSel();
+
+      /* Feedback visual inmediato: no reconstruye DOM ni espera al reporte. */
+      paintSelectionNow();
+
+      /* El cálculo pesado queda desacoplado del clic. */
+      scheduleLightReporteRefresh();
+    }catch(e){
+      console.warn('Selección rápida de obra:',e);
+      try{ if(typeof renderReporte === 'function') renderReporte(); }catch(_e){}
+    }
+  };
+  try{ toggleReporteObra = window.toggleReporteObra; }catch(e){}
+})();
+</script>
