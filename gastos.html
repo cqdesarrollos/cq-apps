@@ -12981,3 +12981,221 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   try{repFinPivot=window.repFinPivot;}catch(e){}
 })();
 </script>
+
+
+<style id="cq-subrubro-trend-v1">
+/* Reporte gastos · evolución de un subrubro entre obras */
+#view-reporte .cq-subtrend-shell{
+  margin:0 0 14px 0;
+  border-bottom:1px solid #E6EFE9;
+  background:linear-gradient(180deg,#FBFEFC 0%,#F7FBF8 100%);
+}
+#view-reporte .cq-subtrend-toolbar{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:14px;
+  padding:15px 16px 11px;
+  flex-wrap:wrap;
+}
+#view-reporte .cq-subtrend-title{
+  font-size:12px;
+  font-weight:950;
+  color:#183C32;
+  letter-spacing:.01em;
+}
+#view-reporte .cq-subtrend-sub{
+  margin-top:3px;
+  font-size:10.5px;
+  color:#789086;
+  line-height:1.35;
+}
+#view-reporte .cq-subtrend-field{
+  min-width:230px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+#view-reporte .cq-subtrend-field label{
+  font-size:9px;
+  font-weight:900;
+  color:#799087;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+}
+#view-reporte .cq-subtrend-field select{
+  width:100%;
+  min-height:38px;
+  border:1px solid #CFE1D6;
+  border-radius:10px;
+  background:#fff;
+  color:#173E31;
+  padding:7px 32px 7px 11px;
+  font:800 12px 'Space Grotesk',sans-serif;
+  outline:none;
+  box-shadow:0 2px 8px rgba(28,61,53,.05);
+}
+#view-reporte .cq-subtrend-field select:focus{border-color:#11A66F;box-shadow:0 0 0 3px rgba(17,166,111,.10)}
+#view-reporte .cq-subtrend-chart-wrap{
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:0 10px 10px;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+}
+#view-reporte .cq-subtrend-svg{
+  display:block;
+  height:315px;
+  max-width:none;
+  background:#fff;
+  border:1px solid #E3ECE7;
+  border-radius:14px;
+  box-shadow:0 3px 12px rgba(24,60,50,.05);
+}
+#view-reporte .cq-subtrend-empty{
+  margin:0 16px 15px;
+  padding:24px 14px;
+  text-align:center;
+  border:1px dashed #D5E4DA;
+  border-radius:12px;
+  color:#879B91;
+  font-size:11px;
+  background:#fff;
+}
+#view-reporte .cq-subtrend-footer{
+  padding:0 16px 14px;
+  font-size:10px;
+  color:#8A9B93;
+  line-height:1.4;
+}
+@media(max-width:650px){
+  #view-reporte .cq-subtrend-toolbar{padding:13px 12px 10px;gap:10px}
+  #view-reporte .cq-subtrend-field{width:100%;min-width:0}
+  #view-reporte .cq-subtrend-chart-wrap{padding:0 7px 9px}
+  #view-reporte .cq-subtrend-svg{height:292px}
+  #view-reporte .cq-subtrend-footer{padding:0 12px 12px}
+}
+</style>
+
+<script id="cq-subrubro-trend-v1-js">
+(function(){
+  const prevRenderRanking = window.renderRankingProveedores;
+
+  function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function key(v){
+    try{return typeof reporteSubrubroKey==='function'?reporteSubrubroKey(v):String(v||'').trim().toLocaleLowerCase('es');}
+    catch(e){return String(v||'').trim().toLowerCase();}
+  }
+  function label(v){
+    try{return typeof reporteSubrubroVisible==='function'?reporteSubrubroVisible(v):String(v||'Sin subrubro');}
+    catch(e){return String(v||'Sin subrubro');}
+  }
+  function usd(g){
+    try{return typeof repUSD==='function'?Number(repUSD(g))||0:Number(toUSD(g.monto,g.moneda,g.tc))||0;}
+    catch(e){return 0;}
+  }
+  function money(v){
+    try{return typeof fmt==='function'?fmt(v,'usd'):'U$S '+Math.round(v).toLocaleString('es-AR');}
+    catch(e){return 'U$S '+Math.round(v).toLocaleString('es-AR');}
+  }
+  function compact(v){
+    const n=Math.abs(Number(v)||0),sgn=(Number(v)||0)<0?'-':'';
+    if(n>=1000000)return sgn+'U$S '+(n/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'M';
+    if(n>=1000)return sgn+'U$S '+(n/1000).toLocaleString('es-AR',{maximumFractionDigits:1})+'k';
+    return sgn+'U$S '+Math.round(n).toLocaleString('es-AR');
+  }
+  function niceMax(v){
+    v=Math.max(0,Number(v)||0);if(v<=0)return 1;
+    const p=Math.pow(10,Math.floor(Math.log10(v)));
+    const u=v/p;
+    let n=u<=1?1:u<=2?2:u<=2.5?2.5:u<=5?5:10;
+    if(n*p<v)n=(n===1?2:n===2?2.5:n===2.5?5:n===5?10:20);
+    return n*p;
+  }
+
+  function sourceData(){
+    let gastos=[];
+    try{gastos=typeof repAdvancedGastos==='function'?repAdvancedGastos(true):[];}catch(e){}
+    let obras=[];
+    try{obras=typeof repSelectedObras==='function'?repSelectedObras():[];}catch(e){}
+    return {gastos:Array.isArray(gastos)?gastos:[],obras:Array.isArray(obras)?obras:[]};
+  }
+
+  function buildOptions(gastos){
+    const map=new Map();
+    gastos.forEach(g=>{
+      const l=label(g.subrubro||g.concepto||'Sin subrubro'),k=key(l);
+      if(!map.has(k))map.set(k,{key:k,label:l,total:0});
+      map.get(k).total+=usd(g);
+    });
+    return [...map.values()].sort((a,b)=>String(a.label).localeCompare(String(b.label),'es',{sensitivity:'base'}));
+  }
+
+  function renderShell(){
+    const el=document.getElementById('reporte-proveedores');
+    if(!el)return;
+    const existing=el.querySelector('.cq-subtrend-shell');if(existing)existing.remove();
+    const {gastos,obras}=sourceData();
+    if(!gastos.length||!obras.length)return;
+    const opts=buildOptions(gastos);
+    if(!opts.length)return;
+
+    let selected=String(window._cqSubtrendSelected||'');
+    if(!opts.some(o=>o.key===selected)){
+      let top='';
+      try{const s=document.getElementById('reporte-sub-filter')?.value||'';if(s&&s!=='all')top=key(s);}catch(e){}
+      if(top&&opts.some(o=>o.key===top))selected=top;
+      else selected=[...opts].sort((a,b)=>b.total-a.total)[0].key;
+      window._cqSubtrendSelected=selected;
+    }
+
+    const shell=document.createElement('div');shell.className='cq-subtrend-shell';
+    shell.innerHTML=`<div class="cq-subtrend-toolbar"><div><div class="cq-subtrend-title">Evolución por subrubro</div><div class="cq-subtrend-sub">Compará el mismo concepto entre las obras seleccionadas.</div></div><div class="cq-subtrend-field"><label>Subrubro a graficar</label><select id="cq-subtrend-select" onchange="cqSubtrendSelect(this.value)">${opts.map(o=>`<option value="${esc(o.key)}" ${o.key===selected?'selected':''}>${esc(o.label)}</option>`).join('')}</select></div></div><div id="cq-subtrend-chart"></div><div class="cq-subtrend-footer">Cada punto muestra el gasto acumulado del subrubro en esa obra, respetando los filtros de período, rubro y obras del reporte.</div>`;
+    el.insertBefore(shell,el.firstChild);
+    renderChart();
+  }
+
+  function renderChart(){
+    const box=document.getElementById('cq-subtrend-chart');if(!box)return;
+    const {gastos,obras}=sourceData();
+    const selected=String(window._cqSubtrendSelected||'');
+    const relevant=gastos.filter(g=>key(label(g.subrubro||g.concepto||'Sin subrubro'))===selected);
+    const selectedLabel=label(relevant[0]?.subrubro||relevant[0]?.concepto||document.querySelector('#cq-subtrend-select option:checked')?.textContent||'Subrubro');
+    const vals=obras.map(o=>({obra:o, value:relevant.filter(g=>g.obraId===o.id).reduce((a,g)=>a+usd(g),0)}));
+    if(!vals.length){box.innerHTML='<div class="cq-subtrend-empty">No hay obras seleccionadas para graficar.</div>';return;}
+
+    const W=Math.max(720,120+vals.length*105),H=315;
+    const m={l:78,r:30,t:42,b:66},pw=W-m.l-m.r,ph=H-m.t-m.b;
+    const maxVal=Math.max(...vals.map(x=>x.value),0),yMax=niceMax(maxVal*1.08);
+    const step=vals.length>1?pw/(vals.length-1):0;
+    const x=i=>m.l+(vals.length===1?pw/2:i*step);
+    const y=v=>m.t+ph-(Math.max(0,v)/yMax)*ph;
+    const pts=vals.map((d,i)=>({x:x(i),y:y(d.value),...d}));
+    const line=pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');
+    const area=pts.length?`M ${pts[0].x.toFixed(1)} ${(m.t+ph).toFixed(1)} `+pts.map(p=>`L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')+` L ${pts[pts.length-1].x.toFixed(1)} ${(m.t+ph).toFixed(1)} Z`:'';
+    const ticks=4;
+    let grid='';
+    for(let i=0;i<=ticks;i++){
+      const v=yMax*(ticks-i)/ticks,yy=m.t+ph*i/ticks;
+      grid+=`<line x1="${m.l}" y1="${yy}" x2="${W-m.r}" y2="${yy}" stroke="#E7EFEA" stroke-width="1"/><text x="${m.l-12}" y="${yy+4}" text-anchor="end" font-size="10" font-family="Space Grotesk, sans-serif" fill="#84988E">${esc(compact(v))}</text>`;
+    }
+    const labels=pts.map((p,i)=>{
+      const nm=p.obra.short||p.obra.label||'';
+      const valY=Math.max(m.t+13,p.y-11);
+      return `<line x1="${p.x}" y1="${m.t+ph}" x2="${p.x}" y2="${m.t+ph+5}" stroke="#BFCFC6"/><text x="${p.x}" y="${H-31}" text-anchor="middle" font-size="11" font-weight="800" font-family="Space Grotesk, sans-serif" fill="#294B40">${esc(nm)}</text><text x="${p.x}" y="${valY}" text-anchor="middle" font-size="10.5" font-weight="900" font-family="JetBrains Mono, monospace" fill="#0B7350">${esc(compact(p.value))}</text><circle cx="${p.x}" cy="${p.y}" r="5.5" fill="#00B879" stroke="#fff" stroke-width="3"><title>${esc(nm+': '+money(p.value))}</title></circle>`;
+    }).join('');
+    const total=vals.reduce((a,d)=>a+d.value,0);
+    box.innerHTML=`<div class="cq-subtrend-chart-wrap"><svg class="cq-subtrend-svg" style="width:${W}px" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución de ${esc(selectedLabel)} por obra"><defs><linearGradient id="cqSubtrendArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00B879" stop-opacity=".20"/><stop offset="100%" stop-color="#00B879" stop-opacity=".02"/></linearGradient></defs><text x="${m.l}" y="24" font-size="13" font-weight="900" font-family="Space Grotesk, sans-serif" fill="#173E31">${esc(selectedLabel)}</text><text x="${W-m.r}" y="24" text-anchor="end" font-size="10.5" font-weight="800" font-family="Space Grotesk, sans-serif" fill="#789086">Total ${esc(money(total))}</text>${grid}<path d="${area}" fill="url(#cqSubtrendArea)"/><path d="${line}" fill="none" stroke="#00A86B" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>${labels}</svg></div>`;
+  }
+
+  window.cqSubtrendSelect=function(v){window._cqSubtrendSelected=String(v||'');renderChart();};
+
+  window.renderRankingProveedores=function(){
+    if(typeof prevRenderRanking==='function')prevRenderRanking.apply(this,arguments);
+    renderShell();
+  };
+  try{renderRankingProveedores=window.renderRankingProveedores;}catch(e){}
+
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{try{renderShell()}catch(e){}},0));
+})();
+</script>
