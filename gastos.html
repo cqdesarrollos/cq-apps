@@ -12648,3 +12648,244 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   }
 }
 </style>
+
+
+<!-- CQ v14 · m² totales + costo/precio por m² en Resumen financiero -->
+<style id="cq-v14-m2-resumen-financiero">
+/* Campo nuevo en Venta por unidad, antes de Presupuesto por obra */
+#modal-fin .fin-metros-top{
+  margin-bottom:10px!important;
+  padding:10px 12px!important;
+  border:1px solid #D9E7F2!important;
+  border-radius:12px!important;
+  background:#F5FAFE!important;
+  box-shadow:inset 4px 0 0 #4D93CC!important;
+}
+#modal-fin .fin-metros-top .ttl{
+  font-size:12px!important;
+  font-weight:900!important;
+  color:#2F6FA3!important;
+  margin-bottom:6px!important;
+  letter-spacing:.01em!important;
+}
+#modal-fin .fin-metros-top input{
+  box-sizing:border-box!important;
+  width:100%!important;
+  border:1px solid #CFE0ED!important;
+  border-radius:10px!important;
+  padding:10px 11px!important;
+  font-size:13px!important;
+  font-family:'Space Grotesk',sans-serif!important;
+  color:#1C2B22!important;
+  background:#fff!important;
+}
+#modal-fin .fin-metros-top .help{
+  margin-top:5px!important;
+  font-size:9.5px!important;
+  color:#7891A2!important;
+  line-height:1.25!important;
+}
+
+/* Fila M² en el resumen, por encima de Presupuesto por obra */
+#view-resumen .fin-m2-row{
+  background:#F5FAFE!important;
+  border-left:4px solid #4D93CC!important;
+  padding-left:12px!important;
+}
+#view-resumen .fin-m2-row .fin-lbl{
+  color:#2F6FA3!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-row .fin-val{
+  color:#245B86!important;
+  font-size:15px!important;
+  font-weight:900!important;
+}
+
+/* Bloque nuevo debajo de Costo total */
+#view-resumen .fin-m2-metrics-region{
+  margin:8px 0!important;
+  border:1px solid #DCEAE4!important;
+  border-radius:12px!important;
+  overflow:hidden!important;
+  background:#FBFDFC!important;
+  box-shadow:inset 4px 0 0 #2E8C6A!important;
+}
+#view-resumen .fin-m2-region-title{
+  padding:7px 12px!important;
+  background:#EFF8F4!important;
+  border-bottom:1px solid #DCEAE4!important;
+  color:#2A755B!important;
+  font-size:9px!important;
+  line-height:1!important;
+  font-weight:900!important;
+  letter-spacing:.075em!important;
+  text-transform:uppercase!important;
+}
+#view-resumen .fin-m2-metrics-region .fin-row{
+  margin:0!important;
+  padding:9px 12px!important;
+}
+#view-resumen .fin-m2-cost .fin-lbl{
+  color:#A06B18!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-cost .fin-val{
+  color:#8A5B13!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-price .fin-lbl{
+  color:#2F6FA3!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-price .fin-val{
+  color:#245B86!important;
+  font-weight:900!important;
+}
+#view-resumen .fin-m2-formula-note{
+  padding:0 12px 8px!important;
+  color:#8A9E93!important;
+  font-size:8.5px!important;
+  line-height:1.25!important;
+}
+
+@media(max-width:799px) and (any-pointer:coarse){
+  #view-resumen .fin-m2-row{padding-left:10px!important;}
+  #view-resumen .fin-m2-row .fin-val{font-size:13px!important;}
+  #view-resumen .fin-m2-metrics-region .fin-row{padding:8px 10px!important;}
+  #view-resumen .fin-m2-region-title{padding:6px 10px!important;font-size:8.3px!important;}
+}
+</style>
+
+<script id="cq-v14-m2-resumen-financiero-js">
+(function(){
+  function finActual(){
+    try{return (typeof getS==='function' && getS()) ? (getS().financiero||{}) : {};}
+    catch(e){return {};}
+  }
+  function m2Actual(){
+    const fin=finActual();
+    return Math.max(0,parseFloat(fin.mts2TotalesProyecto ?? fin.m2TotalesProyecto ?? 0)||0);
+  }
+  function fmtM2(v){
+    const n=Number(v)||0;
+    return n ? n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2})+' m²' : '—';
+  }
+  function fmtUSD(v){
+    try{return typeof fmt==='function' ? fmt(v,'usd') : 'U$S '+(Number(v)||0).toLocaleString('es-AR',{maximumFractionDigits:0});}
+    catch(e){return 'U$S '+(Number(v)||0).toLocaleString('es-AR',{maximumFractionDigits:0});}
+  }
+
+  function ensureMetrosField(){
+    const body=document.querySelector('#modal-fin .mbody');
+    if(!body)return;
+    let box=document.getElementById('fin-metros-proyecto-wrap');
+    if(!box){
+      box=document.createElement('div');
+      box.id='fin-metros-proyecto-wrap';
+      box.className='fin-metros-top';
+      box.innerHTML='<div class="ttl">Mts² totales proyecto</div><input type="number" id="fin-metros-proyecto" min="0" step="0.01" placeholder="Ej: 140"><div class="help">Se usa para calcular automáticamente costo por m² y precio por m².</div>';
+      const presupuesto=body.querySelector('.fin-presupuesto-top,.fin-presupuesto-wrap');
+      if(presupuesto)body.insertBefore(box,presupuesto);
+      else body.insertBefore(box,body.firstChild);
+    }
+    const inp=document.getElementById('fin-metros-proyecto');
+    if(inp && document.activeElement!==inp)inp.value=m2Actual()||'';
+  }
+
+  function injectResumenM2(){
+    const card=document.querySelector('#view-resumen .fin-card-resumen-unico');
+    if(!card)return;
+    card.querySelectorAll('.fin-m2-row,.fin-m2-metrics-region').forEach(el=>el.remove());
+
+    const fin=finActual();
+    const m2=m2Actual();
+
+    const row=document.createElement('div');
+    row.className='fin-row fin-m2-row';
+    row.innerHTML='<span class="fin-lbl">Mts² totales proyecto</span><span class="fin-val">'+fmtM2(m2)+'</span>';
+    const presupuesto=card.querySelector('.fin-presupuesto-row');
+    const kpi=card.querySelector('.kpi-lbl');
+    if(presupuesto)card.insertBefore(row,presupuesto);
+    else if(kpi)kpi.insertAdjacentElement('afterend',row);
+    else card.insertBefore(row,card.firstChild);
+
+    let metricas=null;
+    try{metricas=calcularMetricasFinancieras(fin,(getS().gastos||[]));}catch(e){}
+    const costo=metricas ? (Number(metricas.costoTotal)||0) : 0;
+    const ingreso=metricas ? (Number(metricas.totalIngresos)||0) : 0;
+    const comision=metricas ? (Number(metricas.comision)||0) : 0;
+    const costoM2=m2>0 ? costo/m2 : null;
+    const precioM2=m2>0 ? (ingreso-comision)/m2 : null;
+
+    const region=document.createElement('div');
+    region.className='fin-m2-metrics-region';
+    region.innerHTML='<div class="fin-m2-region-title">Valores por m²</div>'+
+      '<div class="fin-row fin-m2-cost"><span class="fin-lbl">Costo por m²</span><span class="fin-val">'+(costoM2===null?'—':fmtUSD(costoM2))+'</span></div>'+
+      '<div class="fin-row fin-m2-price"><span class="fin-lbl">Precio por m²</span><span class="fin-val">'+(precioM2===null?'—':fmtUSD(precioM2))+'</span></div>'+
+      '<div class="fin-m2-formula-note">Costo = costo total / m² · Precio = (ingreso total − comisión) / m²</div>';
+
+    const costoDetails=[...card.querySelectorAll('details.fin-collapse')].find(d=>(d.querySelector('summary')?.textContent||'').toLowerCase().includes('costo total'));
+    if(costoDetails)costoDetails.insertAdjacentElement('afterend',region);
+    else{
+      const margen=card.querySelector('.fin-highlight');
+      if(margen)card.insertBefore(region,margen); else card.appendChild(region);
+    }
+  }
+
+  /* El modal se reconstruye cada vez: insertar el campo después de la preparación existente. */
+  const prevPrepare=window.cqPrepareFinModal;
+  if(typeof prevPrepare==='function'){
+    window.cqPrepareFinModal=function(){
+      const out=prevPrepare.apply(this,arguments);
+      ensureMetrosField();
+      return out;
+    };
+    try{cqPrepareFinModal=window.cqPrepareFinModal;}catch(e){}
+  }
+
+  const prevOpen=window.openModalFin;
+  if(typeof prevOpen==='function'){
+    window.openModalFin=function(){
+      const out=prevOpen.apply(this,arguments);
+      ensureMetrosField();
+      const inp=document.getElementById('fin-metros-proyecto');
+      if(inp)inp.value=m2Actual()||'';
+      return out;
+    };
+    try{openModalFin=window.openModalFin;}catch(e){}
+  }
+
+  const prevSave=window.saveFinanciero;
+  if(typeof prevSave==='function'){
+    window.saveFinanciero=function(){
+      try{
+        const fin=finActual();
+        const inp=document.getElementById('fin-metros-proyecto');
+        if(inp)fin.mts2TotalesProyecto=Math.max(0,parseFloat(inp.value)||0);
+        if(typeof getS==='function')getS().financiero=fin;
+      }catch(e){}
+      return prevSave.apply(this,arguments);
+    };
+    try{saveFinanciero=window.saveFinanciero;}catch(e){}
+  }
+
+  const prevRender=window.renderResumen;
+  if(typeof prevRender==='function'){
+    window.renderResumen=function(){
+      const out=prevRender.apply(this,arguments);
+      injectResumenM2();
+      requestAnimationFrame(injectResumenM2);
+      setTimeout(injectResumenM2,0);
+      return out;
+    };
+    try{renderResumen=window.renderResumen;}catch(e){}
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    setTimeout(function(){
+      if(document.getElementById('view-resumen')?.classList.contains('active'))injectResumenM2();
+    },0);
+  });
+})();
+</script>
