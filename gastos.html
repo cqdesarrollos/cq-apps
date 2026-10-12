@@ -12341,3 +12341,118 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   }
 }
 </style>
+
+<!-- CQ v12 · tablet evolución sin superposición + selección de obras con feedback inmediato -->
+<style id="cq-v12-evolucion-y-botones">
+@media (min-width:800px) and (max-width:1600px) and (min-height:600px) and (orientation:landscape) and (any-pointer:coarse){
+  /* Evolución mensual: el valor tiene su propio espacio y la barra ya no invade el texto. */
+  #view-reporte #reporte-evolucion .rep-trend{
+    height:270px!important;
+    min-height:270px!important;
+    padding:18px 14px 8px!important;
+    gap:14px!important;
+    align-items:flex-end!important;
+    overflow:visible!important;
+  }
+  #view-reporte #reporte-evolucion .rep-col{
+    min-width:0!important;
+    gap:8px!important;
+    overflow:visible!important;
+  }
+  #view-reporte #reporte-evolucion .rep-colval{
+    writing-mode:horizontal-tb!important;
+    transform:none!important;
+    position:relative!important;
+    z-index:2!important;
+    width:100%!important;
+    height:24px!important;
+    min-height:24px!important;
+    max-height:24px!important;
+    display:flex!important;
+    align-items:flex-end!important;
+    justify-content:center!important;
+    padding:0 2px 4px!important;
+    margin:0!important;
+    box-sizing:border-box!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+    font-size:10.8px!important;
+    line-height:1!important;
+    text-align:center!important;
+  }
+  #view-reporte #reporte-evolucion .rep-colbar{
+    transform:none!important;
+    transform-origin:center bottom!important;
+    max-width:48px!important;
+    width:100%!important;
+    margin:0!important;
+    flex:0 0 auto!important;
+  }
+  #view-reporte #reporte-evolucion .rep-collbl{
+    margin-top:1px!important;
+    font-size:11px!important;
+    line-height:1!important;
+  }
+}
+
+/* El toque queda visible instantáneamente mientras el reporte termina de recalcular. */
+#view-reporte .rep-obra-chip.cq-click-pending{
+  transition:none!important;
+}
+</style>
+
+<script id="cq-v12-fast-reporte-obras">
+(function(){
+  let cqReporteObraTimer = null;
+
+  function repaintReporteObrasSelection(){
+    const selected = new Set(typeof getReporteObrasSel === 'function' ? getReporteObrasSel() : []);
+    const list = (typeof activeObras === 'function')
+      ? activeObras()
+      : ((window.config && Array.isArray(config.obras)) ? config.obras.filter(o=>!o.archived) : []);
+    const buttons = document.querySelectorAll('#reporte-obras-chips .rep-obra-chip');
+    buttons.forEach((btn,i)=>{
+      const obra = list[i];
+      if(!obra) return;
+      btn.classList.toggle('active', selected.has(obra.id));
+      btn.classList.add('cq-click-pending');
+    });
+  }
+
+  /*
+     Antes el mismo toque cambiaba la selección y, sin darle tiempo al navegador
+     a pintar el botón, arrancaba todo el cálculo del reporte. En tablet parecía
+     que el botón no respondía. Ahora se pinta primero y el cálculo comienza
+     después de un frame visible.
+  */
+  window.toggleReporteObra = function(id){
+    try{
+      if(typeof getReporteObrasSel === 'function') getReporteObrasSel();
+      if(!Array.isArray(window.reporteObrasSel) && typeof reporteObrasSel === 'undefined') return;
+
+      /* reporteObrasSel es una variable global declarada con let; se accede directamente. */
+      if(reporteObrasSel.includes(id)) reporteObrasSel = reporteObrasSel.filter(x=>x!==id);
+      else reporteObrasSel.push(id);
+
+      if(typeof saveReporteObrasSel === 'function') saveReporteObrasSel();
+      repaintReporteObrasSelection();
+
+      clearTimeout(cqReporteObraTimer);
+      requestAnimationFrame(function(){
+        cqReporteObraTimer = setTimeout(function(){
+          try{ if(typeof renderReporte === 'function') renderReporte(); }
+          finally{
+            setTimeout(function(){
+              document.querySelectorAll('#reporte-obras-chips .rep-obra-chip').forEach(b=>b.classList.remove('cq-click-pending'));
+            },0);
+          }
+        },0);
+      });
+    }catch(e){
+      console.warn('Selección rápida de obra:',e);
+      try{ if(typeof renderReporte === 'function') renderReporte(); }catch(_e){}
+    }
+  };
+  try{ toggleReporteObra = window.toggleReporteObra; }catch(e){}
+})();
+</script>
