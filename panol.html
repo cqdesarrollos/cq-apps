@@ -2290,7 +2290,7 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
         <input type="number" id="cf-tc" placeholder="1500" step="any" oninput="window.onCfTcInput()">
       </div>
     </div>
-    <button type="button" id="cq-btn-cargar-stock" class="btn-cargar" onclick="window.cargarProductoUnitario()">＋ Cargar al stock</button>
+    <button id="cq-btn-cargar-stock" class="btn-cargar" onclick="window.cargarProductoUnitario()">＋ Cargar al stock</button>
     <button class="btn-secundario" onclick="window.abrirCargaMasiva()">📋 Carga masiva (pegar desde Excel)</button>
   </div>
 
@@ -4785,43 +4785,13 @@ function toggleLotes(prodId){
   document.getElementById('lotes-'+prodId).classList.toggle('open');
 }
 
-async function cargarProductoUnitario(){
-  // CQ 12/10/2026 — blindaje de Registrar ingreso.
-  // La validación de subrubro depende de config/app de Gastos. Si el usuario
-  // toca el botón antes de que termine de cargar Firebase, antes quedaba
-  // rechazado aunque el formulario estuviera correctamente completo.
-  if(!gastosConfigPanol && window._dbReady){
-    try{ await cargarConfigGastosPanol(); }
-    catch(e){ console.warn('Pañol · no se pudo refrescar config de Gastos antes del ingreso',e); }
-  }
-
+function cargarProductoUnitario(){
   var subRaw=(document.getElementById('cf-subrubro').value||'').trim();
   var subrubro=validarSubrubroEntradaPanol(subRaw);
+  if(!subrubro){alert('Elegí un subrubro de Gastos para este producto.');return;}
 
   var codigo=document.getElementById('cf-codigo').value.trim();
   var nombre=document.getElementById('cf-producto').value.trim();
-
-  // Fallback seguro: si la config todavía no está disponible, aceptar únicamente
-  // el subrubro que ya viene identificado por un material del catálogo o por un
-  // producto existente de Pañol. No se aceptan textos manuales arbitrarios.
-  if(!subrubro && subRaw){
-    var refSub='';
-    if(cfMaterialSeleccionadoPanol) refSub=String(cfMaterialSeleccionadoPanol.category||'').trim();
-    if(!refSub){
-      try{
-        var prodExistente=buscarProductoParaCarga(codigo,nombre);
-        refSub=String(prodExistente&&prodExistente.rubro||'').trim();
-      }catch(_e){}
-    }
-    if(refSub && refSub.localeCompare(subRaw,'es',{sensitivity:'base'})===0) subrubro=subRaw;
-  }
-
-  if(!subrubro){
-    alert(gastosConfigPanol
-      ?'Elegí un subrubro de Gastos para este producto.'
-      :'Todavía no se pudo validar el subrubro. Verificá la conexión y volvé a tocar Cargar al stock.');
-    return;
-  }
 
   // Si se eligió del catálogo, usar exactamente sus datos.
   if(cfMaterialSeleccionadoPanol){
@@ -5493,7 +5463,7 @@ function renderObraDetalle(){
   html+='<div class="cq-mat-check" id="consumo-materiales-check"><div><label><input type="checkbox" id="consumo-cargar-materiales" onchange="window.toggleMaterialesConsumoPanol()"> Cargar en Materiales</label><small>Los productos tomados del catálogo se vinculan automáticamente.</small><div class="cf-auto-materiales" id="consumo-materiales-auto" style="display:none"></div></div></div>';
   html+='<div class="cq-mat-picker" id="consumo-materiales-picker"><input class="cq-mat-search" id="consumo-materiales-search" placeholder="Buscar producto, código o categoría..." autocomplete="off" oninput="window.renderCatalogoMaterialesConsumoPanol()"><div class="cq-mat-results" id="consumo-materiales-results"></div><div class="cq-mat-selected" id="consumo-materiales-selected">Ningún producto seleccionado</div></div>';
   html+='<div class="fld"><label>Comentario (opcional)</label><textarea class="consumo-comment" id="consumo-comentario" placeholder="Comentario para Gastos y Materiales"></textarea></div>';
-  html+='<button type="button" id="cq-btn-cargar-obra" class="btn-cargar" onclick="window.registrarConsumo()">➖ Descontar de stock</button>';
+  html+='<button id="cq-btn-cargar-obra" class="btn-cargar" onclick="window.registrarConsumo()">➖ Descontar de stock</button>';
   html+='</div></div>';
 
   var histSubs=[];
@@ -6408,14 +6378,6 @@ function cqEncolarSyncConsumoPanol(movId,meta){
 }
 
 async function registrarConsumo(){
-  // CQ 12/10/2026 — blindaje de Registrar salida.
-  // Obra y subrubro se resuelven desde config/app de Gastos; asegurar que esté
-  // cargada antes de validar para evitar que el botón parezca no responder.
-  if(!gastosConfigPanol && window._dbReady){
-    try{ await cargarConfigGastosPanol(); }
-    catch(e){ console.warn('Pañol · no se pudo refrescar config de Gastos antes de la salida',e); }
-  }
-
   var prod=getProductoDesdeConsumoInput();
   var prodId=prod?prod.id:'';
   var cantidad=parseFloat(document.getElementById('consumo-cantidad').value);
@@ -9937,64 +9899,7 @@ function go(t){var a=items();if(!a.length)return;if(t==="stock"){share(makePdf("
 document.addEventListener("click",function(e){var b=e.target.closest("[data-sharepdf]");if(!b)return;e.preventDefault();e.stopPropagation();go(b.getAttribute("data-sharepdf"))},true);
 function r(){setTimeout(mount,100)}document.addEventListener("change",r);window.addEventListener("load",r);r()
 })();
-</script>
-
-<!-- CQ 12/10/2026 — binding robusto de Registrar ingreso / salida -->
-<script id="cq-panol-action-buttons-fix-20261012">
-(function(){
-  "use strict";
-
-  function mostrarError(nombre,e){
-    console.error('Pañol · error en '+nombre,e);
-    var msg='No se pudo '+nombre+'. '+String(e&&e.message||e||'Error desconocido');
-    try{ if(typeof window.showToast==='function') window.showToast('⚠️ '+msg,'err'); else alert(msg); }
-    catch(_e){ try{alert(msg);}catch(__e){} }
-  }
-
-  function enlazar(id,fnName,accion){
-    var btn=document.getElementById(id);
-    if(!btn || btn.dataset.cqActionBound==='1')return;
-    btn.type='button';
-    btn.dataset.cqActionBound='1';
-    btn.onclick=function(ev){
-      if(ev){ try{ev.preventDefault();ev.stopPropagation();}catch(e){} }
-      var fn=window[fnName];
-      if(typeof fn!=='function'){
-        mostrarError(accion,new Error('La función '+fnName+' no está disponible'));
-        return false;
-      }
-      try{
-        var r=fn.call(window);
-        if(r&&typeof r.catch==='function')r.catch(function(e){mostrarError(accion,e);});
-      }catch(e){
-        mostrarError(accion,e);
-      }
-      return false;
-    };
-  }
-
-  function bind(){
-    enlazar('cq-btn-cargar-stock','cargarProductoUnitario','registrar el ingreso');
-    enlazar('cq-btn-cargar-obra','registrarConsumo','registrar la salida');
-  }
-
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});
-  else bind();
-
-  // El formulario de Obras se reconstruye con innerHTML al cambiar de obra.
-  // Observar el DOM evita perder el click del botón de salida al recrearlo.
-  var obs=new MutationObserver(function(){bind();});
-  var arrancarObserver=function(){
-    var root=document.getElementById('view-obras')||document.body;
-    if(root)obs.observe(root,{childList:true,subtree:true});
-    bind();
-  };
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',arrancarObserver,{once:true});
-  else arrancarObserver();
-})();
-</script>
-
-</body>
+</script></body>
 </html>
 <style id="cq-stock-report-darker-final">
 /* Reporte Stock: un tono más oscuro, sin alterar lógica */
