@@ -9622,6 +9622,10 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 .cq-mm-body{overflow:auto;padding:12px 14px 14px}
 .cq-mm-year{margin-bottom:14px}
 .cq-mm-year-title{font-size:11px;font-weight:900;color:#658574;letter-spacing:.06em;margin:0 0 7px 2px}
+.cq-mm-year-title-select{display:flex;align-items:center;min-height:24px}
+.cq-mm-year-check{display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:#416C5A;font-size:12px;font-weight:900;letter-spacing:.04em}
+.cq-mm-year-check input{width:17px;height:17px;accent-color:#0A8C63;cursor:pointer}
+.cq-mm-year-check span{line-height:1}
 .cq-mm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .cq-mm-opt{display:flex;align-items:center;gap:7px;padding:9px 10px;border:1px solid #E2EBE4;border-radius:11px;background:#FBFDFC;color:#29483E;font-size:10.5px;font-weight:700;cursor:pointer}
 .cq-mm-opt input{width:15px;height:15px;accent-color:#0A8C63}
@@ -9667,10 +9671,12 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
   function availableYears(tab){const set=new Set([curY()]);if(tab==='gastos'||tab==='resumen'){(getS().gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)})}else if(tab==='reporte'){(config.obras||[]).forEach(o=>(repGetState(o.id).gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)}))}else{(repGetState('oficina').gastos||[]).forEach(g=>{const y=String(g.fecha||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)});(config.obras||[]).forEach(o=>{if(isObraSimple(o.id))return;const u=cqFinUnits(repGetState(o.id).financiero||{});['A','B'].forEach(k=>{[u[k].fechaVenta,u[k].ventaMes,...(u[k].cuotasDetalle||[]).map(c=>c.mes)].forEach(v=>{const y=String(v||'').slice(0,4);if(/^\d{4}$/.test(y))set.add(y)})})})}return [...set].sort((a,b)=>b.localeCompare(a))}
   function ensureModal(){if(document.getElementById('cq-mm-bg'))return;const d=document.createElement('div');d.id='cq-mm-bg';d.className='cq-mm-bg';d.innerHTML='<div class="cq-mm-modal" onclick="event.stopPropagation()"><div class="cq-mm-hd"><div class="cq-mm-title">Seleccionar meses</div><button type="button" class="cq-mm-close" onclick="cqMMClose()">×</button></div><div class="cq-mm-tools"><button type="button" onclick="cqMMAll()">Seleccionar todos</button><button type="button" onclick="cqMMNone()">Ver todo</button></div><div class="cq-mm-body" id="cq-mm-body"></div><div class="cq-mm-ft"><button type="button" onclick="cqMMClose()">Cancelar</button><button type="button" onclick="cqMMApply()">Aplicar</button></div></div>';d.addEventListener('click',e=>{if(e.target===d)window.cqMMClose()});document.body.appendChild(d)}
   let active='gastos';
-  window.cqMMOpen=function(tab){ensureModal();active=tab;const sel=new Set(periods(tab));document.getElementById('cq-mm-body').innerHTML=availableYears(tab).map(y=>`<section class="cq-mm-year"><div class="cq-mm-year-title">${y}</div><div class="cq-mm-grid">${M.map(([m,n])=>{const v=`${y}-${m}`;return `<label class="cq-mm-opt"><input type="checkbox" value="${v}" ${sel.has(v)?'checked':''}><span>${n}</span></label>`}).join('')}</div></section>`).join('');document.getElementById('cq-mm-bg').classList.add('open')};
+  window.cqMMOpen=function(tab){ensureModal();active=tab;const sel=new Set(periods(tab));const ys=availableYears(tab);document.getElementById('cq-mm-body').innerHTML=ys.map(y=>{const yearHeader=tab==='resumen'?`<div class="cq-mm-year-title cq-mm-year-title-select"><label class="cq-mm-year-check"><input type="checkbox" class="cq-mm-year-master" data-year="${y}" value="${y}" onchange="cqMMToggleYear('${y}',this)"><span>${y}</span></label></div>`:`<div class="cq-mm-year-title">${y}</div>`;return `<section class="cq-mm-year">${yearHeader}<div class="cq-mm-grid">${M.map(([m,n])=>{const v=`${y}-${m}`;return `<label class="cq-mm-opt"><input type="checkbox" data-year="${y}" value="${v}" ${sel.has(v)?'checked':''} ${tab==='resumen'?`onchange="cqMMSyncYear('${y}')"`:''}><span>${n}</span></label>`}).join('')}</div></section>`}).join('');if(tab==='resumen')ys.forEach(y=>window.cqMMSyncYear(y));document.getElementById('cq-mm-bg').classList.add('open')};
+  window.cqMMToggleYear=function(y,master){document.querySelectorAll(`#cq-mm-body input[type="checkbox"][data-year="${y}"]:not(.cq-mm-year-master)`).forEach(i=>i.checked=!!master.checked);master.indeterminate=false};
+  window.cqMMSyncYear=function(y){const master=document.querySelector(`#cq-mm-body .cq-mm-year-master[data-year="${y}"]`);if(!master)return;const ms=[...document.querySelectorAll(`#cq-mm-body input[type="checkbox"][data-year="${y}"]:not(.cq-mm-year-master)`)];const n=ms.filter(i=>i.checked).length;master.checked=n===ms.length&&ms.length>0;master.indeterminate=n>0&&n<ms.length};
   window.cqMMClose=function(){document.getElementById('cq-mm-bg')?.classList.remove('open')};
-  window.cqMMAll=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>i.checked=true)};
-  window.cqMMNone=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>i.checked=false)};
+  window.cqMMAll=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>{i.checked=true;i.indeterminate=false})};
+  window.cqMMNone=function(){document.querySelectorAll('#cq-mm-body input[type=checkbox]').forEach(i=>{i.checked=false;i.indeterminate=false})};
   window.cqMMApply=function(){S[active]=uniq([...document.querySelectorAll('#cq-mm-body input[type=checkbox]:checked')].map(i=>i.value));save();window.cqMMClose();updateLabels();rerender(active)};
   function button(tab){return `<button type="button" class="cq-monthmulti" id="cq-mm-${tab}" onclick="cqMMOpen('${tab}')"><span class="cq-mm-label">Mes</span><span class="cq-mm-value">${label(tab)}</span><span class="cq-mm-cal">▣</span></button>`}
   function install(){
@@ -13197,5 +13203,97 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   try{renderRankingProveedores=window.renderRankingProveedores;}catch(e){}
 
   document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{try{renderShell()}catch(e){}},0));
+})();
+</script>
+<style id="cq-subrubro-trend-v2">
+/* Reporte gastos · evolución múltiple de subrubros */
+#view-reporte .cq-subtrend-shell{width:100%!important;max-width:none!important;}
+#view-reporte .cq-subtrend-toolbar{align-items:flex-start!important;}
+#view-reporte .cq-subtrend-field{min-width:290px!important;max-width:430px;width:min(430px,100%);}
+#view-reporte .cq-subtrend-multi{position:relative;width:100%;}
+#view-reporte .cq-subtrend-multi-btn{
+  width:100%;min-height:42px;border:1px solid #CFE1D6;border-radius:11px;background:#fff;
+  color:#173E31;padding:8px 11px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font:850 12px 'Space Grotesk',sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(28,61,53,.05);text-align:left;
+}
+#view-reporte .cq-subtrend-multi-btn:hover{border-color:#11A66F;background:#FBFEFC;}
+#view-reporte .cq-subtrend-multi-btn .arrow{font-size:12px;color:#70887D;flex:0 0 auto;}
+#view-reporte .cq-subtrend-menu{
+  display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:70;width:min(390px,88vw);max-height:330px;
+  overflow:auto;background:#fff;border:1px solid #D7E5DC;border-radius:13px;box-shadow:0 14px 34px rgba(20,55,44,.18);padding:8px;
+}
+#view-reporte .cq-subtrend-menu.open{display:block;}
+#view-reporte .cq-subtrend-menu-actions{display:flex;gap:7px;padding:3px 3px 8px;position:sticky;top:0;background:#fff;z-index:2;}
+#view-reporte .cq-subtrend-menu-actions button{border:1px solid #D8E6DD;background:#F8FBF9;color:#31594A;border-radius:9px;padding:6px 10px;font:800 10px 'Space Grotesk',sans-serif;cursor:pointer;}
+#view-reporte .cq-subtrend-option{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:9px;font-size:11.5px;font-weight:750;color:#294B40;cursor:pointer;}
+#view-reporte .cq-subtrend-option:hover{background:#F1F8F4;}
+#view-reporte .cq-subtrend-option input{width:16px;height:16px;accent-color:#0AA56C;flex:0 0 auto;}
+#view-reporte .cq-subtrend-legend{display:flex;flex-wrap:wrap;gap:8px 12px;padding:0 14px 10px;}
+#view-reporte .cq-subtrend-legend-item{display:inline-flex;align-items:center;gap:7px;border:1px solid #E1EAE5;background:#fff;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:850;color:#35584B;}
+#view-reporte .cq-subtrend-legend-line{width:20px;height:3px;border-radius:99px;display:inline-block;}
+#view-reporte .cq-subtrend-chart-wrap{width:100%!important;max-width:none!important;padding:0 10px 10px!important;box-sizing:border-box;}
+#view-reporte .cq-subtrend-svg{width:auto;max-width:none!important;}
+#view-reporte .cq-subtrend-empty{margin-top:0!important;}
+@media (min-width:700px) and (max-width:1400px) and (orientation:landscape){
+  #view-reporte{width:100vw!important;max-width:none!important;margin:0!important;padding-left:8px!important;padding-right:8px!important;box-sizing:border-box!important;}
+  #view-reporte .rep-card,#view-reporte .rep-card-full,#view-reporte #reporte-proveedores{width:100%!important;max-width:none!important;}
+  #view-reporte .cq-subtrend-shell{width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important;}
+  #view-reporte .cq-subtrend-chart-wrap{padding-left:4px!important;padding-right:4px!important;}
+  #view-reporte .cq-subtrend-svg{height:340px!important;}
+}
+@media(max-width:650px){
+  #view-reporte .cq-subtrend-field{width:100%!important;max-width:none!important;min-width:0!important;}
+  #view-reporte .cq-subtrend-menu{left:0;right:auto;width:100%;max-height:300px;}
+  #view-reporte .cq-subtrend-legend{padding-left:10px;padding-right:10px;}
+}
+</style>
+<script id="cq-subrubro-trend-v2-js">
+(function(){
+  const prevRankingV2=window.renderRankingProveedores;
+  const COLORS=['#00A86B','#2E7BEF','#E58A16','#8A5CF6','#E04B4B','#159AA8','#C28A0E','#D45AA8','#667085','#7A9E45'];
+  function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function skey(v){try{return typeof reporteSubrubroKey==='function'?reporteSubrubroKey(v):String(v||'').trim().toLocaleLowerCase('es');}catch(e){return String(v||'').trim().toLowerCase();}}
+  function slabel(v){try{return typeof reporteSubrubroVisible==='function'?reporteSubrubroVisible(v):String(v||'Sin subrubro');}catch(e){return String(v||'Sin subrubro');}}
+  function susd(g){try{return typeof repUSD==='function'?Number(repUSD(g))||0:Number(toUSD(g.monto,g.moneda,g.tc))||0;}catch(e){return 0;}}
+  function smoney(v){try{return typeof fmt==='function'?fmt(v,'usd'):'U$S '+Math.round(v).toLocaleString('es-AR');}catch(e){return 'U$S '+Math.round(v).toLocaleString('es-AR');}}
+  function compact(v){const n=Math.abs(Number(v)||0),sgn=(Number(v)||0)<0?'-':'';if(n>=1000000)return sgn+'U$S '+(n/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+'M';if(n>=1000)return sgn+'U$S '+(n/1000).toLocaleString('es-AR',{maximumFractionDigits:1})+'k';return sgn+'U$S '+Math.round(n).toLocaleString('es-AR');}
+  function niceMax(v){v=Math.max(0,Number(v)||0);if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v))),u=v/p;let n=u<=1?1:u<=2?2:u<=2.5?2.5:u<=5?5:10;if(n*p<v)n=(n===1?2:n===2?2.5:n===2.5?5:n===5?10:20);return n*p;}
+  function source(){let gastos=[],obras=[];try{gastos=typeof repAdvancedGastos==='function'?repAdvancedGastos(true):[];}catch(e){}try{obras=typeof repSelectedObras==='function'?repSelectedObras():[];}catch(e){}return{gastos:Array.isArray(gastos)?gastos:[],obras:Array.isArray(obras)?obras:[]};}
+  function options(gastos){const m=new Map();gastos.forEach(g=>{const l=slabel(g.subrubro||g.concepto||'Sin subrubro'),k=skey(l);if(!m.has(k))m.set(k,{key:k,label:l,total:0});m.get(k).total+=susd(g);});return[...m.values()].sort((a,b)=>String(a.label).localeCompare(String(b.label),'es',{sensitivity:'base'}));}
+  function selectedValid(opts){let arr=Array.isArray(window._cqSubtrendSelectedMulti)?window._cqSubtrendSelectedMulti.map(String):[];if(!arr.length&&window._cqSubtrendSelected)arr=[String(window._cqSubtrendSelected)];arr=arr.filter(k=>opts.some(o=>o.key===k));if(!arr.length&&opts.length){let top=opts.slice().sort((a,b)=>b.total-a.total)[0]?.key;if(top)arr=[top];}window._cqSubtrendSelectedMulti=arr;return arr;}
+  function summaryText(arr,opts){if(!arr.length)return'Seleccioná subrubros';if(arr.length===1)return opts.find(o=>o.key===arr[0])?.label||'1 subrubro';return arr.length+' subrubros seleccionados';}
+  function renderShellV2(){
+    const el=document.getElementById('reporte-proveedores');if(!el)return;
+    el.querySelectorAll('.cq-subtrend-shell').forEach(n=>n.remove());
+    const {gastos,obras}=source();if(!gastos.length||!obras.length)return;
+    const opts=options(gastos);if(!opts.length)return;const selected=selectedValid(opts);
+    const shell=document.createElement('div');shell.className='cq-subtrend-shell';shell.dataset.version='2';
+    shell.innerHTML=`<div class="cq-subtrend-toolbar"><div><div class="cq-subtrend-title">Evolución por subrubro</div><div class="cq-subtrend-sub">Seleccioná uno o varios conceptos y compará su evolución entre las obras.</div></div><div class="cq-subtrend-field"><label>Subrubros a graficar</label><div class="cq-subtrend-multi"><button type="button" class="cq-subtrend-multi-btn" onclick="cqSubtrendToggleMenu(event)"><span id="cq-subtrend-summary">${esc(summaryText(selected,opts))}</span><span class="arrow">▾</span></button><div class="cq-subtrend-menu" id="cq-subtrend-menu"><div class="cq-subtrend-menu-actions"><button type="button" onclick="cqSubtrendSetAll(true)">Todos</button><button type="button" onclick="cqSubtrendSetAll(false)">Limpiar</button></div>${opts.map(o=>`<label class="cq-subtrend-option"><input type="checkbox" value="${esc(o.key)}" ${selected.includes(o.key)?'checked':''} onchange="cqSubtrendToggleKey(this.value,this.checked)"><span>${esc(o.label)}</span></label>`).join('')}</div></div></div></div><div id="cq-subtrend-legend" class="cq-subtrend-legend"></div><div id="cq-subtrend-chart"></div><div class="cq-subtrend-footer">Cada línea corresponde a un subrubro y cada punto muestra su gasto acumulado en esa obra, respetando los filtros activos del reporte.</div>`;
+    el.insertBefore(shell,el.firstChild);renderChartV2();
+  }
+  function renderChartV2(){
+    const box=document.getElementById('cq-subtrend-chart'),legend=document.getElementById('cq-subtrend-legend');if(!box)return;
+    const {gastos,obras}=source(),opts=options(gastos),sel=selectedValid(opts);
+    const sum=document.getElementById('cq-subtrend-summary');if(sum)sum.textContent=summaryText(sel,opts);
+    document.querySelectorAll('#cq-subtrend-menu input[type="checkbox"]').forEach(cb=>cb.checked=sel.includes(cb.value));
+    if(!sel.length){if(legend)legend.innerHTML='';box.innerHTML='<div class="cq-subtrend-empty">Seleccioná al menos un subrubro para graficar.</div>';return;}
+    const series=sel.map((k,idx)=>{const op=opts.find(o=>o.key===k)||{label:k};const rel=gastos.filter(g=>skey(slabel(g.subrubro||g.concepto||'Sin subrubro'))===k);const vals=obras.map(o=>({obra:o,value:rel.filter(g=>g.obraId===o.id).reduce((a,g)=>a+susd(g),0)}));return{key:k,label:op.label,color:COLORS[idx%COLORS.length],vals,total:vals.reduce((a,d)=>a+d.value,0)};});
+    if(legend)legend.innerHTML=series.map(s=>`<span class="cq-subtrend-legend-item"><span class="cq-subtrend-legend-line" style="background:${s.color}"></span><span>${esc(s.label)}</span><span style="color:#7C9087;font-family:'JetBrains Mono',monospace">${esc(compact(s.total))}</span></span>`).join('');
+    const cw=Math.floor(box.getBoundingClientRect().width||box.parentElement?.getBoundingClientRect().width||0);const tablet=window.innerWidth>=700&&window.innerWidth<=1400&&window.innerWidth>window.innerHeight;const minByPoints=120+obras.length*105;const W=tablet?Math.max(760,cw-4,minByPoints):Math.max(window.innerWidth<=650?720:760,cw-20,minByPoints),H=tablet?340:315;
+    const m={l:78,r:32,t:46,b:66},pw=W-m.l-m.r,ph=H-m.t-m.b;const all=series.flatMap(s=>s.vals.map(v=>v.value));const maxVal=Math.max(...all,0),yMax=niceMax(maxVal*1.10);const step=obras.length>1?pw/(obras.length-1):0;const x=i=>m.l+(obras.length===1?pw/2:i*step),y=v=>m.t+ph-(Math.max(0,v)/yMax)*ph;
+    let grid='';for(let i=0;i<=4;i++){const v=yMax*(4-i)/4,yy=m.t+ph*i/4;grid+=`<line x1="${m.l}" y1="${yy}" x2="${W-m.r}" y2="${yy}" stroke="#E7EFEA" stroke-width="1"/><text x="${m.l-12}" y="${yy+4}" text-anchor="end" font-size="10" font-family="Space Grotesk, sans-serif" fill="#84988E">${esc(compact(v))}</text>`;}
+    const xlabels=obras.map((o,i)=>`<line x1="${x(i)}" y1="${m.t+ph}" x2="${x(i)}" y2="${m.t+ph+5}" stroke="#BFCFC6"/><text x="${x(i)}" y="${H-31}" text-anchor="middle" font-size="11" font-weight="800" font-family="Space Grotesk, sans-serif" fill="#294B40">${esc(o.short||o.label||'')}</text>`).join('');
+    const paths=series.map((s,si)=>{const pts=s.vals.map((d,i)=>({x:x(i),y:y(d.value),...d}));const d=pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');const dots=pts.map(p=>{const name=p.obra.short||p.obra.label||'';const valueLabel=series.length===1?`<text x="${p.x}" y="${Math.max(m.t+13,p.y-11)}" text-anchor="middle" font-size="10.5" font-weight="900" font-family="JetBrains Mono, monospace" fill="${s.color}">${esc(compact(p.value))}</text>`:'';return valueLabel+`<circle cx="${p.x}" cy="${p.y}" r="5.3" fill="${s.color}" stroke="#fff" stroke-width="2.7"><title>${esc(s.label+' · '+name+': '+smoney(p.value))}</title></circle>`;}).join('');return`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;}).join('');
+    const title=series.length===1?series[0].label:'Comparación de '+series.length+' subrubros';
+    box.innerHTML=`<div class="cq-subtrend-chart-wrap"><svg class="cq-subtrend-svg" style="width:${W}px" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)} por obra"><text x="${m.l}" y="26" font-size="13" font-weight="900" font-family="Space Grotesk, sans-serif" fill="#173E31">${esc(title)}</text>${grid}${paths}${xlabels}</svg></div>`;
+  }
+  window.cqSubtrendToggleMenu=function(ev){ev&&ev.stopPropagation();document.getElementById('cq-subtrend-menu')?.classList.toggle('open');};
+  window.cqSubtrendToggleKey=function(k,on){let arr=Array.isArray(window._cqSubtrendSelectedMulti)?window._cqSubtrendSelectedMulti.slice():[];arr=arr.filter(x=>x!==k);if(on)arr.push(k);window._cqSubtrendSelectedMulti=arr;renderChartV2();};
+  window.cqSubtrendSetAll=function(on){const {gastos}=source(),opts=options(gastos);window._cqSubtrendSelectedMulti=on?opts.map(o=>o.key):[];renderChartV2();};
+  document.addEventListener('click',e=>{if(!e.target.closest?.('.cq-subtrend-multi'))document.getElementById('cq-subtrend-menu')?.classList.remove('open');});
+  window.renderRankingProveedores=function(){if(typeof prevRankingV2==='function')prevRankingV2.apply(this,arguments);renderShellV2();};
+  try{renderRankingProveedores=window.renderRankingProveedores;}catch(e){}
+  let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(document.querySelector('.cq-subtrend-shell[data-version="2"]'))renderChartV2();},120);});
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{try{renderShellV2()}catch(e){}},20));
 })();
 </script>
