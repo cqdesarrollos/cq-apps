@@ -12889,3 +12889,95 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   });
 })();
 </script>
+
+
+<!-- CQ v15 · ajuste visual m² + costo/precio por m² en Reporte financiero -->
+<style id="cq-v15-m2-ajuste-y-reporte">
+/* Separar apenas el texto de la barra lateral, sin ensanchar visualmente el bloque */
+#view-resumen .fin-m2-row .fin-lbl{
+  padding-left:7px!important;
+}
+#view-resumen .fin-m2-metrics-region .fin-row .fin-lbl{
+  padding-left:7px!important;
+}
+#view-resumen .fin-m2-row{
+  padding-right:14px!important;
+}
+#view-resumen .fin-m2-metrics-region .fin-row{
+  padding-right:14px!important;
+}
+
+/* Nuevas filas en Reporte financiero */
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-cost th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-cost td{
+  color:#8A6118!important;
+  font-weight:850!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-price th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-price td{
+  color:#2F6FA3!important;
+  font-weight:850!important;
+}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-cost th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-m2-price th{
+  padding-left:18px!important;
+}
+</style>
+
+<script id="cq-v15-m2-reporte-financiero-js">
+(function(){
+  const prevPivot=window.repFinPivot;
+  if(typeof prevPivot!=='function')return;
+
+  function m2FromRow(r){
+    const fin=r?.fin||r?.s?.financiero||{};
+    return Math.max(0,parseFloat(fin.mts2TotalesProyecto ?? fin.m2TotalesProyecto ?? 0)||0);
+  }
+  function money(v){
+    try{return typeof fmt==='function'?fmt(v,'usd'):'U$S '+Math.round(Number(v)||0).toLocaleString('es-AR');}
+    catch(e){return 'U$S '+Math.round(Number(v)||0).toLocaleString('es-AR');}
+  }
+  function esc(v){
+    return String(v??'').replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]});
+  }
+  function metricRow(label,vals,total,rowClass){
+    return '<tr class="'+rowClass+'"><th>'+esc(label)+'</th>'+vals.map(v=>'<td>'+esc(v)+'</td>').join('')+'<td class="rep-total-col">'+esc(total)+'</td></tr>';
+  }
+
+  window.repFinPivot=function(rows){
+    let html=prevPivot.apply(this,arguments);
+    if(!Array.isArray(rows)||!rows.length)return html;
+
+    let totalM2=0,totalCosto=0,totalPrecioBase=0;
+    const costoVals=[];
+    const precioVals=[];
+
+    rows.forEach(function(r){
+      const m2=m2FromRow(r);
+      const costo=Number(r?.direct?.costoTotal)||0;
+      const ingreso=Number(r?.direct?.totalIngresos)||0;
+      const comision=Number(r?.direct?.comision)||0;
+      if(m2>0){
+        costoVals.push(money(costo/m2));
+        precioVals.push(money((ingreso-comision)/m2));
+        totalM2+=m2;
+        totalCosto+=costo;
+        totalPrecioBase+=(ingreso-comision);
+      }else{
+        costoVals.push('—');
+        precioVals.push('—');
+      }
+    });
+
+    const totalCostoM2=totalM2>0?money(totalCosto/totalM2):'—';
+    const totalPrecioM2=totalM2>0?money(totalPrecioBase/totalM2):'—';
+    const extra=metricRow('Costo por m²',costoVals,totalCostoM2,'rep-row-m2-cost')+
+                metricRow('Precio por m²',precioVals,totalPrecioM2,'rep-row-m2-price');
+
+    const re=/(<tr[^>]*>\s*<th>Costo total<\/th>[\s\S]*?<\/tr>)/i;
+    if(re.test(html))html=html.replace(re,'$1'+extra);
+    return html;
+  };
+  try{repFinPivot=window.repFinPivot;}catch(e){}
+})();
+</script>
