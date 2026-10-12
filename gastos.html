@@ -11640,3 +11640,243 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   setTimeout(cqDecorateFinGroups,0);
 })();
 </script>
+
+<!-- CQ v6 · ajustes puntuales solicitados 12/10/2026 -->
+<style id="cq-v6-ajustes-puntuales">
+/* 1) Venta por unidad: pie siempre visible en móvil */
+#modal-fin .modal{
+  height:min(900px,calc(100dvh - 20px))!important;
+  max-height:calc(100dvh - 20px)!important;
+  overflow:hidden!important;
+  display:flex!important;
+  flex-direction:column!important;
+}
+#modal-fin .modal-hd{flex:0 0 auto!important;position:relative!important;top:auto!important;}
+#modal-fin .mbody{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain!important;
+  padding-bottom:18px!important;
+}
+#modal-fin .mfooter{
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  flex:0 0 auto!important;
+  position:relative!important;
+  inset:auto!important;
+  min-height:62px!important;
+  padding:10px 14px 12px!important;
+  margin:0!important;
+  background:#fff!important;
+  border-top:1px solid #DDE8DE!important;
+  box-shadow:0 -7px 20px rgba(20,60,45,.08)!important;
+  z-index:50!important;
+}
+#modal-fin .mfooter .btn{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-height:40px!important;
+}
+
+/* Diferenciar SOLO por color de texto los títulos internos de carga */
+#modal-fin .fin-unit-section:has([id$="-venta"]) .fin-unit-label{
+  color:#2F6FA3!important;
+}
+#modal-fin .fin-unit-section:has(.fin-unit-cuotas) .fin-unit-label{
+  color:#7455A7!important;
+}
+#modal-fin .fin-unit-commission .lbl{
+  color:#9A681A!important;
+  font-weight:900!important;
+}
+#modal-fin .fin-unit-status .lbl{
+  color:#168260!important;
+  font-weight:900!important;
+}
+
+@media(max-width:760px){
+  #modal-fin .modal{
+    height:calc(100dvh - 10px)!important;
+    max-height:calc(100dvh - 10px)!important;
+    width:calc(100vw - 12px)!important;
+  }
+  #modal-fin .mfooter{
+    min-height:58px!important;
+    padding:8px 9px 9px!important;
+  }
+  #modal-fin .mfooter .btn{min-height:39px!important;font-size:11px!important;}
+}
+</style>
+
+<script id="cq-v6-filtros-independientes-y-reaccion-reporte">
+(function(){
+  /* =========================================================
+     2) REPORTE FINANCIERO: selección de obras INDEPENDIENTE
+        de Reporte gastos.
+     ========================================================= */
+  const FIN_OBRAS_KEY='gastos_reporte_fin_obras_sel_v6';
+  let finObrasSel=null;
+
+  function activeIds(){
+    try{return (typeof activeObras==='function'?activeObras():(config.obras||[]).filter(o=>!o.archived)).map(o=>o.id)}
+    catch(e){return (config.obras||[]).map(o=>o.id)}
+  }
+  function loadFinSel(){
+    if(Array.isArray(finObrasSel))return finObrasSel;
+    const ids=activeIds();
+    try{
+      const saved=JSON.parse(localStorage.getItem(FIN_OBRAS_KEY)||'null');
+      if(Array.isArray(saved)) finObrasSel=saved.filter(id=>ids.includes(id));
+    }catch(e){}
+    if(!Array.isArray(finObrasSel)){
+      /* Sólo la primera vez copiamos la selección actual como punto de partida;
+         desde ahí quedan totalmente separadas. */
+      let base=[];
+      try{base=(typeof getReporteObrasSel==='function'?getReporteObrasSel():[]).filter(id=>ids.includes(id))}catch(e){}
+      finObrasSel=base.length?base:ids.filter(id=>id!=='oficina');
+      saveFinSel();
+    }
+    return finObrasSel;
+  }
+  function saveFinSel(){
+    try{localStorage.setItem(FIN_OBRAS_KEY,JSON.stringify(finObrasSel||[]))}catch(e){}
+  }
+  function finSelectedObras(){
+    const sel=loadFinSel();
+    const list=typeof activeObras==='function'?activeObras():(config.obras||[]).filter(o=>!o.archived);
+    return list.filter(o=>sel.includes(o.id));
+  }
+  window.getReporteFinObrasSel=function(){return [...loadFinSel()]};
+
+  function renderFinObraChips(){
+    const el=document.getElementById('reporte-fin-obras-chips');
+    if(!el)return;
+    const sel=loadFinSel();
+    const list=typeof activeObras==='function'?activeObras():(config.obras||[]).filter(o=>!o.archived);
+    el.innerHTML=list.map(o=>`<button class="rep-obra-chip ${sel.includes(o.id)?'active':''} ${typeof obraChipClass==='function'?obraChipClass(o):''}" onclick="toggleReporteFinObra('${o.id}')">${o.short||o.label}</button>`).join('');
+  }
+
+  window.toggleReporteFinObra=function(id){
+    const ids=activeIds();
+    loadFinSel();
+    if(finObrasSel.includes(id)) finObrasSel=finObrasSel.filter(x=>x!==id);
+    else if(ids.includes(id)) finObrasSel.push(id);
+    saveFinSel();
+    renderFinObraChips();
+    requestAnimationFrame(()=>{try{window.renderReporteFinancieroComparativo&&window.renderReporteFinancieroComparativo()}catch(e){console.warn(e)}});
+  };
+  window.selectAllReporteObrasFin=function(){
+    finObrasSel=activeIds();saveFinSel();renderFinObraChips();
+    requestAnimationFrame(()=>{try{window.renderReporteFinancieroComparativo&&window.renderReporteFinancieroComparativo()}catch(e){}});
+  };
+  window.clearReporteObrasFin=function(){
+    finObrasSel=[];saveFinSel();renderFinObraChips();
+    requestAnimationFrame(()=>{try{window.renderReporteFinancieroComparativo&&window.renderReporteFinancieroComparativo()}catch(e){}});
+  };
+
+  /* Reporte gastos conserva SU selección; Reporte financiero pinta la suya. */
+  const rawRenderObrasChips=window.renderReporteObrasChips;
+  window.renderReporteObrasChips=function(){
+    try{
+      /* Contenedor de Reporte gastos: comportamiento previo intacto. */
+      const rg=document.getElementById('reporte-obras-chips');
+      if(rg){
+        const sel=typeof getReporteObrasSel==='function'?getReporteObrasSel():[];
+        const list=typeof activeObras==='function'?activeObras():(config.obras||[]).filter(o=>!o.archived);
+        rg.innerHTML=list.map(o=>`<button class="rep-obra-chip ${sel.includes(o.id)?'active':''} ${typeof obraChipClass==='function'?obraChipClass(o):''}" onclick="toggleReporteObra('${o.id}')">${o.short||o.label}</button>`).join('');
+      }
+      renderFinObraChips();
+    }catch(e){
+      if(typeof rawRenderObrasChips==='function')return rawRenderObrasChips.apply(this,arguments);
+    }
+  };
+  try{renderReporteObrasChips=window.renderReporteObrasChips}catch(e){}
+
+  /* Durante TODO el render financiero, reemplazamos temporalmente sólo la fuente
+     de obras seleccionadas. Así filtros, OFICINA y prorrateos financieros usan
+     exclusivamente la selección del Reporte financiero. */
+  function withFinSelection(fn,ctx,args){
+    const oldWin=window.repSelectedObras;
+    let oldGlobal;
+    try{oldGlobal=repSelectedObras}catch(e){oldGlobal=null}
+    const finFn=()=>finSelectedObras();
+    window.repSelectedObras=finFn;
+    try{repSelectedObras=finFn}catch(e){}
+    try{return fn.apply(ctx,args||[])}
+    finally{
+      window.repSelectedObras=oldWin;
+      try{repSelectedObras=oldGlobal||oldWin}catch(e){}
+    }
+  }
+
+  const rawFinRender=window.renderReporteFinancieroComparativo;
+  if(typeof rawFinRender==='function'){
+    window.renderReporteFinancieroComparativo=function(){
+      return withFinSelection(rawFinRender,this,arguments);
+    };
+    try{renderReporteFinancieroComparativo=window.renderReporteFinancieroComparativo}catch(e){}
+  }
+
+  const rawFinTab=window.renderReporteFinancieroTab;
+  window.renderReporteFinancieroTab=function(){
+    renderFinObraChips();
+    if(typeof rawFinTab==='function'){
+      /* Evitar que el render viejo repinte ambos grupos con la selección de gastos. */
+      const old=window.renderReporteObrasChips;
+      window.renderReporteObrasChips=function(){renderFinObraChips()};
+      try{renderReporteObrasChips=window.renderReporteObrasChips}catch(e){}
+      try{return withFinSelection(rawFinTab,this,arguments)}
+      finally{
+        window.renderReporteObrasChips=old;
+        try{renderReporteObrasChips=old}catch(e){}
+        renderFinObraChips();
+      }
+    }
+    return window.renderReporteFinancieroComparativo?.();
+  };
+  try{renderReporteFinancieroTab=window.renderReporteFinancieroTab}catch(e){}
+
+  /* =========================================================
+     3) REPORTE GASTOS: feedback inmediato al tocar la solapa.
+        Se muestra la solapa primero y el cálculo pesado se hace
+        en el frame siguiente.
+     ========================================================= */
+  const rawShowTab=window.showTab;
+  let reporteFrame=0,reporteTimer=0;
+  window.showTab=function(t){
+    if(t!=='reporte' || typeof rawShowTab!=='function') return rawShowTab?.apply(this,arguments);
+
+    const realRender=window.renderReporte;
+    let oldGlobal;
+    try{oldGlobal=renderReporte}catch(e){oldGlobal=realRender}
+    const noop=function(){};
+
+    /* Ejecutar toda la lógica normal de cambio de solapa, pero sin bloquear
+       el primer paint con el reporte pesado. */
+    window.renderReporte=noop;
+    try{renderReporte=noop}catch(e){}
+    let out;
+    try{out=rawShowTab.apply(this,arguments)}
+    finally{
+      window.renderReporte=realRender;
+      try{renderReporte=oldGlobal||realRender}catch(e){}
+    }
+
+    if(reporteFrame)cancelAnimationFrame(reporteFrame);
+    if(reporteTimer)clearTimeout(reporteTimer);
+    reporteFrame=requestAnimationFrame(function(){
+      reporteTimer=setTimeout(function(){
+        try{realRender&&realRender()}catch(e){console.error('Reporte gastos:',e)}
+      },0);
+    });
+    return out;
+  };
+  try{showTab=window.showTab}catch(e){}
+
+  /* Si el archivo abre directamente en Reporte financiero, pintar su selección propia. */
+  setTimeout(function(){try{renderFinObraChips()}catch(e){}},0);
+})();
+</script>
