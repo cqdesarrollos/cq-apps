@@ -7535,6 +7535,33 @@ function categoriaAprendidaPara(codigo,nombre){
 
 
 function claveMaterialUnificar(nombre){return String(nombre||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'').trim();}
+
+/* CQ 12/10/2026 — blindaje de identidad DURATOP.
+   El código 902001103 pertenece a CODO DURATOP 45° HH 63MM.
+   Nunca debe fusionarse ni resolverse contra "Adicional 100 cm" u otro producto. */
+var CQ_CODO_DURATOP_45_63_CODIGO='902001103';
+function cqEsCodoDuratop45HH63Nombre(v){
+  var n=claveMaterialUnificar(v||'');
+  return n.indexOf('codo')>=0
+    && n.indexOf('duratop')>=0
+    && n.indexOf('45')>=0
+    && n.indexOf('63')>=0;
+}
+function cqEsAdicionalNombre(v){
+  var n=claveMaterialUnificar(v||'');
+  return n.indexOf('adicional')>=0;
+}
+function cqCruceCodoDuratopAdicional(a,b){
+  return (cqEsCodoDuratop45HH63Nombre(a)&&cqEsAdicionalNombre(b))
+      || (cqEsCodoDuratop45HH63Nombre(b)&&cqEsAdicionalNombre(a));
+}
+function cqNombreProductoCompatibleSeguro(a,b){
+  if(cqCruceCodoDuratopAdicional(a,b))return false;
+  var x=claveMaterialUnificar(a),y=claveMaterialUnificar(b);
+  if(!x||!y)return true;
+  if(x===y)return true;
+  return null; // dejar que la lógica histórica evalúe los demás casos
+}
 function cqCodigoPresentacionInvalido(v){
   var x=String(v==null?'':v).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
   return /^\d+(?:[.,]\d+)?\s*(pallet|pallets|palet|palets|bulto|bultos|caja|cajas|bolsa|bolsas|unidad|unidades|u|un|m2|m²|mts?|metros?)$/.test(x);
@@ -7542,6 +7569,7 @@ function cqCodigoPresentacionInvalido(v){
 function codigoMaterialUnificar(mat){
   var raw=String(getMatCodigo(mat)||(mat&&mat.codigo)||'').trim();
   if(cqCodigoPresentacionInvalido(raw))return '';
+  if(raw===CQ_CODO_DURATOP_45_63_CODIGO && mat && !cqEsCodoDuratop45HH63Nombre(mat.mat||''))return '';
   return raw.toLowerCase().replace(/\s+/g,'');
 }
 function baseEstaticaMaterial(matId,obraIdx){if(typeof CALCULATED_MATS!=='undefined'&&CALCULATED_MATS[matId])return 0;var key=matId+'-'+obraIdx;if(state.overrides&&state.overrides[key]!=null)return parseFloat(state.overrides[key])||0;var mat=ALL_MATS.find(function(m){return m.id===matId;});return mat&&mat.data&&mat.data[obraIdx]!=null?(parseFloat(mat.data[obraIdx])||0):0;}
@@ -7562,7 +7590,7 @@ function buscarCoincidenciaMaterial(mat,excluirId){
     if(Number(x.id)===Number(excluirId)||isMatDeleted(x.id))return false;
     var esp=cqMismoProductoEspecial(mat,x);
     if(esp===false)return false;
-    if(ck&&codigoMaterialUnificar(x)===ck)return true;
+    if(ck&&codigoMaterialUnificar(x)===ck){if(cqCruceCodoDuratopAdicional(mat.mat,x.mat))return false;return true;}
     return nk&&claveMaterialUnificar(x.mat)===nk;
   })||null;
 }
@@ -7575,7 +7603,7 @@ function consolidarMaterialesDuplicados(){
     if(ck&&vistosCodigo[ck]){
       var candidato=vistosCodigo[ck];
       var esp=cqMismoProductoEspecial(m,candidato);
-      if(esp!==false)otro=candidato;
+      if(esp!==false && !cqCruceCodoDuratopAdicional(m.mat,candidato.mat))otro=candidato;
     }
     if(!otro&&nk&&vistosNombre[nk])otro=vistosNombre[nk];
     if(otro&&Number(otro.id)!==Number(m.id)){
@@ -7993,6 +8021,82 @@ function cqForzarCementoHolcimCanonico(){
   return true;
 }
 
+
+var cqDuratopCambioPendiente=false;
+function cqSanearCodigoCodoDuratop(){
+  if(!state.matCodigos)state.matCodigos={};
+  var cambio=false;
+  getAllMats().forEach(function(m){
+    if(!m||isMatDeleted(m.id))return;
+    var code=String((state.matCodigos&&state.matCodigos[m.id])||m.codigo||'').trim();
+    if(code===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Nombre(m.mat||'')){
+      state.matCodigos[m.id]='';
+      m.codigo='';
+      var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(m.id);});
+      if(ex)ex.codigo='';
+      cambio=true;
+    }
+  });
+  if(cambio)cqDuratopCambioPendiente=true;
+  return cambio;
+}
+function cqObtenerOCrearCodoDuratopCanonico(carga){
+  var mats=getAllMats().filter(function(m){return m&&!isMatDeleted(m.id);});
+  var exacto=mats.find(function(m){return cqEsCodoDuratop45HH63Nombre(m.mat||'');})||null;
+  if(exacto){
+    if(!state.matCodigos)state.matCodigos={};
+    state.matCodigos[exacto.id]=CQ_CODO_DURATOP_45_63_CODIGO;
+    exacto.codigo=CQ_CODO_DURATOP_45_63_CODIGO;
+    return exacto;
+  }
+  var ids=mats.map(function(m){return Number(m.id)||0;});
+  var nuevoId=Math.max(10000,ids.length?Math.max.apply(null,ids)+1:10000);
+  var nombre=String(carga&&carga.materialNameOrigen||'CODO DURATOP 45° HH 63MM').trim()||'CODO DURATOP 45° HH 63MM';
+  var cat=String(carga&&carga.categoriaOrigen||'').trim()||'VARIOS';
+  var nuevo={
+    id:nuevoId,mat:nombre,codigo:CQ_CODO_DURATOP_45_63_CODIGO,
+    prom:0,data:[],catName:cat,
+    comentarios:'Creado automáticamente para reparar identidad DURATOP',
+    autoCreated:true
+  };
+  if(!Array.isArray(state.extraMats))state.extraMats=[];
+  state.extraMats.push(nuevo);
+  if(!state.matCodigos)state.matCodigos={};
+  if(!state.matCategorias)state.matCategorias={};
+  state.matCodigos[nuevoId]=CQ_CODO_DURATOP_45_63_CODIGO;
+  state.matCategorias[nuevoId]=cat;
+  if(!ALL_MATS.some(function(m){return Number(m.id)===Number(nuevoId);}))ALL_MATS.push(nuevo);
+  var catObj=CATS.find(function(c){return c&&!isCatDeleted(c.name)&&String(c.name)===cat;});
+  if(catObj&&!catObj.items.some(function(m){return Number(m.id)===Number(nuevoId);}))catObj.items.push(nuevo);
+  return nuevo;
+}
+function cqRepararCruceCodoDuratopEnCargas(){
+  if(!Array.isArray(state.cargas))return false;
+  var cambio=false;
+  state.cargas.forEach(function(c){
+    if(!c)return;
+    var origen=cqOrigenCargaNormalizado(c);
+    if(origen!=='acopio'&&origen!=='panol')return;
+    var nomOrigen=String(c.materialNameOrigen||'').trim();
+    if(!cqEsCodoDuratop45HH63Nombre(nomOrigen))return;
+    var actual=getAllMats().find(function(m){return Number(m.id)===Number(c.matId);})||null;
+    if(actual && cqEsCodoDuratop45HH63Nombre(actual.mat||'')){
+      c.matName=actual.mat;
+      c.matCode=CQ_CODO_DURATOP_45_63_CODIGO;
+      c.codigoOrigen=CQ_CODO_DURATOP_45_63_CODIGO;
+      return;
+    }
+    var canon=cqObtenerOCrearCodoDuratopCanonico(c);
+    c.matId=canon.id;
+    c.matName=canon.mat;
+    c.matCode=CQ_CODO_DURATOP_45_63_CODIGO;
+    c.codigoOrigen=CQ_CODO_DURATOP_45_63_CODIGO;
+    cambio=true;
+  });
+  if(cambio)cqDuratopCambioPendiente=true;
+  return cambio;
+}
+
 function normalizeState(){
   if(!state.overrides)state.overrides={};
   if(!state.historial)state.historial={};
@@ -8035,6 +8139,11 @@ function normalizeState(){
   aplicarCodigosMateriales();
   aplicarCategoriasMateriales();
   cqForzarCementoHolcimCanonico();
+  aplicarNombresMateriales();
+  aplicarCodigosMateriales();
+  aplicarCategoriasMateriales();
+  cqSanearCodigoCodoDuratop();
+  cqRepararCruceCodoDuratopEnCargas();
   aplicarNombresMateriales();
   aplicarCodigosMateriales();
   aplicarCategoriasMateriales();
@@ -8174,6 +8283,28 @@ async function completarCodigosDesdeAcopioYPanol(forzar){
       }
 
       var codigo=codigos[0];
+
+      // 902001103 es exclusivo del CODO DURATOP 45° HH 63MM.
+      // Si una fuente histórica lo publicó en "Adicional 100 cm", no contaminar Materiales.
+      if(codigo===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Nombre(mat.mat||'')){
+        conflictos++;
+        console.warn('Código DURATOP 902001103 ignorado por nombre incompatible',mat.mat);
+        return;
+      }
+
+      // No completar automáticamente un código que ya pertenece a otro producto incompatible.
+      var choqueCodigo=getAllMats().find(function(otro){
+        return otro && Number(otro.id)!==Number(mat.id) && !isMatDeleted(otro.id)
+          && String(getMatCodigo(otro)||'').trim()===codigo
+          && cqCruceCodoDuratopAdicional(mat.mat,otro.mat);
+      });
+      if(choqueCodigo){
+        conflictos++;
+        console.warn('Código no completado por conflicto de identidad',{
+          codigo:codigo,material:mat.mat,otro:choqueCodigo.mat
+        });
+        return;
+      }
 
       /* El cemento canónico no puede volver al código histórico aunque Acopio/Pañol
          todavía publiquen el dato anterior. */
@@ -8337,6 +8468,7 @@ async function initApp(){
 async function cqReconciliarMaterialesConAcopioActual(){
   if(!window._dbReady||!modoFirebase)return false;
   var cambio=false;
+  if(cqDuratopCambioPendiente){cambio=true;cqDuratopCambioPendiente=false;}
   try{
     var snapA=await window._getDoc(window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3'));
     if(!snapA.exists())return false;
@@ -8513,6 +8645,7 @@ function cqNombreMaterialIntegracion(v){
   return claveMaterialUnificar(String(v||''));
 }
 function cqNombresCompatiblesIntegracion(a,b){
+  if(cqCruceCodoDuratopAdicional(a,b))return false;
   var x=cqNombreMaterialIntegracion(a),y=cqNombreMaterialIntegracion(b);
   if(!x||!y)return true;
   if(x===y)return true;
@@ -8552,6 +8685,17 @@ function buscarMaterialIntegracion(codigo,nombre,origen){
     return getAllMats().find(function(mat){
       return Number(mat.id)===CQ_CEMENTO_CANON_ID && !isMatDeleted(mat.id);
     })||null;
+  }
+
+  // CODO DURATOP 45° HH 63MM: identidad canónica.
+  if(cqEsCodoDuratop45HH63Nombre(nombre) || code===CQ_CODO_DURATOP_45_63_CODIGO){
+    var duratopExacto=mats.find(function(mat){return cqEsCodoDuratop45HH63Nombre(mat.mat||'');})||null;
+    if(duratopExacto && cqEsCodoDuratop45HH63Nombre(nombre)){
+      if(!state.matCodigos)state.matCodigos={};
+      state.matCodigos[duratopExacto.id]=CQ_CODO_DURATOP_45_63_CODIGO;
+      duratopExacto.codigo=CQ_CODO_DURATOP_45_63_CODIGO;
+      return duratopExacto;
+    }
   }
 
   // 1. Nombre exacto primero. Evita que un código duplicado o mal asignado
@@ -8594,7 +8738,11 @@ function buscarMaterialIntegracion(codigo,nombre,origen){
   mats.forEach(function(mat){if(mat.id>=maxId)maxId=mat.id+1;});
   var cat=categoriaAprendidaPara(codigo,nombre)||'VARIOS';
   if(!CATS.some(function(c){return c.name===cat&&!isCatDeleted(c.name);}))cat='VARIOS';
-  var newMat={id:maxId,mat:String(nombre||('Material '+codigo)).trim(),codigo:String(codigo||'').trim(),prom:0,data:[],catName:cat,comentarios:'Creado automáticamente desde '+(origen||'integración'),autoCreated:true};
+  var nombreNuevo=String(nombre||('Material '+codigo)).trim();
+  var codigoNuevo=String(codigo||'').trim();
+  if(cqEsCodoDuratop45HH63Nombre(nombreNuevo))codigoNuevo=CQ_CODO_DURATOP_45_63_CODIGO;
+  if(codigoNuevo===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Nombre(nombreNuevo))codigoNuevo='';
+  var newMat={id:maxId,mat:nombreNuevo,codigo:codigoNuevo,prom:0,data:[],catName:cat,comentarios:'Creado automáticamente desde '+(origen||'integración'),autoCreated:true};
   if(!state.matCategorias)state.matCategorias={};
   state.matCategorias[maxId]=cat;
   if(!state.extraMats)state.extraMats=[];
@@ -8739,6 +8887,8 @@ function aplicarIntegracion(ev){
   if(!mat){
     var codigoEntrante=String(ev.materialCode||'').trim();
     var nombreEntrante=String(ev.materialName||'').trim();
+    if(cqEsCodoDuratop45HH63Nombre(nombreEntrante))codigoEntrante=CQ_CODO_DURATOP_45_63_CODIGO;
+    else if(codigoEntrante===CQ_CODO_DURATOP_45_63_CODIGO)codigoEntrante='';
 
     if(codigoEntrante){
       mat=getAllMats().find(function(m){
@@ -8813,6 +8963,8 @@ function aplicarIntegracion(ev){
   // Si se unificó por nombre y el catálogo todavía no tenía código,
   // copiar inmediatamente el código que viene de Acopio/Pañol/Caja.
   var codigoIntegracion=String(ev.materialCode||'').trim();
+  if(cqEsCodoDuratop45HH63Nombre(ev.materialName||mat.mat||''))codigoIntegracion=CQ_CODO_DURATOP_45_63_CODIGO;
+  else if(codigoIntegracion===CQ_CODO_DURATOP_45_63_CODIGO)codigoIntegracion='';
   if(codigoIntegracion && !String(getMatCodigo(mat)||'').trim()){
     if(!state.matCodigos)state.matCodigos={};
     state.matCodigos[mat.id]=codigoIntegracion;
@@ -8837,7 +8989,7 @@ function aplicarIntegracion(ev){
     sourceMovementId:ev.sourceMovementId||'',
     automatico:true,
     integracionId:ev.integrationId,
-    codigoOrigen:ev.materialCode||'',
+    codigoOrigen:codigoIntegracion,
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||''
   };

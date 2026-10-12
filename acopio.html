@@ -6812,6 +6812,9 @@ function cqIdentidadCannesTripoli(nombreA,nombreB){
   return (aCan&&bCan)||(aTri&&bTri);
 }
 function cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nomCarga,codCarga){
+  if(cqCruceCodoDuratopAdicionalAcopio(nomRet,nomCarga))return false;
+  if((cqEsCodoDuratop45HH63NombreAcopio(nomRet)||cqEsCodoDuratop45HH63NombreAcopio(nomCarga))
+     && !(cqEsCodoDuratop45HH63NombreAcopio(nomRet)&&cqEsCodoDuratop45HH63NombreAcopio(nomCarga)))return false;
   var esp=cqIdentidadCannesTripoli(nomRet,nomCarga);
   if(esp!==null)return esp;
   return !!(
@@ -7512,6 +7515,22 @@ function cqMatNormDirecto(v){
     .replace(/[^a-z0-9]+/g,'')
     .trim();
 }
+
+var CQ_CODO_DURATOP_45_63_CODIGO='902001103';
+function cqEsCodoDuratop45HH63NombreAcopio(v){
+  var n=cqMatNormDirecto(v||'');
+  return n.indexOf('codo')>=0
+    && n.indexOf('duratop')>=0
+    && n.indexOf('45')>=0
+    && n.indexOf('63')>=0;
+}
+function cqEsAdicionalNombreAcopio(v){
+  return cqMatNormDirecto(v||'').indexOf('adicional')>=0;
+}
+function cqCruceCodoDuratopAdicionalAcopio(a,b){
+  return (cqEsCodoDuratop45HH63NombreAcopio(a)&&cqEsAdicionalNombreAcopio(b))
+      || (cqEsCodoDuratop45HH63NombreAcopio(b)&&cqEsAdicionalNombreAcopio(a));
+}
 function cqMatClaveObraDirecto(v){
   var raw=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   var m=raw.match(/(?:lote|l)?\s*(\d+)\s*(?:\/|[- ]*mz|[- ]*manzana)\s*(\d+)/i);
@@ -7520,6 +7539,7 @@ function cqMatClaveObraDirecto(v){
   return m?(Number(m[1])+'/'+Number(m[2])):'';
 }
 function cqMatNombreCompatibleDirecto(a,b){
+  if(cqCruceCodoDuratopAdicionalAcopio(a,b))return false;
   var x=cqMatNormDirecto(a),y=cqMatNormDirecto(b);
   if(!x||!y)return true;
   if(x===y)return true;
@@ -7572,7 +7592,9 @@ function cqMatResolverObraDirecto(data,nombre){
 function cqMatCodigoDirecto(data,mat){
   if(!mat)return '';
   var mapa=data.matCodigos&&typeof data.matCodigos==='object'?data.matCodigos:{};
-  return String(mapa[mat.id]!=null?mapa[mat.id]:(mat.codigo||'')).trim();
+  var code=String(mapa[mat.id]!=null?mapa[mat.id]:(mat.codigo||'')).trim();
+  if(code===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))return '';
+  return code;
 }
 function cqMatTodosDirecto(data){
   var extras=Array.isArray(data.extraMats)?data.extraMats:[];
@@ -7586,6 +7608,17 @@ function cqMatResolverMaterialDirecto(data,ev){
   if(!data.matCodigos||typeof data.matCodigos!=='object')data.matCodigos={};
   if(!data.matCategorias||typeof data.matCategorias!=='object')data.matCategorias={};
 
+  // Limpiar el código 902001103 si alguna versión vieja lo dejó en otro producto.
+  cqMatTodosDirecto(data).forEach(function(x){
+    if(!x)return;
+    var raw=String((data.matCodigos&&data.matCodigos[x.id])!=null?data.matCodigos[x.id]:(x.codigo||'')).trim();
+    if(raw===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(x.mat||'')){
+      data.matCodigos[x.id]='';
+      var ex=(data.extraMats||[]).find(function(m){return String(m.id)===String(x.id);});
+      if(ex)ex.codigo='';
+    }
+  });
+
   var deleted=Array.isArray(data.deletedMatIds)?data.deletedMatIds.map(String):[];
   var mats=cqMatTodosDirecto(data).filter(function(x){return deleted.indexOf(String(x.id))<0;});
   var nombre=String(ev.materialName||'').trim();
@@ -7593,7 +7626,11 @@ function cqMatResolverMaterialDirecto(data,ev){
   var code=String(ev.materialCode||'').trim().toLowerCase();
   var mat=null;
 
-  if(nk){
+  if(cqEsCodoDuratop45HH63NombreAcopio(nombre)){
+    mat=mats.find(function(x){return cqEsCodoDuratop45HH63NombreAcopio(x.mat||'');})||null;
+  }
+
+  if(!mat&&nk){
     mat=mats.find(function(x){return cqMatNormDirecto(x.mat)===nk;})||null;
   }
 
@@ -7634,10 +7671,14 @@ function cqMatResolverMaterialDirecto(data,ev){
       data.extraCats.push({name:cat,color:'#6FA58D',autoCreated:true,source:'acopio'});
     }
 
+    var nombreNuevo=nombre||('Material '+String(ev.materialCode||''));
+    var codigoNuevo=cqCodigoMaterialSeguro(ev.materialCode);
+    if(cqEsCodoDuratop45HH63NombreAcopio(nombreNuevo))codigoNuevo=CQ_CODO_DURATOP_45_63_CODIGO;
+    if(codigoNuevo===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(nombreNuevo))codigoNuevo='';
     mat={
       id:maxId,
-      mat:nombre||('Material '+String(ev.materialCode||'')),
-      codigo:cqCodigoMaterialSeguro(ev.materialCode),
+      mat:nombreNuevo,
+      codigo:codigoNuevo,
       prom:0,
       data:[],
       catName:cat,
@@ -7652,6 +7693,8 @@ function cqMatResolverMaterialDirecto(data,ev){
   }
 
   var incomingCode=cqCodigoMaterialSeguro(ev.materialCode);
+  if(cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))incomingCode=CQ_CODO_DURATOP_45_63_CODIGO;
+  if(incomingCode===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))incomingCode='';
   if(incomingCode&&!cqMatCodigoDirecto(data,mat)){
     data.matCodigos[mat.id]=incomingCode;
     mat.codigo=incomingCode;
@@ -7894,6 +7937,9 @@ async function sincronizarRetiroConMateriales(retiro,activo){
 
   var materialCode=cqCodigoMaterialSeguro(retiro.materialCode!=null?retiro.materialCode:(m&&m.cod)||'');
   var materialName=String(retiro.materialName!=null?retiro.materialName:(m&&m.nom)||'').trim();
+  // 902001103 es exclusivo del CODO DURATOP 45° HH 63MM.
+  if(cqEsCodoDuratop45HH63NombreAcopio(materialName))materialCode=CQ_CODO_DURATOP_45_63_CODIGO;
+  else if(materialCode===CQ_CODO_DURATOP_45_63_CODIGO)materialCode='';
   var materialUnidad=String(retiro.materialUnidad!=null?retiro.materialUnidad:(m&&m.unidad)||'').trim();
   var categoria=String(retiro.subrubro||'').trim()||'VARIOS';
 
