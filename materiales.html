@@ -5305,155 +5305,26 @@ function renombrarExtrasSegunGastos(){
   return cambio;
 }
 
-// CQ 12/10/2026 — BLINDAJE DE ÍNDICES DE OBRA.
-// Las obras que llegan desde Gastos NO pueden quedar solamente "inyectadas" por getObras(),
-// porque su posición depende del orden de config/app. Si mañana se agrega una obra antes de
-// otra, un obraIdx histórico puede terminar apuntando a otra obra y todos los números parecen
-// cambiar. Por eso, una vez vista una obra nueva de Gastos, se fija para siempre al final de
-// extraObras. Las obras futuras se agregan detrás y nunca desplazan índices existentes.
-function estabilizarObrasGastosMateriales(){
-  if(!state||!Array.isArray(state.extraObras)||!Array.isArray(obrasGastosMateriales))return false;
-  var cambio=false;
-  var existentes=OBRAS_BASE.concat(state.extraObras).slice();
-
-  obrasGastosActivasMateriales().forEach(function(g){
-    var nombre=String(g.label||g.short||g.id||'').trim();
-    if(!nombre)return;
-    var clave=claveLoteMz(nombre);
-    var existe=existentes.some(function(o){
-      if(clave)return claveLoteMz(o)===clave;
-      return String(o||'').trim().toLowerCase()===nombre.toLowerCase();
-    });
-    if(!existe){
-      state.extraObras.push(nombre);
-      existentes.push(nombre);
-      cambio=true;
-    }
-  });
-  return cambio;
-}
-
-function indiceObraEstableMateriales(nombre){
-  nombre=String(nombre||'').trim();
-  if(!nombre)return -1;
-  var clave=claveLoteMz(nombre);
-  var normal=normalizarClaveIntegracion(nombre);
-  var obras=OBRAS_BASE.map(function(o,i){return nombreObraUnificadoMateriales(o,i);})
-    .concat((state.extraObras||[]).map(function(o){
-      var g=obraGastosPorClaveMateriales(claveLoteMz(o));
-      return g?(g.label||g.short||g.id):o;
-    }));
-  for(var i=0;i<obras.length;i++){
-    if(clave && claveLoteMz(obras[i])===clave)return i;
-    if(!clave && normal && normalizarClaveIntegracion(obras[i])===normal)return i;
-  }
-  return -1;
-}
-
-// Antes de mover las cargas, usamos sus nombres históricos para reconstruir cómo debe
-// desplazarse cualquier dato que todavía esté indexado por número de obra (overrides, historial,
-// terminadas y orden). El remapeo sólo se aplica cuando para un índice viejo hay una única obra
-// destino inequívoca; ante cualquier ambigüedad no toca ese índice.
-function reubicarEstadoIndexadoPorCargasMateriales(){
-  if(!state||!Array.isArray(state.cargas))return false;
-  var destinos={};
-  state.cargas.forEach(function(c){
-    if(!c)return;
-    var viejo=Number(c.obraIdx);
-    if(!Number.isInteger(viejo)||viejo<0)return;
-    var fuente=String(c.obraNameOrigen||c.obraName||'').trim();
-    if(!fuente)return;
-    var nuevo=indiceObraEstableMateriales(fuente);
-    if(nuevo<0)return;
-    if(!destinos[viejo])destinos[viejo]={};
-    destinos[viejo][nuevo]=true;
-  });
-
-  var mapa={};
-  Object.keys(destinos).forEach(function(k){
-    var ds=Object.keys(destinos[k]);
-    if(ds.length===1){
-      var viejo=Number(k),nuevo=Number(ds[0]);
-      if(viejo!==nuevo)mapa[viejo]=nuevo;
-    }
-  });
-  if(!Object.keys(mapa).length)return false;
-
-  function remapDiccionarioPorSufijo(origen){
-    var salida={};
-    Object.keys(origen||{}).forEach(function(k){
-      var m=String(k).match(/^(.*)-(\d+)$/);
-      if(!m){salida[k]=origen[k];return;}
-      var idx=Number(m[2]);
-      var nk=m[1]+'-'+(Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx);
-      // Construcción simultánea: si hubiera una colisión inesperada, conservar el valor
-      // que ya pertenece al destino para no pisar información silenciosamente.
-      if(!Object.prototype.hasOwnProperty.call(salida,nk))salida[nk]=origen[k];
-    });
-    return salida;
-  }
-
-  state.overrides=remapDiccionarioPorSufijo(state.overrides||{});
-  state.historial=remapDiccionarioPorSufijo(state.historial||{});
-
-  if(state.obrasTerminadas){
-    var nt={};
-    Object.keys(state.obrasTerminadas).forEach(function(k){
-      var idx=Number(k),nk=Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx;
-      if(state.obrasTerminadas[k])nt[nk]=true;
-    });
-    state.obrasTerminadas=nt;
-  }
-
-  if(Array.isArray(state.obraOrder)){
-    var vistos={};
-    state.obraOrder=state.obraOrder.map(function(idx){
-      idx=Number(idx);
-      return Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx;
-    }).filter(function(idx){
-      if(vistos[idx])return false;
-      vistos[idx]=true;return true;
-    });
-  }
-  return true;
-}
-
-// Reubica cargas por la IDENTIDAD guardada de la obra, nunca por la posición actual.
-// obraNameOrigen es la fuente más confiable para integraciones; en cargas manuales usamos obraName.
-function reubicarCargasPorNombreEstableMateriales(){
-  if(!state||!Array.isArray(state.cargas))return false;
-  var cambio=false;
-  var obras=getObras();
-  state.cargas.forEach(function(c){
-    if(!c)return;
-    var fuente=String(c.obraNameOrigen||c.obraName||'').trim();
-    if(!fuente)return;
-    var idx=indiceObraEstableMateriales(fuente);
-    if(idx<0)return;
-    if(Number(c.obraIdx)!==idx){c.obraIdx=idx;cambio=true;}
-    var nuevo=obras[idx]||fuente;
-    if(nuevo && String(c.obraName||'')!==String(nuevo)){c.obraName=nuevo;cambio=true;}
-  });
-  return cambio;
-}
-
-// Unifica el nombre guardado dentro de cada carga SIN usar obraIdx como identidad.
-// Antes se tomaba primero el índice y eso podía renombrar una carga con la obra equivocada
-// después de agregar obras nuevas en Gastos.
+// Unifica también el nombre guardado dentro de cada carga. Así una misma obra
+// no aparece a veces como "5/98" y otras como "5/98 (Ramón)" cuando Gastos
+// ya tiene definido el nombre completo. La identidad sigue siendo lote/manzana.
 function normalizarNombresObraCargasMateriales(){
   if(!state||!Array.isArray(state.cargas))return false;
-  var cambio=false;
-  cambio=reubicarCargasPorNombreEstableMateriales()||cambio;
   var obras=getObras();
+  var cambio=false;
   state.cargas.forEach(function(c){
     if(!c)return;
+    var nuevo='';
     var idx=Number(c.obraIdx);
-    if(Number.isInteger(idx)&&idx>=0&&idx<obras.length){
-      var nuevo=obras[idx]||'';
-      if(nuevo && String(c.obraName||'')!==String(nuevo)){
-        c.obraName=nuevo;
-        cambio=true;
-      }
+    if(Number.isInteger(idx)&&idx>=0&&idx<obras.length)nuevo=obras[idx]||'';
+    if(!nuevo){
+      var clave=claveLoteMz(c.obraNameOrigen||c.obraName||'');
+      var g=obraGastosPorClaveMateriales(clave);
+      if(g)nuevo=g.label||g.short||g.id||'';
+    }
+    if(nuevo && String(c.obraName||'')!==String(nuevo)){
+      c.obraName=nuevo;
+      cambio=true;
     }
   });
   return cambio;
@@ -7456,10 +7327,6 @@ var CATS = [
 var ALL_MATS = CATS.reduce(function(a,c){return a.concat(c.items);}, []);
 CATS.forEach(function(c){ if(!c._baseName)c._baseName=c.name; });
 
-// CQ 13/10/2026 — IDs del catálogo base real. Se usa para distinguir
-// materiales nativos de fichas dinámicas creadas por Acopio/Pañol/Cajas.
-var CQ_BASE_MAT_IDS=new Set(ALL_MATS.map(function(m){return String(m.id);}));
-
 function categoriaVisiblePorBase(baseName){
   return (state.catRenames&&state.catRenames[baseName])||baseName;
 }
@@ -7539,33 +7406,6 @@ function categoriaAprendidaPara(codigo,nombre){
 
 
 function claveMaterialUnificar(nombre){return String(nombre||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'').trim();}
-
-/* CQ 12/10/2026 — blindaje de identidad DURATOP.
-   El código 902001103 pertenece a CODO DURATOP 45° HH 63MM.
-   Nunca debe fusionarse ni resolverse contra "Adicional 100 cm" u otro producto. */
-var CQ_CODO_DURATOP_45_63_CODIGO='902001103';
-function cqEsCodoDuratop45HH63Nombre(v){
-  var n=claveMaterialUnificar(v||'');
-  return n.indexOf('codo')>=0
-    && n.indexOf('duratop')>=0
-    && n.indexOf('45')>=0
-    && n.indexOf('63')>=0;
-}
-function cqEsAdicionalNombre(v){
-  var n=claveMaterialUnificar(v||'');
-  return n.indexOf('adicional')>=0;
-}
-function cqCruceCodoDuratopAdicional(a,b){
-  return (cqEsCodoDuratop45HH63Nombre(a)&&cqEsAdicionalNombre(b))
-      || (cqEsCodoDuratop45HH63Nombre(b)&&cqEsAdicionalNombre(a));
-}
-function cqNombreProductoCompatibleSeguro(a,b){
-  if(cqCruceCodoDuratopAdicional(a,b))return false;
-  var x=claveMaterialUnificar(a),y=claveMaterialUnificar(b);
-  if(!x||!y)return true;
-  if(x===y)return true;
-  return null; // dejar que la lógica histórica evalúe los demás casos
-}
 function cqCodigoPresentacionInvalido(v){
   var x=String(v==null?'':v).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
   return /^\d+(?:[.,]\d+)?\s*(pallet|pallets|palet|palets|bulto|bultos|caja|cajas|bolsa|bolsas|unidad|unidades|u|un|m2|m²|mts?|metros?)$/.test(x);
@@ -7573,7 +7413,6 @@ function cqCodigoPresentacionInvalido(v){
 function codigoMaterialUnificar(mat){
   var raw=String(getMatCodigo(mat)||(mat&&mat.codigo)||'').trim();
   if(cqCodigoPresentacionInvalido(raw))return '';
-  if(raw===CQ_CODO_DURATOP_45_63_CODIGO && mat && !cqEsCodoDuratop45HH63Nombre(mat.mat||''))return '';
   return raw.toLowerCase().replace(/\s+/g,'');
 }
 function baseEstaticaMaterial(matId,obraIdx){if(typeof CALCULATED_MATS!=='undefined'&&CALCULATED_MATS[matId])return 0;var key=matId+'-'+obraIdx;if(state.overrides&&state.overrides[key]!=null)return parseFloat(state.overrides[key])||0;var mat=ALL_MATS.find(function(m){return m.id===matId;});return mat&&mat.data&&mat.data[obraIdx]!=null?(parseFloat(mat.data[obraIdx])||0):0;}
@@ -7594,7 +7433,7 @@ function buscarCoincidenciaMaterial(mat,excluirId){
     if(Number(x.id)===Number(excluirId)||isMatDeleted(x.id))return false;
     var esp=cqMismoProductoEspecial(mat,x);
     if(esp===false)return false;
-    if(ck&&codigoMaterialUnificar(x)===ck){if(cqCruceCodoDuratopAdicional(mat.mat,x.mat))return false;return true;}
+    if(ck&&codigoMaterialUnificar(x)===ck)return true;
     return nk&&claveMaterialUnificar(x.mat)===nk;
   })||null;
 }
@@ -7607,7 +7446,7 @@ function consolidarMaterialesDuplicados(){
     if(ck&&vistosCodigo[ck]){
       var candidato=vistosCodigo[ck];
       var esp=cqMismoProductoEspecial(m,candidato);
-      if(esp!==false && !cqCruceCodoDuratopAdicional(m.mat,candidato.mat))otro=candidato;
+      if(esp!==false)otro=candidato;
     }
     if(!otro&&nk&&vistosNombre[nk])otro=vistosNombre[nk];
     if(otro&&Number(otro.id)!==Number(m.id)){
@@ -8025,451 +7864,6 @@ function cqForzarCementoHolcimCanonico(){
   return true;
 }
 
-
-var cqDuratopCambioPendiente=false;
-function cqSanearCodigoCodoDuratop(){
-  if(!state.matCodigos)state.matCodigos={};
-  var cambio=false;
-  getAllMats().forEach(function(m){
-    if(!m||isMatDeleted(m.id))return;
-    var code=String((state.matCodigos&&state.matCodigos[m.id])||m.codigo||'').trim();
-    if(code===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Nombre(m.mat||'')){
-      state.matCodigos[m.id]='';
-      m.codigo='';
-      var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(m.id);});
-      if(ex)ex.codigo='';
-      cambio=true;
-    }
-  });
-  if(cambio)cqDuratopCambioPendiente=true;
-  return cambio;
-}
-function cqObtenerOCrearCodoDuratopCanonico(carga){
-  var mats=getAllMats().filter(function(m){return m&&!isMatDeleted(m.id);});
-  var exacto=mats.find(function(m){return cqEsCodoDuratop45HH63Nombre(m.mat||'');})||null;
-  if(exacto){
-    if(!state.matCodigos)state.matCodigos={};
-    state.matCodigos[exacto.id]=CQ_CODO_DURATOP_45_63_CODIGO;
-    exacto.codigo=CQ_CODO_DURATOP_45_63_CODIGO;
-    return exacto;
-  }
-  var ids=mats.map(function(m){return Number(m.id)||0;});
-  var nuevoId=Math.max(10000,ids.length?Math.max.apply(null,ids)+1:10000);
-  var nombre=String(carga&&carga.materialNameOrigen||'CODO DURATOP 45° HH 63MM').trim()||'CODO DURATOP 45° HH 63MM';
-  var cat=String(carga&&carga.categoriaOrigen||'').trim()||'VARIOS';
-  var nuevo={
-    id:nuevoId,mat:nombre,codigo:CQ_CODO_DURATOP_45_63_CODIGO,
-    prom:0,data:[],catName:cat,
-    comentarios:'Creado automáticamente para reparar identidad DURATOP',
-    autoCreated:true
-  };
-  if(!Array.isArray(state.extraMats))state.extraMats=[];
-  state.extraMats.push(nuevo);
-  if(!state.matCodigos)state.matCodigos={};
-  if(!state.matCategorias)state.matCategorias={};
-  state.matCodigos[nuevoId]=CQ_CODO_DURATOP_45_63_CODIGO;
-  state.matCategorias[nuevoId]=cat;
-  if(!ALL_MATS.some(function(m){return Number(m.id)===Number(nuevoId);}))ALL_MATS.push(nuevo);
-  var catObj=CATS.find(function(c){return c&&!isCatDeleted(c.name)&&String(c.name)===cat;});
-  if(catObj&&!catObj.items.some(function(m){return Number(m.id)===Number(nuevoId);}))catObj.items.push(nuevo);
-  return nuevo;
-}
-
-/* CQ 12/10/2026 — reconciliación histórica DURATOP desde Acopio.
-   Acopio conserva en cada retiro el materialName/materialCode elegido al momento
-   de registrar el movimiento. Esa instantánea es la fuente de verdad para reparar
-   cruces históricos causados por códigos duplicados/unificaciones antiguas. */
-function cqReconciliarDuratopDesdeRetirosAcopio(dbA){
-  if(!dbA||!Array.isArray(dbA.acopios))return false;
-  var cambio=false;
-  var fuentes=[];
-
-  function normObra(v){
-    try{return cqClaveObraIntegracion(v||'');}catch(e){return String(v||'').trim().toLowerCase();}
-  }
-  function materialAcopio(a,r){
-    var m=(a&&Array.isArray(a.mats))?a.mats.find(function(x){return String(x&&x.id)===String(r&&r.matId);}):null;
-    var nombre=String(r&&r.materialName!=null?r.materialName:(m&&m.nom)||'').trim();
-    var codigo=String(r&&r.materialCode!=null?r.materialCode:(m&&m.cod)||'').trim();
-    var unidad=String(r&&r.materialUnidad!=null?r.materialUnidad:(m&&m.unidad)||'').trim();
-    return {nombre:nombre,codigo:codigo,unidad:unidad};
-  }
-  function obtenerOCrearExacto(info){
-    if(cqEsCodoDuratop45HH63Nombre(info.nombre))return cqObtenerOCrearCodoDuratopCanonico({materialNameOrigen:info.nombre});
-    var nk=cqNombreExactoCodigo(info.nombre||'');
-    var exacto=getAllMats().find(function(m){return !isMatDeleted(m.id)&&cqNombreExactoCodigo(m.mat||'')===nk;})||null;
-    if(exacto)return exacto;
-    if(!info.nombre)return null;
-    var ids=getAllMats().map(function(m){return Number(m.id)||0;});
-    var nuevoId=(ids.length?Math.max.apply(null,ids):10000)+1;
-    var codigo=String(info.codigo||'').trim();
-    if(codigo===CQ_CODO_DURATOP_45_63_CODIGO&&!cqEsCodoDuratop45HH63Nombre(info.nombre))codigo='';
-    var cat=String(info.categoria||'VARIOS').trim()||'VARIOS';
-    var nuevo={id:nuevoId,mat:info.nombre,codigo:codigo,prom:0,data:[],catName:cat,comentarios:'Creado automáticamente al reconciliar Acopio',autoCreated:true};
-    if(!Array.isArray(state.extraMats))state.extraMats=[];
-    state.extraMats.push(nuevo);
-    if(!state.matCodigos)state.matCodigos={};
-    if(codigo)state.matCodigos[nuevoId]=codigo;
-    if(!state.matCategorias)state.matCategorias={};
-    state.matCategorias[nuevoId]=cat;
-    var catObj=CATS.find(function(c){return c.name===cat&&!isCatDeleted(c.name);});
-    if(catObj&&!catObj.items.some(function(x){return Number(x.id)===Number(nuevoId);}))catObj.items.push(nuevo);
-    if(!ALL_MATS.some(function(x){return Number(x.id)===Number(nuevoId);}))ALL_MATS.push(nuevo);
-    return nuevo;
-  }
-
-  dbA.acopios.forEach(function(a){
-    (Array.isArray(a&&a.retiros)?a.retiros:[]).forEach(function(r){
-      if(!r||r.id==null||a.id==null)return;
-      var mm=materialAcopio(a,r);
-      var esCodo=cqEsCodoDuratop45HH63Nombre(mm.nombre);
-      var esAdic=cqEsAdicionalNombre(mm.nombre);
-      if(!esCodo&&!esAdic)return;
-      fuentes.push({
-        iid:'acopio_'+String(a.id)+'_'+String(r.id),
-        mov:String(r.id),
-        obra:String(r.obraHistorica||r.obraName||''),
-        fecha:String(r.fecha||''),
-        qty:Number(r.qty)||0,
-        nombre:mm.nombre,
-        codigo:mm.codigo,
-        unidad:mm.unidad,
-        categoria:String(r.subrubro||'VARIOS').trim()||'VARIOS',
-        esCodo:esCodo,
-        esAdic:esAdic,
-        debeExistir:r.cargarMateriales===true || String(r.materialesSyncEstado||'')==='ok' || String(r.materialesSyncEstado||'')==='pendiente'
-      });
-    });
-  });
-  if(!fuentes.length)return false;
-
-  // Totales originales de Acopio por obra, usados sólo para detectar overrides contaminados.
-  var sumCodo={},sumAdic={};
-  function addSum(obj,key,val){obj[key]=(obj[key]||0)+(Number(val)||0);}
-
-  fuentes.forEach(function(f){
-    var obraKey=normObra(f.obra);
-    var idx=(state.cargas||[]).findIndex(function(c){return String(c&&c.integracionId||'')===f.iid;});
-
-    if(idx<0){
-      var movMatches=[];
-      (state.cargas||[]).forEach(function(c,i){
-        if(cqOrigenCargaNormalizado(c)!=='acopio')return;
-        if(String(c.sourceMovementId||'')!==f.mov)return;
-        if(f.obra && normObra(c.obraNameOrigen||c.obraName||'') && normObra(c.obraNameOrigen||c.obraName||'')!==obraKey)return;
-        movMatches.push(i);
-      });
-      if(movMatches.length===1)idx=movMatches[0];
-    }
-
-    // Respaldo para cargas históricas que perdieron los IDs auxiliares.
-    if(idx<0){
-      var huella=[];
-      (state.cargas||[]).forEach(function(c,i){
-        if(cqOrigenCargaNormalizado(c)!=='acopio')return;
-        if(f.obra && normObra(c.obraNameOrigen||c.obraName||'')!==obraKey)return;
-        if(Math.abs((Number(c.qty)||0)-f.qty)>0.000001)return;
-        if(f.fecha&&c.fecha&&String(c.fecha)!==f.fecha)return;
-        var matAct=getAllMats().find(function(m){return Number(m.id)===Number(c.matId);});
-        var nomAct=String(c.materialNameOrigen||c.matName||(matAct&&matAct.mat)||'');
-        if(!(cqEsCodoDuratop45HH63Nombre(nomAct)||cqEsAdicionalNombre(nomAct)))return;
-        huella.push(i);
-      });
-      if(huella.length===1)idx=huella[0];
-    }
-
-    var debe=f.debeExistir || idx>=0;
-    if(!debe)return;
-    var target=obtenerOCrearExacto(f);
-    if(!target)return;
-    var obraIdx=-1;
-    try{obraIdx=buscarObraIntegracion(f.obra);}catch(e){}
-    if(obraIdx<0 && idx>=0)obraIdx=Number(state.cargas[idx].obraIdx);
-    if(obraIdx<0)return;
-
-    var entry={
-      id:idx>=0?state.cargas[idx].id:(Date.now()+Math.floor(Math.random()*100000)),
-      obraIdx:obraIdx,
-      obraName:getObras()[obraIdx]||f.obra,
-      matId:target.id,
-      matName:target.mat,
-      qty:f.qty,
-      nota:'Automático · Acopio',
-      fecha:f.fecha||todayISO(),
-      fechaHoraCarga:idx>=0?(state.cargas[idx].fechaHoraCarga||state.cargas[idx].id||Date.now()):Date.now(),
-      origen:'acopio',
-      sourceMovementId:f.mov,
-      automatico:true,
-      integracionId:f.iid,
-      codigoOrigen:f.esCodo?CQ_CODO_DURATOP_45_63_CODIGO:String(f.codigo||''),
-      materialNameOrigen:f.nombre,
-      obraNameOrigen:f.obra
-    };
-    if(f.esCodo){
-      if(!state.matCodigos)state.matCodigos={};
-      state.matCodigos[target.id]=CQ_CODO_DURATOP_45_63_CODIGO;
-      target.codigo=CQ_CODO_DURATOP_45_63_CODIGO;
-    }
-
-    if(idx>=0){
-      var prev=state.cargas[idx];
-      var diff=Number(prev.matId)!==Number(entry.matId)
-        || String(prev.matName||'')!==String(entry.matName||'')
-        || String(prev.integracionId||'')!==entry.integracionId
-        || String(prev.materialNameOrigen||'')!==f.nombre
-        || String(prev.codigoOrigen||'')!==entry.codigoOrigen
-        || Number(prev.obraIdx)!==Number(entry.obraIdx);
-      if(diff){state.cargas[idx]=Object.assign({},prev,entry);cambio=true;}
-    }else{
-      state.cargas.push(entry);cambio=true;
-    }
-
-    var k=String(obraIdx);
-    if(f.esCodo)addSum(sumCodo,k,f.qty);
-    if(f.esAdic)addSum(sumAdic,k,f.qty);
-  });
-
-  // Si la antigua unificación por código movió un valor fijo/override del CODO al
-  // "Adicional", limpiarlo sólo cuando la evidencia es inequívoca: no hay retiro
-  // real del Adicional en esa obra y el override coincide exactamente con el total
-  // DURATOP de Acopio. El CODO ya queda reconstruido desde sus retiros automáticos.
-  var adicionales=getAllMats().filter(function(m){return m&&!isMatDeleted(m.id)&&cqEsAdicionalNombre(m.mat||'');});
-  adicionales.forEach(function(ad){
-    Object.keys(sumCodo).forEach(function(k){
-      var srcC=Number(sumCodo[k]||0),srcA=Number(sumAdic[k]||0);
-      if(!(srcC>0)||srcA>0)return;
-      var key=String(ad.id)+'-'+String(k);
-      if(state.overrides&&state.overrides[key]!=null){
-        var ov=Number(state.overrides[key])||0;
-        var manual=(state.cargas||[]).some(function(c){
-          return Number(c.matId)===Number(ad.id)&&Number(c.obraIdx)===Number(k)&&cqOrigenCargaNormalizado(c)!=='acopio';
-        });
-        if(!manual && Math.abs(ov-srcC)<0.000001){
-          delete state.overrides[key];
-          if(state.historial)delete state.historial[key];
-          cambio=true;
-        }
-      }
-    });
-  });
-
-  if(cambio){
-    cqConsolidarCargasAutomaticasDuplicadas();
-    cqSanearCodigoCodoDuratop();
-  }
-  return cambio;
-}
-
-
-/* CQ 12/10/2026 — limpieza DEFINITIVA del residuo histórico "Adicional de 100 cm".
-   La antigua unificación por código pudo copiar valores base/overrides del CODO al
-   Adicional. getVal() suma base/override + cargas, por lo que reparar sólo cargas
-   no alcanza. Este saneamiento corre UNA sola vez: anula exclusivamente la base
-   histórica contaminada del Adicional de 100 cm y conserva todas sus cargas reales. */
-function cqEsAdicional100CmExacto(v){
-  var n=claveMaterialUnificar(v||'');
-  return n==='adicionalde100cm' || n==='adicional100cm' || n==='adicionalde100cms' || n==='adicional100cms';
-}
-function cqLimpiarBaseHistoricaAdicional100UnaVez(){
-  if(state&&state._cqFixAdicional100BaseV1===true)return false;
-  if(!state.overrides)state.overrides={};
-  if(!state.historial)state.historial={};
-  var cambio=false;
-  var obras=(typeof getObras==='function'?getObras():[])||[];
-  var mats=(typeof getAllMats==='function'?getAllMats():ALL_MATS||[]).filter(function(m){
-    return m && !isMatDeleted(m.id) && cqEsAdicional100CmExacto(m.mat||'');
-  });
-
-  mats.forEach(function(mat){
-    // El código 902001103 nunca pertenece al Adicional.
-    var cod=String(getMatCodigo(mat)||mat.codigo||'').trim();
-    if(cod===CQ_CODO_DURATOP_45_63_CODIGO){
-      if(state.matCodigos)delete state.matCodigos[mat.id];
-      mat.codigo='';
-      var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
-      if(ex)ex.codigo='';
-      cambio=true;
-    }
-
-    // Forzar base 0 en todas las obras. Las cargas reales NO se tocan y getVal()
-    // las seguirá sumando normalmente encima de este cero.
-    obras.forEach(function(_obra,obraIdx){
-      var key=String(mat.id)+'-'+String(obraIdx);
-      var teniaOverride=state.overrides[key]!=null && Number(state.overrides[key])!==0;
-      var teniaBase=Array.isArray(mat.data) && mat.data[obraIdx]!=null && Number(mat.data[obraIdx])!==0;
-      if(teniaOverride || teniaBase){
-        state.overrides[key]=0;
-        if(state.historial&&state.historial[key])delete state.historial[key];
-        cambio=true;
-      }else if(state.overrides[key]==null && teniaBase){
-        state.overrides[key]=0;
-        cambio=true;
-      }
-    });
-  });
-
-  state._cqFixAdicional100BaseV1=true;
-  state._cqFixAdicional100BaseAt=new Date().toISOString();
-  cambio=true; // persistir también el marcador para que no vuelva a limpiar valores futuros.
-  return cambio;
-}
-
-function cqRepararCruceCodoDuratopEnCargas(){
-  if(!Array.isArray(state.cargas))return false;
-  var cambio=false;
-  state.cargas.forEach(function(c){
-    if(!c)return;
-    var origen=cqOrigenCargaNormalizado(c);
-    if(origen!=='acopio'&&origen!=='panol')return;
-    var nomOrigen=String(c.materialNameOrigen||'').trim();
-    if(!cqEsCodoDuratop45HH63Nombre(nomOrigen))return;
-    var actual=getAllMats().find(function(m){return Number(m.id)===Number(c.matId);})||null;
-    if(actual && cqEsCodoDuratop45HH63Nombre(actual.mat||'')){
-      c.matName=actual.mat;
-      c.matCode=CQ_CODO_DURATOP_45_63_CODIGO;
-      c.codigoOrigen=CQ_CODO_DURATOP_45_63_CODIGO;
-      return;
-    }
-    var canon=cqObtenerOCrearCodoDuratopCanonico(c);
-    c.matId=canon.id;
-    c.matName=canon.mat;
-    c.matCode=CQ_CODO_DURATOP_45_63_CODIGO;
-    c.codigoOrigen=CQ_CODO_DURATOP_45_63_CODIGO;
-    cambio=true;
-  });
-  if(cambio)cqDuratopCambioPendiente=true;
-  return cambio;
-}
-
-// CQ 13/10/2026 — integridad de catálogo para cargas automáticas.
-// Una carga no puede quedar apuntando a un matId sin ficha de producto: Catálogo y
-// Reportes recorren CATS/ALL_MATS y, si falta extraMats, la cantidad existe pero queda invisible.
-function cqEsCargaAutomaticaMateriales(c){
-  if(!c)return false;
-  if(c.automatico===true||c.integracionId)return true;
-  var o='';
-  try{o=cqOrigenCargaNormalizado(c);}catch(_e){o=String(c.origen||c.source||'').toLowerCase();}
-  return o==='acopio'||o==='panol'||o==='caja_chica'||o==='cq_caja_gerencia'||o==='caja_gerencia';
-}
-function cqRepararCatalogoHuerfanoEnData(data){
-  if(!data||typeof data!=='object')return false;
-  if(!Array.isArray(data.cargas))data.cargas=[];
-  if(!Array.isArray(data.extraMats))data.extraMats=[];
-  if(!Array.isArray(data.extraCats))data.extraCats=[];
-  if(!Array.isArray(data.deletedMatIds))data.deletedMatIds=[];
-  if(!data.matCodigos||typeof data.matCodigos!=='object')data.matCodigos={};
-  if(!data.matCategorias||typeof data.matCategorias!=='object')data.matCategorias={};
-  if(!data.matNombres||typeof data.matNombres!=='object')data.matNombres={};
-
-  var cambio=false;
-  var extras={};
-  data.extraMats.forEach(function(m){if(m&&m.id!=null)extras[String(m.id)]=m;});
-
-  data.cargas.forEach(function(c){
-    if(!c||c.matId==null||!cqEsCargaAutomaticaMateriales(c))return;
-    var sid=String(c.matId);
-    var idNum=Number(c.matId);
-    var idVal=Number.isFinite(idNum)?idNum:c.matId;
-
-    // Una carga activa siempre debe volver visible su material.
-    var antes=(data.deletedMatIds||[]).length;
-    data.deletedMatIds=(data.deletedMatIds||[]).filter(function(id){return String(id)!==sid;});
-    if(data.deletedMatIds.length!==antes)cambio=true;
-
-    // Los materiales base no necesitan extraMats, pero sí conservamos metadatos faltantes.
-    var esBase=(typeof CQ_BASE_MAT_IDS!=='undefined'&&CQ_BASE_MAT_IDS.has(sid));
-    var nombre=String(c.matName||c.materialNameOrigen||'').trim();
-    var cat=String(data.matCategorias[sid]||data.matCategorias[c.matId]||c.categoriaOrigen||'VARIOS').trim()||'VARIOS';
-    var code=String(data.matCodigos[sid]||data.matCodigos[c.matId]||c.codigoOrigen||c.matCode||'').trim();
-
-    if(!esBase && !extras[sid]){
-      var origen='integración';
-      try{origen=cqOrigenCargaNormalizado(c)||origen;}catch(_e){}
-      var nuevo={
-        id:idVal,
-        mat:nombre||('Material '+sid),
-        codigo:code,
-        prom:0,
-        data:[],
-        catName:cat,
-        comentarios:'Recuperado automáticamente desde '+origen,
-        autoCreated:true,
-        source:origen,
-        repairedAt:new Date().toISOString()
-      };
-      data.extraMats.push(nuevo);
-      extras[sid]=nuevo;
-      cambio=true;
-    }
-
-    var ex=extras[sid];
-    if(ex){
-      if(!String(ex.mat||'').trim()&&nombre){ex.mat=nombre;cambio=true;}
-      if(!String(ex.catName||'').trim()&&cat){ex.catName=cat;cambio=true;}
-      if(!String(ex.codigo||'').trim()&&code){ex.codigo=code;cambio=true;}
-    }
-    if(cat&&!data.matCategorias[sid]&&!data.matCategorias[c.matId]){data.matCategorias[idVal]=cat;cambio=true;}
-    if(code&&!data.matCodigos[sid]&&!data.matCodigos[c.matId]){data.matCodigos[idVal]=code;cambio=true;}
-
-    if(cat && !data.extraCats.some(function(x){return String(x&&x.name||'').toLowerCase()===cat.toLowerCase();})){
-      // Sólo crear una categoría dinámica si no existe en el catálogo base actual.
-      var existeBaseCat=false;
-      try{existeBaseCat=CATS.some(function(x){return String(x&&x.name||'').toLowerCase()===cat.toLowerCase();});}catch(_e){}
-      if(!existeBaseCat){
-        data.extraCats.push({name:cat,color:'#6FA58D',autoCreated:true,source:'integracion'});
-        cambio=true;
-      }
-    }
-  });
-  return cambio;
-}
-
-// Al guardar mientras entra una integración externa, preservar también la ficha del
-// producto remoto. Antes se fusionaban sólo las cargas, pudiendo borrar extraMats.
-function cqFusionarCatalogoRemotoParaCargas(dest,remoto,cargasAutomaticas){
-  if(!dest||!remoto)return false;
-  if(!Array.isArray(dest.extraMats))dest.extraMats=[];
-  if(!Array.isArray(dest.extraCats))dest.extraCats=[];
-  if(!dest.matCodigos||typeof dest.matCodigos!=='object')dest.matCodigos={};
-  if(!dest.matCategorias||typeof dest.matCategorias!=='object')dest.matCategorias={};
-  if(!dest.matNombres||typeof dest.matNombres!=='object')dest.matNombres={};
-
-  var ids=new Set((cargasAutomaticas||[]).filter(Boolean).map(function(c){return String(c.matId);}));
-  var cambio=false;
-  var localIds=new Set(dest.extraMats.filter(Boolean).map(function(m){return String(m.id);}));
-  (Array.isArray(remoto.extraMats)?remoto.extraMats:[]).forEach(function(m){
-    if(!m||m.id==null||!ids.has(String(m.id))||localIds.has(String(m.id)))return;
-    dest.extraMats.push(JSON.parse(JSON.stringify(m)));
-    localIds.add(String(m.id));
-    cambio=true;
-  });
-
-  ['matCodigos','matCategorias','matNombres'].forEach(function(k){
-    var src=(remoto[k]&&typeof remoto[k]==='object')?remoto[k]:{};
-    ids.forEach(function(id){
-      if((dest[k][id]==null||dest[k][id]==='') && src[id]!=null && src[id]!==''){
-        dest[k][id]=src[id]; cambio=true;
-      }
-    });
-  });
-
-  var catsNecesarias=new Set();
-  ids.forEach(function(id){
-    var cat=dest.matCategorias[id]||(remoto.matCategorias&&remoto.matCategorias[id]);
-    if(cat)catsNecesarias.add(String(cat).toLowerCase());
-  });
-  var catsLocales=new Set(dest.extraCats.filter(Boolean).map(function(c){return String(c.name||'').toLowerCase();}));
-  (Array.isArray(remoto.extraCats)?remoto.extraCats:[]).forEach(function(c){
-    var nk=String(c&&c.name||'').toLowerCase();
-    if(!nk||!catsNecesarias.has(nk)||catsLocales.has(nk))return;
-    dest.extraCats.push(JSON.parse(JSON.stringify(c)));
-    catsLocales.add(nk); cambio=true;
-  });
-
-  if(cqRepararCatalogoHuerfanoEnData(dest))cambio=true;
-  return cambio;
-}
-
 function normalizeState(){
   if(!state.overrides)state.overrides={};
   if(!state.historial)state.historial={};
@@ -8489,10 +7883,6 @@ function normalizeState(){
   if(!state.categoriaMemoria)state.categoriaMemoria={};
   if(!state.ignoredIntegrationIds)state.ignoredIntegrationIds=[];
   if(!state.reporteComentarios)state.reporteComentarios={};
-
-  // Si una sincronización anterior conservó la carga pero perdió la ficha dinámica,
-  // reconstruirla antes de poblar CATS/ALL_MATS.
-  cqRepararCatalogoHuerfanoEnData(state);
 
   // Normaliza el origen de cargas automáticas viejas y nuevas.
   // Esto hace que cualquier filtro por origen reconozca siempre Acopio/Pañol,
@@ -8516,11 +7906,6 @@ function normalizeState(){
   aplicarCodigosMateriales();
   aplicarCategoriasMateriales();
   cqForzarCementoHolcimCanonico();
-  aplicarNombresMateriales();
-  aplicarCodigosMateriales();
-  aplicarCategoriasMateriales();
-  cqSanearCodigoCodoDuratop();
-  cqRepararCruceCodoDuratopEnCargas();
   aplicarNombresMateriales();
   aplicarCodigosMateriales();
   aplicarCategoriasMateriales();
@@ -8661,28 +8046,6 @@ async function completarCodigosDesdeAcopioYPanol(forzar){
 
       var codigo=codigos[0];
 
-      // 902001103 es exclusivo del CODO DURATOP 45° HH 63MM.
-      // Si una fuente histórica lo publicó en "Adicional 100 cm", no contaminar Materiales.
-      if(codigo===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Nombre(mat.mat||'')){
-        conflictos++;
-        console.warn('Código DURATOP 902001103 ignorado por nombre incompatible',mat.mat);
-        return;
-      }
-
-      // No completar automáticamente un código que ya pertenece a otro producto incompatible.
-      var choqueCodigo=getAllMats().find(function(otro){
-        return otro && Number(otro.id)!==Number(mat.id) && !isMatDeleted(otro.id)
-          && String(getMatCodigo(otro)||'').trim()===codigo
-          && cqCruceCodoDuratopAdicional(mat.mat,otro.mat);
-      });
-      if(choqueCodigo){
-        conflictos++;
-        console.warn('Código no completado por conflicto de identidad',{
-          codigo:codigo,material:mat.mat,otro:choqueCodigo.mat
-        });
-        return;
-      }
-
       /* El cemento canónico no puede volver al código histórico aunque Acopio/Pañol
          todavía publiquen el dato anterior. */
       if(Number(mat.id)===CQ_CEMENTO_CANON_ID || cqEsCementoCanonicoONuevo(mat)){
@@ -8713,7 +8076,13 @@ async function completarCodigosDesdeAcopioYPanol(forzar){
       localStorage.setItem(DB_KEY,JSON.stringify(state));
 
       suppressRemoteUntil=Date.now()+1500;
-      await cqGuardarMaterialesSeguro({codigosFuentesActualizadosAt:new Date().toISOString()});
+      await window._setDoc(
+        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
+        JSON.parse(JSON.stringify(Object.assign({},state,{
+          updatedAt:new Date().toISOString(),
+          codigosFuentesActualizadosAt:new Date().toISOString()
+        })))
+      );
 
       try{await updateLastSync('completó códigos desde Acopio/Pañol');}catch(e){}
       renderActive();
@@ -8776,13 +8145,6 @@ async function cqGuardarMaterialesSeguro(extra){
       var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
     });
     local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
-
-    // CRÍTICO: junto con las cargas externas preservar sus fichas de catálogo.
-    // Sin esto podía sobrevivir el integrationId pero desaparecer extraMats, dejando
-    // el material invisible en Catálogo y Reportes.
-    cqFusionarCatalogoRemotoParaCargas(local,remoto,local.cargas.filter(esAuto));
-    cqRepararCatalogoHuerfanoEnData(local);
-
     Object.keys(extra).forEach(function(k){local[k]=extra[k];});
     local.updatedAt=new Date().toISOString();
     tx.set(ref,local);
@@ -8824,17 +8186,16 @@ async function persist(){
 async function initApp(){
   normalizeState();
   await cargarObrasGastosMateriales();
-  var migro=estabilizarObrasGastosMateriales();
-  migro=renombrarExtrasSegunGastos()||migro;
+  var migro=renombrarExtrasSegunGastos();
   migro=consolidarExtrasDuplicadasConGastos()||migro;
-  migro=reubicarEstadoIndexadoPorCargasMateriales()||migro;
-  migro=reubicarCargasPorNombreEstableMateriales()||migro;
   migro=normalizarNombresObraCargasMateriales()||migro;
   if(migro){
-    // En initApp sólo se acomoda la copia local. NO se escribe Firebase todavía:
-    // startFirebase/loadFromFirebase debe leer primero el documento compartido real.
-    // Esto evita que una copia local vieja pueda pisar datos remotos al detectar obras nuevas.
     localStorage.setItem(DB_KEY,JSON.stringify(state));
+    if(window._dbReady&&modoFirebase){
+      try{
+        await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()})));
+      }catch(e){console.warn('No se pudo guardar la unificación de obras',e);}
+    }
   }
   updateModoUI();
   renderActive();
@@ -8846,28 +8207,11 @@ async function initApp(){
 async function cqReconciliarMaterialesConAcopioActual(){
   if(!window._dbReady||!modoFirebase)return false;
   var cambio=false;
-  if(cqDuratopCambioPendiente){cambio=true;cqDuratopCambioPendiente=false;}
-  // Antes de reconciliar los retiros, eliminar una sola vez la base histórica
-  // contaminada que hacía que "Adicional de 100 cm" siguiera apareciendo.
-  cambio=cqLimpiarBaseHistoricaAdicional100UnaVez()||cambio;
   try{
     var snapA=await window._getDoc(window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3'));
-    if(!snapA.exists()){
-      if(cambio){
-        normalizeState();
-        localStorage.setItem(DB_KEY,JSON.stringify(state));
-        suppressRemoteUntil=Date.now()+1800;
-        await cqGuardarMaterialesSeguro();
-      }
-      return cambio;
-    }
+    if(!snapA.exists())return false;
     var raw=snapA.data()||{};
     var dbA=(raw.db&&typeof raw.db==='object')?raw.db:raw;
-
-    // Reparar TODAS las obras del cruce CODO DURATOP / Adicional usando los retiros
-    // originales de Acopio como fuente de verdad.
-    cambio=cqReconciliarDuratopDesdeRetirosAcopio(dbA)||cambio;
-
     var validos=new Set();
     (Array.isArray(dbA.acopios)?dbA.acopios:[]).forEach(function(a){
       (Array.isArray(a&&a.retiros)?a.retiros:[]).forEach(function(r){
@@ -8933,7 +8277,10 @@ async function cqReconciliarMaterialesConAcopioActual(){
       normalizeState();
       localStorage.setItem(DB_KEY,JSON.stringify(state));
       suppressRemoteUntil=Date.now()+1800;
-      await cqGuardarMaterialesSeguro();
+      await window._setDoc(
+        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
+        JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
+      );
     }
     return cambio;
   }catch(e){
@@ -8952,25 +8299,16 @@ async function loadFromFirebase(){
       var d=snap.data();
       delete d.updatedAt;
       state=d;
-      // CQ 13/10/2026 FIX 2 — capturar la reparación ANTES de normalizar para
-      // persistirla en Firebase. Antes normalizeState() reconstruía la ficha sólo
-      // en memoria, pero `migro` podía quedar false y el catálogo reparado no se
-      // guardaba para el resto de sesiones/dispositivos.
-      var reparoCatalogoHuerfano=cqRepararCatalogoHuerfanoEnData(state);
       normalizeState();
-      var migro=!!reparoCatalogoHuerfano;
-      migro=estabilizarObrasGastosMateriales()||migro;
-      migro=renombrarExtrasSegunGastos()||migro;
+      var migro=renombrarExtrasSegunGastos();
       migro=consolidarExtrasDuplicadasConGastos()||migro;
-      migro=reubicarEstadoIndexadoPorCargasMateriales()||migro;
-      migro=reubicarCargasPorNombreEstableMateriales()||migro;
       migro=normalizarNombresObraCargasMateriales()||migro;
       var limpioTechi=cqLimpiarTechiCau29_77Materiales();
       migro=limpioTechi||migro;
       localStorage.setItem(DB_KEY,JSON.stringify(state));
       if(migro){
         try{
-          await cqGuardarMaterialesSeguro();
+          await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()})));
         }catch(err){console.warn('No se pudo persistir la unificación de obras',err);}
       }
     }
@@ -9003,8 +8341,6 @@ function normalizarClaveIntegracion(v){
   return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
 }
 function buscarObraIntegracion(nombre){
-  // Asegura que cualquier obra nueva de Gastos ya tenga un índice persistente antes de usarla.
-  estabilizarObrasGastosMateriales();
   var key=normalizarClaveIntegracion(nombre);
   var obras=getObras();
   for(var i=0;i<obras.length;i++){
@@ -9042,7 +8378,6 @@ function cqNombreMaterialIntegracion(v){
   return claveMaterialUnificar(String(v||''));
 }
 function cqNombresCompatiblesIntegracion(a,b){
-  if(cqCruceCodoDuratopAdicional(a,b))return false;
   var x=cqNombreMaterialIntegracion(a),y=cqNombreMaterialIntegracion(b);
   if(!x||!y)return true;
   if(x===y)return true;
@@ -9082,17 +8417,6 @@ function buscarMaterialIntegracion(codigo,nombre,origen){
     return getAllMats().find(function(mat){
       return Number(mat.id)===CQ_CEMENTO_CANON_ID && !isMatDeleted(mat.id);
     })||null;
-  }
-
-  // CODO DURATOP 45° HH 63MM: identidad canónica.
-  if(cqEsCodoDuratop45HH63Nombre(nombre) || code===CQ_CODO_DURATOP_45_63_CODIGO){
-    var duratopExacto=mats.find(function(mat){return cqEsCodoDuratop45HH63Nombre(mat.mat||'');})||null;
-    if(duratopExacto && cqEsCodoDuratop45HH63Nombre(nombre)){
-      if(!state.matCodigos)state.matCodigos={};
-      state.matCodigos[duratopExacto.id]=CQ_CODO_DURATOP_45_63_CODIGO;
-      duratopExacto.codigo=CQ_CODO_DURATOP_45_63_CODIGO;
-      return duratopExacto;
-    }
   }
 
   // 1. Nombre exacto primero. Evita que un código duplicado o mal asignado
@@ -9135,11 +8459,7 @@ function buscarMaterialIntegracion(codigo,nombre,origen){
   mats.forEach(function(mat){if(mat.id>=maxId)maxId=mat.id+1;});
   var cat=categoriaAprendidaPara(codigo,nombre)||'VARIOS';
   if(!CATS.some(function(c){return c.name===cat&&!isCatDeleted(c.name);}))cat='VARIOS';
-  var nombreNuevo=String(nombre||('Material '+codigo)).trim();
-  var codigoNuevo=String(codigo||'').trim();
-  if(cqEsCodoDuratop45HH63Nombre(nombreNuevo))codigoNuevo=CQ_CODO_DURATOP_45_63_CODIGO;
-  if(codigoNuevo===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Nombre(nombreNuevo))codigoNuevo='';
-  var newMat={id:maxId,mat:nombreNuevo,codigo:codigoNuevo,prom:0,data:[],catName:cat,comentarios:'Creado automáticamente desde '+(origen||'integración'),autoCreated:true};
+  var newMat={id:maxId,mat:String(nombre||('Material '+codigo)).trim(),codigo:String(codigo||'').trim(),prom:0,data:[],catName:cat,comentarios:'Creado automáticamente desde '+(origen||'integración'),autoCreated:true};
   if(!state.matCategorias)state.matCategorias={};
   state.matCategorias[maxId]=cat;
   if(!state.extraMats)state.extraMats=[];
@@ -9284,8 +8604,6 @@ function aplicarIntegracion(ev){
   if(!mat){
     var codigoEntrante=String(ev.materialCode||'').trim();
     var nombreEntrante=String(ev.materialName||'').trim();
-    if(cqEsCodoDuratop45HH63Nombre(nombreEntrante))codigoEntrante=CQ_CODO_DURATOP_45_63_CODIGO;
-    else if(codigoEntrante===CQ_CODO_DURATOP_45_63_CODIGO)codigoEntrante='';
 
     if(codigoEntrante){
       mat=getAllMats().find(function(m){
@@ -9360,8 +8678,6 @@ function aplicarIntegracion(ev){
   // Si se unificó por nombre y el catálogo todavía no tenía código,
   // copiar inmediatamente el código que viene de Acopio/Pañol/Caja.
   var codigoIntegracion=String(ev.materialCode||'').trim();
-  if(cqEsCodoDuratop45HH63Nombre(ev.materialName||mat.mat||''))codigoIntegracion=CQ_CODO_DURATOP_45_63_CODIGO;
-  else if(codigoIntegracion===CQ_CODO_DURATOP_45_63_CODIGO)codigoIntegracion='';
   if(codigoIntegracion && !String(getMatCodigo(mat)||'').trim()){
     if(!state.matCodigos)state.matCodigos={};
     state.matCodigos[mat.id]=codigoIntegracion;
@@ -9386,7 +8702,7 @@ function aplicarIntegracion(ev){
     sourceMovementId:ev.sourceMovementId||'',
     automatico:true,
     integracionId:ev.integrationId,
-    codigoOrigen:codigoIntegracion,
+    codigoOrigen:ev.materialCode||'',
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||''
   };
@@ -9558,8 +8874,6 @@ async function startFirebase(){
                 var remotasAutomaticas=rem.filter(esAutoExterna);
 
                 state.cargas=localesManuales.concat(JSON.parse(JSON.stringify(remotasAutomaticas)));
-                // Adoptar también las fichas dinámicas/categorías/códigos asociadas.
-                cqFusionarCatalogoRemotoParaCargas(state,rd,remotasAutomaticas);
                 normalizeState();
                 localStorage.setItem(DB_KEY,JSON.stringify(state));
                 renderActive();
@@ -9583,12 +8897,8 @@ async function startFirebase(){
             state=d;
             normalizeState();
 
-            var migro=estabilizarObrasGastosMateriales();
-            migro=renombrarExtrasSegunGastos()||migro;
+            var migro=renombrarExtrasSegunGastos();
             migro=consolidarExtrasDuplicadasConGastos()||migro;
-            migro=reubicarEstadoIndexadoPorCargasMateriales()||migro;
-            migro=reubicarCargasPorNombreEstableMateriales()||migro;
-            migro=normalizarNombresObraCargasMateriales()||migro;
 
             localStorage.setItem(DB_KEY,JSON.stringify(state));
             renderActive();
@@ -9597,7 +8907,10 @@ async function startFirebase(){
 
             if(migro){
               suppressRemoteUntil=Date.now()+1200;
-              cqGuardarMaterialesSeguro().catch(function(e){console.warn(e);});
+              window._setDoc(
+                window._doc(window._db,'materiales','data_planilla_exacta_v4'),
+                JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()}))
+              ).catch(function(e){console.warn(e);});
             }
           },
           function(e){
@@ -9881,16 +9194,9 @@ function calcProm(matId){
 }
 function getExtraMats(){return state.extraMats||[];}
 function getAllMats(){
-  // ALL_MATS ya puede contener extras insertados por mergeExtrasIntoCats.
-  // Devolver una sola ficha por ID evita dobles recorridos y consolidaciones ambiguas.
-  var out=[],vistos={};
-  ALL_MATS.concat(getExtraMats()).forEach(function(m){
-    if(!m||m.id==null)return;
-    var k=String(m.id);
-    if(vistos[k])return;
-    vistos[k]=1;out.push(m);
-  });
-  return out;
+  var extra=getExtraMats();
+  if(!extra.length) return ALL_MATS;
+  return ALL_MATS.concat(extra);
 }
 
 // Normalizar categorías y materiales
@@ -10360,7 +9666,10 @@ async function cqPersistirComentariosReporte(){
     try{
       setSyncStatus('Firebase: guardando...');
       suppressRemoteUntil=Date.now()+1200;
-      await cqGuardarMaterialesSeguro();
+      await window._setDoc(
+        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
+        JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()}))
+      );
       try{await updateLastSync('guardó comentario de reporte');}catch(e){}
       setSyncStatus('Firebase: guardado','ok');
       return true;
@@ -16429,11 +15738,6 @@ window.abrirGraficoDirecto = function(){
       local.matNombres=clone(state.matNombres||{});
       local.matCategorias=clone(state.matCategorias||{});
       local.matCodigos=clone(state.matCodigos||{});
-
-      // Conservar también la ficha dinámica asociada a cada carga automática remota.
-      // Sin extraMats puede sobrevivir el integrationId y desaparecer el producto de Catálogo/Reportes.
-      cqFusionarCatalogoRemotoParaCargas(local,remoto,local.cargas.filter(esAuto));
-      cqRepararCatalogoHuerfanoEnData(local);
 
       Object.keys(extra).forEach(function(k){local[k]=extra[k];});
       local.updatedAt=new Date().toISOString();
