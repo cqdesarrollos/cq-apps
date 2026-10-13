@@ -7067,10 +7067,13 @@ function cqRetiroExisteRealEnMateriales(retiro,a){
   var iid=integracionRetiroId(a.id,retiro.id);
 
   // Fuente de verdad: el documento REAL materiales/data_planilla_exacta_v4.
-  // Para marcar verde no alcanza con que exista la carga: también debe existir
-  // la ficha matId que Catálogo/Reportes necesitan para mostrarla.
-  if(materialesIntegradosAcopio instanceof Set && materialesIntegradosAcopio.has(iid)){
-    return true;
+  // Para marcar verde no alcanza con que exista el integrationId: la CARGA
+  // concreta debe apuntar a un matId cuya ficha exista en Catálogo/Reportes.
+  var porId=(materialesCargasSnapshotAcopio||[]).find(function(c){
+    return String(c&&c.integracionId||'')===String(iid);
+  });
+  if(porId){
+    return cqCargaTieneFichaCatalogoMaterialesAcopio(porId);
   }
   return (materialesCargasSnapshotAcopio||[]).some(function(c){
     return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a)
@@ -7151,7 +7154,9 @@ async function cqAutoRepararMaterialesFaltantesActual(){
 
   var faltantes=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
     if(!r||r.cargarMateriales===false)return false;
-    if(String(r.materialesSyncEstado||'')!=='ok')return false;
+    // CQ 13/10/2026 FIX 2 — no depender de una marca histórica `ok`.
+    // Si el retiro debía ir a Materiales y hoy no existe con ficha visible,
+    // se repone idempotentemente por integrationId.
     return !cqRetiroExisteRealEnMateriales(r,a);
   });
 

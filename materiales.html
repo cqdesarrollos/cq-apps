@@ -8952,8 +8952,14 @@ async function loadFromFirebase(){
       var d=snap.data();
       delete d.updatedAt;
       state=d;
+      // CQ 13/10/2026 FIX 2 — capturar la reparación ANTES de normalizar para
+      // persistirla en Firebase. Antes normalizeState() reconstruía la ficha sólo
+      // en memoria, pero `migro` podía quedar false y el catálogo reparado no se
+      // guardaba para el resto de sesiones/dispositivos.
+      var reparoCatalogoHuerfano=cqRepararCatalogoHuerfanoEnData(state);
       normalizeState();
-      var migro=estabilizarObrasGastosMateriales();
+      var migro=!!reparoCatalogoHuerfano;
+      migro=estabilizarObrasGastosMateriales()||migro;
       migro=renombrarExtrasSegunGastos()||migro;
       migro=consolidarExtrasDuplicadasConGastos()||migro;
       migro=reubicarEstadoIndexadoPorCargasMateriales()||migro;
