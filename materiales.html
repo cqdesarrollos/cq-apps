@@ -8070,6 +8070,192 @@ function cqObtenerOCrearCodoDuratopCanonico(carga){
   if(catObj&&!catObj.items.some(function(m){return Number(m.id)===Number(nuevoId);}))catObj.items.push(nuevo);
   return nuevo;
 }
+
+/* CQ 12/10/2026 — reconciliación histórica DURATOP desde Acopio.
+   Acopio conserva en cada retiro el materialName/materialCode elegido al momento
+   de registrar el movimiento. Esa instantánea es la fuente de verdad para reparar
+   cruces históricos causados por códigos duplicados/unificaciones antiguas. */
+function cqReconciliarDuratopDesdeRetirosAcopio(dbA){
+  if(!dbA||!Array.isArray(dbA.acopios))return false;
+  var cambio=false;
+  var fuentes=[];
+
+  function normObra(v){
+    try{return cqClaveObraIntegracion(v||'');}catch(e){return String(v||'').trim().toLowerCase();}
+  }
+  function materialAcopio(a,r){
+    var m=(a&&Array.isArray(a.mats))?a.mats.find(function(x){return String(x&&x.id)===String(r&&r.matId);}):null;
+    var nombre=String(r&&r.materialName!=null?r.materialName:(m&&m.nom)||'').trim();
+    var codigo=String(r&&r.materialCode!=null?r.materialCode:(m&&m.cod)||'').trim();
+    var unidad=String(r&&r.materialUnidad!=null?r.materialUnidad:(m&&m.unidad)||'').trim();
+    return {nombre:nombre,codigo:codigo,unidad:unidad};
+  }
+  function obtenerOCrearExacto(info){
+    if(cqEsCodoDuratop45HH63Nombre(info.nombre))return cqObtenerOCrearCodoDuratopCanonico({materialNameOrigen:info.nombre});
+    var nk=cqNombreExactoCodigo(info.nombre||'');
+    var exacto=getAllMats().find(function(m){return !isMatDeleted(m.id)&&cqNombreExactoCodigo(m.mat||'')===nk;})||null;
+    if(exacto)return exacto;
+    if(!info.nombre)return null;
+    var ids=getAllMats().map(function(m){return Number(m.id)||0;});
+    var nuevoId=(ids.length?Math.max.apply(null,ids):10000)+1;
+    var codigo=String(info.codigo||'').trim();
+    if(codigo===CQ_CODO_DURATOP_45_63_CODIGO&&!cqEsCodoDuratop45HH63Nombre(info.nombre))codigo='';
+    var cat=String(info.categoria||'VARIOS').trim()||'VARIOS';
+    var nuevo={id:nuevoId,mat:info.nombre,codigo:codigo,prom:0,data:[],catName:cat,comentarios:'Creado automáticamente al reconciliar Acopio',autoCreated:true};
+    if(!Array.isArray(state.extraMats))state.extraMats=[];
+    state.extraMats.push(nuevo);
+    if(!state.matCodigos)state.matCodigos={};
+    if(codigo)state.matCodigos[nuevoId]=codigo;
+    if(!state.matCategorias)state.matCategorias={};
+    state.matCategorias[nuevoId]=cat;
+    var catObj=CATS.find(function(c){return c.name===cat&&!isCatDeleted(c.name);});
+    if(catObj&&!catObj.items.some(function(x){return Number(x.id)===Number(nuevoId);}))catObj.items.push(nuevo);
+    if(!ALL_MATS.some(function(x){return Number(x.id)===Number(nuevoId);}))ALL_MATS.push(nuevo);
+    return nuevo;
+  }
+
+  dbA.acopios.forEach(function(a){
+    (Array.isArray(a&&a.retiros)?a.retiros:[]).forEach(function(r){
+      if(!r||r.id==null||a.id==null)return;
+      var mm=materialAcopio(a,r);
+      var esCodo=cqEsCodoDuratop45HH63Nombre(mm.nombre);
+      var esAdic=cqEsAdicionalNombre(mm.nombre);
+      if(!esCodo&&!esAdic)return;
+      fuentes.push({
+        iid:'acopio_'+String(a.id)+'_'+String(r.id),
+        mov:String(r.id),
+        obra:String(r.obraHistorica||r.obraName||''),
+        fecha:String(r.fecha||''),
+        qty:Number(r.qty)||0,
+        nombre:mm.nombre,
+        codigo:mm.codigo,
+        unidad:mm.unidad,
+        categoria:String(r.subrubro||'VARIOS').trim()||'VARIOS',
+        esCodo:esCodo,
+        esAdic:esAdic,
+        debeExistir:r.cargarMateriales===true || String(r.materialesSyncEstado||'')==='ok' || String(r.materialesSyncEstado||'')==='pendiente'
+      });
+    });
+  });
+  if(!fuentes.length)return false;
+
+  // Totales originales de Acopio por obra, usados sólo para detectar overrides contaminados.
+  var sumCodo={},sumAdic={};
+  function addSum(obj,key,val){obj[key]=(obj[key]||0)+(Number(val)||0);}
+
+  fuentes.forEach(function(f){
+    var obraKey=normObra(f.obra);
+    var idx=(state.cargas||[]).findIndex(function(c){return String(c&&c.integracionId||'')===f.iid;});
+
+    if(idx<0){
+      var movMatches=[];
+      (state.cargas||[]).forEach(function(c,i){
+        if(cqOrigenCargaNormalizado(c)!=='acopio')return;
+        if(String(c.sourceMovementId||'')!==f.mov)return;
+        if(f.obra && normObra(c.obraNameOrigen||c.obraName||'') && normObra(c.obraNameOrigen||c.obraName||'')!==obraKey)return;
+        movMatches.push(i);
+      });
+      if(movMatches.length===1)idx=movMatches[0];
+    }
+
+    // Respaldo para cargas históricas que perdieron los IDs auxiliares.
+    if(idx<0){
+      var huella=[];
+      (state.cargas||[]).forEach(function(c,i){
+        if(cqOrigenCargaNormalizado(c)!=='acopio')return;
+        if(f.obra && normObra(c.obraNameOrigen||c.obraName||'')!==obraKey)return;
+        if(Math.abs((Number(c.qty)||0)-f.qty)>0.000001)return;
+        if(f.fecha&&c.fecha&&String(c.fecha)!==f.fecha)return;
+        var matAct=getAllMats().find(function(m){return Number(m.id)===Number(c.matId);});
+        var nomAct=String(c.materialNameOrigen||c.matName||(matAct&&matAct.mat)||'');
+        if(!(cqEsCodoDuratop45HH63Nombre(nomAct)||cqEsAdicionalNombre(nomAct)))return;
+        huella.push(i);
+      });
+      if(huella.length===1)idx=huella[0];
+    }
+
+    var debe=f.debeExistir || idx>=0;
+    if(!debe)return;
+    var target=obtenerOCrearExacto(f);
+    if(!target)return;
+    var obraIdx=-1;
+    try{obraIdx=buscarObraIntegracion(f.obra);}catch(e){}
+    if(obraIdx<0 && idx>=0)obraIdx=Number(state.cargas[idx].obraIdx);
+    if(obraIdx<0)return;
+
+    var entry={
+      id:idx>=0?state.cargas[idx].id:(Date.now()+Math.floor(Math.random()*100000)),
+      obraIdx:obraIdx,
+      obraName:getObras()[obraIdx]||f.obra,
+      matId:target.id,
+      matName:target.mat,
+      qty:f.qty,
+      nota:'Automático · Acopio',
+      fecha:f.fecha||todayISO(),
+      fechaHoraCarga:idx>=0?(state.cargas[idx].fechaHoraCarga||state.cargas[idx].id||Date.now()):Date.now(),
+      origen:'acopio',
+      sourceMovementId:f.mov,
+      automatico:true,
+      integracionId:f.iid,
+      codigoOrigen:f.esCodo?CQ_CODO_DURATOP_45_63_CODIGO:String(f.codigo||''),
+      materialNameOrigen:f.nombre,
+      obraNameOrigen:f.obra
+    };
+    if(f.esCodo){
+      if(!state.matCodigos)state.matCodigos={};
+      state.matCodigos[target.id]=CQ_CODO_DURATOP_45_63_CODIGO;
+      target.codigo=CQ_CODO_DURATOP_45_63_CODIGO;
+    }
+
+    if(idx>=0){
+      var prev=state.cargas[idx];
+      var diff=Number(prev.matId)!==Number(entry.matId)
+        || String(prev.matName||'')!==String(entry.matName||'')
+        || String(prev.integracionId||'')!==entry.integracionId
+        || String(prev.materialNameOrigen||'')!==f.nombre
+        || String(prev.codigoOrigen||'')!==entry.codigoOrigen
+        || Number(prev.obraIdx)!==Number(entry.obraIdx);
+      if(diff){state.cargas[idx]=Object.assign({},prev,entry);cambio=true;}
+    }else{
+      state.cargas.push(entry);cambio=true;
+    }
+
+    var k=String(obraIdx);
+    if(f.esCodo)addSum(sumCodo,k,f.qty);
+    if(f.esAdic)addSum(sumAdic,k,f.qty);
+  });
+
+  // Si la antigua unificación por código movió un valor fijo/override del CODO al
+  // "Adicional", limpiarlo sólo cuando la evidencia es inequívoca: no hay retiro
+  // real del Adicional en esa obra y el override coincide exactamente con el total
+  // DURATOP de Acopio. El CODO ya queda reconstruido desde sus retiros automáticos.
+  var adicionales=getAllMats().filter(function(m){return m&&!isMatDeleted(m.id)&&cqEsAdicionalNombre(m.mat||'');});
+  adicionales.forEach(function(ad){
+    Object.keys(sumCodo).forEach(function(k){
+      var srcC=Number(sumCodo[k]||0),srcA=Number(sumAdic[k]||0);
+      if(!(srcC>0)||srcA>0)return;
+      var key=String(ad.id)+'-'+String(k);
+      if(state.overrides&&state.overrides[key]!=null){
+        var ov=Number(state.overrides[key])||0;
+        var manual=(state.cargas||[]).some(function(c){
+          return Number(c.matId)===Number(ad.id)&&Number(c.obraIdx)===Number(k)&&cqOrigenCargaNormalizado(c)!=='acopio';
+        });
+        if(!manual && Math.abs(ov-srcC)<0.000001){
+          delete state.overrides[key];
+          if(state.historial)delete state.historial[key];
+          cambio=true;
+        }
+      }
+    });
+  });
+
+  if(cambio){
+    cqConsolidarCargasAutomaticasDuplicadas();
+    cqSanearCodigoCodoDuratop();
+  }
+  return cambio;
+}
+
 function cqRepararCruceCodoDuratopEnCargas(){
   if(!Array.isArray(state.cargas))return false;
   var cambio=false;
@@ -8474,6 +8660,11 @@ async function cqReconciliarMaterialesConAcopioActual(){
     if(!snapA.exists())return false;
     var raw=snapA.data()||{};
     var dbA=(raw.db&&typeof raw.db==='object')?raw.db:raw;
+
+    // Reparar TODAS las obras del cruce CODO DURATOP / Adicional usando los retiros
+    // originales de Acopio como fuente de verdad.
+    cambio=cqReconciliarDuratopDesdeRetirosAcopio(dbA)||cambio;
+
     var validos=new Set();
     (Array.isArray(dbA.acopios)?dbA.acopios:[]).forEach(function(a){
       (Array.isArray(a&&a.retiros)?a.retiros:[]).forEach(function(r){
