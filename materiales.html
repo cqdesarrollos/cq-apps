@@ -4524,7 +4524,16 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 
 
 <style id="cq-fix-filtros-tablet-overlay-v2">
-@media (min-width:651px) and (max-width:1200px){
+@media (min-width:651px) and (max-width:1800px){
+  #view-carga .premium-hist{
+    position:relative!important;
+    z-index:100000!important;
+    overflow:visible!important;
+  }
+  #view-carga #carga-historial{
+    position:relative!important;
+    z-index:1!important;
+  }
   #view-carga .premium-hist .cq-multi-filter-menu,
   #view-carga .premium-hist .hist-mat-dropdown{
     position:fixed!important;
@@ -4534,17 +4543,25 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
     box-shadow:0 20px 55px rgba(10,38,30,.28)!important;
   }
   #view-carga .premium-hist .cq-multi-filter-menu{
-    min-width:280px!important;
-    max-width:min(420px,calc(100vw - 20px))!important;
+    min-width:320px!important;
+    max-width:min(520px,calc(100vw - 20px))!important;
+    max-height:72vh!important;
+    overflow:hidden!important;
+    background:#fff!important;
+    border:1px solid #cfded6!important;
   }
   #view-carga .premium-hist .cq-multi-filter-options{
-    max-height:43vh!important;
+    max-height:52vh!important;
     overflow:auto!important;
+    background:#fff!important;
   }
   #view-carga .premium-hist .hist-mat-dropdown{
-    min-width:300px!important;
-    max-width:min(520px,calc(100vw - 20px))!important;
+    min-width:340px!important;
+    max-width:min(620px,calc(100vw - 20px))!important;
+    max-height:70vh!important;
     overflow:auto!important;
+    background:#fff!important;
+    border:1px solid #cfded6!important;
   }
 }
 </style>
@@ -8158,40 +8175,49 @@ function cqDepurarOverridesAdicional100Materiales(){
   return cambio;
 }
 
-/* CQ 13/10/2026 — CORTAR BUCLE PAÑOL → MATERIALES PARA ADICIONAL 100 CM
-   El producto es exclusivo de Pañol. Versiones viejas de Pañol podían marcar sus
-   salidas históricas como materialesAgregar=true y reconstruirlas aquí aunque se
-   borraran. Se eliminan únicamente cargas automáticas originadas en Pañol. */
-function cqEsCargaPanolAdicional100Materiales(c){
-  if(!c)return false;
-  var iid=String(c.integracionId||'');
-  var origen=cqOrigenCargaNormalizado(c);
-  var nom=String(c.materialNameOrigen||c.matName||c.materialName||'');
-  return (origen==='panol'||iid.indexOf('panol_')===0) && cqEsAdicional100Materiales(nom);
-}
-function cqDepurarCargasPanolAdicional100Materiales(){
+/* CQ 13/10/2026 — limpiar SOLO las 8 cargas erróneas visibles del 02/06.
+   Son residuos históricos del cruce de identidad y NO son consumos de Pañol.
+   Firma observada: Adicional de 100 cm · 10 u · obras 5/98, 18/78, 6/92 y 7/100,
+   duplicadas. Las cargas cuyo origen real es Pañol se preservan. */
+function cqDepurarCargasErroneasAdicional100_0206(){
+  if(state._cqAdicional100CargasErroneas0206DepuradasV1)return false;
   if(!Array.isArray(state.cargas))state.cargas=[];
-  if(!Array.isArray(state.ignoredIntegrationIds))state.ignoredIntegrationIds=[];
-  var matIds=[];
-  var cambio=false;
+  var obrasMal={'5/98':true,'18/78':true,'6/92':true,'7/100':true};
+  var removidas=0;
+  var obras=getObras();
   state.cargas=state.cargas.filter(function(c){
-    if(!cqEsCargaPanolAdicional100Materiales(c))return true;
-    if(c&&c.matId!=null)matIds.push(c.matId);
-    if(c&&c.integracionId)cqIgnorarIntegracion(c.integracionId);
-    cambio=true;
+    if(!c)return true;
+    var nombre=String(c.matName||c.materialName||'');
+    if(!cqEsAdicional100Materiales(nombre))return true;
+
+    // Lo correcto proveniente de Pañol se conserva siempre.
+    var origen=cqOrigenCargaNormalizado(c);
+    var iid=String(c.integracionId||'');
+    if(origen==='panol'||iid.indexOf('panol_')===0)return true;
+
+    if(Math.abs((Number(c.qty)||0)-10)>0.000001)return true;
+    var fecha=String(c.fecha||'').trim();
+    var es0206=/-06-02$/.test(fecha)||/^02[\/-]06(?:[\/-]|$)/.test(fecha);
+    if(!es0206)return true;
+
+    var obra=String(c.obraNameOrigen||c.obraName||obras[Number(c.obraIdx)]||'');
+    var clave=claveLoteMz(obra);
+    if(!obrasMal[clave])return true;
+
+    removidas++;
     return false;
   });
-  Array.from(new Set(matIds.map(String))).forEach(function(mid){
-    var usado=state.cargas.some(function(c){return String(c&&c.matId)===mid;});
-    if(usado)return;
-    var ex=(state.extraMats||[]).find(function(m){return String(m&&m.id)===mid;})||null;
-    if(ex && cqEsAdicional100Materiales(ex.mat||'') && (ex.autoCreated===true||String(ex.source||'').toLowerCase()==='panol'||String(ex.comentarios||'').indexOf('Creado automáticamente desde Pañol')===0)){
-      if(limpiarMaterialAutomaticoSinUso(ex.id))cambio=true;
-    }
-  });
-  if(cambio)state._cqAdicional100PanolCargasDepuradasAt=new Date().toISOString();
-  return cambio;
+  if(removidas){
+    state._cqAdicional100CargasErroneas0206DepuradasV1={
+      at:new Date().toISOString(),
+      removidas:removidas
+    };
+    console.info('Materiales: eliminadas '+removidas+' cargas erróneas de Adicional 100 cm del 02/06.');
+    return true;
+  }
+  return false;
 }
+
 
 function normalizeState(){
   if(!state.overrides)state.overrides={};
@@ -8240,7 +8266,7 @@ function normalizeState(){
   aplicarCategoriasMateriales();
   cqRepararIdentidadCargasAutomaticasMateriales();
   cqDepurarOverridesAdicional100Materiales();
-  cqDepurarCargasPanolAdicional100Materiales();
+  cqDepurarCargasErroneasAdicional100_0206();
   consolidarMaterialesDuplicados();
 }
 function setSyncStatus(txt,cls){
@@ -8895,19 +8921,6 @@ function aplicarIntegracion(ev){
   // Si el usuario eliminó expresamente una carga automática desde Materiales,
   // no permitir que el listener de Firebase la vuelva a crear.
   if(ev.active!==false && cqIntegracionIgnorada(ev.integrationId)) return false;
-
-  // "Adicional de 100 cm" es exclusivo de Pañol. Nunca aceptar una alta automática
-  // de Pañol para este ítem; si existe una carga vieja, se elimina y se bloquea su ID.
-  var origenAdic=cqOrigenCargaNormalizado({origen:ev.source,sourceLabel:ev.sourceLabel,integrationId:ev.integrationId});
-  if(origenAdic==='panol' && cqEsAdicional100Materiales(ev.materialName||'')){
-    var idxAdic=(state.cargas||[]).findIndex(function(c){return String(c&&c.integracionId||'')===String(ev.integrationId);});
-    var matAdic=idxAdic>=0?state.cargas[idxAdic].matId:null;
-    var cambioAdic=false;
-    if(idxAdic>=0){state.cargas.splice(idxAdic,1);cambioAdic=true;}
-    cqIgnorarIntegracion(ev.integrationId);
-    if(matAdic!=null && limpiarMaterialAutomaticoSinUso(matAdic))cambioAdic=true;
-    return cambioAdic;
-  }
 
   if(cqEsTechiCau29_77Integracion(ev)){
     var idxBloq=(state.cargas||[]).findIndex(function(c){return c.integracionId===ev.integrationId;});
@@ -11315,7 +11328,7 @@ function renderActive(){
 
 function cqEsTabletHistorial(){
   var w=window.innerWidth||document.documentElement.clientWidth||0;
-  return w>=651&&w<=1200;
+  return w>=651&&w<=1800;
 }
 function cqPosicionarDropdownHistorial(anchor,menu,minWidth){
   if(!anchor||!menu)return;

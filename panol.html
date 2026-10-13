@@ -3239,46 +3239,48 @@ async function aplicarResetPanolUnaVez(){
   return false;
 }
 
-/* ==========================================================
-   CQ 13/10/2026 — ADICIONAL DE 100 CM ES EXCLUSIVO DE PAÑOL
-   Este producto quedó enlazado históricamente a Materiales y sus salidas viejas
-   se reinyectaban automáticamente. Se conserva stock e historial de Pañol, pero
-   se corta de forma definitiva el vínculo con Materiales.
-   ========================================================== */
-function cqNormAdicional100Panol(v){
+
+/* CQ 13/10/2026 — reversión del bloqueo erróneo de Adicional 100 cm.
+   La versión anterior marcó esos consumos como "solo Pañol" y puso materialesCantidad=0.
+   Sólo se restauran movimientos que llevan exactamente esa marca, sin tocar otros consumos. */
+function cqNormAdicional100RestorePanol(v){
   return String(v||'').toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');
 }
-function cqEsAdicional100SoloPanol(v){
-  var n=cqNormAdicional100Panol(v);
-  return n.indexOf('adicional')>=0 && n.indexOf('100')>=0 && (n.indexOf('cm')>=0 || n==='adicional100');
+function cqEsAdicional100RestorePanol(v){
+  var n=cqNormAdicional100RestorePanol(v);
+  return n.indexOf('adicional')>=0 && n.indexOf('100')>=0;
 }
-function cqAplicarMarcaAdicional100SoloPanolLocal(){
-  if(!state)return {cambio:false,movIds:[]};
+function cqRestaurarAdicional100TrasBloqueoErroneo(){
+  if(!state)return false;
   if(!Array.isArray(state.productos))state.productos=[];
   if(!Array.isArray(state.movimientos))state.movimientos=[];
   var ids={};
   var cambio=false;
-  state.productos.forEach(function(prod){
-    if(!prod||!cqEsAdicional100SoloPanol(prod.nombre||''))return;
-    ids[String(prod.id)]=true;
-    if(prod.materialesProducto){delete prod.materialesProducto;cambio=true;}
-    if(prod.materialesSoloPanol!==true){prod.materialesSoloPanol=true;cambio=true;}
+  state.productos.forEach(function(p){
+    if(!p||!cqEsAdicional100RestorePanol(p.nombre||''))return;
+    ids[String(p.id)]=true;
+    if(p.materialesSoloPanol===true){delete p.materialesSoloPanol;cambio=true;}
   });
-  var movIds=[];
+  var marca='Producto exclusivo de Pañol · no se envía a Materiales';
   state.movimientos.forEach(function(m){
     if(!m||m.tipo!=='salida')return;
-    var pertenece=!!ids[String(m.prodId)] || cqEsAdicional100SoloPanol(m.materialName||'');
-    if(!pertenece)return;
-    movIds.push(String(m.id));
-    if(m.materialesAgregar!==false){m.materialesAgregar=false;cambio=true;}
-    if(m.materialesProducto){m.materialesProducto=null;cambio=true;}
-    if(Number(m.materialesCantidad||0)!==0){m.materialesCantidad=0;cambio=true;}
-    if(m.materialesSyncEstado!=='no'){m.materialesSyncEstado='no';cambio=true;}
-    var msg='Producto exclusivo de Pañol · no se envía a Materiales';
-    if(String(m.materialesSyncError||'')!==msg){m.materialesSyncError=msg;cambio=true;}
+    var esAdic=!!ids[String(m.prodId)]||cqEsAdicional100RestorePanol(m.materialName||'');
+    if(!esAdic)return;
+    // Únicamente deshacer lo que modificó nuestra versión anterior.
+    if(String(m.materialesSyncError||'')!==marca)return;
+    var cantidad=Number(m.cantidad)||0;
+    var omitida=Math.max(0,Number(m.materialesOmitidosCantidad)||0);
+    var aMateriales=Math.max(0,cantidad-omitida);
+    if(aMateriales<=0 && cantidad>0 && omitida<=0)aMateriales=cantidad;
+    m.materialesAgregar=aMateriales>0;
+    m.materialesCantidad=aMateriales;
+    m.materialesProducto=null; // se reconcilia por nombre exacto con el catálogo actual.
+    m.materialesSyncEstado=aMateriales>0?'pendiente':'no';
+    m.materialesSyncError=aMateriales>0?'':'Registrado en Materiales anteriormente.';
+    cambio=true;
   });
-  return {cambio:cambio,movIds:movIds};
+  return cambio;
 }
 
 function normalizeState(){
@@ -3287,7 +3289,7 @@ function normalizeState(){
   if(!state.movimientos) state.movimientos=[];
   if(!state.obras || !state.obras.length) state.obras=OBRAS_SEED.slice();
   if(!state.rubros) state.rubros=[];
-  cqAplicarMarcaAdicional100SoloPanolLocal();
+  cqRestaurarAdicional100TrasBloqueoErroneo();
   state.movimientos.forEach(function(m){
     if(m&&m.tipo==='salida'&&typeof m.materialesAgregar==='undefined'){
       m.materialesAgregar=true;
@@ -3766,7 +3768,6 @@ async function loadFromFirebase(){
     }
 
     try{await cqLimpiarTechiCau29_77Panol();}catch(e){console.warn(e);}
-    try{await cqDepurarAdicional100SoloPanolFirebase();}catch(e){console.warn('Depuración Adicional 100 cm',e);}
     panolLimpiarFiltrosVisualesStock();
     renderActive();
   }catch(e){
@@ -5606,7 +5607,6 @@ var conciliandoCatalogoPanol=false;
 
 function encontrarMaterialCatalogoParaProductoPanol(prod){
   if(!prod||prod.materialesProducto)return null;
-  if(prod.materialesSoloPanol===true||cqEsAdicional100SoloPanol(prod.nombre||''))return null;
   var catalogo=cqCatalogoMaterialesPanol||[];
   var nombre=normCatalogoPanol(prod.nombre);
   var codigo=String(prod.codigo||'').trim().toLowerCase();
@@ -6296,93 +6296,6 @@ async function cqLimpiarTechiCau29_77Panol(){
   return cambio;
 }
 
-var cqAdicional100SoloPanolFixEnCurso=false;
-var cqAdicional100SoloPanolFixHechoSesion=false;
-async function cqDepurarAdicional100SoloPanolFirebase(){
-  if(cqAdicional100SoloPanolFixEnCurso||cqAdicional100SoloPanolFixHechoSesion)return false;
-  if(!window._dbReady||!window._db||!window._doc||!window._runTransaction||!window._setDoc)return false;
-  cqAdicional100SoloPanolFixEnCurso=true;
-  try{
-    var loc=cqAplicarMarcaAdicional100SoloPanolLocal();
-    var movIds=loc.movIds||[];
-    var iids=movIds.map(function(id){return 'panol_'+String(id);});
-    var iidSet={};iids.forEach(function(x){iidSet[String(x)]=true;});
-
-    // Primero guardar Pañol sin vínculo para que ningún listener vuelva a recrear cargas.
-    if(loc.cambio){
-      try{await persist();}catch(e){console.warn('No se pudo guardar marca Solo Pañol',e);}
-    }
-
-    var ref=window._doc(window._db,'materiales','data_planilla_exacta_v4');
-    await window._runTransaction(window._db,async function(tx){
-      var snap=await tx.get(ref);
-      if(!snap.exists())return;
-      var d=snap.data()||{};
-      if(!Array.isArray(d.cargas))d.cargas=[];
-      if(!Array.isArray(d.extraMats))d.extraMats=[];
-      if(!Array.isArray(d.ignoredIntegrationIds))d.ignoredIntegrationIds=[];
-      if(!d.overrides||typeof d.overrides!=='object')d.overrides={};
-      if(!d.historial||typeof d.historial!=='object')d.historial={};
-      if(!d.matCodigos||typeof d.matCodigos!=='object')d.matCodigos={};
-      if(!d.matCategorias||typeof d.matCategorias!=='object')d.matCategorias={};
-      if(!d.matNombres||typeof d.matNombres!=='object')d.matNombres={};
-
-      var matIds={};
-      d.extraMats.forEach(function(m){
-        if(m&&cqEsAdicional100SoloPanol(m.mat||''))matIds[String(m.id)]=true;
-      });
-      d.cargas.forEach(function(c){
-        var nom=String(c&&c.materialNameOrigen||c&&c.matName||c&&c.materialName||'');
-        var iid=String(c&&c.integracionId||'');
-        var origen=String(c&&c.origen||c&&c.source||c&&c.nota||'').toLowerCase();
-        if(iidSet[iid] || ((origen.indexOf('panol')>=0||iid.indexOf('panol_')===0) && cqEsAdicional100SoloPanol(nom))){
-          if(c&&c.matId!=null)matIds[String(c.matId)]=true;
-          if(iid)d.ignoredIntegrationIds.push(iid);
-        }
-      });
-      d.ignoredIntegrationIds=Array.from(new Set(d.ignoredIntegrationIds.map(String)));
-      d.cargas=d.cargas.filter(function(c){
-        var nom=String(c&&c.materialNameOrigen||c&&c.matName||c&&c.materialName||'');
-        var iid=String(c&&c.integracionId||'');
-        var origen=String(c&&c.origen||c&&c.source||c&&c.nota||'').toLowerCase();
-        return !(iidSet[iid] || ((origen.indexOf('panol')>=0||iid.indexOf('panol_')===0) && cqEsAdicional100SoloPanol(nom)));
-      });
-
-      Object.keys(matIds).forEach(function(mid){
-        Object.keys(d.overrides).forEach(function(k){if(k.indexOf(mid+'-')===0)delete d.overrides[k];});
-        Object.keys(d.historial).forEach(function(k){if(k.indexOf(mid+'-')===0)delete d.historial[k];});
-      });
-
-      d.extraMats=d.extraMats.filter(function(m){
-        if(!m||!matIds[String(m.id)])return true;
-        var usado=d.cargas.some(function(c){return String(c&&c.matId)===String(m.id);});
-        if(usado)return true;
-        delete d.matCodigos[m.id];delete d.matCategorias[m.id];delete d.matNombres[m.id];
-        return false;
-      });
-      d._cqAdicional100SoloPanolDepuradoAt=new Date().toISOString();
-      d.updatedAt=new Date().toISOString();
-      tx.set(ref,d);
-    });
-
-    // Desactivar también la auditoría de las salidas históricas concretas.
-    for(var i=0;i<iids.length;i++){
-      try{
-        await window._setDoc(window._doc(window._db,'materiales_integraciones',iids[i]),{
-          integrationId:iids[i],source:'panol',active:false,
-          disabledReason:'Adicional de 100 cm es exclusivo de Pañol',
-          updatedAt:new Date().toISOString()
-        },{merge:true});
-      }catch(e){console.warn('No se pudo desactivar integración '+iids[i],e);}
-    }
-    cqAdicional100SoloPanolFixHechoSesion=true;
-    try{renderActive();}catch(_e){}
-    return true;
-  }finally{
-    cqAdicional100SoloPanolFixEnCurso=false;
-  }
-}
-
 function integracionConsumoId(movId){ return 'panol_'+String(movId); }
 async function cqVerificarCargaMaterialesReal(iid,payload){
   if(!window._getDoc||!window._doc||!window._db){
@@ -6423,18 +6336,6 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
 
   var destino=mov.materialesProducto||null;
   var prod=prodFallback || state.productos.find(function(p){return p.id===mov.prodId;}) || null;
-
-  // Adicional de 100 cm es un ítem interno de Pañol. Si una rutina histórica intenta
-  // sincronizarlo, convertir la acción en BAJA para cortar el bucle definitivamente.
-  if(activo!==false && ((prod&&cqEsAdicional100SoloPanol(prod.nombre||''))||cqEsAdicional100SoloPanol(mov.materialName||''))){
-    activo=false;
-    mov.materialesAgregar=false;
-    mov.materialesProducto=null;
-    mov.materialesCantidad=0;
-    mov.materialesSyncEstado='no';
-    mov.materialesSyncError='Producto exclusivo de Pañol · no se envía a Materiales';
-    destino=null;
-  }
 
   // No exigir vínculo previo con el catálogo:
   // Materiales puede resolver uno existente por código/nombre o crear uno nuevo.
