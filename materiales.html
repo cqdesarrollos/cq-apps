@@ -5305,26 +5305,155 @@ function renombrarExtrasSegunGastos(){
   return cambio;
 }
 
-// Unifica también el nombre guardado dentro de cada carga. Así una misma obra
-// no aparece a veces como "5/98" y otras como "5/98 (Ramón)" cuando Gastos
-// ya tiene definido el nombre completo. La identidad sigue siendo lote/manzana.
-function normalizarNombresObraCargasMateriales(){
-  if(!state||!Array.isArray(state.cargas))return false;
-  var obras=getObras();
+// CQ 12/10/2026 — BLINDAJE DE ÍNDICES DE OBRA.
+// Las obras que llegan desde Gastos NO pueden quedar solamente "inyectadas" por getObras(),
+// porque su posición depende del orden de config/app. Si mañana se agrega una obra antes de
+// otra, un obraIdx histórico puede terminar apuntando a otra obra y todos los números parecen
+// cambiar. Por eso, una vez vista una obra nueva de Gastos, se fija para siempre al final de
+// extraObras. Las obras futuras se agregan detrás y nunca desplazan índices existentes.
+function estabilizarObrasGastosMateriales(){
+  if(!state||!Array.isArray(state.extraObras)||!Array.isArray(obrasGastosMateriales))return false;
   var cambio=false;
+  var existentes=OBRAS_BASE.concat(state.extraObras).slice();
+
+  obrasGastosActivasMateriales().forEach(function(g){
+    var nombre=String(g.label||g.short||g.id||'').trim();
+    if(!nombre)return;
+    var clave=claveLoteMz(nombre);
+    var existe=existentes.some(function(o){
+      if(clave)return claveLoteMz(o)===clave;
+      return String(o||'').trim().toLowerCase()===nombre.toLowerCase();
+    });
+    if(!existe){
+      state.extraObras.push(nombre);
+      existentes.push(nombre);
+      cambio=true;
+    }
+  });
+  return cambio;
+}
+
+function indiceObraEstableMateriales(nombre){
+  nombre=String(nombre||'').trim();
+  if(!nombre)return -1;
+  var clave=claveLoteMz(nombre);
+  var normal=normalizarClaveIntegracion(nombre);
+  var obras=OBRAS_BASE.map(function(o,i){return nombreObraUnificadoMateriales(o,i);})
+    .concat((state.extraObras||[]).map(function(o){
+      var g=obraGastosPorClaveMateriales(claveLoteMz(o));
+      return g?(g.label||g.short||g.id):o;
+    }));
+  for(var i=0;i<obras.length;i++){
+    if(clave && claveLoteMz(obras[i])===clave)return i;
+    if(!clave && normal && normalizarClaveIntegracion(obras[i])===normal)return i;
+  }
+  return -1;
+}
+
+// Antes de mover las cargas, usamos sus nombres históricos para reconstruir cómo debe
+// desplazarse cualquier dato que todavía esté indexado por número de obra (overrides, historial,
+// terminadas y orden). El remapeo sólo se aplica cuando para un índice viejo hay una única obra
+// destino inequívoca; ante cualquier ambigüedad no toca ese índice.
+function reubicarEstadoIndexadoPorCargasMateriales(){
+  if(!state||!Array.isArray(state.cargas))return false;
+  var destinos={};
   state.cargas.forEach(function(c){
     if(!c)return;
-    var nuevo='';
-    var idx=Number(c.obraIdx);
-    if(Number.isInteger(idx)&&idx>=0&&idx<obras.length)nuevo=obras[idx]||'';
-    if(!nuevo){
-      var clave=claveLoteMz(c.obraNameOrigen||c.obraName||'');
-      var g=obraGastosPorClaveMateriales(clave);
-      if(g)nuevo=g.label||g.short||g.id||'';
+    var viejo=Number(c.obraIdx);
+    if(!Number.isInteger(viejo)||viejo<0)return;
+    var fuente=String(c.obraNameOrigen||c.obraName||'').trim();
+    if(!fuente)return;
+    var nuevo=indiceObraEstableMateriales(fuente);
+    if(nuevo<0)return;
+    if(!destinos[viejo])destinos[viejo]={};
+    destinos[viejo][nuevo]=true;
+  });
+
+  var mapa={};
+  Object.keys(destinos).forEach(function(k){
+    var ds=Object.keys(destinos[k]);
+    if(ds.length===1){
+      var viejo=Number(k),nuevo=Number(ds[0]);
+      if(viejo!==nuevo)mapa[viejo]=nuevo;
     }
-    if(nuevo && String(c.obraName||'')!==String(nuevo)){
-      c.obraName=nuevo;
-      cambio=true;
+  });
+  if(!Object.keys(mapa).length)return false;
+
+  function remapDiccionarioPorSufijo(origen){
+    var salida={};
+    Object.keys(origen||{}).forEach(function(k){
+      var m=String(k).match(/^(.*)-(\d+)$/);
+      if(!m){salida[k]=origen[k];return;}
+      var idx=Number(m[2]);
+      var nk=m[1]+'-'+(Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx);
+      // Construcción simultánea: si hubiera una colisión inesperada, conservar el valor
+      // que ya pertenece al destino para no pisar información silenciosamente.
+      if(!Object.prototype.hasOwnProperty.call(salida,nk))salida[nk]=origen[k];
+    });
+    return salida;
+  }
+
+  state.overrides=remapDiccionarioPorSufijo(state.overrides||{});
+  state.historial=remapDiccionarioPorSufijo(state.historial||{});
+
+  if(state.obrasTerminadas){
+    var nt={};
+    Object.keys(state.obrasTerminadas).forEach(function(k){
+      var idx=Number(k),nk=Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx;
+      if(state.obrasTerminadas[k])nt[nk]=true;
+    });
+    state.obrasTerminadas=nt;
+  }
+
+  if(Array.isArray(state.obraOrder)){
+    var vistos={};
+    state.obraOrder=state.obraOrder.map(function(idx){
+      idx=Number(idx);
+      return Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx;
+    }).filter(function(idx){
+      if(vistos[idx])return false;
+      vistos[idx]=true;return true;
+    });
+  }
+  return true;
+}
+
+// Reubica cargas por la IDENTIDAD guardada de la obra, nunca por la posición actual.
+// obraNameOrigen es la fuente más confiable para integraciones; en cargas manuales usamos obraName.
+function reubicarCargasPorNombreEstableMateriales(){
+  if(!state||!Array.isArray(state.cargas))return false;
+  var cambio=false;
+  var obras=getObras();
+  state.cargas.forEach(function(c){
+    if(!c)return;
+    var fuente=String(c.obraNameOrigen||c.obraName||'').trim();
+    if(!fuente)return;
+    var idx=indiceObraEstableMateriales(fuente);
+    if(idx<0)return;
+    if(Number(c.obraIdx)!==idx){c.obraIdx=idx;cambio=true;}
+    var nuevo=obras[idx]||fuente;
+    if(nuevo && String(c.obraName||'')!==String(nuevo)){c.obraName=nuevo;cambio=true;}
+  });
+  return cambio;
+}
+
+// Unifica el nombre guardado dentro de cada carga SIN usar obraIdx como identidad.
+// Antes se tomaba primero el índice y eso podía renombrar una carga con la obra equivocada
+// después de agregar obras nuevas en Gastos.
+function normalizarNombresObraCargasMateriales(){
+  if(!state||!Array.isArray(state.cargas))return false;
+  var cambio=false;
+  cambio=reubicarCargasPorNombreEstableMateriales()||cambio;
+  var obras=getObras();
+  state.cargas.forEach(function(c){
+    if(!c)return;
+    var idx=Number(c.obraIdx);
+    if(Number.isInteger(idx)&&idx>=0&&idx<obras.length){
+      var nuevo=obras[idx]||'';
+      if(nuevo && String(c.obraName||'')!==String(nuevo)){
+        c.obraName=nuevo;
+        cambio=true;
+      }
     }
   });
   return cambio;
@@ -8186,16 +8315,17 @@ async function persist(){
 async function initApp(){
   normalizeState();
   await cargarObrasGastosMateriales();
-  var migro=renombrarExtrasSegunGastos();
+  var migro=estabilizarObrasGastosMateriales();
+  migro=renombrarExtrasSegunGastos()||migro;
   migro=consolidarExtrasDuplicadasConGastos()||migro;
+  migro=reubicarEstadoIndexadoPorCargasMateriales()||migro;
+  migro=reubicarCargasPorNombreEstableMateriales()||migro;
   migro=normalizarNombresObraCargasMateriales()||migro;
   if(migro){
+    // En initApp sólo se acomoda la copia local. NO se escribe Firebase todavía:
+    // startFirebase/loadFromFirebase debe leer primero el documento compartido real.
+    // Esto evita que una copia local vieja pueda pisar datos remotos al detectar obras nuevas.
     localStorage.setItem(DB_KEY,JSON.stringify(state));
-    if(window._dbReady&&modoFirebase){
-      try{
-        await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()})));
-      }catch(e){console.warn('No se pudo guardar la unificación de obras',e);}
-    }
   }
   updateModoUI();
   renderActive();
@@ -8300,8 +8430,11 @@ async function loadFromFirebase(){
       delete d.updatedAt;
       state=d;
       normalizeState();
-      var migro=renombrarExtrasSegunGastos();
+      var migro=estabilizarObrasGastosMateriales();
+      migro=renombrarExtrasSegunGastos()||migro;
       migro=consolidarExtrasDuplicadasConGastos()||migro;
+      migro=reubicarEstadoIndexadoPorCargasMateriales()||migro;
+      migro=reubicarCargasPorNombreEstableMateriales()||migro;
       migro=normalizarNombresObraCargasMateriales()||migro;
       var limpioTechi=cqLimpiarTechiCau29_77Materiales();
       migro=limpioTechi||migro;
@@ -8341,6 +8474,8 @@ function normalizarClaveIntegracion(v){
   return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
 }
 function buscarObraIntegracion(nombre){
+  // Asegura que cualquier obra nueva de Gastos ya tenga un índice persistente antes de usarla.
+  estabilizarObrasGastosMateriales();
   var key=normalizarClaveIntegracion(nombre);
   var obras=getObras();
   for(var i=0;i<obras.length;i++){
@@ -8897,8 +9032,12 @@ async function startFirebase(){
             state=d;
             normalizeState();
 
-            var migro=renombrarExtrasSegunGastos();
+            var migro=estabilizarObrasGastosMateriales();
+            migro=renombrarExtrasSegunGastos()||migro;
             migro=consolidarExtrasDuplicadasConGastos()||migro;
+            migro=reubicarEstadoIndexadoPorCargasMateriales()||migro;
+            migro=reubicarCargasPorNombreEstableMateriales()||migro;
+            migro=normalizarNombresObraCargasMateriales()||migro;
 
             localStorage.setItem(DB_KEY,JSON.stringify(state));
             renderActive();
@@ -10092,54 +10231,7 @@ function cqAbrirPDFImprimible(data){
     '<table><thead><tr>'+data.headers.map(function(h){return '<th>'+cqEscapeExport(h)+'</th>';}).join('')+
     '</tr></thead><tbody>'+filas+'</tbody></table>'+
     '<script>window.onload=function(){setTimeout(function(){window.print();},250)}<\/script>'+
-    '
-<style id="cq-catalogo-tablet-fill-final">
-/* Catálogo en tablet horizontal: la tabla de Materiales cargados ocupa TODO el ancho. */
-@media (min-width:768px) and (max-width:1600px) and (orientation:landscape){
-  #view-catalogo #catalogo-content,
-  #view-catalogo #catalogo-content .card,
-  #view-catalogo #catalogo-content .tbl-wrap{
-    width:100%!important;
-    max-width:none!important;
-    box-sizing:border-box!important;
-  }
-
-  #view-catalogo #catalogo-content .tbl-wrap{
-    overflow-x:hidden!important;
-  }
-
-  #view-catalogo #catalogo-content .tbl-wrap table{
-    width:100%!important;
-    min-width:100%!important;
-    max-width:100%!important;
-    table-layout:fixed!important;
-    border-collapse:collapse!important;
-  }
-
-  /* Repartir el ancho útil para eliminar el gran vacío de la derecha. */
-  #view-catalogo #catalogo-content table th:nth-child(1),
-  #view-catalogo #catalogo-content table td:nth-child(1){width:38%!important;}
-  #view-catalogo #catalogo-content table th:nth-child(2),
-  #view-catalogo #catalogo-content table td:nth-child(2){width:18%!important;}
-  #view-catalogo #catalogo-content table th:nth-child(3),
-  #view-catalogo #catalogo-content table td:nth-child(3){width:44%!important;}
-
-  #view-catalogo #catalogo-content table td:nth-child(1),
-  #view-catalogo #catalogo-content table td:nth-child(2),
-  #view-catalogo #catalogo-content table td:nth-child(3){
-    overflow:hidden!important;
-  }
-
-  /* La observación puede usar todo el ancho de su columna. */
-  #view-catalogo #catalogo-content table td:nth-child(3) > div{
-    width:100%!important;
-    max-width:none!important;
-    box-sizing:border-box!important;
-  }
-}
-</style>
-
-</body></html>'
+    '</body></html>'
   );
   w.document.close();
 }
@@ -16830,6 +16922,53 @@ body:has(#modal-reporte.open) #modal-reporte{
     box-sizing:border-box!important;
     width:100%!important;
     max-width:none!important;
+  }
+}
+</style>
+
+
+<style id="cq-catalogo-tablet-fill-safe">
+/* Catálogo en tablet horizontal: aprovechar todo el ancho SIN tocar JS/Firebase. */
+@media (min-width:768px) and (max-width:1600px) and (orientation:landscape){
+  #view-catalogo #catalogo-content,
+  #view-catalogo #catalogo-content .card,
+  #view-catalogo #catalogo-content .tbl-wrap{
+    box-sizing:border-box!important;
+    width:100%!important;
+    max-width:none!important;
+  }
+
+  #view-catalogo #catalogo-content .tbl-wrap{
+    overflow-x:hidden!important;
+  }
+
+  #view-catalogo #catalogo-content .tbl-wrap table{
+    width:100%!important;
+    min-width:100%!important;
+    max-width:100%!important;
+    table-layout:fixed!important;
+    border-collapse:collapse!important;
+  }
+
+  #view-catalogo #catalogo-content table th:nth-child(1),
+  #view-catalogo #catalogo-content table td:nth-child(1){width:38%!important;}
+
+  #view-catalogo #catalogo-content table th:nth-child(2),
+  #view-catalogo #catalogo-content table td:nth-child(2){width:18%!important;}
+
+  #view-catalogo #catalogo-content table th:nth-child(3),
+  #view-catalogo #catalogo-content table td:nth-child(3){width:44%!important;}
+
+  #view-catalogo #catalogo-content table td:nth-child(1),
+  #view-catalogo #catalogo-content table td:nth-child(2),
+  #view-catalogo #catalogo-content table td:nth-child(3){
+    overflow:hidden!important;
+  }
+
+  #view-catalogo #catalogo-content table td:nth-child(3) > div{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
   }
 }
 </style>
