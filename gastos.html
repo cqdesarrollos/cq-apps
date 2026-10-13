@@ -3174,7 +3174,7 @@ function slug(value){
   return base||('obra_'+Date.now());
 }
 
-function saveObra(){const id=document.getElementById('obra-id-edit').value,label=document.getElementById('obra-label').value.trim(),short=document.getElementById('obra-short').value.trim();if(!label||!short){alert('Completá nombre y nombre corto');return}if(id){const o=config.obras.find(x=>x.id===id);o.label=label;o.short=short}else{const newId=slug(label);config.obras.push({id:newId,label,short});state[newId]=emptyState();curObra=newId;localStorage.setItem('gastos_cur_obra',curObra);persist()}persistConfig();closeModal('modal-obra');renderAll();subscribeObra()}
+function saveObra(){const id=document.getElementById('obra-id-edit').value,label=document.getElementById('obra-label').value.trim(),short=document.getElementById('obra-short').value.trim(),integrarEl=document.getElementById('obra-integrar-modulos'),integrarModulos=integrarEl?integrarEl.checked:true;if(!label||!short){alert('Completá nombre y nombre corto');return}if(id){const o=config.obras.find(x=>x.id===id);o.label=label;o.short=short;o.integrarModulos=(String(o.id)==='oficina'?true:integrarModulos)}else{const newId=slug(label);config.obras.push({id:newId,label,short,integrarModulos});state[newId]=emptyState();curObra=newId;localStorage.setItem('gastos_cur_obra',curObra);persist()}persistConfig();closeModal('modal-obra');renderAll();subscribeObra()}
 function deleteObra(id){if(id==='oficina'){alert('La oficina queda fija para gastos generales.');return}if(config.obras.length===1){alert('Tiene que quedar al menos una obra');return}if(!confirm('¿Eliminar la obra del listado? No borra los datos de Firebase, pero deja de mostrarse.'))return;config.obras=config.obras.filter(o=>o.id!==id);if(curObra===id){curObra=config.obras[0].id;localStorage.setItem('gastos_cur_obra',curObra);subscribeObra()}persistConfig();renderAll()}
 function editCategory(cat){const actual=CAT_LABELS[cat]||cat;const nuevoRaw=prompt('Modificar nombre de categoría. Los gastos ya cargados conservarán su categoría y solo cambiará el nombre visible.',actual);if(nuevoRaw===null)return;const nuevo=nuevoRaw.trim();if(!nuevo){alert('El nombre de la categoría no puede quedar vacío.');return}if(nuevo===actual)return;if(!config.categoryLabels)config.categoryLabels={};config.categoryLabels[cat]=nuevo;CAT_LABELS[cat]=nuevo;persistConfig();renderAll();}
 function addSubrubro(cat){const v=prompt('Nuevo subrubro para '+CAT_LABELS[cat]);if(!v)return;const val=v.trim();if(!val)return;const existe=(config.subrubros[cat]||[]).some(x=>String(x).trim().toLocaleLowerCase('es')===val.toLocaleLowerCase('es'));if(!existe){config.subrubros[cat].push(val);config.subrubros[cat].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'}));}persistConfig();renderConfig();updateSubrubroOptions()}
@@ -10234,7 +10234,7 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
   window.renderConfig=function(){
     const obrasEl=document.getElementById('obras-config');
     if(obrasEl){
-      obrasEl.innerHTML=`<table class="tbl"><thead><tr><th>Orden</th><th>Obra</th><th>Corto</th><th>Estado</th><th></th></tr></thead><tbody>${(config.obras||[]).map((o,i)=>`<tr class="${o.archived?'obra-archived-row':''}"><td class="mono"><button class="btn-sm" onclick="moveObra('${o.id}',-1)" ${i===0?'disabled':''}>↑</button> <button class="btn-sm" onclick="moveObra('${o.id}',1)" ${i===config.obras.length-1?'disabled':''}>↓</button></td><td>${o.label}</td><td class="mono">${o.short}</td><td>${o.archived?'<span class="obra-archived-tag">Archivada</span>':'<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Activa</span>'}</td><td class="r"><button class="btn-sm" onclick="openObraModal('${o.id}')">Editar</button> ${o.id==='oficina'?'':(o.archived?`<button class="archive-btn restore" onclick="cqRestoreObra('${o.id}')">Restaurar</button>`:`<button class="archive-btn" onclick="cqArchiveObra('${o.id}')">📦 Archivar</button> <button class="btn-del" onclick="deleteObra('${o.id}')">Eliminar</button>`)}</td></tr>`).join('')}</tbody></table>`;
+      obrasEl.innerHTML=`<table class="tbl"><thead><tr><th>Orden</th><th>Obra</th><th>Corto</th><th>Estado</th><th>Vínculo</th><th></th></tr></thead><tbody>${(config.obras||[]).map((o,i)=>`<tr class="${o.archived?'obra-archived-row':''}"><td class="mono"><button class="btn-sm" onclick="moveObra('${o.id}',-1)" ${i===0?'disabled':''}>↑</button> <button class="btn-sm" onclick="moveObra('${o.id}',1)" ${i===config.obras.length-1?'disabled':''}>↓</button></td><td>${o.label}</td><td class="mono">${o.short}</td><td>${o.archived?'<span class="obra-archived-tag">Archivada</span>':'<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Activa</span>'}</td><td>${o.id==='oficina'?'<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Sistema</span>':(o.integrarModulos===false?'<span class="obra-archived-tag" style="background:#FFF3D9;color:#94600B">Solo Gastos</span>':'<span class="obra-archived-tag" style="background:#EAF4FF;color:#28659A">Vinculada</span>')}</td><td class="r"><button class="btn-sm" onclick="openObraModal('${o.id}')">Editar</button> ${o.id==='oficina'?'':(o.archived?`<button class="archive-btn restore" onclick="cqRestoreObra('${o.id}')">Restaurar</button>`:`<button class="archive-btn" onclick="cqArchiveObra('${o.id}')">📦 Archivar</button> <button class="btn-del" onclick="deleteObra('${o.id}')">Eliminar</button>`)}</td></tr>`).join('')}</tbody></table>`;
     }
     const sub=document.getElementById('subrubros-config');
     if(sub){sub.innerHTML=Object.entries(CAT_LABELS).map(([cat,label])=>`<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${label}</span></span><span style="display:flex;gap:6px;align-items:center"><button class="btn-sm" title="Modificar nombre de categoría" onclick="editCategory('${cat}')">✏️ Categoría</button><button class="btn-sm" onclick="addSubrubro('${cat}')">＋ Agregar</button></span></div><div class="pillbox">${[...(config.subrubros[cat]||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<span class="pill">${s}<button title="Modificar" onclick="editSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">✏️</button><button title="Eliminar" onclick="delSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">×</button></span>`).join('')}</div></div>`).join('')}
@@ -10317,6 +10317,8 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     const t=normObraText(o);
     return t.includes('oficina') || t.includes('acopio') || t.includes('post obra') || t.includes('postobra') || t.includes('cq extras');
   }
+  window.cqObraIntegraModulos=function(o){return !!o && (String(o.id)==='oficina' || (o.integrarModulos!==false && o.archived!==true));};
+
   window.cqObraEsDiferenciada=function(o){
     if(!o)return false;
     if(o.visualTipo==='standard')return false;
@@ -10331,24 +10333,42 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 
   function ensureVisualSelector(){
     const short=document.getElementById('obra-short');
-    if(!short || document.getElementById('obra-visual-selector-wrap'))return;
+    if(!short)return;
     const fld=short.closest('.fld');
     if(!fld)return;
-    fld.insertAdjacentHTML('afterend',`<div class="fld" id="obra-visual-selector-wrap">
-      <label>Color del botón</label>
-      <div class="obra-visual-selector">
-        <label class="obra-visual-option standard-choice">
-          <input type="radio" name="obra-visual-tipo" value="standard" checked>
-          <span class="obra-swatch standard"></span>
-          <span class="obra-visual-copy"><strong>Estándar</strong><small>Azul como las obras</small></span>
+
+    if(!document.getElementById('obra-visual-selector-wrap')){
+      fld.insertAdjacentHTML('afterend',`<div class="fld" id="obra-visual-selector-wrap">
+        <label>Color del botón</label>
+        <div class="obra-visual-selector">
+          <label class="obra-visual-option standard-choice">
+            <input type="radio" name="obra-visual-tipo" value="standard" checked>
+            <span class="obra-swatch standard"></span>
+            <span class="obra-visual-copy"><strong>Estándar</strong><small>Azul como las obras</small></span>
+          </label>
+          <label class="obra-visual-option">
+            <input type="radio" name="obra-visual-tipo" value="especial">
+            <span class="obra-swatch especial"></span>
+            <span class="obra-visual-copy"><strong>Diferenciado</strong><small>Para oficina, acopio, extras, etc.</small></span>
+          </label>
+        </div>
+      </div>`);
+    }
+
+    if(!document.getElementById('obra-integracion-wrap')){
+      const visual=document.getElementById('obra-visual-selector-wrap')||fld;
+      visual.insertAdjacentHTML('afterend',`<div class="fld" id="obra-integracion-wrap">
+        <label>Vínculo con otros módulos</label>
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid #DDE8DE;border-radius:10px;background:#F8FBF8;cursor:pointer">
+          <input type="checkbox" id="obra-integrar-modulos" checked style="width:18px;height:18px;margin-top:1px;flex:0 0 auto">
+          <span style="font-size:12px;line-height:1.35;color:#355247">
+            <b>Vincular esta obra</b><br>
+            <span style="font-size:10.5px;color:#7A9E82">Materiales, Acopio, Pañol, Caja Chica, Caja Gerencia y demás módulos conectados.</span>
+          </span>
         </label>
-        <label class="obra-visual-option">
-          <input type="radio" name="obra-visual-tipo" value="especial">
-          <span class="obra-swatch especial"></span>
-          <span class="obra-visual-copy"><strong>Diferenciado</strong><small>Para oficina, acopio, extras, etc.</small></span>
-        </label>
-      </div>
-    </div>`);
+        <div style="font-size:10px;color:#9A6A18;margin-top:5px">Desmarcá esta opción para una obra histórica que deba existir sólo en Gastos.</div>
+      </div>`);
+    }
   }
   function setVisualChoice(value){
     ensureVisualSelector();
@@ -10362,6 +10382,7 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 
   window.openObraModal=function(id=''){
     ensureVisualSelector();
+    const integrarEl=document.getElementById('obra-integrar-modulos');
     const idEl=document.getElementById('obra-id-edit');
     const labelEl=document.getElementById('obra-label');
     const shortEl=document.getElementById('obra-short');
@@ -10374,10 +10395,12 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
       labelEl.value=obra.label||'';
       shortEl.value=obra.short||'';
       setVisualChoice(cqObraEsDiferenciada(obra)?'especial':'standard');
+      if(integrarEl){integrarEl.checked=(obra.integrarModulos!==false);integrarEl.disabled=(String(obra.id)==='oficina');}
       if(titleEl)titleEl.textContent='Editar obra';
     }else{
       idEl.value='';labelEl.value='';shortEl.value='';
       setVisualChoice('standard');
+      if(integrarEl){integrarEl.checked=true;integrarEl.disabled=false;}
       if(titleEl)titleEl.textContent='Agregar obra';
     }
     openModal('modal-obra');
@@ -10389,17 +10412,19 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     const label=document.getElementById('obra-label')?.value.trim()||'';
     const short=document.getElementById('obra-short')?.value.trim()||'';
     const visualTipo=getVisualChoice();
+    const integrarEl=document.getElementById('obra-integrar-modulos');
+    const integrarModulos=integrarEl?integrarEl.checked:true;
     if(!label||!short){alert('Completá nombre y nombre corto');return}
     if(id){
       const o=(config.obras||[]).find(x=>x.id===id);
       if(!o)return;
-      o.label=label;o.short=short;o.visualTipo=visualTipo;
+      o.label=label;o.short=short;o.visualTipo=visualTipo;o.integrarModulos=(String(o.id)==='oficina'?true:integrarModulos);
     }else{
       const newId=slug(label);
       if((config.obras||[]).some(o=>o.id===newId)){
         alert('Ya existe una obra con un nombre igual o muy parecido.');return;
       }
-      config.obras.push({id:newId,label,short,visualTipo});
+      config.obras.push({id:newId,label,short,visualTipo,integrarModulos});
       state[newId]=emptyState();
       curObra=newId;
       localStorage.setItem('gastos_cur_obra',curObra);

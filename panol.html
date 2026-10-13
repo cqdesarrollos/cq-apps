@@ -2838,7 +2838,7 @@ async function cargarConfigGastosPanol(){
   })();
   return gastosConfigLoadingPanol;
 }
-function obrasGastosPanol(){
+function obrasGastosPanolTodas(){
   return gastosConfigPanol&&Array.isArray(gastosConfigPanol.obras)
     ? gastosConfigPanol.obras.filter(function(o){return o&&o.id;}).map(function(o){
         var x=Object.assign({},o);
@@ -2850,7 +2850,19 @@ function obrasGastosPanol(){
       })
     : [];
 }
-function obraGastosPanolPorId(id){return obrasGastosPanol().find(function(o){return o.id===id;})||null;}
+function obrasGastosPanol(){
+  // Sólo las obras habilitadas en Gastos pueden entrar a nuevos vínculos del Pañol.
+  // Los registros históricos siguen resolviendo su nombre con obrasGastosPanolTodas().
+  return obrasGastosPanolTodas().filter(function(o){
+    return String(o.id)==='oficina' || (o.integrarModulos!==false && o.archived!==true);
+  });
+}
+function obraGastosPanolPorId(id){return obrasGastosPanolTodas().find(function(o){return o.id===id;})||null;}
+function obraIntegrablePanol(id){
+  if(!id||String(id)==='oficina')return true;
+  var o=obraGastosPanolPorId(id);
+  return !o || (o.integrarModulos!==false && o.archived!==true);
+}
 function nombreObraMovPanol(m){
   if(m&&m.gastosObraId){
     var o=obraGastosPanolPorId(m.gastosObraId);
@@ -3141,6 +3153,14 @@ async function sincronizarConsumoConGastos(mov,activo){
   if(!mov)throw new Error('Consumo no encontrado');
   await cargarConfigGastosPanol();
   if(!mov.gastosObraId)throw new Error('La salida no tiene obra vinculada con Gastos');
+  if(activo!==false && !obraIntegrablePanol(mov.gastosObraId)){
+    mov.gastosSyncEstado='omitido';
+    mov.gastosSyncError='Obra configurada como Solo Gastos';
+    mov.gastosSyncAt=new Date().toISOString();
+    cqPanolSetSyncEstadoActual(mov.id,'gastos','omitido',mov.gastosSyncError);
+    await persist();
+    return true;
+  }
   await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),activo===false);
   mov.gastosSyncEstado=activo===false?'error':'ok';
   mov.gastosSyncError=activo===false?'Eliminado de Gastos':'';
@@ -3169,7 +3189,7 @@ async function verificarGastosPanol(){
   verificandoGastosPanol=true;
   try{
     var movs=state.movimientos.filter(function(m){
-      return m.tipo==='salida'&&m.gastosObraId&&m.gastosDebeCargar!==false;
+      return m.tipo==='salida'&&m.gastosObraId&&m.gastosDebeCargar!==false&&obraIntegrablePanol(m.gastosObraId);
     });
     var ids=[...new Set(movs.map(function(m){return m.gastosObraId;}))],docs={};
     for(var i=0;i<ids.length;i++){
@@ -5542,20 +5562,31 @@ var conciliandoCatalogoPanol=false;
 
 function encontrarMaterialCatalogoParaProductoPanol(prod){
   if(!prod||prod.materialesProducto)return null;
+  var catalogo=cqCatalogoMaterialesPanol||[];
+  var nombre=normCatalogoPanol(prod.nombre);
   var codigo=String(prod.codigo||'').trim().toLowerCase();
 
-  if(codigo){
-    var porCodigo=(cqCatalogoMaterialesPanol||[]).find(function(x){
-      return String(x.code||'').trim().toLowerCase()===codigo;
-    });
-    if(porCodigo)return porCodigo;
+  // 1) Nombre exacto: identidad principal.
+  if(nombre){
+    var porNombre=catalogo.find(function(x){return normCatalogoPanol(x.name)===nombre;})||null;
+    if(porNombre)return porNombre;
   }
 
-  var nombre=normCatalogoPanol(prod.nombre);
-  if(!nombre)return null;
-  return (cqCatalogoMaterialesPanol||[]).find(function(x){
-    return normCatalogoPanol(x.name)===nombre;
-  })||null;
+  // 2) Código sólo como respaldo y únicamente si el nombre es compatible.
+  // Un código repetido/mal heredado nunca puede cambiar la identidad del producto.
+  if(codigo){
+    var candidatos=catalogo.filter(function(x){
+      return String(x.code||'').trim().toLowerCase()===codigo;
+    });
+    var compatible=candidatos.find(function(x){
+      return cqMatNombreCompatibleDirecto(x.name||'',prod.nombre||'');
+    })||null;
+    if(compatible)return compatible;
+    if(candidatos.length){
+      console.warn('Pañol: código en conflicto; no se auto-vincula',codigo,prod.nombre,candidatos.map(function(x){return x.name;}));
+    }
+  }
+  return null;
 }
 
 async function conciliarProductosNuevosConMaterialesPanol(){
@@ -5830,7 +5861,7 @@ function iniciarVerificacionMaterialesPanol(){
     // Pañol la reconstruye automáticamente en Materiales.
     var cambioEstado=false;
     state.movimientos.forEach(function(m){
-      if(!m||m.tipo!=='salida'||m.materialesAgregar===false)return;
+      if(!m||m.tipo!=='salida'||m.materialesAgregar===false||!obraIntegrablePanol(m.gastosObraId))return;
       var iid=integracionConsumoId(m.id);
       var existe=ids.has(String(iid));
 
@@ -5963,29 +5994,45 @@ function cqMatResolverMaterialDirecto(data,ev){
 
   var deleted=Array.isArray(data.deletedMatIds)?data.deletedMatIds.map(String):[];
   var mats=cqMatTodosDirecto(data).filter(function(x){return deleted.indexOf(String(x.id))<0;});
+  var incomingId=ev.materialId!=null?String(ev.materialId):'';
   var nombre=String(ev.materialName||'').trim();
   var nk=cqMatNormDirecto(nombre);
   var code=String(ev.materialCode||'').trim().toLowerCase();
   var mat=null;
 
-  // 1) Nombre exacto.
-  if(nk){
+  // 1) ID del catálogo real, pero validando que el nombre siga siendo el mismo producto.
+  if(incomingId){
+    var byId=mats.find(function(x){return String(x.id)===incomingId;})||null;
+    if(byId && (!nombre || cqMatNormDirecto(byId.mat)===nk)){
+      mat=byId;
+    }else if(byId){
+      console.warn('Pañol: materialId en conflicto; se ignora y se resuelve por nombre',{
+        materialId:incomingId,recibido:nombre,actual:byId.mat
+      });
+    }
+  }
+
+  // 2) Nombre exacto.
+  if(!mat&&nk){
     mat=mats.find(function(x){return cqMatNormDirecto(x.mat)===nk;})||null;
   }
 
-  // 2) Código: si es único, es autoridad aunque el nombre esté escrito distinto.
-  // Si hubiese más de un material con el mismo código, usamos compatibilidad de nombre.
+  // 3) Código sólo si el nombre es compatible, aunque exista un único candidato.
   if(!mat&&code){
     var candidatos=mats.filter(function(x){
       return cqMatCodigoDirecto(data,x).toLowerCase()===code;
     });
-    if(candidatos.length===1)mat=candidatos[0];
-    else if(candidatos.length>1){
-      mat=candidatos.find(function(x){return cqMatNombreCompatibleDirecto(x.mat,nombre);})||null;
+    mat=candidatos.find(function(x){
+      return cqMatNombreCompatibleDirecto(x.mat,nombre);
+    })||null;
+    if(!mat&&candidatos.length){
+      console.warn('Pañol → Materiales: código en conflicto; no se reutiliza otro producto',{
+        codigo:ev.materialCode,recibido:nombre,existentes:candidatos.map(function(x){return x.mat;})
+      });
     }
   }
 
-  // 3) Si no existe, crear AUTOMÁTICAMENTE el producto en catálogo.
+  // 4) Si no existe coincidencia segura, crear el producto recibido.
   if(!mat){
     var maxId=10000;
     mats.forEach(function(x){if(Number(x.id)>=maxId)maxId=Number(x.id)+1;});
@@ -5993,9 +6040,7 @@ function cqMatResolverMaterialDirecto(data,ev){
 
     if(!Array.isArray(data.extraCats))data.extraCats=[];
     var existeCat=data.extraCats.some(function(c){return String(c&&c.name||'')===cat;});
-    if(!existeCat){
-      data.extraCats.push({name:cat,color:'#6FA58D',autoCreated:true,source:'panol'});
-    }
+    if(!existeCat)data.extraCats.push({name:cat,color:'#6FA58D',autoCreated:true,source:'panol'});
 
     mat={
       id:maxId,
@@ -6004,7 +6049,7 @@ function cqMatResolverMaterialDirecto(data,ev){
       prom:0,
       data:[],
       catName:cat,
-      comentarios:'Creado automáticamente desde '+(String(ev.source||'integración')==='acopio'?'Acopio':'Pañol'),
+      comentarios:'Creado automáticamente desde Pañol',
       autoCreated:true,
       source:'panol',
       createdAt:new Date().toISOString()
@@ -6016,6 +6061,7 @@ function cqMatResolverMaterialDirecto(data,ev){
 
   var incomingCode=String(ev.materialCode||'').trim();
   if(incomingCode&&!cqMatCodigoDirecto(data,mat)){
+    // Copiar código sólo al mismo producto que ya fue resuelto de forma segura.
     data.matCodigos[mat.id]=incomingCode;
     mat.codigo=incomingCode;
   }
@@ -6100,6 +6146,8 @@ function cqMatAplicarEventoDirecto(data,ev){
     automatico:true,
     integracionId:iid,
     codigoOrigen:ev.materialCode||'',
+    materialIdOrigen:ev.materialId!=null?ev.materialId:'',
+    materialCategoryOrigen:ev.materialCategory||ev.category||'',
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||''
   };
@@ -6234,6 +6282,12 @@ async function cqVerificarCargaMaterialesReal(iid,payload){
 async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
   if(!window._dbReady) throw new Error('Firebase no disponible');
   if(!mov) throw new Error('Consumo no encontrado');
+  if(activo!==false && mov.gastosObraId && !obraIntegrablePanol(mov.gastosObraId)){
+    mov.materialesSyncEstado='omitido';
+    mov.materialesSyncError='Obra configurada como Solo Gastos';
+    cqPanolSetSyncEstadoActual(mov.id,'materiales','omitido',mov.materialesSyncError);
+    return true;
+  }
 
   var destino=mov.materialesProducto||null;
   var prod=prodFallback || state.productos.find(function(p){return p.id===mov.prodId;}) || null;
@@ -6257,6 +6311,7 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
     comentario:String(mov.comentario||''),
     sourceMovementId:String(mov.id),
     obraName:String(nombreObraMovPanol(mov)||mov.obra||''),
+    materialId:destino&&destino.id!=null?destino.id:null,
     materialCode:materialCode,
     materialName:materialName,
     category:materialCategory,

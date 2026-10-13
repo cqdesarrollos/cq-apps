@@ -793,10 +793,24 @@ function selectedObraIdCC(){
   const dest=document.getElementById('mDestType').value;
   return dest==='oficina'?'oficina':document.getElementById('mWork').value;
 }
+function obraIntegrableCC(id){
+  if(!id||String(id)==='oficina')return true;
+  const o=(gastosConfigCC?.obras||[]).find(x=>x&&String(x.id)===String(id));
+  return !o || (o.integrarModulos!==false && o.archived!==true);
+}
 function fillWorksFromGastos(selected=''){
   const el=document.getElementById('mWork');
-  const obras=(gastosConfigCC?.obras||[]).filter(o=>o&&o.id&&o.id!=='oficina'&&!isOficinaCC(o.id));
-  el.innerHTML='<option value="">Seleccionar obra</option>'+obras.map(o=>`<option value="${esc(o.id)}">${esc(o.label||o.short||o.id)}</option>`).join('');
+  const todas=(gastosConfigCC?.obras||[]);
+  const obras=todas.filter(o=>o&&o.id&&o.id!=='oficina'&&!isOficinaCC(o.id)&&o.integrarModulos!==false&&o.archived!==true);
+
+  // Si se edita un movimiento histórico de una obra hoy marcada "Solo Gastos",
+  // conservarla visible sólo para no perder la referencia existente.
+  if(selected && !obras.some(o=>String(o.id)===String(selected))){
+    const hist=todas.find(o=>o&&String(o.id)===String(selected));
+    if(hist)obras.push(hist);
+  }
+
+  el.innerHTML='<option value="">Seleccionar obra</option>'+obras.map(o=>`<option value="${esc(o.id)}">${esc(o.label||o.short||o.id)}${o.integrarModulos===false?' · Solo Gastos':''}</option>`).join('');
   if(selected)el.value=selected;
 }
 function fillCategories(selected=''){
@@ -998,6 +1012,23 @@ function cqCcNorm(v){
     .replace(/[^a-z0-9]+/g,'')
     .trim();
 }
+
+function cqCcNombresCompatibles(a,b){
+  var x=cqCcNorm(a),y=cqCcNorm(b);
+  if(!x||!y)return true;
+  if(x===y)return true;
+  if(x.length>=5&&y.indexOf(x)>=0)return true;
+  if(y.length>=5&&x.indexOf(y)>=0)return true;
+  function palabras(v){
+    return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .split(/[^a-z0-9]+/).filter(function(w){
+        return w.length>=5 && ['ceramica','porcelanato','pulido','canuelas','canuela','material'].indexOf(w)<0;
+      });
+  }
+  var pa=palabras(a),pb=palabras(b);
+  return pa.some(function(w){return pb.indexOf(w)>=0;});
+}
+
 function cqCcClaveObra(v){
   var raw=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   var m=raw.match(/(?:lote|l)?\s*(\d+)\s*(?:\/|[- ]*mz|[- ]*manzana)\s*(\d+)/i);
@@ -1058,26 +1089,42 @@ function cqCcResolverMat(data,ev){
   var code=String(ev.materialCode||'').trim().toLowerCase();
   var mat=null;
 
-  // El producto fue seleccionado desde el catálogo real de Materiales:
-  // usar primero SU ID. Evita cualquier resolución ambigua por nombre/código.
+  // 1) El ID del catálogo es fuerte sólo si sigue describiendo el mismo nombre.
+  // Si un ID histórico quedó contaminado, no puede arrastrar la carga al producto equivocado.
   if(incomingId){
-    mat=mats.find(function(x){return String(x.id)===incomingId;})||null;
+    var byId=mats.find(function(x){return String(x.id)===incomingId;})||null;
+    if(byId && (!nombre || cqCcNorm(byId.mat)===nk)){
+      mat=byId;
+    }else if(byId){
+      console.warn('Caja Chica: materialId en conflicto; se resuelve por nombre',{
+        materialId:incomingId,recibido:nombre,actual:byId.mat
+      });
+    }
   }
+
+  // 2) Nombre exacto.
   if(!mat&&nk){
     mat=mats.find(function(x){return cqCcNorm(x.mat)===nk;})||null;
   }
+
+  // 3) Código sólo si el nombre es compatible. Código solo nunca manda.
   if(!mat&&code){
-    mat=mats.find(function(x){return cqCcCodigo(data,x).toLowerCase()===code;})||null;
+    var candidatos=mats.filter(function(x){return cqCcCodigo(data,x).toLowerCase()===code;});
+    mat=candidatos.find(function(x){return cqCcNombresCompatibles(x.mat,nombre);})||null;
+    if(!mat&&candidatos.length){
+      console.warn('Caja Chica → Materiales: código en conflicto; no se reutiliza otro producto',{
+        codigo:ev.materialCode,recibido:nombre,existentes:candidatos.map(function(x){return x.mat;})
+      });
+    }
   }
 
-  // Sólo como respaldo crear uno nuevo, usando la misma colección interna
-  // que usa actualmente materiales.html: materialesNuevos.
+  // 4) Crear un producto separado si no hay coincidencia segura.
   if(!mat){
     var nextId=10000;
     mats.forEach(function(x){if(Number(x.id)>=nextId)nextId=Number(x.id)+1;});
     var cat=String(ev.materialCategory||ev.category||'VARIOS').trim()||'VARIOS';
     mat={
-      id:incomingId||nextId,
+      id:nextId,
       mat:nombre||'Material',
       codigo:String(ev.materialCode||'').trim(),
       catName:cat,
@@ -1218,6 +1265,15 @@ async function syncMaterialesCC(m,oldM){
     }catch(e){
       console.warn('Respaldo materiales_integraciones no disponible',e);
     }
+  }
+
+  if(!obraIntegrableCC(m.gastosObraId)){
+    m.materialesSyncEstado='omitido';
+    m.materialesSyncError='Obra configurada como Solo Gastos';
+    m.materialesSyncAt=new Date().toISOString();
+    cqCcSetCurrentSyncState(m.id,'materiales','omitido',m.materialesSyncError);
+    save();render();
+    return;
   }
 
   if(m.materialesAgregar&&m.category==='mat'&&Number(m.materialesCantidad)>0){
@@ -1389,9 +1445,21 @@ async function syncMovementCC(m,oldM=null){
   if(!m||m.type!=='gasto')return;
   const newObra=m.gastosObraId;
   const oldObra=oldM?.gastosObraId;
+
+  // Si cambió la obra, limpiar el vínculo anterior aunque la nueva sea "Solo Gastos".
   if(oldObra&&oldObra!==newObra){
     await upsertGastoCC(oldObra,gastoPayloadCC(oldM),true);
   }
+
+  if(!obraIntegrableCC(newObra)){
+    m.gastosSyncEstado='omitido';
+    m.gastosSyncError='Obra configurada como Solo Gastos';
+    m.gastosSyncAt=new Date().toISOString();
+    cqCcSetCurrentSyncState(m.id,'gastos','omitido',m.gastosSyncError);
+    save();render();
+    return;
+  }
+
   await upsertGastoCC(newObra,gastoPayloadCC(m),false);
   m.gastosSyncEstado='ok';
   m.gastosSyncError='';
@@ -1423,7 +1491,7 @@ async function verifyGastosCC(){
   if(verifyingCC||!window._cqGastosBridge)return;
   verifyingCC=true;
   try{
-    const gastos=db.movements.filter(m=>m.type==='gasto'&&m.gastosObraId);
+    const gastos=db.movements.filter(m=>m.type==='gasto'&&m.gastosObraId&&obraIntegrableCC(m.gastosObraId));
     const obraIds=[...new Set(gastos.map(m=>m.gastosObraId))];
     const docs={};
     const f=window._cqGastosBridge;
@@ -1469,7 +1537,7 @@ async function verifyMaterialesCC(){
   verifyingMaterialesCC=true;
   try{
     const f=window._cqGastosBridge;
-    const movs=db.movements.filter(m=>m.type==='gasto'&&m.category==='mat');
+    const movs=db.movements.filter(m=>m.type==='gasto'&&m.category==='mat'&&obraIntegrableCC(m.gastosObraId));
 
     // Autorreparación: si hay cargas vinculadas pendientes/rojas, Caja Chica
     // vuelve a intentar materializarlas sin necesitar abrir Materiales.

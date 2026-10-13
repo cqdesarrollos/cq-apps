@@ -5237,7 +5237,7 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
       <button class="btn btn-p btn-sm" style="flex:1;min-width:95px" onclick="window.openNuevoMat()">＋ Material</button>
     </div>
   </div>
-  <div class="catalog-merge-note">Los materiales con el mismo nombre o código se unifican automáticamente y conservan sus cantidades.</div>
+  <div class="catalog-merge-note">Los materiales sólo se unifican automáticamente si tienen el mismo nombre exacto. Un código repetido se trata como conflicto y nunca mezcla cantidades.</div>
   <div id="catalogo-content"></div>
 </div>
 
@@ -5255,17 +5255,36 @@ function claveLoteMz(v){
   m=raw.match(/\b(\d+)\s*\/\s*(\d+)\b/);
   return m?(Number(m[1])+'/'+Number(m[2])):'';
 }
-function obrasGastosActivasMateriales(){
+function obrasGastosTodasMateriales(){
   return Array.isArray(obrasGastosMateriales)
     ? obrasGastosMateriales.filter(function(o){return o&&o.id&&o.id!=='oficina';})
     : [];
 }
+function obrasGastosActivasMateriales(){
+  return obrasGastosTodasMateriales().filter(function(o){
+    return o.integrarModulos!==false && o.archived!==true;
+  });
+}
 function obraGastosPorClaveMateriales(clave){
   if(!clave)return null;
-  return obrasGastosActivasMateriales().find(function(o){
+  // Para resolver históricos se consulta también una obra marcada "Solo Gastos".
+  // Esa obra no se inyecta como nueva selección, pero sus registros viejos conservan nombre.
+  return obrasGastosTodasMateriales().find(function(o){
     return [o.label,o.short,o.id].some(function(v){return claveLoteMz(v)===clave;});
   })||null;
 }
+
+function obraGastosExcluidaMateriales(nombre){
+  var clave=claveLoteMz(nombre);
+  var n=String(nombre||'').trim().toLowerCase();
+  var o=obrasGastosTodasMateriales().find(function(x){
+    if(!x)return false;
+    if(clave && [x.label,x.short,x.id].some(function(v){return claveLoteMz(v)===clave;}))return true;
+    return [x.label,x.short,x.id].some(function(v){return String(v||'').trim().toLowerCase()===n;});
+  })||null;
+  return !!(o && (o.integrarModulos===false || o.archived===true));
+}
+
 function nombreObraUnificadoMateriales(baseName,idx){
   if(idx<OBRA_GASTOS_DESDE_IDX)return (state.obraNombres&&state.obraNombres[idx])?state.obraNombres[idx]:baseName;
   var g=obraGastosPorClaveMateriales(claveLoteMz(baseName));
@@ -5355,67 +5374,12 @@ function indiceObraEstableMateriales(nombre){
 // terminadas y orden). El remapeo sólo se aplica cuando para un índice viejo hay una única obra
 // destino inequívoca; ante cualquier ambigüedad no toca ese índice.
 function reubicarEstadoIndexadoPorCargasMateriales(){
-  if(!state||!Array.isArray(state.cargas))return false;
-  var destinos={};
-  state.cargas.forEach(function(c){
-    if(!c)return;
-    var viejo=Number(c.obraIdx);
-    if(!Number.isInteger(viejo)||viejo<0)return;
-    var fuente=String(c.obraNameOrigen||c.obraName||'').trim();
-    if(!fuente)return;
-    var nuevo=indiceObraEstableMateriales(fuente);
-    if(nuevo<0)return;
-    if(!destinos[viejo])destinos[viejo]={};
-    destinos[viejo][nuevo]=true;
-  });
-
-  var mapa={};
-  Object.keys(destinos).forEach(function(k){
-    var ds=Object.keys(destinos[k]);
-    if(ds.length===1){
-      var viejo=Number(k),nuevo=Number(ds[0]);
-      if(viejo!==nuevo)mapa[viejo]=nuevo;
-    }
-  });
-  if(!Object.keys(mapa).length)return false;
-
-  function remapDiccionarioPorSufijo(origen){
-    var salida={};
-    Object.keys(origen||{}).forEach(function(k){
-      var m=String(k).match(/^(.*)-(\d+)$/);
-      if(!m){salida[k]=origen[k];return;}
-      var idx=Number(m[2]);
-      var nk=m[1]+'-'+(Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx);
-      // Construcción simultánea: si hubiera una colisión inesperada, conservar el valor
-      // que ya pertenece al destino para no pisar información silenciosamente.
-      if(!Object.prototype.hasOwnProperty.call(salida,nk))salida[nk]=origen[k];
-    });
-    return salida;
-  }
-
-  state.overrides=remapDiccionarioPorSufijo(state.overrides||{});
-  state.historial=remapDiccionarioPorSufijo(state.historial||{});
-
-  if(state.obrasTerminadas){
-    var nt={};
-    Object.keys(state.obrasTerminadas).forEach(function(k){
-      var idx=Number(k),nk=Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx;
-      if(state.obrasTerminadas[k])nt[nk]=true;
-    });
-    state.obrasTerminadas=nt;
-  }
-
-  if(Array.isArray(state.obraOrder)){
-    var vistos={};
-    state.obraOrder=state.obraOrder.map(function(idx){
-      idx=Number(idx);
-      return Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx;
-    }).filter(function(idx){
-      if(vistos[idx])return false;
-      vistos[idx]=true;return true;
-    });
-  }
-  return true;
+  // CQ 13/10/2026 — DESACTIVADO.
+  // Antes se infería un mapa desde algunas cargas y luego se movían EN BLOQUE
+  // overrides/historial/obrasTerminadas. Esa heurística podía trasladar números
+  // de una obra a otra. A partir de ahora sólo se reubican cargas individuales
+  // usando obraNameOrigen; los valores indexados no se mueven sin evidencia directa.
+  return false;
 }
 
 // Reubica cargas por la IDENTIDAD guardada de la obra, nunca por la posición actual.
@@ -5459,54 +5423,12 @@ function normalizarNombresObraCargasMateriales(){
   return cambio;
 }
 function consolidarExtrasDuplicadasConGastos(){
-  if(!state||!Array.isArray(state.extraObras)||!state.extraObras.length)return false;
-  var oldExtras=state.extraObras.slice();
-  var keep=[], oldToNew={}, cambio=false;
-
-  oldExtras.forEach(function(nombre,extraIdx){
-    var clave=claveLoteMz(nombre);
-    var canonical=indiceBasePorClaveGastos(clave);
-    var oldGlobal=OBRAS_BASE.length+extraIdx;
-    if(canonical>=OBRA_GASTOS_DESDE_IDX){
-      oldToNew[oldGlobal]=canonical;
-      cambio=true;
-    }else{
-      oldToNew[oldGlobal]=OBRAS_BASE.length+keep.length;
-      keep.push(nombre);
-    }
-  });
-
-  if(!cambio)return false;
-
-  (state.cargas||[]).forEach(function(c){
-    if(Object.prototype.hasOwnProperty.call(oldToNew,c.obraIdx)){
-      c.obraIdx=oldToNew[c.obraIdx];
-      c.obraName=nombreObraUnificadoMateriales(OBRAS_BASE[c.obraIdx]||'',c.obraIdx);
-    }
-  });
-
-  if(state.obrasTerminadas){
-    var nt={};
-    Object.keys(state.obrasTerminadas).forEach(function(k){
-      var n=Number(k);
-      var nk=Object.prototype.hasOwnProperty.call(oldToNew,n)?oldToNew[n]:n;
-      if(state.obrasTerminadas[k])nt[nk]=true;
-    });
-    state.obrasTerminadas=nt;
-  }
-
-  if(Array.isArray(state.obraOrder)){
-    var seen={};
-    state.obraOrder=state.obraOrder.map(function(n){
-      return Object.prototype.hasOwnProperty.call(oldToNew,n)?oldToNew[n]:n;
-    }).filter(function(n){
-      if(seen[n])return false;
-      seen[n]=true;return true;
-    });
-  }
-
-  state.extraObras=keep;
-  return true;
+  // CQ 13/10/2026 — DESACTIVADO POR SEGURIDAD DE ÍNDICES.
+  // Nunca retirar/recompactar state.extraObras automáticamente.
+  // Los valores históricos de Materiales usan obraIdx como posición y eliminar
+  // una obra intermedia desplaza todas las siguientes. La lista queda append-only.
+  // La equivalencia por lote/manzana se resuelve al mostrar/buscar, sin mover columnas.
+  return false;
 }
 
 var CATS = [
@@ -7557,38 +7479,41 @@ function cqMismoProductoEspecial(a,b){
 }
 function buscarCoincidenciaMaterial(mat,excluirId){
   if(!mat)return null;
-  var nk=claveMaterialUnificar(mat.mat),ck=codigoMaterialUnificar(mat);
+  var nk=claveMaterialUnificar(mat.mat);
+  if(!nk)return null;
+
+  // CQ 13/10/2026 — IDENTIDAD SEGURA:
+  // un código repetido NO convierte dos productos en el mismo material.
+  // Sólo se propone una unificación automática cuando el NOMBRE normalizado es idéntico.
+  // Esto evita cruces como "Adicional de 100 cm" ↔ "Codo Duratop".
   return getAllMats().find(function(x){
     if(Number(x.id)===Number(excluirId)||isMatDeleted(x.id))return false;
-    var esp=cqMismoProductoEspecial(mat,x);
-    if(esp===false)return false;
-    if(ck&&codigoMaterialUnificar(x)===ck)return true;
-    return nk&&claveMaterialUnificar(x.mat)===nk;
+    return claveMaterialUnificar(x.mat)===nk;
   })||null;
 }
 function consolidarMaterialesDuplicados(){
   var activos=getAllMats().filter(function(m){return m&&!isMatDeleted(m.id);}).slice();
-  var vistosNombre={},vistosCodigo={},cambio=false;
+  var vistosNombre={},cambio=false;
+
   activos.forEach(function(m){
     if(isMatDeleted(m.id)||!ALL_MATS.some(function(x){return Number(x.id)===Number(m.id);}))return;
-    var nk=claveMaterialUnificar(m.mat),ck=codigoMaterialUnificar(m),otro=null;
-    if(ck&&vistosCodigo[ck]){
-      var candidato=vistosCodigo[ck];
-      var esp=cqMismoProductoEspecial(m,candidato);
-      if(esp!==false)otro=candidato;
-    }
-    if(!otro&&nk&&vistosNombre[nk])otro=vistosNombre[nk];
+    var nk=claveMaterialUnificar(m.mat);
+    if(!nk)return;
+
+    // CQ 13/10/2026 — Nunca fusionar automáticamente por código.
+    // El código sirve como dato de referencia/integración, no como identidad destructiva.
+    var otro=vistosNombre[nk]||null;
     if(otro&&Number(otro.id)!==Number(m.id)){
-      var can=elegirCanonicoMaterial(otro,m),dup=Number(can.id)===Number(otro.id)?m:otro;
+      var can=elegirCanonicoMaterial(otro,m);
+      var dup=Number(can.id)===Number(otro.id)?m:otro;
       unificarDosMateriales(can,dup,{toast:false});
       cambio=true;
-      if(nk)vistosNombre[nk]=can;
-      if(ck)vistosCodigo[ck]=can;
+      vistosNombre[nk]=can;
     }else{
-      if(nk)vistosNombre[nk]=m;
-      if(ck)vistosCodigo[ck]=m;
+      vistosNombre[nk]=m;
     }
   });
+
   if(cambio)state._materialesUnificadosAt=new Date().toISOString();
   return cambio;
 }
@@ -7993,6 +7918,152 @@ function cqForzarCementoHolcimCanonico(){
   return true;
 }
 
+
+/* ==========================================================
+   CQ 13/10/2026 — BLINDAJE DE IDENTIDAD DE MATERIALES
+   - Un código nunca autoriza una fusión destructiva.
+   - Las cargas automáticas se pueden reparar usando el nombre de ORIGEN
+     que quedó guardado por Acopio/Pañol/Cajas.
+   - Regla definitiva: 902001103 pertenece al CODO DURATOP 45° HH 63MM.
+   ========================================================== */
+var CQ_MAT_CODO_DURATOP_45_63_CODIGO='902001103';
+
+function cqEsCodoDuratop45HH63Materiales(v){
+  var n=claveMaterialUnificar(v);
+  return n.indexOf('codo')>=0 && n.indexOf('duratop')>=0 && n.indexOf('45')>=0 && n.indexOf('63')>=0;
+}
+function cqEsAdicional100Materiales(v){
+  var n=claveMaterialUnificar(v);
+  return n.indexOf('adicional')>=0 && (n.indexOf('100')>=0 || n.indexOf('cm')>=0 || n==='adicional');
+}
+function cqCodigoSeguroMaterialesParaNombre(codigo,nombre){
+  var c=String(codigo||'').trim();
+  if(c===CQ_MAT_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Materiales(nombre))return '';
+  return c;
+}
+function cqBuscarMaterialExactoPorNombreMateriales(nombre){
+  var nk=claveMaterialUnificar(nombre);
+  if(!nk)return null;
+  return getAllMats().find(function(m){
+    return m&&!isMatDeleted(m.id)&&claveMaterialUnificar(m.mat)===nk;
+  })||null;
+}
+function cqCrearMaterialOrigenSeguroMateriales(nombre,codigo,categoria,origen){
+  var limpio=String(nombre||'').trim();
+  if(!limpio)return null;
+  var existe=cqBuscarMaterialExactoPorNombreMateriales(limpio);
+  if(existe)return existe;
+
+  var maxId=10000;
+  getAllMats().forEach(function(m){
+    var id=Number(m&&m.id)||0;
+    if(id>=maxId)maxId=id+1;
+  });
+
+  var cat=String(categoria||'VARIOS').trim()||'VARIOS';
+  if(!CATS.some(function(c){return c&&!isCatDeleted(c.name)&&String(c.name).toLowerCase()===cat.toLowerCase();}))cat='VARIOS';
+  var code=cqCodigoSeguroMaterialesParaNombre(codigo,limpio);
+  if(cqEsCodoDuratop45HH63Materiales(limpio))code=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+
+  var mat={
+    id:maxId,
+    mat:limpio,
+    codigo:code,
+    prom:0,
+    data:[],
+    catName:cat,
+    comentarios:'Recuperado automáticamente desde '+String(origen||'integración'),
+    autoCreated:true
+  };
+  if(!Array.isArray(state.extraMats))state.extraMats=[];
+  state.extraMats.push(mat);
+  if(!state.matCodigos)state.matCodigos={};
+  if(code)state.matCodigos[mat.id]=code;
+  if(!state.matCategorias)state.matCategorias={};
+  state.matCategorias[mat.id]=cat;
+  var catObj=CATS.find(function(c){return c&&String(c.name).toLowerCase()===cat.toLowerCase();});
+  if(catObj&&!catObj.items.some(function(x){return Number(x.id)===Number(mat.id);}))catObj.items.push(mat);
+  if(!ALL_MATS.some(function(x){return Number(x.id)===Number(mat.id);}))ALL_MATS.push(mat);
+  return mat;
+}
+function cqRepararIdentidadCargasAutomaticasMateriales(){
+  var cambio=false;
+
+  // 1) El código 902001103 no puede quedar asignado a un producto que no sea el Codo.
+  getAllMats().forEach(function(mat){
+    if(!mat)return;
+    var raw=String((state.matCodigos&&state.matCodigos[mat.id])!=null?state.matCodigos[mat.id]:(mat.codigo||'')).trim();
+    if(raw===CQ_MAT_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Materiales(mat.mat||'')){
+      if(state.matCodigos)delete state.matCodigos[mat.id];
+      mat.codigo='';
+      var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
+      if(ex)ex.codigo='';
+      cambio=true;
+    }
+  });
+
+  // 2) Una carga automática conserva materialNameOrigen/codigoOrigen.
+  // Si hoy está apuntando a otro producto, devolverla al producto de origen.
+  (state.cargas||[]).forEach(function(c){
+    if(!c||!c.automatico)return;
+    var nombreOrigen=String(c.materialNameOrigen||'').trim();
+    if(!nombreOrigen)return;
+
+    var actual=getAllMats().find(function(m){return Number(m.id)===Number(c.matId)&&!isMatDeleted(m.id);})||null;
+    var nkOrigen=claveMaterialUnificar(nombreOrigen);
+    var nkActual=actual?claveMaterialUnificar(actual.mat):'';
+
+    // Mismo nombre exacto: nada que reparar.
+    if(actual&&nkOrigen&&nkActual===nkOrigen){
+      if(cqEsCodoDuratop45HH63Materiales(nombreOrigen)){
+        if(!state.matCodigos)state.matCodigos={};
+        if(String(state.matCodigos[actual.id]||getMatCodigo(actual)||'')!==CQ_MAT_CODO_DURATOP_45_63_CODIGO){
+          state.matCodigos[actual.id]=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+          actual.codigo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+          cambio=true;
+        }
+      }
+      return;
+    }
+
+    // No mover por pequeñas variantes compatibles: sólo cuando la identidad de origen
+    // es inequívoca o en el cruce conocido Codo ↔ Adicional.
+    var cruceCodoAdicional=actual && (
+      (cqEsCodoDuratop45HH63Materiales(nombreOrigen)&&cqEsAdicional100Materiales(actual.mat)) ||
+      (cqEsAdicional100Materiales(nombreOrigen)&&cqEsCodoDuratop45HH63Materiales(actual.mat))
+    );
+    var incompatible=actual ? !cqNombresCompatiblesIntegracion(actual.mat,nombreOrigen) : true;
+    if(!cruceCodoAdicional && !incompatible)return;
+
+    var destino=cqBuscarMaterialExactoPorNombreMateriales(nombreOrigen);
+    if(!destino){
+      destino=cqCrearMaterialOrigenSeguroMateriales(
+        nombreOrigen,
+        c.codigoOrigen||'',
+        c.materialCategoryOrigen||c.categoryOrigen||'VARIOS',
+        c.origen||'integración'
+      );
+    }
+    if(!destino)return;
+
+    // Para el caso conocido, el Codo siempre recupera su código exclusivo.
+    if(cqEsCodoDuratop45HH63Materiales(nombreOrigen)){
+      if(!state.matCodigos)state.matCodigos={};
+      state.matCodigos[destino.id]=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+      destino.codigo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+    }
+
+    if(Number(c.matId)!==Number(destino.id) || String(c.matName||'')!==String(destino.mat||'')){
+      c.matId=destino.id;
+      c.matName=destino.mat;
+      cambio=true;
+    }
+  });
+
+  if(cambio)state._identidadMaterialesReparadaAt=new Date().toISOString();
+  return cambio;
+}
+
 function normalizeState(){
   if(!state.overrides)state.overrides={};
   if(!state.historial)state.historial={};
@@ -8038,6 +8109,7 @@ function normalizeState(){
   aplicarNombresMateriales();
   aplicarCodigosMateriales();
   aplicarCategoriasMateriales();
+  cqRepararIdentidadCargasAutomaticasMateriales();
   consolidarMaterialesDuplicados();
 }
 function setSyncStatus(txt,cls){
@@ -8173,7 +8245,12 @@ async function completarCodigosDesdeAcopioYPanol(forzar){
         return;
       }
 
-      var codigo=codigos[0];
+      var codigo=cqCodigoSeguroMaterialesParaNombre(codigos[0],mat.mat||'');
+      if(!codigo && codigos[0]){
+        conflictos++;
+        console.warn('Código descartado por conflicto de identidad',mat.mat,codigos[0]);
+        return;
+      }
 
       /* El cemento canónico no puede volver al código histórico aunque Acopio/Pañol
          todavía publiquen el dato anterior. */
@@ -8538,10 +8615,25 @@ function cqNombresCompatiblesIntegracion(a,b){
   if(pa.some(function(w){return pb.includes(w);}))return true;
   return false;
 }
-function buscarMaterialIntegracion(codigo,nombre,origen){
+function buscarMaterialIntegracion(codigo,nombre,origen,materialId){
   var code=String(codigo||'').trim().toLowerCase();
   var mats=getAllMats().filter(function(mat){return !isMatDeleted(mat.id);});
   var nk=claveMaterialUnificar(nombre);
+
+  var incomingId=materialId!=null?String(materialId):'';
+  if(incomingId){
+    var byId=mats.find(function(mat){return String(mat.id)===incomingId;})||null;
+    if(byId){
+      // El ID sólo es confiable si el nombre de origen sigue describiendo ese mismo producto.
+      // Si el catálogo cambió/estuvo contaminado, caer al nombre exacto en vez de mezclar.
+      if(!String(nombre||'').trim() || claveMaterialUnificar(byId.mat)===nk){
+        return byId;
+      }
+      console.warn('ID de material en conflicto; se ignora el ID y se resuelve por nombre',{
+        materialId:materialId,recibido:nombre,actual:byId.mat
+      });
+    }
+  }
 
   /* CEMENTO blindado: cualquier payload viejo/nuevo va siempre al ID 7. */
   if(code===CQ_CEMENTO_CANON_CODIGO.toLowerCase()
@@ -8594,7 +8686,10 @@ function buscarMaterialIntegracion(codigo,nombre,origen){
   mats.forEach(function(mat){if(mat.id>=maxId)maxId=mat.id+1;});
   var cat=categoriaAprendidaPara(codigo,nombre)||'VARIOS';
   if(!CATS.some(function(c){return c.name===cat&&!isCatDeleted(c.name);}))cat='VARIOS';
-  var newMat={id:maxId,mat:String(nombre||('Material '+codigo)).trim(),codigo:String(codigo||'').trim(),prom:0,data:[],catName:cat,comentarios:'Creado automáticamente desde '+(origen||'integración'),autoCreated:true};
+  var nombreNuevo=String(nombre||('Material '+codigo)).trim();
+  var codigoNuevo=cqCodigoSeguroMaterialesParaNombre(codigo,nombreNuevo);
+  if(cqEsCodoDuratop45HH63Materiales(nombreNuevo))codigoNuevo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+  var newMat={id:maxId,mat:nombreNuevo,codigo:codigoNuevo,prom:0,data:[],catName:cat,comentarios:'Creado automáticamente desde '+(origen||'integración'),autoCreated:true};
   if(!state.matCategorias)state.matCategorias={};
   state.matCategorias[maxId]=cat;
   if(!state.extraMats)state.extraMats=[];
@@ -8729,45 +8824,33 @@ function aplicarIntegracion(ev){
     });
     return cambio;
   }
-  var obraIdx=buscarObraIntegracion(ev.obraName);
-  var mat=buscarMaterialIntegracion(ev.materialCode,ev.materialName,ev.sourceLabel||ev.source);
+  if(obraGastosExcluidaMateriales(ev.obraName)){
+    // La obra existe en Gastos pero fue marcada "Solo Gastos".
+    // No crear ni actualizar nuevas cargas; una baja (active=false) ya fue atendida arriba.
+    return false;
+  }
 
-  // Si no pudo resolverlo con la lógica histórica:
-  // 1) buscar por código exacto;
-  // 2) buscar por nombre exacto normalizado;
-  // 3) si no existe, crear un producto nuevo en el catálogo conservando código/nombre.
+  var obraIdx=buscarObraIntegracion(ev.obraName);
+  var mat=buscarMaterialIntegracion(ev.materialCode,ev.materialName,ev.sourceLabel||ev.source,ev.materialId);
+
+  // Respaldo defensivo: si el resolvedor principal no devolvió material,
+  // jamás resolver sólo por código. Nombre exacto o producto nuevo.
   if(!mat){
     var codigoEntrante=String(ev.materialCode||'').trim();
     var nombreEntrante=String(ev.materialName||'').trim();
-
-    if(codigoEntrante){
-      mat=getAllMats().find(function(m){
-        return !isMatDeleted(m.id)
-          && String(getMatCodigo(m)||'').trim().toLowerCase()===codigoEntrante.toLowerCase();
-      })||null;
-    }
-
-    if(!mat && nombreEntrante){
+    if(nombreEntrante){
       var nk=cqNombreExactoCodigo(nombreEntrante);
       mat=getAllMats().find(function(m){
         return !isMatDeleted(m.id) && cqNombreExactoCodigo(m.mat||'')===nk;
       })||null;
     }
-
     if(!mat && nombreEntrante){
-      var ids=getAllMats().map(function(m){return Number(m.id)||0;});
-      var nuevoId=(ids.length?Math.max.apply(null,ids):0)+1;
-      mat={
-        id:nuevoId,
-        mat:nombreEntrante,
-        catName:String(ev.category||ev.materialCategory||'VARIOS').trim()||'VARIOS',
-        codigo:codigoEntrante
-      };
-      if(!Array.isArray(state.materialesNuevos))state.materialesNuevos=[];
-      state.materialesNuevos.push(mat);
-      if(!state.matCodigos)state.matCodigos={};
-      if(codigoEntrante)state.matCodigos[nuevoId]=codigoEntrante;
-      guardarMemoriaCategoriaMaterial(mat,mat.catName||'VARIOS');
+      mat=cqCrearMaterialOrigenSeguroMateriales(
+        nombreEntrante,
+        codigoEntrante,
+        ev.materialCategory||ev.category||'VARIOS',
+        ev.sourceLabel||ev.source||'integración'
+      );
     }
   }
 
@@ -8812,7 +8895,8 @@ function aplicarIntegracion(ev){
 
   // Si se unificó por nombre y el catálogo todavía no tenía código,
   // copiar inmediatamente el código que viene de Acopio/Pañol/Caja.
-  var codigoIntegracion=String(ev.materialCode||'').trim();
+  var codigoIntegracion=cqCodigoSeguroMaterialesParaNombre(ev.materialCode,mat.mat||'');
+  if(cqEsCodoDuratop45HH63Materiales(mat.mat||''))codigoIntegracion=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
   if(codigoIntegracion && !String(getMatCodigo(mat)||'').trim()){
     if(!state.matCodigos)state.matCodigos={};
     state.matCodigos[mat.id]=codigoIntegracion;
@@ -8838,6 +8922,8 @@ function aplicarIntegracion(ev){
     automatico:true,
     integracionId:ev.integrationId,
     codigoOrigen:ev.materialCode||'',
+    materialIdOrigen:ev.materialId!=null?ev.materialId:'',
+    materialCategoryOrigen:ev.materialCategory||ev.category||'',
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||''
   };

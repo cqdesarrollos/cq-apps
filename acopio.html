@@ -5171,22 +5171,32 @@ function makeMatsFromTemplate(){
 var curAcopioId=null;
 function getAcopio(){return DB.acopios.find(function(a){return a.id===curAcopioId;});}
 function getAllMats(){var a=getAcopio();return a?a.mats:[];}
-function getObras(){
-  return gastosConfigAcopio&&Array.isArray(gastosConfigAcopio.obras)
-    ? gastosConfigAcopio.obras.filter(function(o){return o&&o.id&&o.id!=='oficina';}).map(function(o){return o.label||o.short||o.id;})
-    : [];
-}
-function getObrasGastosObjects(){
+function getObrasGastosAllObjects(){
   return gastosConfigAcopio&&Array.isArray(gastosConfigAcopio.obras)
     ? gastosConfigAcopio.obras.filter(function(o){return o&&o.id&&o.id!=='oficina';})
     : [];
 }
+function getObrasGastosObjects(){
+  // Sólo obras habilitadas para integración desde Gastos.
+  return getObrasGastosAllObjects().filter(function(o){
+    return o.integrarModulos!==false && o.archived!==true;
+  });
+}
+function getObras(){
+  return getObrasGastosObjects().map(function(o){return o.label||o.short||o.id;});
+}
+function obraGastosIntegrableAcopio(id){
+  if(!id)return true;
+  var o=getObrasGastosAllObjects().find(function(x){return String(x.id)===String(id);})||null;
+  return !o || (o.integrarModulos!==false && o.archived!==true);
+}
+
 function obraGastosActualPorIdx(idx){return getObrasGastosObjects()[idx]||null;}
 function retiroObraLabel(r){
   if(!r)return 'Obra';
   if(r.obraHistorica)return r.obraHistorica;
   if(r.gastosObraId){
-    var o=getObrasGastosObjects().find(function(x){return x.id===r.gastosObraId;});
+    var o=getObrasGastosAllObjects().find(function(x){return x.id===r.gastosObraId;});
     if(o)return o.label||o.short||o.id;
   }
   var a=getAcopio();
@@ -5709,7 +5719,7 @@ async function verificarGastosAcopio(){
     await cargarConfigGastosAcopio();
     var a=getAcopio();
     if(!a)return;
-    var retiros=(a.retiros||[]).filter(function(r){return r.gastosObraId&&r.cargarGastos!==false;});
+    var retiros=(a.retiros||[]).filter(function(r){return r.gastosObraId&&r.cargarGastos!==false&&obraGastosIntegrableAcopio(r.gastosObraId);});
     var ids=[...new Set(retiros.map(function(r){return r.gastosObraId;}))];
     var docs={},f=window._cqFirebase;
     for(var i=0;i<ids.length;i++){
@@ -7154,6 +7164,7 @@ async function cqAutoRepararMaterialesFaltantesActual(){
 
   var faltantes=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
     if(!r||r.cargarMateriales===false)return false;
+    if(r.gastosObraId && !obraGastosIntegrableAcopio(r.gastosObraId))return false;
     // CQ 13/10/2026 FIX 2 — no depender de una marca histórica `ok`.
     // Si el retiro debía ir a Materiales y hoy no existe con ficha visible,
     // se repone idempotentemente por integrationId.
@@ -8105,9 +8116,17 @@ async function sincronizarRetiroConMateriales(retiro,activo){
   var a=getAcopio();
   if(!a||!retiro)throw new Error('Retiro no encontrado');
 
+  // Una obra marcada "Solo Gastos" no genera NUEVAS integraciones. Las bajas
+  // siguen permitidas para poder limpiar un vínculo histórico si corresponde.
+  if(activo!==false && retiro.gastosObraId && !obraGastosIntegrableAcopio(retiro.gastosObraId)){
+    retiro.materialesSyncEstado='omitido';
+    retiro.materialesSyncError='Obra configurada como Solo Gastos';
+    return true;
+  }
+
   var m=getMat(retiro.matId);
   var obraObj=retiro.gastosObraId
-    ?getObrasGastosObjects().find(function(o){return String(o.id)===String(retiro.gastosObraId);})
+    ?getObrasGastosAllObjects().find(function(o){return String(o.id)===String(retiro.gastosObraId);})
     :null;
   var obra=String(
     (obraObj&&(obraObj.label||obraObj.short||obraObj.id))
