@@ -4522,6 +4522,33 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 }
 </style>
 
+
+<style id="cq-fix-filtros-tablet-overlay-v2">
+@media (min-width:651px) and (max-width:1200px){
+  #view-carga .premium-hist .cq-multi-filter-menu,
+  #view-carga .premium-hist .hist-mat-dropdown{
+    position:fixed!important;
+    right:auto!important;
+    z-index:2147483000!important;
+    max-height:58vh!important;
+    box-shadow:0 20px 55px rgba(10,38,30,.28)!important;
+  }
+  #view-carga .premium-hist .cq-multi-filter-menu{
+    min-width:280px!important;
+    max-width:min(420px,calc(100vw - 20px))!important;
+  }
+  #view-carga .premium-hist .cq-multi-filter-options{
+    max-height:43vh!important;
+    overflow:auto!important;
+  }
+  #view-carga .premium-hist .hist-mat-dropdown{
+    min-width:300px!important;
+    max-width:min(520px,calc(100vw - 20px))!important;
+    overflow:auto!important;
+  }
+}
+</style>
+
 <style id="cq-reporte-comentarios-definitivo">
 #modal-reporte .cq-report-number-cell,
 #view-obras #obras-content .cq-report-number-cell{position:relative;cursor:pointer}
@@ -7927,6 +7954,7 @@ function cqForzarCementoHolcimCanonico(){
    - Regla definitiva: 902001103 pertenece al CODO DURATOP 45° HH 63MM.
    ========================================================== */
 var CQ_MAT_CODO_DURATOP_45_63_CODIGO='902001103';
+var CQ_MAT_CODO_DURATOP_45_63_NOMBRE='CODO DURATOP 45° HH 63MM';
 var CQ_MAT_WEBER_MEMBRANA_CODIGO='3309301312';
 var CQ_MAT_WEBER_MEMBRANA_NOMBRE='WEBER MEMBRANA LIQUIDA TECHOS PU X 20 KG BCO';
 
@@ -8016,8 +8044,9 @@ function cqRepararIdentidadCargasAutomaticasMateriales(){
     if(!c||!c.automatico)return;
     var nombreOrigen=String(c.materialNameOrigen||'').trim();
     var codigoOrigen=String(c.codigoOrigen||'').trim();
-    // Recuperación histórica WEBER: si quedó el código pero se perdió el nombre de origen,
-    // el código 3309301312 identifica exclusivamente esta membrana.
+    // Recuperaciones históricas por código exclusivo: si una versión vieja perdió
+    // materialNameOrigen, estos códigos siguen identificando un solo producto.
+    if(!nombreOrigen && codigoOrigen===CQ_MAT_CODO_DURATOP_45_63_CODIGO)nombreOrigen=CQ_MAT_CODO_DURATOP_45_63_NOMBRE;
     if(!nombreOrigen && codigoOrigen===CQ_MAT_WEBER_MEMBRANA_CODIGO)nombreOrigen=CQ_MAT_WEBER_MEMBRANA_NOMBRE;
     if(!nombreOrigen)return;
 
@@ -8087,6 +8116,48 @@ function cqRepararIdentidadCargasAutomaticasMateriales(){
   return cambio;
 }
 
+/* CQ 13/10/2026 — DEPURACIÓN DE RESIDUOS DEL CRUCE CODO ↔ ADICIONAL 100 CM
+   La antigua unificación destructiva podía copiar la matriz/override del Codo sobre
+   "Adicional de 100 cm". Aunque hoy la identidad ya está blindada, esos overrides
+   persistidos en Firebase seguían sumándose en Reporte. El Adicional es una ficha
+   dinámica: su valor válido debe venir de cargas reales, no de una matriz heredada. */
+function cqDepurarOverridesAdicional100Materiales(){
+  if(state._cqAdicional100OverridesDepuradosV2)return false;
+
+  var adicionales=getAllMats().filter(function(m){
+    return m && !isMatDeleted(m.id) && cqEsAdicional100Materiales(m.mat||'');
+  });
+  if(!adicionales.length)return false;
+
+  var cambio=false;
+  adicionales.forEach(function(mat){
+    var extra=(state.extraMats||[]).find(function(x){return Number(x&&x.id)===Number(mat.id);})||null;
+    var nuevo=(state.materialesNuevos||[]).find(function(x){return Number(x&&x.id)===Number(mat.id);})||null;
+    var dinamico=!!extra || !!nuevo || Number(mat.id)>=10000 || mat.autoCreated===true;
+    if(!dinamico)return;
+
+    var pref=String(mat.id)+'-';
+    Object.keys(state.overrides||{}).forEach(function(k){
+      if(k.indexOf(pref)===0){
+        delete state.overrides[k];
+        cambio=true;
+      }
+    });
+    Object.keys(state.historial||{}).forEach(function(k){
+      if(k.indexOf(pref)===0){
+        delete state.historial[k];
+        cambio=true;
+      }
+    });
+  });
+
+  if(cambio){
+    state._cqAdicional100OverridesDepuradosV2=new Date().toISOString();
+    console.info('Materiales: eliminados overrides heredados del cruce Codo ↔ Adicional 100 cm.');
+  }
+  return cambio;
+}
+
 function normalizeState(){
   if(!state.overrides)state.overrides={};
   if(!state.historial)state.historial={};
@@ -8133,6 +8204,7 @@ function normalizeState(){
   aplicarCodigosMateriales();
   aplicarCategoriasMateriales();
   cqRepararIdentidadCargasAutomaticasMateriales();
+  cqDepurarOverridesAdicional100Materiales();
   consolidarMaterialesDuplicados();
 }
 function setSyncStatus(txt,cls){
@@ -11192,6 +11264,45 @@ function renderActive(){
   else if(t==='catalogo') renderCatalogo();
 }
 
+function cqEsTabletHistorial(){
+  var w=window.innerWidth||document.documentElement.clientWidth||0;
+  return w>=651&&w<=1200;
+}
+function cqPosicionarDropdownHistorial(anchor,menu,minWidth){
+  if(!anchor||!menu)return;
+  if(!cqEsTabletHistorial()){
+    menu.style.removeProperty('left');
+    menu.style.removeProperty('top');
+    menu.style.removeProperty('width');
+    menu.style.removeProperty('right');
+    return;
+  }
+  var r=anchor.getBoundingClientRect();
+  var vw=window.innerWidth||document.documentElement.clientWidth||1024;
+  var vh=window.innerHeight||document.documentElement.clientHeight||700;
+  var width=Math.max(Number(minWidth)||280,Math.round(r.width));
+  width=Math.min(width,vw-20);
+  var left=Math.max(10,Math.min(Math.round(r.left),vw-width-10));
+  var maxH=Math.max(220,Math.round(vh*.58));
+  var top=Math.round(r.bottom+5);
+  if(top+maxH>vh-10){
+    top=Math.max(10,Math.round(r.top-maxH-5));
+  }
+  menu.style.setProperty('left',left+'px','important');
+  menu.style.setProperty('top',top+'px','important');
+  menu.style.setProperty('right','auto','important');
+  menu.style.setProperty('width',width+'px','important');
+}
+function cqCerrarDropdownsHistorialTablet(){
+  try{
+    document.querySelectorAll('#view-carga .cq-multi-filter').forEach(function(w){w.classList.remove('open');});
+    var hm=document.getElementById('hist-mat-dropdown');if(hm)hm.classList.remove('open');
+  }catch(_e){}
+}
+window.addEventListener('resize',cqCerrarDropdownsHistorialTablet);
+window.addEventListener('orientationchange',cqCerrarDropdownsHistorialTablet);
+
+
 function escapeHtml(v){return String(v==null?'':v).replace(/[&<>"']/g,function(ch){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch];});}
 
 function getMatComentario(mat){
@@ -11873,7 +11984,15 @@ function renderHistMatDropdown(query){
   var mats=(window.__histMatsOrdenados||[]).filter(function(m){return !q||String(m.name).toLowerCase().indexOf(q)!==-1||String(m.cat).toLowerCase().indexOf(q)!==-1;});
   box.innerHTML='<button type="button" class="hist-mat-option'+(selected==='all'?' active':'')+'" onclick="window.setHistMatFilter(\'all\')"><span>Todos los materiales</span><small>A–Z</small></button>'+mats.map(function(m){return '<button type="button" class="hist-mat-option'+(String(selected)===String(m.id)?' active':'')+'" onclick="window.setHistMatFilter(\''+String(m.id).replace(/'/g,"\\'")+'\')"><span>'+escapeHtml(m.name)+'</span><small>'+escapeHtml(m.cat)+'</small></button>';}).join('');
 }
-function openHistMatDropdown(){var box=document.getElementById('hist-mat-dropdown');if(box){renderHistMatDropdown();box.classList.add('open');}}
+function openHistMatDropdown(){
+  var box=document.getElementById('hist-mat-dropdown');
+  var anchor=document.getElementById('hist-filter-mat-search');
+  if(box){
+    renderHistMatDropdown();
+    box.classList.add('open');
+    cqPosicionarDropdownHistorial(anchor,box,320);
+  }
+}
 function onHistMatSearch(v){var sel=document.getElementById('hist-filter-mat');if(sel&&sel.value!=='all'){sel.value='all';}renderHistMatDropdown(v);openHistMatDropdown();var c=document.getElementById('hist-mat-clear');if(c)c.classList.toggle('show',!!String(v).trim());window.renderCargaTab();}
 function setHistMatFilter(id){var sel=document.getElementById('hist-filter-mat');if(!sel)return;sel.value=String(id);var box=document.getElementById('hist-mat-dropdown');if(box)box.classList.remove('open');syncHistMatSearchLabel();window.renderCargaTab();}
 function clearHistMatFilter(){var sel=document.getElementById('hist-filter-mat'),inp=document.getElementById('hist-filter-mat-search'),box=document.getElementById('hist-mat-dropdown');if(sel)sel.value='all';if(inp)inp.value='';if(box)box.classList.remove('open');syncHistMatSearchLabel();window.renderCargaTab();}
@@ -13108,7 +13227,17 @@ html.cq-employee-materiales-readonly #view-obras [onclick*="openEdit("]{
       if(w&&t!==tipo)w.classList.remove('open');
     });
     var w=document.getElementById(cfg(tipo).wrap);
-    if(w){w.classList.toggle('open');if(w.classList.contains('open'))cqRenderMultiFilter(tipo);}
+    if(w){
+      w.classList.toggle('open');
+      if(w.classList.contains('open')){
+        cqRenderMultiFilter(tipo);
+        if(tipo==='hist-obras'||tipo==='hist-cats'){
+          var btn=w.querySelector('.cq-multi-filter-btn');
+          var menu=w.querySelector('.cq-multi-filter-menu');
+          cqPosicionarDropdownHistorial(btn,menu,300);
+        }
+      }
+    }
   }
 
   function cqToggleMultiValue(chk,ev){
