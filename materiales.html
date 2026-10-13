@@ -8256,6 +8256,60 @@ function cqReconciliarDuratopDesdeRetirosAcopio(dbA){
   return cambio;
 }
 
+
+/* CQ 12/10/2026 — limpieza DEFINITIVA del residuo histórico "Adicional de 100 cm".
+   La antigua unificación por código pudo copiar valores base/overrides del CODO al
+   Adicional. getVal() suma base/override + cargas, por lo que reparar sólo cargas
+   no alcanza. Este saneamiento corre UNA sola vez: anula exclusivamente la base
+   histórica contaminada del Adicional de 100 cm y conserva todas sus cargas reales. */
+function cqEsAdicional100CmExacto(v){
+  var n=claveMaterialUnificar(v||'');
+  return n==='adicionalde100cm' || n==='adicional100cm' || n==='adicionalde100cms' || n==='adicional100cms';
+}
+function cqLimpiarBaseHistoricaAdicional100UnaVez(){
+  if(state&&state._cqFixAdicional100BaseV1===true)return false;
+  if(!state.overrides)state.overrides={};
+  if(!state.historial)state.historial={};
+  var cambio=false;
+  var obras=(typeof getObras==='function'?getObras():[])||[];
+  var mats=(typeof getAllMats==='function'?getAllMats():ALL_MATS||[]).filter(function(m){
+    return m && !isMatDeleted(m.id) && cqEsAdicional100CmExacto(m.mat||'');
+  });
+
+  mats.forEach(function(mat){
+    // El código 902001103 nunca pertenece al Adicional.
+    var cod=String(getMatCodigo(mat)||mat.codigo||'').trim();
+    if(cod===CQ_CODO_DURATOP_45_63_CODIGO){
+      if(state.matCodigos)delete state.matCodigos[mat.id];
+      mat.codigo='';
+      var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
+      if(ex)ex.codigo='';
+      cambio=true;
+    }
+
+    // Forzar base 0 en todas las obras. Las cargas reales NO se tocan y getVal()
+    // las seguirá sumando normalmente encima de este cero.
+    obras.forEach(function(_obra,obraIdx){
+      var key=String(mat.id)+'-'+String(obraIdx);
+      var teniaOverride=state.overrides[key]!=null && Number(state.overrides[key])!==0;
+      var teniaBase=Array.isArray(mat.data) && mat.data[obraIdx]!=null && Number(mat.data[obraIdx])!==0;
+      if(teniaOverride || teniaBase){
+        state.overrides[key]=0;
+        if(state.historial&&state.historial[key])delete state.historial[key];
+        cambio=true;
+      }else if(state.overrides[key]==null && teniaBase){
+        state.overrides[key]=0;
+        cambio=true;
+      }
+    });
+  });
+
+  state._cqFixAdicional100BaseV1=true;
+  state._cqFixAdicional100BaseAt=new Date().toISOString();
+  cambio=true; // persistir también el marcador para que no vuelva a limpiar valores futuros.
+  return cambio;
+}
+
 function cqRepararCruceCodoDuratopEnCargas(){
   if(!Array.isArray(state.cargas))return false;
   var cambio=false;
@@ -8655,9 +8709,23 @@ async function cqReconciliarMaterialesConAcopioActual(){
   if(!window._dbReady||!modoFirebase)return false;
   var cambio=false;
   if(cqDuratopCambioPendiente){cambio=true;cqDuratopCambioPendiente=false;}
+  // Antes de reconciliar los retiros, eliminar una sola vez la base histórica
+  // contaminada que hacía que "Adicional de 100 cm" siguiera apareciendo.
+  cambio=cqLimpiarBaseHistoricaAdicional100UnaVez()||cambio;
   try{
     var snapA=await window._getDoc(window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3'));
-    if(!snapA.exists())return false;
+    if(!snapA.exists()){
+      if(cambio){
+        normalizeState();
+        localStorage.setItem(DB_KEY,JSON.stringify(state));
+        suppressRemoteUntil=Date.now()+1800;
+        await window._setDoc(
+          window._doc(window._db,'materiales','data_planilla_exacta_v4'),
+          JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
+        );
+      }
+      return cambio;
+    }
     var raw=snapA.data()||{};
     var dbA=(raw.db&&typeof raw.db==='object')?raw.db:raw;
 
