@@ -7927,6 +7927,8 @@ function cqForzarCementoHolcimCanonico(){
    - Regla definitiva: 902001103 pertenece al CODO DURATOP 45° HH 63MM.
    ========================================================== */
 var CQ_MAT_CODO_DURATOP_45_63_CODIGO='902001103';
+var CQ_MAT_WEBER_MEMBRANA_CODIGO='3309301312';
+var CQ_MAT_WEBER_MEMBRANA_NOMBRE='WEBER MEMBRANA LIQUIDA TECHOS PU X 20 KG BCO';
 
 function cqEsCodoDuratop45HH63Materiales(v){
   var n=claveMaterialUnificar(v);
@@ -7936,9 +7938,13 @@ function cqEsAdicional100Materiales(v){
   var n=claveMaterialUnificar(v);
   return n.indexOf('adicional')>=0 && (n.indexOf('100')>=0 || n.indexOf('cm')>=0 || n==='adicional');
 }
+function cqEsWeberMembranaMateriales(v){
+  return claveMaterialUnificar(v)===claveMaterialUnificar(CQ_MAT_WEBER_MEMBRANA_NOMBRE);
+}
 function cqCodigoSeguroMaterialesParaNombre(codigo,nombre){
   var c=String(codigo||'').trim();
   if(c===CQ_MAT_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Materiales(nombre))return '';
+  if(c===CQ_MAT_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaMateriales(nombre))return '';
   return c;
 }
 function cqBuscarMaterialExactoPorNombreMateriales(nombre){
@@ -7989,11 +7995,13 @@ function cqCrearMaterialOrigenSeguroMateriales(nombre,codigo,categoria,origen){
 function cqRepararIdentidadCargasAutomaticasMateriales(){
   var cambio=false;
 
-  // 1) El código 902001103 no puede quedar asignado a un producto que no sea el Codo.
+  // 1) Códigos exclusivos: nunca pueden quedar asignados a otro producto.
   getAllMats().forEach(function(mat){
     if(!mat)return;
     var raw=String((state.matCodigos&&state.matCodigos[mat.id])!=null?state.matCodigos[mat.id]:(mat.codigo||'')).trim();
-    if(raw===CQ_MAT_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Materiales(mat.mat||'')){
+    var invalidoCodo=raw===CQ_MAT_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Materiales(mat.mat||'');
+    var invalidoWeber=raw===CQ_MAT_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaMateriales(mat.mat||'');
+    if(invalidoCodo||invalidoWeber){
       if(state.matCodigos)delete state.matCodigos[mat.id];
       mat.codigo='';
       var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
@@ -8007,6 +8015,10 @@ function cqRepararIdentidadCargasAutomaticasMateriales(){
   (state.cargas||[]).forEach(function(c){
     if(!c||!c.automatico)return;
     var nombreOrigen=String(c.materialNameOrigen||'').trim();
+    var codigoOrigen=String(c.codigoOrigen||'').trim();
+    // Recuperación histórica WEBER: si quedó el código pero se perdió el nombre de origen,
+    // el código 3309301312 identifica exclusivamente esta membrana.
+    if(!nombreOrigen && codigoOrigen===CQ_MAT_WEBER_MEMBRANA_CODIGO)nombreOrigen=CQ_MAT_WEBER_MEMBRANA_NOMBRE;
     if(!nombreOrigen)return;
 
     var actual=getAllMats().find(function(m){return Number(m.id)===Number(c.matId)&&!isMatDeleted(m.id);})||null;
@@ -8015,11 +8027,14 @@ function cqRepararIdentidadCargasAutomaticasMateriales(){
 
     // Mismo nombre exacto: nada que reparar.
     if(actual&&nkOrigen&&nkActual===nkOrigen){
-      if(cqEsCodoDuratop45HH63Materiales(nombreOrigen)){
+      var codigoExclusivo='';
+      if(cqEsCodoDuratop45HH63Materiales(nombreOrigen))codigoExclusivo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+      if(cqEsWeberMembranaMateriales(nombreOrigen))codigoExclusivo=CQ_MAT_WEBER_MEMBRANA_CODIGO;
+      if(codigoExclusivo){
         if(!state.matCodigos)state.matCodigos={};
-        if(String(state.matCodigos[actual.id]||getMatCodigo(actual)||'')!==CQ_MAT_CODO_DURATOP_45_63_CODIGO){
-          state.matCodigos[actual.id]=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
-          actual.codigo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+        if(String(state.matCodigos[actual.id]||getMatCodigo(actual)||'')!==codigoExclusivo){
+          state.matCodigos[actual.id]=codigoExclusivo;
+          actual.codigo=codigoExclusivo;
           cambio=true;
         }
       }
@@ -8032,8 +8047,11 @@ function cqRepararIdentidadCargasAutomaticasMateriales(){
       (cqEsCodoDuratop45HH63Materiales(nombreOrigen)&&cqEsAdicional100Materiales(actual.mat)) ||
       (cqEsAdicional100Materiales(nombreOrigen)&&cqEsCodoDuratop45HH63Materiales(actual.mat))
     );
+    // WEBER 3309301312 se fuerza siempre a su ficha exacta; no se acepta una
+    // coincidencia aproximada por palabras compartidas ni por código heredado.
+    var cruceWeber=actual && cqEsWeberMembranaMateriales(nombreOrigen) && !cqEsWeberMembranaMateriales(actual.mat);
     var incompatible=actual ? !cqNombresCompatiblesIntegracion(actual.mat,nombreOrigen) : true;
-    if(!cruceCodoAdicional && !incompatible)return;
+    if(!cruceCodoAdicional && !cruceWeber && !incompatible)return;
 
     var destino=cqBuscarMaterialExactoPorNombreMateriales(nombreOrigen);
     if(!destino){
@@ -8051,6 +8069,11 @@ function cqRepararIdentidadCargasAutomaticasMateriales(){
       if(!state.matCodigos)state.matCodigos={};
       state.matCodigos[destino.id]=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
       destino.codigo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+    }
+    if(cqEsWeberMembranaMateriales(nombreOrigen)){
+      if(!state.matCodigos)state.matCodigos={};
+      state.matCodigos[destino.id]=CQ_MAT_WEBER_MEMBRANA_CODIGO;
+      destino.codigo=CQ_MAT_WEBER_MEMBRANA_CODIGO;
     }
 
     if(Number(c.matId)!==Number(destino.id) || String(c.matName||'')!==String(destino.mat||'')){

@@ -6905,6 +6905,7 @@ var materialesCargasSnapshotAcopio=[];
 // CQ 13/10/2026 — IDs de productos que existen realmente en el catálogo de Materiales.
 // El verde exige carga + ficha visible; una carga huérfana se fuerza a reparar.
 var materialesCatalogoIdsAcopio=new Set();
+var materialesCatalogoPorIdAcopio=new Map();
 var materialesIntegracionesAuditadasAcopio=null;
 var materialesAuditandoAcopio=false;
 var materialesVerificacionErrorAcopio=false;
@@ -6976,6 +6977,10 @@ function cqIdentidadCannesTripoli(nombreA,nombreB){
 }
 function cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nomCarga,codCarga){
   if(cqCruceCodoDuratopAdicionalAcopio(nomRet,nomCarga))return false;
+  var retWeber=cqEsWeberMembranaNombreAcopio(nomRet), cargaWeber=cqEsWeberMembranaNombreAcopio(nomCarga);
+  if((retWeber||cargaWeber) && !(retWeber&&cargaWeber))return false;
+  if((codRet===cqNormVerifMat(CQ_WEBER_MEMBRANA_CODIGO)||codCarga===cqNormVerifMat(CQ_WEBER_MEMBRANA_CODIGO))
+     && !(retWeber&&cargaWeber))return false;
   if((cqEsCodoDuratop45HH63NombreAcopio(nomRet)||cqEsCodoDuratop45HH63NombreAcopio(nomCarga))
      && !(cqEsCodoDuratop45HH63NombreAcopio(nomRet)&&cqEsCodoDuratop45HH63NombreAcopio(nomCarga)))return false;
   var esp=cqIdentidadCannesTripoli(nomRet,nomCarga);
@@ -7065,10 +7070,27 @@ async function cargarIntegracionesAuditadasMaterialesAcopio(){
   return materialesIntegracionesAuditadasAcopio;
 }
 
-function cqCargaTieneFichaCatalogoMaterialesAcopio(c){
+function cqCargaTieneFichaCatalogoMaterialesAcopio(c,retiro){
   if(!c||c.matId==null)return false;
-  return materialesCatalogoIdsAcopio instanceof Set
-    && materialesCatalogoIdsAcopio.has(String(c.matId));
+  var id=String(c.matId);
+  if(!(materialesCatalogoIdsAcopio instanceof Set) || !materialesCatalogoIdsAcopio.has(id))return false;
+  if(!retiro)return true;
+  var ficha=materialesCatalogoPorIdAcopio instanceof Map?materialesCatalogoPorIdAcopio.get(id):null;
+  if(!ficha)return false;
+
+  var nomRet=String(retiro.materialName||((getMat(retiro.matId)||{}).nom)||'');
+  var codRet=String(retiro.materialCode||((getMat(retiro.matId)||{}).cod)||'');
+  var nomFicha=String(ficha.nombre||'');
+  var codFicha=String(ficha.codigo||'');
+
+  // Productos con código reservado: el verde exige también identidad de nombre.
+  if(codRet===CQ_WEBER_MEMBRANA_CODIGO || cqEsWeberMembranaNombreAcopio(nomRet)){
+    return cqEsWeberMembranaNombreAcopio(nomFicha) && (!codFicha || codFicha===CQ_WEBER_MEMBRANA_CODIGO);
+  }
+  if(codRet===CQ_CODO_DURATOP_45_63_CODIGO || cqEsCodoDuratop45HH63NombreAcopio(nomRet)){
+    return cqEsCodoDuratop45HH63NombreAcopio(nomFicha) && (!codFicha || codFicha===CQ_CODO_DURATOP_45_63_CODIGO);
+  }
+  return true;
 }
 
 function cqRetiroExisteRealEnMateriales(retiro,a){
@@ -7083,11 +7105,11 @@ function cqRetiroExisteRealEnMateriales(retiro,a){
     return String(c&&c.integracionId||'')===String(iid);
   });
   if(porId){
-    return cqCargaTieneFichaCatalogoMaterialesAcopio(porId);
+    return cqCargaTieneFichaCatalogoMaterialesAcopio(porId,retiro);
   }
   return (materialesCargasSnapshotAcopio||[]).some(function(c){
     return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a)
-      && cqCargaTieneFichaCatalogoMaterialesAcopio(c);
+      && cqCargaTieneFichaCatalogoMaterialesAcopio(c,retiro);
   });
 }
 
@@ -7217,18 +7239,24 @@ function iniciarVerificacionMaterialesAcopio(){
     materialesVerificacionErrorAcopio=false;
     var ids=new Set();
     materialesCatalogoIdsAcopio=new Set();
+    materialesCatalogoPorIdAcopio=new Map();
     if(snap.exists()){
       var d=snap.data()||{};
+      var borrados=new Set((Array.isArray(d.deletedMatIds)?d.deletedMatIds:[]).map(function(x){return String(x);}));
+      function registrarFicha(m){
+        if(!m||m.id==null||borrados.has(String(m.id)))return;
+        var id=String(m.id);
+        var nombre=String((d.matNombres&&d.matNombres[m.id])!=null?d.matNombres[m.id]:(m.mat||''));
+        var codigo=String((d.matCodigos&&d.matCodigos[m.id])!=null?d.matCodigos[m.id]:(m.codigo||''));
+        materialesCatalogoIdsAcopio.add(id);
+        materialesCatalogoPorIdAcopio.set(id,{nombre:nombre,codigo:codigo});
+      }
       // Catálogo base + fichas dinámicas. El callback ocurre después de cargar el script,
       // por lo que CQ_MAT_BASE_DIRECTO ya está disponible.
       try{
-        (Array.isArray(CQ_MAT_BASE_DIRECTO)?CQ_MAT_BASE_DIRECTO:[]).forEach(function(m){
-          if(m&&m.id!=null)materialesCatalogoIdsAcopio.add(String(m.id));
-        });
+        (Array.isArray(CQ_MAT_BASE_DIRECTO)?CQ_MAT_BASE_DIRECTO:[]).forEach(registrarFicha);
       }catch(_e){}
-      (Array.isArray(d.extraMats)?d.extraMats:[]).forEach(function(m){
-        if(m&&m.id!=null)materialesCatalogoIdsAcopio.add(String(m.id));
-      });
+      (Array.isArray(d.extraMats)?d.extraMats:[]).forEach(registrarFicha);
 
       materialesCargasSnapshotAcopio=Array.isArray(d.cargas)?d.cargas.slice():[];
       materialesCargasSnapshotAcopio.forEach(function(c){
@@ -7709,6 +7737,8 @@ function cqMatNormDirecto(v){
 }
 
 var CQ_CODO_DURATOP_45_63_CODIGO='902001103';
+var CQ_WEBER_MEMBRANA_CODIGO='3309301312';
+var CQ_WEBER_MEMBRANA_NOMBRE='WEBER MEMBRANA LIQUIDA TECHOS PU X 20 KG BCO';
 function cqEsCodoDuratop45HH63NombreAcopio(v){
   var n=cqMatNormDirecto(v||'');
   return n.indexOf('codo')>=0
@@ -7718,6 +7748,9 @@ function cqEsCodoDuratop45HH63NombreAcopio(v){
 }
 function cqEsAdicionalNombreAcopio(v){
   return cqMatNormDirecto(v||'').indexOf('adicional')>=0;
+}
+function cqEsWeberMembranaNombreAcopio(v){
+  return cqMatNormDirecto(v||'')===cqMatNormDirecto(CQ_WEBER_MEMBRANA_NOMBRE);
 }
 function cqCruceCodoDuratopAdicionalAcopio(a,b){
   return (cqEsCodoDuratop45HH63NombreAcopio(a)&&cqEsAdicionalNombreAcopio(b))
@@ -7786,6 +7819,7 @@ function cqMatCodigoDirecto(data,mat){
   var mapa=data.matCodigos&&typeof data.matCodigos==='object'?data.matCodigos:{};
   var code=String(mapa[mat.id]!=null?mapa[mat.id]:(mat.codigo||'')).trim();
   if(code===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))return '';
+  if(code===CQ_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaNombreAcopio(mat.mat||''))return '';
   return code;
 }
 function cqMatTodosDirecto(data){
@@ -7804,7 +7838,9 @@ function cqMatResolverMaterialDirecto(data,ev){
   cqMatTodosDirecto(data).forEach(function(x){
     if(!x)return;
     var raw=String((data.matCodigos&&data.matCodigos[x.id])!=null?data.matCodigos[x.id]:(x.codigo||'')).trim();
-    if(raw===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(x.mat||'')){
+    var invalidoCodo=raw===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(x.mat||'');
+    var invalidoWeber=raw===CQ_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaNombreAcopio(x.mat||'');
+    if(invalidoCodo||invalidoWeber){
       data.matCodigos[x.id]='';
       var ex=(data.extraMats||[]).find(function(m){return String(m.id)===String(x.id);});
       if(ex)ex.codigo='';
@@ -7820,6 +7856,9 @@ function cqMatResolverMaterialDirecto(data,ev){
 
   if(cqEsCodoDuratop45HH63NombreAcopio(nombre)){
     mat=mats.find(function(x){return cqEsCodoDuratop45HH63NombreAcopio(x.mat||'');})||null;
+  }
+  if(!mat&&cqEsWeberMembranaNombreAcopio(nombre)){
+    mat=mats.find(function(x){return cqEsWeberMembranaNombreAcopio(x.mat||'');})||null;
   }
 
   if(!mat&&nk){
@@ -7866,7 +7905,9 @@ function cqMatResolverMaterialDirecto(data,ev){
     var nombreNuevo=nombre||('Material '+String(ev.materialCode||''));
     var codigoNuevo=cqCodigoMaterialSeguro(ev.materialCode);
     if(cqEsCodoDuratop45HH63NombreAcopio(nombreNuevo))codigoNuevo=CQ_CODO_DURATOP_45_63_CODIGO;
+    if(cqEsWeberMembranaNombreAcopio(nombreNuevo))codigoNuevo=CQ_WEBER_MEMBRANA_CODIGO;
     if(codigoNuevo===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(nombreNuevo))codigoNuevo='';
+    if(codigoNuevo===CQ_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaNombreAcopio(nombreNuevo))codigoNuevo='';
     mat={
       id:maxId,
       mat:nombreNuevo,
@@ -7886,7 +7927,9 @@ function cqMatResolverMaterialDirecto(data,ev){
 
   var incomingCode=cqCodigoMaterialSeguro(ev.materialCode);
   if(cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))incomingCode=CQ_CODO_DURATOP_45_63_CODIGO;
+  if(cqEsWeberMembranaNombreAcopio(mat.mat||''))incomingCode=CQ_WEBER_MEMBRANA_CODIGO;
   if(incomingCode===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))incomingCode='';
+  if(incomingCode===CQ_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaNombreAcopio(mat.mat||''))incomingCode='';
   if(incomingCode&&!cqMatCodigoDirecto(data,mat)){
     data.matCodigos[mat.id]=incomingCode;
     mat.codigo=incomingCode;
@@ -8137,9 +8180,11 @@ async function sincronizarRetiroConMateriales(retiro,activo){
 
   var materialCode=cqCodigoMaterialSeguro(retiro.materialCode!=null?retiro.materialCode:(m&&m.cod)||'');
   var materialName=String(retiro.materialName!=null?retiro.materialName:(m&&m.nom)||'').trim();
-  // 902001103 es exclusivo del CODO DURATOP 45° HH 63MM.
+  // Códigos exclusivos de producto: nunca se heredan a otro nombre.
   if(cqEsCodoDuratop45HH63NombreAcopio(materialName))materialCode=CQ_CODO_DURATOP_45_63_CODIGO;
   else if(materialCode===CQ_CODO_DURATOP_45_63_CODIGO)materialCode='';
+  if(cqEsWeberMembranaNombreAcopio(materialName))materialCode=CQ_WEBER_MEMBRANA_CODIGO;
+  else if(materialCode===CQ_WEBER_MEMBRANA_CODIGO)materialCode='';
   var materialUnidad=String(retiro.materialUnidad!=null?retiro.materialUnidad:(m&&m.unidad)||'').trim();
   var categoria=String(retiro.subrubro||'').trim()||'VARIOS';
 
@@ -14600,6 +14645,8 @@ document.addEventListener('click',function(e){
     // la carga masiva nunca debe tomar el primer duplicado por orden del catálogo.
     var codoReservado=mats.find(function(m){return m&&cqEsCodoDuratop45HH63NombreAcopio(m.nom||'');});
     if(codoReservado)cod[norm(CQ_CODO_DURATOP_45_63_CODIGO)]=codoReservado;
+    var weberReservado=mats.find(function(m){return m&&cqEsWeberMembranaNombreAcopio(m.nom||'');});
+    if(weberReservado)cod[norm(CQ_WEBER_MEMBRANA_CODIGO)]=weberReservado;
     return {cod:cod,nom:nom};
   }
   function lineas(id){
