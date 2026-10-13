@@ -7456,6 +7456,10 @@ var CATS = [
 var ALL_MATS = CATS.reduce(function(a,c){return a.concat(c.items);}, []);
 CATS.forEach(function(c){ if(!c._baseName)c._baseName=c.name; });
 
+// CQ 13/10/2026 — IDs del catálogo base real. Se usa para distinguir
+// materiales nativos de fichas dinámicas creadas por Acopio/Pañol/Cajas.
+var CQ_BASE_MAT_IDS=new Set(ALL_MATS.map(function(m){return String(m.id);}));
+
 function categoriaVisiblePorBase(baseName){
   return (state.catRenames&&state.catRenames[baseName])||baseName;
 }
@@ -8337,6 +8341,135 @@ function cqRepararCruceCodoDuratopEnCargas(){
   return cambio;
 }
 
+// CQ 13/10/2026 — integridad de catálogo para cargas automáticas.
+// Una carga no puede quedar apuntando a un matId sin ficha de producto: Catálogo y
+// Reportes recorren CATS/ALL_MATS y, si falta extraMats, la cantidad existe pero queda invisible.
+function cqEsCargaAutomaticaMateriales(c){
+  if(!c)return false;
+  if(c.automatico===true||c.integracionId)return true;
+  var o='';
+  try{o=cqOrigenCargaNormalizado(c);}catch(_e){o=String(c.origen||c.source||'').toLowerCase();}
+  return o==='acopio'||o==='panol'||o==='caja_chica'||o==='cq_caja_gerencia'||o==='caja_gerencia';
+}
+function cqRepararCatalogoHuerfanoEnData(data){
+  if(!data||typeof data!=='object')return false;
+  if(!Array.isArray(data.cargas))data.cargas=[];
+  if(!Array.isArray(data.extraMats))data.extraMats=[];
+  if(!Array.isArray(data.extraCats))data.extraCats=[];
+  if(!Array.isArray(data.deletedMatIds))data.deletedMatIds=[];
+  if(!data.matCodigos||typeof data.matCodigos!=='object')data.matCodigos={};
+  if(!data.matCategorias||typeof data.matCategorias!=='object')data.matCategorias={};
+  if(!data.matNombres||typeof data.matNombres!=='object')data.matNombres={};
+
+  var cambio=false;
+  var extras={};
+  data.extraMats.forEach(function(m){if(m&&m.id!=null)extras[String(m.id)]=m;});
+
+  data.cargas.forEach(function(c){
+    if(!c||c.matId==null||!cqEsCargaAutomaticaMateriales(c))return;
+    var sid=String(c.matId);
+    var idNum=Number(c.matId);
+    var idVal=Number.isFinite(idNum)?idNum:c.matId;
+
+    // Una carga activa siempre debe volver visible su material.
+    var antes=(data.deletedMatIds||[]).length;
+    data.deletedMatIds=(data.deletedMatIds||[]).filter(function(id){return String(id)!==sid;});
+    if(data.deletedMatIds.length!==antes)cambio=true;
+
+    // Los materiales base no necesitan extraMats, pero sí conservamos metadatos faltantes.
+    var esBase=(typeof CQ_BASE_MAT_IDS!=='undefined'&&CQ_BASE_MAT_IDS.has(sid));
+    var nombre=String(c.matName||c.materialNameOrigen||'').trim();
+    var cat=String(data.matCategorias[sid]||data.matCategorias[c.matId]||c.categoriaOrigen||'VARIOS').trim()||'VARIOS';
+    var code=String(data.matCodigos[sid]||data.matCodigos[c.matId]||c.codigoOrigen||c.matCode||'').trim();
+
+    if(!esBase && !extras[sid]){
+      var origen='integración';
+      try{origen=cqOrigenCargaNormalizado(c)||origen;}catch(_e){}
+      var nuevo={
+        id:idVal,
+        mat:nombre||('Material '+sid),
+        codigo:code,
+        prom:0,
+        data:[],
+        catName:cat,
+        comentarios:'Recuperado automáticamente desde '+origen,
+        autoCreated:true,
+        source:origen,
+        repairedAt:new Date().toISOString()
+      };
+      data.extraMats.push(nuevo);
+      extras[sid]=nuevo;
+      cambio=true;
+    }
+
+    var ex=extras[sid];
+    if(ex){
+      if(!String(ex.mat||'').trim()&&nombre){ex.mat=nombre;cambio=true;}
+      if(!String(ex.catName||'').trim()&&cat){ex.catName=cat;cambio=true;}
+      if(!String(ex.codigo||'').trim()&&code){ex.codigo=code;cambio=true;}
+    }
+    if(cat&&!data.matCategorias[sid]&&!data.matCategorias[c.matId]){data.matCategorias[idVal]=cat;cambio=true;}
+    if(code&&!data.matCodigos[sid]&&!data.matCodigos[c.matId]){data.matCodigos[idVal]=code;cambio=true;}
+
+    if(cat && !data.extraCats.some(function(x){return String(x&&x.name||'').toLowerCase()===cat.toLowerCase();})){
+      // Sólo crear una categoría dinámica si no existe en el catálogo base actual.
+      var existeBaseCat=false;
+      try{existeBaseCat=CATS.some(function(x){return String(x&&x.name||'').toLowerCase()===cat.toLowerCase();});}catch(_e){}
+      if(!existeBaseCat){
+        data.extraCats.push({name:cat,color:'#6FA58D',autoCreated:true,source:'integracion'});
+        cambio=true;
+      }
+    }
+  });
+  return cambio;
+}
+
+// Al guardar mientras entra una integración externa, preservar también la ficha del
+// producto remoto. Antes se fusionaban sólo las cargas, pudiendo borrar extraMats.
+function cqFusionarCatalogoRemotoParaCargas(dest,remoto,cargasAutomaticas){
+  if(!dest||!remoto)return false;
+  if(!Array.isArray(dest.extraMats))dest.extraMats=[];
+  if(!Array.isArray(dest.extraCats))dest.extraCats=[];
+  if(!dest.matCodigos||typeof dest.matCodigos!=='object')dest.matCodigos={};
+  if(!dest.matCategorias||typeof dest.matCategorias!=='object')dest.matCategorias={};
+  if(!dest.matNombres||typeof dest.matNombres!=='object')dest.matNombres={};
+
+  var ids=new Set((cargasAutomaticas||[]).filter(Boolean).map(function(c){return String(c.matId);}));
+  var cambio=false;
+  var localIds=new Set(dest.extraMats.filter(Boolean).map(function(m){return String(m.id);}));
+  (Array.isArray(remoto.extraMats)?remoto.extraMats:[]).forEach(function(m){
+    if(!m||m.id==null||!ids.has(String(m.id))||localIds.has(String(m.id)))return;
+    dest.extraMats.push(JSON.parse(JSON.stringify(m)));
+    localIds.add(String(m.id));
+    cambio=true;
+  });
+
+  ['matCodigos','matCategorias','matNombres'].forEach(function(k){
+    var src=(remoto[k]&&typeof remoto[k]==='object')?remoto[k]:{};
+    ids.forEach(function(id){
+      if((dest[k][id]==null||dest[k][id]==='') && src[id]!=null && src[id]!==''){
+        dest[k][id]=src[id]; cambio=true;
+      }
+    });
+  });
+
+  var catsNecesarias=new Set();
+  ids.forEach(function(id){
+    var cat=dest.matCategorias[id]||(remoto.matCategorias&&remoto.matCategorias[id]);
+    if(cat)catsNecesarias.add(String(cat).toLowerCase());
+  });
+  var catsLocales=new Set(dest.extraCats.filter(Boolean).map(function(c){return String(c.name||'').toLowerCase();}));
+  (Array.isArray(remoto.extraCats)?remoto.extraCats:[]).forEach(function(c){
+    var nk=String(c&&c.name||'').toLowerCase();
+    if(!nk||!catsNecesarias.has(nk)||catsLocales.has(nk))return;
+    dest.extraCats.push(JSON.parse(JSON.stringify(c)));
+    catsLocales.add(nk); cambio=true;
+  });
+
+  if(cqRepararCatalogoHuerfanoEnData(dest))cambio=true;
+  return cambio;
+}
+
 function normalizeState(){
   if(!state.overrides)state.overrides={};
   if(!state.historial)state.historial={};
@@ -8356,6 +8489,10 @@ function normalizeState(){
   if(!state.categoriaMemoria)state.categoriaMemoria={};
   if(!state.ignoredIntegrationIds)state.ignoredIntegrationIds=[];
   if(!state.reporteComentarios)state.reporteComentarios={};
+
+  // Si una sincronización anterior conservó la carga pero perdió la ficha dinámica,
+  // reconstruirla antes de poblar CATS/ALL_MATS.
+  cqRepararCatalogoHuerfanoEnData(state);
 
   // Normaliza el origen de cargas automáticas viejas y nuevas.
   // Esto hace que cualquier filtro por origen reconozca siempre Acopio/Pañol,
@@ -8576,13 +8713,7 @@ async function completarCodigosDesdeAcopioYPanol(forzar){
       localStorage.setItem(DB_KEY,JSON.stringify(state));
 
       suppressRemoteUntil=Date.now()+1500;
-      await window._setDoc(
-        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-        JSON.parse(JSON.stringify(Object.assign({},state,{
-          updatedAt:new Date().toISOString(),
-          codigosFuentesActualizadosAt:new Date().toISOString()
-        })))
-      );
+      await cqGuardarMaterialesSeguro({codigosFuentesActualizadosAt:new Date().toISOString()});
 
       try{await updateLastSync('completó códigos desde Acopio/Pañol');}catch(e){}
       renderActive();
@@ -8645,6 +8776,13 @@ async function cqGuardarMaterialesSeguro(extra){
       var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
     });
     local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
+
+    // CRÍTICO: junto con las cargas externas preservar sus fichas de catálogo.
+    // Sin esto podía sobrevivir el integrationId pero desaparecer extraMats, dejando
+    // el material invisible en Catálogo y Reportes.
+    cqFusionarCatalogoRemotoParaCargas(local,remoto,local.cargas.filter(esAuto));
+    cqRepararCatalogoHuerfanoEnData(local);
+
     Object.keys(extra).forEach(function(k){local[k]=extra[k];});
     local.updatedAt=new Date().toISOString();
     tx.set(ref,local);
@@ -8719,10 +8857,7 @@ async function cqReconciliarMaterialesConAcopioActual(){
         normalizeState();
         localStorage.setItem(DB_KEY,JSON.stringify(state));
         suppressRemoteUntil=Date.now()+1800;
-        await window._setDoc(
-          window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-          JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
-        );
+        await cqGuardarMaterialesSeguro();
       }
       return cambio;
     }
@@ -8798,10 +8933,7 @@ async function cqReconciliarMaterialesConAcopioActual(){
       normalizeState();
       localStorage.setItem(DB_KEY,JSON.stringify(state));
       suppressRemoteUntil=Date.now()+1800;
-      await window._setDoc(
-        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-        JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
-      );
+      await cqGuardarMaterialesSeguro();
     }
     return cambio;
   }catch(e){
@@ -8832,7 +8964,7 @@ async function loadFromFirebase(){
       localStorage.setItem(DB_KEY,JSON.stringify(state));
       if(migro){
         try{
-          await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()})));
+          await cqGuardarMaterialesSeguro();
         }catch(err){console.warn('No se pudo persistir la unificación de obras',err);}
       }
     }
@@ -9420,6 +9552,8 @@ async function startFirebase(){
                 var remotasAutomaticas=rem.filter(esAutoExterna);
 
                 state.cargas=localesManuales.concat(JSON.parse(JSON.stringify(remotasAutomaticas)));
+                // Adoptar también las fichas dinámicas/categorías/códigos asociadas.
+                cqFusionarCatalogoRemotoParaCargas(state,rd,remotasAutomaticas);
                 normalizeState();
                 localStorage.setItem(DB_KEY,JSON.stringify(state));
                 renderActive();
@@ -9457,10 +9591,7 @@ async function startFirebase(){
 
             if(migro){
               suppressRemoteUntil=Date.now()+1200;
-              window._setDoc(
-                window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-                JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()}))
-              ).catch(function(e){console.warn(e);});
+              cqGuardarMaterialesSeguro().catch(function(e){console.warn(e);});
             }
           },
           function(e){
@@ -9744,9 +9875,16 @@ function calcProm(matId){
 }
 function getExtraMats(){return state.extraMats||[];}
 function getAllMats(){
-  var extra=getExtraMats();
-  if(!extra.length) return ALL_MATS;
-  return ALL_MATS.concat(extra);
+  // ALL_MATS ya puede contener extras insertados por mergeExtrasIntoCats.
+  // Devolver una sola ficha por ID evita dobles recorridos y consolidaciones ambiguas.
+  var out=[],vistos={};
+  ALL_MATS.concat(getExtraMats()).forEach(function(m){
+    if(!m||m.id==null)return;
+    var k=String(m.id);
+    if(vistos[k])return;
+    vistos[k]=1;out.push(m);
+  });
+  return out;
 }
 
 // Normalizar categorías y materiales
@@ -10216,10 +10354,7 @@ async function cqPersistirComentariosReporte(){
     try{
       setSyncStatus('Firebase: guardando...');
       suppressRemoteUntil=Date.now()+1200;
-      await window._setDoc(
-        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-        JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()}))
-      );
+      await cqGuardarMaterialesSeguro();
       try{await updateLastSync('guardó comentario de reporte');}catch(e){}
       setSyncStatus('Firebase: guardado','ok');
       return true;
@@ -16288,6 +16423,11 @@ window.abrirGraficoDirecto = function(){
       local.matNombres=clone(state.matNombres||{});
       local.matCategorias=clone(state.matCategorias||{});
       local.matCodigos=clone(state.matCodigos||{});
+
+      // Conservar también la ficha dinámica asociada a cada carga automática remota.
+      // Sin extraMats puede sobrevivir el integrationId y desaparecer el producto de Catálogo/Reportes.
+      cqFusionarCatalogoRemotoParaCargas(local,remoto,local.cargas.filter(esAuto));
+      cqRepararCatalogoHuerfanoEnData(local);
 
       Object.keys(extra).forEach(function(k){local[k]=extra[k];});
       local.updatedAt=new Date().toISOString();

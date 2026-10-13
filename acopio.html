@@ -6892,6 +6892,9 @@ document.addEventListener('click',function(e){
 // ═══════════════════════════════════════════
 var materialesIntegradosAcopio=null;
 var materialesCargasSnapshotAcopio=[];
+// CQ 13/10/2026 — IDs de productos que existen realmente en el catálogo de Materiales.
+// El verde exige carga + ficha visible; una carga huérfana se fuerza a reparar.
+var materialesCatalogoIdsAcopio=new Set();
 var materialesIntegracionesAuditadasAcopio=null;
 var materialesAuditandoAcopio=false;
 var materialesVerificacionErrorAcopio=false;
@@ -7052,17 +7055,26 @@ async function cargarIntegracionesAuditadasMaterialesAcopio(){
   return materialesIntegracionesAuditadasAcopio;
 }
 
+function cqCargaTieneFichaCatalogoMaterialesAcopio(c){
+  if(!c||c.matId==null)return false;
+  return materialesCatalogoIdsAcopio instanceof Set
+    && materialesCatalogoIdsAcopio.has(String(c.matId));
+}
+
 function cqRetiroExisteRealEnMateriales(retiro,a){
   a=a||getAcopio();
   if(!a||!retiro)return false;
   var iid=integracionRetiroId(a.id,retiro.id);
 
   // Fuente de verdad: el documento REAL materiales/data_planilla_exacta_v4.
+  // Para marcar verde no alcanza con que exista la carga: también debe existir
+  // la ficha matId que Catálogo/Reportes necesitan para mostrarla.
   if(materialesIntegradosAcopio instanceof Set && materialesIntegradosAcopio.has(iid)){
     return true;
   }
   return (materialesCargasSnapshotAcopio||[]).some(function(c){
-    return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a);
+    return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a)
+      && cqCargaTieneFichaCatalogoMaterialesAcopio(c);
   });
 }
 
@@ -7188,11 +7200,25 @@ function iniciarVerificacionMaterialesAcopio(){
   unsubVerificacionMaterialesAcopio=f.onSnapshot(f.doc(f.db,'materiales','data_planilla_exacta_v4'),function(snap){
     materialesVerificacionErrorAcopio=false;
     var ids=new Set();
+    materialesCatalogoIdsAcopio=new Set();
     if(snap.exists()){
       var d=snap.data()||{};
+      // Catálogo base + fichas dinámicas. El callback ocurre después de cargar el script,
+      // por lo que CQ_MAT_BASE_DIRECTO ya está disponible.
+      try{
+        (Array.isArray(CQ_MAT_BASE_DIRECTO)?CQ_MAT_BASE_DIRECTO:[]).forEach(function(m){
+          if(m&&m.id!=null)materialesCatalogoIdsAcopio.add(String(m.id));
+        });
+      }catch(_e){}
+      (Array.isArray(d.extraMats)?d.extraMats:[]).forEach(function(m){
+        if(m&&m.id!=null)materialesCatalogoIdsAcopio.add(String(m.id));
+      });
+
       materialesCargasSnapshotAcopio=Array.isArray(d.cargas)?d.cargas.slice():[];
       materialesCargasSnapshotAcopio.forEach(function(c){
-        if(c&&c.integracionId)ids.add(String(c.integracionId));
+        if(c&&c.integracionId&&cqCargaTieneFichaCatalogoMaterialesAcopio(c)){
+          ids.add(String(c.integracionId));
+        }
       });
     }else{
       materialesCargasSnapshotAcopio=[];
