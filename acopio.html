@@ -4781,6 +4781,145 @@ async function saveToFirebase(){
     }
   }
 }
+
+
+/* ==========================================================
+   CQ 12/10/2026 — REPARACIÓN CODO DURATOP 45° HH 63MM
+   Causa histórica: durante un período "Adicional de 100 cm"
+   recibió por error el código 902001103. La carga masiva resolvía
+   primero por código, por lo que retiros del CODO podían quedar
+   guardados en Acopio con el nombre/ID del Adicional.
+   Esta reparación usa la regla de negocio definitiva:
+   902001103 pertenece exclusivamente al CODO DURATOP 45° HH 63MM.
+   ========================================================== */
+var CQ_DURATOP_FIX_CODE='902001103';
+function cqDuratopFixNorm(v){
+  return String(v||'').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');
+}
+function cqDuratopFixEsCodo(v){
+  var n=cqDuratopFixNorm(v);
+  return n.indexOf('codo')>=0 && n.indexOf('duratop')>=0 && n.indexOf('45')>=0 && n.indexOf('63')>=0;
+}
+function cqDuratopFixEsAdicional(v){
+  var n=cqDuratopFixNorm(v);
+  return n.indexOf('adicional')>=0 && (n.indexOf('100')>=0 || n.indexOf('cm')>=0 || n==='adicional');
+}
+function cqDuratopFixBuscarCodo(ac){
+  var mats=ac&&Array.isArray(ac.mats)?ac.mats:[];
+  return mats.find(function(m){return m&&cqDuratopFixEsCodo(m.nom||m.nombre||'');})
+    || mats.find(function(m){
+      return m && String(m.cod||m.codigo||'').trim()===CQ_DURATOP_FIX_CODE && !cqDuratopFixEsAdicional(m.nom||m.nombre||'');
+    }) || null;
+}
+function cqRepararCruceDuratopEnAcopio(){
+  var resultado={cambio:false,retiros:[],codigosLimpiados:0};
+  if(!DB||!Array.isArray(DB.acopios))return resultado;
+
+  DB.acopios.forEach(function(ac){
+    if(!ac)return;
+    if(!Array.isArray(ac.mats))ac.mats=[];
+    if(!Array.isArray(ac.retiros))ac.retiros=[];
+    var codo=cqDuratopFixBuscarCodo(ac);
+
+    // El código 902001103 no puede permanecer en ningún producto distinto del CODO.
+    ac.mats.forEach(function(m){
+      if(!m)return;
+      var code=String(m.cod||m.codigo||'').trim();
+      if(code===CQ_DURATOP_FIX_CODE && !cqDuratopFixEsCodo(m.nom||m.nombre||'')){
+        if('cod' in m)m.cod='';
+        if('codigo' in m)m.codigo='';
+        resultado.codigosLimpiados++;
+        resultado.cambio=true;
+      }
+    });
+
+    ac.retiros.forEach(function(r){
+      if(!r)return;
+      var code=String(r.materialCode||'').trim();
+      if(code!==CQ_DURATOP_FIX_CODE)return;
+
+      var matActual=ac.mats.find(function(m){return String(m&&m.id)===String(r.matId);})||null;
+      var nombreRetiro=String(r.materialName||'').trim();
+      var nombreActual=String(matActual&&(matActual.nom||matActual.nombre)||'').trim();
+
+      // Sólo tocar el cruce inequívoco: retiro guardado como Adicional + código exclusivo del CODO.
+      if(!cqDuratopFixEsAdicional(nombreRetiro||nombreActual))return;
+
+      var nombreCodo=String(codo&&(codo.nom||codo.nombre)||'CODO DURATOP 45° HH 63MM').trim();
+      r.materialName=nombreCodo;
+      r.materialCode=CQ_DURATOP_FIX_CODE;
+      if(codo){
+        r.matId=codo.id;
+        if(codo.unidad!=null)r.materialUnidad=String(codo.unidad||'');
+      }
+      r.materialesSyncEstado='pendiente';
+      r.materialesSyncError='';
+      resultado.retiros.push({acopio:ac,retiro:r});
+      resultado.cambio=true;
+    });
+  });
+  return resultado;
+}
+
+async function cqReenviarRetirosDuratopCorregidos(items){
+  items=Array.isArray(items)?items:[];
+  if(!items.length||!window._cqFirebaseReady||!window._cqFirebase)return {ok:0,error:0};
+  var f=window._cqFirebase,ok=0,error=0;
+
+  for(var i=0;i<items.length;i++){
+    var ac=items[i].acopio,r=items[i].retiro;
+    if(!ac||!r)continue;
+    try{
+      var obraObj=r.gastosObraId && typeof getObrasGastosObjects==='function'
+        ?getObrasGastosObjects().find(function(o){return String(o&&o.id)===String(r.gastosObraId);})
+        :null;
+      var obra=String((obraObj&&(obraObj.label||obraObj.short||obraObj.id))||r.obraHistorica||'').trim();
+      if(!obra && typeof getObras==='function')obra=String((getObras()||[])[Number(r.obraIdx)]||'').trim();
+      if(!obra)throw new Error('Obra no encontrada para retiro '+r.id);
+
+      var iid=integracionRetiroId(ac.id,r.id);
+      var payload={
+        integrationId:iid,
+        source:'acopio',
+        sourceLabel:r.comentario?('Acopio · '+String(r.comentario)):'Acopio',
+        comentario:String(r.comentario||''),
+        sourceContainerId:String(ac.id),
+        sourceMovementId:String(r.id),
+        obraName:obra,
+        materialCode:CQ_DURATOP_FIX_CODE,
+        materialName:String(r.materialName||'CODO DURATOP 45° HH 63MM'),
+        materialCategory:String(r.subrubro||'').trim()||'VARIOS',
+        category:String(r.subrubro||'').trim()||'VARIOS',
+        autoCreateCatalog:true,
+        qty:Number(r.qty)||0,
+        unidad:String(r.materialUnidad||''),
+        fecha:String(r.fecha||''),
+        active:true,
+        updatedAt:new Date().toISOString()
+      };
+
+      await cqMaterializarEnMaterialesDirecto(payload,{db:f.db,doc:f.doc,runTransaction:f.runTransaction});
+      await f.setDoc(f.doc(f.db,'materiales_integraciones',iid),payload,{merge:true});
+      r.materialesSyncEstado='ok';
+      r.materialesSyncError='';
+      r.materialesSyncAt=new Date().toISOString();
+      ok++;
+    }catch(e){
+      error++;
+      r.materialesSyncEstado='error';
+      r.materialesSyncError=String(e&&e.message||e);
+      console.warn('No se pudo reparar retiro DURATOP',r&&r.id,e);
+    }
+  }
+
+  if(ok||error){
+    try{persist();}catch(_e){}
+    try{renderRetirarHistorial();}catch(_e){}
+  }
+  return {ok:ok,error:error};
+}
+
 async function loadFromFirebase(){
   if(!window._cqFirebaseReady||!window._cqFirebase)return;
   try{
@@ -4814,6 +4953,17 @@ async function loadFromFirebase(){
       await cqBackupDiarioDesdeRemoto(snap.data().db,snap.data().updatedAt||'');
       var localBackups=(DB&&DB.backups)||[];
       DB=sanitizeDB(snap.data().db);
+
+      // CQ 12/10/2026 — reparar retiros históricos que quedaron como
+      // "Adicional de 100 cm" por el código duplicado 902001103.
+      var cqFixDuratop=cqRepararCruceDuratopEnAcopio();
+      if(cqFixDuratop.cambio){
+        marcarAcopioDirty();
+        saveRequested=true;
+        setTimeout(function(){
+          cqReenviarRetirosDuratopCorregidos(cqFixDuratop.retiros).catch(function(e){console.warn(e);});
+        },120);
+      }
 
       // CQ 01/09/2026 — IMPORTANTE:
       // Firebase no transporta los backups locales. Hay que reponerlos ANTES de
@@ -14395,6 +14545,11 @@ document.addEventListener('click',function(e){
     var mats=typeof getAllMats==='function'?(getAllMats()||[]):[];
     var cod={},nom={};
     mats.forEach(function(m){var c=norm(m.cod),n=norm(m.nom);if(c&&!cod[c])cod[c]=m;if(n&&!nom[n])nom[n]=m;});
+    // 902001103 pertenece exclusivamente al CODO DURATOP 45° HH 63MM.
+    // Si alguna versión vieja dejó el mismo código en "Adicional de 100 cm",
+    // la carga masiva nunca debe tomar el primer duplicado por orden del catálogo.
+    var codoReservado=mats.find(function(m){return m&&cqEsCodoDuratop45HH63NombreAcopio(m.nom||'');});
+    if(codoReservado)cod[norm(CQ_CODO_DURATOP_45_63_CODIGO)]=codoReservado;
     return {cod:cod,nom:nom};
   }
   function lineas(id){
@@ -14410,7 +14565,7 @@ document.addEventListener('click',function(e){
       var code=String(codes[i]||'').trim(),name=String(names[i]||'').trim(),qtxt=String(qtys[i]||'').trim();
       if(!code&&!name&&!qtxt)continue;
       if(i===0 && /codigo|código/i.test(code) && /material/i.test(name) && /cantidad/i.test(qtxt))continue;
-      var byCode=code?idx.cod[norm(code)]:null,byName=name?idx.nom[norm(name)]:null,mat=byCode||byName||null,qty=num(qtxt),error='';
+      var byCode=code?idx.cod[norm(code)]:null,byName=name?idx.nom[norm(name)]:null,mat=(name&&byName)?byName:(byCode||byName||null),qty=num(qtxt),error='';
       if(!mat)error='Material no encontrado';
       else if(!(qty>0))error='Cantidad inválida';
       else if(byCode&&byName&&Number(byCode.id)!==Number(byName.id))error='Código y material no coinciden';
