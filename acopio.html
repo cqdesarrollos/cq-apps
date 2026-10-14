@@ -5176,10 +5176,22 @@ function getObrasGastosAllObjects(){
     ? gastosConfigAcopio.obras.filter(function(o){return o&&o.id&&o.id!=='oficina';})
     : [];
 }
+
+// CQ 13/10/2026 — permisos individuales definidos desde Gastos.
+// Compatibilidad hacia atrás: si una obra todavía no tiene `modulos`, conserva
+// el comportamiento histórico de `integrarModulos` (ausente = habilitada).
+function obraGastosPermiteModuloAcopio(obra,modulo){
+  if(!obra)return true;
+  if(obra.archived===true)return false;
+  var legacyDefault=obra.integrarModulos!==false;
+  var mods=(obra.modulos&&typeof obra.modulos==='object'&&!Array.isArray(obra.modulos))
+    ?obra.modulos:{};
+  return mods[modulo]===undefined ? legacyDefault : mods[modulo]!==false;
+}
 function getObrasGastosObjects(){
-  // Sólo obras habilitadas para integración desde Gastos.
+  // Sólo las obras habilitadas específicamente para Acopio aparecen en nuevas cargas.
   return getObrasGastosAllObjects().filter(function(o){
-    return o.integrarModulos!==false && o.archived!==true;
+    return obraGastosPermiteModuloAcopio(o,'acopio');
   });
 }
 function getObras(){
@@ -5188,7 +5200,17 @@ function getObras(){
 function obraGastosIntegrableAcopio(id){
   if(!id)return true;
   var o=getObrasGastosAllObjects().find(function(x){return String(x.id)===String(id);})||null;
-  return !o || (o.integrarModulos!==false && o.archived!==true);
+  return !o || obraGastosPermiteModuloAcopio(o,'acopio');
+}
+function obraGastosPermiteMaterialesAcopio(id){
+  if(!id)return true;
+  var o=getObrasGastosAllObjects().find(function(x){return String(x.id)===String(id);})||null;
+  return !o || obraGastosPermiteModuloAcopio(o,'materiales');
+}
+function obraGastosPermitePanolAcopio(id){
+  if(!id)return true;
+  var o=getObrasGastosAllObjects().find(function(x){return String(x.id)===String(id);})||null;
+  return !o || obraGastosPermiteModuloAcopio(o,'panol');
 }
 
 function obraGastosActualPorIdx(idx){return getObrasGastosObjects()[idx]||null;}
@@ -5641,8 +5663,19 @@ async function sincronizarRetiroConGastos(retiro,activo,obraIdAnterior){
 
   if(!obraId){
     // Sólo para registros viejos que no tengan gastosObraId.
+    // Primero resolver por el nombre histórico: al ocultar obras de Acopio cambia
+    // la lista visible y nunca debemos reinterpretar un índice viejo como otra obra.
     await cargarConfigGastosAcopio();
-    var obraFallback=obraGastosActualPorIdx(retiro.obraIdx);
+    var nombreHistorico=String(retiro.obraHistorica||'').trim();
+    if(!nombreHistorico){
+      try{
+        var acHist=getAcopio();
+        var obrasLegacy=acHist&&Array.isArray(acHist.obras)?acHist.obras:[];
+        nombreHistorico=String(obrasLegacy[Number(retiro.obraIdx)]||'').trim();
+      }catch(_e){}
+    }
+    var obraFallback=nombreHistorico?obraGastosDesdeNombre(nombreHistorico):null;
+    if(!obraFallback)obraFallback=obraGastosActualPorIdx(retiro.obraIdx);
     obraId=String(obraFallback&&obraFallback.id||'').trim();
   }
 
@@ -5719,7 +5752,8 @@ async function verificarGastosAcopio(){
     await cargarConfigGastosAcopio();
     var a=getAcopio();
     if(!a)return;
-    var retiros=(a.retiros||[]).filter(function(r){return r.gastosObraId&&r.cargarGastos!==false&&obraGastosIntegrableAcopio(r.gastosObraId);});
+    // Gastos conserva el histórico aunque la obra deje de mostrarse en Acopio.
+    var retiros=(a.retiros||[]).filter(function(r){return r.gastosObraId&&r.cargarGastos!==false;});
     var ids=[...new Set(retiros.map(function(r){return r.gastosObraId;}))];
     var docs={},f=window._cqFirebase;
     for(var i=0;i<ids.length;i++){
@@ -7186,7 +7220,9 @@ async function cqAutoRepararMaterialesFaltantesActual(){
 
   var faltantes=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
     if(!r||r.cargarMateriales===false)return false;
-    if(r.gastosObraId && !obraGastosIntegrableAcopio(r.gastosObraId))return false;
+    // Si Materiales está deshabilitado para esta obra desde Gastos, no recrear
+    // automáticamente una integración faltante. El histórico existente no se borra.
+    if(r.gastosObraId && !obraGastosPermiteMaterialesAcopio(r.gastosObraId))return false;
     // CQ 13/10/2026 FIX 2 — no depender de una marca histórica `ok`.
     // Si el retiro debía ir a Materiales y hoy no existe con ficha visible,
     // se repone idempotentemente por integrationId.
@@ -8159,14 +8195,6 @@ async function sincronizarRetiroConMateriales(retiro,activo){
   var a=getAcopio();
   if(!a||!retiro)throw new Error('Retiro no encontrado');
 
-  // Una obra marcada "Solo Gastos" no genera NUEVAS integraciones. Las bajas
-  // siguen permitidas para poder limpiar un vínculo histórico si corresponde.
-  if(activo!==false && retiro.gastosObraId && !obraGastosIntegrableAcopio(retiro.gastosObraId)){
-    retiro.materialesSyncEstado='omitido';
-    retiro.materialesSyncError='Obra configurada como Solo Gastos';
-    return true;
-  }
-
   var m=getMat(retiro.matId);
   var obraObj=retiro.gastosObraId
     ?getObrasGastosAllObjects().find(function(o){return String(o.id)===String(retiro.gastosObraId);})
@@ -8611,6 +8639,16 @@ async function guardarRetiro(){
 
   var obraSel=obraGastosActualPorIdx(curRetirarObra);
   if(!obraSel){alert('No se pudo identificar la obra seleccionada. Volvé a elegirla.');return;}
+
+  // Los permisos son independientes: Acopio puede estar habilitado y otro destino no.
+  if(cargarMateriales && !obraGastosPermiteMaterialesAcopio(obraSel.id)){
+    alert('Esta obra tiene Materiales deshabilitado desde Gastos. Marcá Materiales en la configuración de la obra para poder enviar este retiro.');
+    return;
+  }
+  if(cargarPanol && !obraGastosPermitePanolAcopio(obraSel.id)){
+    alert('Esta obra tiene Pañol deshabilitado desde Gastos. Marcá Pañol en la configuración de la obra para poder enviar este retiro.');
+    return;
+  }
 
   var a=getAcopio();
   if(!a.retiros)a.retiros=[];
@@ -9503,11 +9541,14 @@ async function cqRepararMaterialesPendientes(){
   var btn=document.getElementById('cq-reparar-materiales-btn');
   var info=document.getElementById('cq-reparar-materiales-info');
   if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no está listo','err');return;}
+  try{await cargarConfigGastosAcopio();}catch(e){toast('No se pudo leer la configuración de obras de Gastos','err');return;}
   var acopios=(DB&&Array.isArray(DB.acopios))?DB.acopios:[];
   var candidatos=[];
   acopios.forEach(function(ac){
     (Array.isArray(ac.retiros)?ac.retiros:[]).forEach(function(r){
-      if(r&&r.cargarMateriales===true)candidatos.push({acopio:ac,retiro:r});
+      if(r&&r.cargarMateriales===true && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
+        candidatos.push({acopio:ac,retiro:r});
+      }
     });
   });
   if(!candidatos.length){toast('No hay retiros marcados para Materiales');return;}
@@ -9603,7 +9644,9 @@ async function cqRepararGastosPendientes(){
       try{
         var obraId=String(r.gastosObraId||'').trim();
         if(!obraId){
-          var of=obraGastosActualPorIdx(r.obraIdx);
+          var nombreHist=String(r.obraHistorica||'').trim();
+          var of=nombreHist?obraGastosDesdeNombre(nombreHist):null;
+          if(!of)of=obraGastosActualPorIdx(r.obraIdx);
           obraId=String(of&&of.id||'').trim();
           if(obraId)r.gastosObraId=obraId;
         }
@@ -9665,7 +9708,10 @@ async function cqRepararPanolPendientes(){
   var a=getAcopio();
   if(!a){toast('Abrí un acopio primero','err');return;}
 
-  var candidatos=(a.retiros||[]).filter(function(r){return r&&r.cargarPanol===true;});
+  try{await cargarConfigGastosAcopio();}catch(e){toast('No se pudo leer la configuración de obras de Gastos','err');return;}
+  var candidatos=(a.retiros||[]).filter(function(r){
+    return r&&r.cargarPanol===true&&(!r.gastosObraId||obraGastosPermitePanolAcopio(r.gastosObraId));
+  });
   if(!candidatos.length){toast('No hay retiros marcados para Pañol');return;}
 
   btn.disabled=true;
@@ -9799,6 +9845,18 @@ async function guardarEditRetiro(){
     || Number(anterior.obraIdx)!==Number(obraNuevaIdx)
     || normObraAcopio(anterior.obraHistorica||'')!==normObraAcopio(obraNueva.label||obraNueva.short||obraNueva.id)
   ) : false;
+
+  // Si el vínculo ya existía en la misma obra, permitir mantener/editar el histórico.
+  // Sólo bloqueamos una NUEVA vinculación o el traslado a otra obra deshabilitada.
+  var obraDestinoId=String((obraNueva&&obraNueva.id)||obraAnterior||'').trim();
+  if(cargarMateriales && (!antesMateriales||cambioObra) && obraDestinoId && !obraGastosPermiteMaterialesAcopio(obraDestinoId)){
+    alert('Esta obra tiene Materiales deshabilitado desde Gastos. Marcá Materiales antes de crear o mover este vínculo.');
+    return;
+  }
+  if(cargarPanol && (!antesPanol||cambioObra) && obraDestinoId && !obraGastosPermitePanolAcopio(obraDestinoId)){
+    alert('Esta obra tiene Pañol deshabilitado desde Gastos. Marcá Pañol antes de crear o mover este vínculo.');
+    return;
+  }
 
   a.retiros=(a.retiros||[]).map(function(r){
     if(r.id!==editRetiroId)return r;
@@ -14755,6 +14813,20 @@ document.addEventListener('click',function(e){
     var bad=rows.filter(function(r){return r.error;});if(bad.length){cqPreviewCargaMasivaRetiros();alert('Hay '+bad.length+' fila'+(bad.length===1?'':'s')+' con error. Corregilas antes de registrar.');return;}
     var obras=indices.map(function(i){return {idx:i,obj:typeof obraGastosActualPorIdx==='function'?obraGastosActualPorIdx(i):null};}).filter(function(x){return !!x.obj;});
     if(obras.length!==indices.length){alert('No se pudo identificar una de las obras seleccionadas.');return;}
+    if(destinos.cargarMateriales){
+      var sinMateriales=obras.filter(function(x){return !obraGastosPermiteMaterialesAcopio(x.obj.id);});
+      if(sinMateriales.length){
+        alert('Estas obras tienen Materiales deshabilitado desde Gastos:\n\n'+sinMateriales.map(function(x){return x.obj.label||x.obj.short||x.obj.id;}).join('\n'));
+        return;
+      }
+    }
+    if(destinos.cargarPanol){
+      var sinPanol=obras.filter(function(x){return !obraGastosPermitePanolAcopio(x.obj.id);});
+      if(sinPanol.length){
+        alert('Estas obras tienen Pañol deshabilitado desde Gastos:\n\n'+sinPanol.map(function(x){return x.obj.label||x.obj.short||x.obj.id;}).join('\n'));
+        return;
+      }
+    }
     var labels=obras.map(function(x){return x.obj.label||x.obj.short||x.obj.id||'';});
     var total=rows.length*obras.length;
     var destinoTxt=[];if(destinos.cargarMateriales)destinoTxt.push('Materiales');if(destinos.cargarGastos)destinoTxt.push('Gastos');if(destinos.cargarPanol)destinoTxt.push('Pañol'+(destinos.panolSinPrecio?' sin precio':''));

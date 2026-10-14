@@ -1604,14 +1604,25 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
    if(el)el.value=JSON.stringify(a||[]);
  };
  window.cqSetCatalogoObrasFiltro=function(obras){
+   // CQ 13/10/2026 — el filtro operativo sólo muestra obras habilitadas para Pedidos.
+   // Los pedidos históricos permanecen en `pedidos`, pero ya no vuelven a inyectar
+   // una obra destildada dentro del filtro ni del selector de nuevas solicitudes.
    const set=new Set((obras||[]).map(x=>String(x).trim()).filter(Boolean));
-   (pedidos||[]).forEach(p=>{const o=String(p?.obra||"").trim();if(o)set.add(o)});
-   if(set.size)window.cqCatalogoObrasFiltro=[...set].sort((a,b)=>a.localeCompare(b,"es",{numeric:true}));
+   window.cqCatalogoObrasFiltro=[...set].sort((a,b)=>a.localeCompare(b,"es",{numeric:true}));
+
+   // Si había un filtro aplicado a una obra que acaba de deshabilitarse, limpiarlo.
+   try{
+     const actuales=window.cqGetFiltroObras?window.cqGetFiltroObras():[];
+     const validos=actuales.filter(x=>set.has(String(x).trim()));
+     if(window.cqSetFiltroObras && validos.length!==actuales.length)window.cqSetFiltroObras(validos);
+   }catch(_e){}
  };
 
  window.cqObrasDisponibles=function(){
-   const set=new Set((window.cqCatalogoObrasFiltro||[]).map(x=>String(x).trim()).filter(Boolean));
-   (pedidos||[]).forEach(p=>{const o=String(p?.obra||"").trim();if(o)set.add(o)});
+   const base=Array.isArray(window.CQ_OBRAS_GASTOS)
+     ?window.CQ_OBRAS_GASTOS
+     :(window.cqCatalogoObrasFiltro||[]);
+   const set=new Set((base||[]).map(x=>String(x).trim()).filter(Boolean));
    return [...set].sort((a,b)=>a.localeCompare(b,"es",{numeric:true}));
  };
 
@@ -2650,21 +2661,44 @@ const db=getFirestore(getApp());
 const CFG_REF=doc(db,'config','app');
 const norm=v=>String(v||'').trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
 function nombreObra(o){return String(o?.label||o?.short||o?.id||'').trim()}
+function obraHabilitadaPedidos(o){
+  if(!o||!o.id||o.archived===true)return false;
+  const mods=(o.modulos&&typeof o.modulos==='object')?o.modulos:null;
+  // Compatibilidad: las obras anteriores, sin el nuevo campo, siguen visibles.
+  // Sólo un false explícito en Pedidos las oculta de este módulo.
+  if(mods&&Object.prototype.hasOwnProperty.call(mods,'pedidos'))return mods.pedidos!==false;
+  if(mods&&Object.prototype.hasOwnProperty.call(mods,'solicitudPedidos'))return mods.solicitudPedidos!==false;
+  return true;
+}
 function aplicarObrasGastos(data){
-  let obras=(Array.isArray(data?.obras)?data.obras:[])
-    .filter(o=>o&&o.id)
-    .map(nombreObra).filter(Boolean);
+  const objetos=(Array.isArray(data?.obras)?data.obras:[]).filter(o=>o&&o.id);
+  window.CQ_OBRAS_GASTOS_TODAS=objetos.map(nombreObra).filter(Boolean);
+
+  let obras=objetos.filter(obraHabilitadaPedidos).map(nombreObra).filter(Boolean);
   const seen=new Set(); obras=obras.filter(o=>{const k=norm(o);if(!k||seen.has(k))return false;seen.add(k);return true});
   window.CQ_OBRAS_GASTOS=obras;
+
   window.cqSetCatalogoObrasFiltro?.(obras);
   window.cqPintarObrasCorrectas?.(obras);
+
   const sel=document.getElementById('obra');
   if(sel){
     const actual=sel.value;
-    sel.innerHTML='<option value="">Seleccionar obra</option>'+obras.map(o=>'<option></option>').join('');
-    [...sel.options].slice(1).forEach((op,i)=>{op.value=obras[i];op.textContent=obras[i]});
-    if(obras.includes(actual))sel.value=actual;
-    sel.dataset.origen='GASTOS · config/app · Firebase';
+    const editando=window._cqEditId!=null;
+    const opciones=obras.slice();
+
+    // Si se está editando un pedido histórico de una obra hoy oculta,
+    // conservar esa obra sólo dentro de esa edición.
+    if(editando&&actual&&!opciones.includes(actual))opciones.unshift(actual);
+
+    sel.innerHTML='<option value="">Seleccionar obra</option>'+opciones.map(o=>'<option></option>').join('');
+    [...sel.options].slice(1).forEach((op,i)=>{
+      op.value=opciones[i];
+      op.textContent=opciones[i]+((editando&&!obras.includes(opciones[i]))?' · histórica':'');
+      if(editando&&!obras.includes(opciones[i]))op.dataset.cqHistorica='1';
+    });
+    if(opciones.includes(actual))sel.value=actual;
+    sel.dataset.origen='GASTOS · config/app · Firebase · permiso pedidos';
   }
 }
 try{
@@ -3422,6 +3456,61 @@ html.cq-tablet-horizontal body .pedido-row-v37 .pedido-material small{
   applyTabletLandscape();
   window.addEventListener('resize',applyTabletLandscape,{passive:true});
   window.addEventListener('orientationchange',function(){setTimeout(applyTabletLandscape,120)},{passive:true});
+})();
+</script>
+
+
+<script id="cq-pedidos-v77-permisos-modulos-historicos">
+(function(){
+  // CQ 13/10/2026 — compatibilidad final del permiso individual "Pedidos".
+  // Una obra destildada no puede usarse en solicitudes nuevas, pero un pedido
+  // histórico puede conservarla al editarse sin reinyectarla al catálogo operativo.
+
+  function asegurarObraHistoricaEnEdicion(nombre){
+    nombre=String(nombre||'').trim();
+    if(!nombre)return;
+    var sel=document.getElementById('obra');
+    if(!sel)return;
+
+    var existe=Array.from(sel.options||[]).some(function(op){
+      return String(op.value||'')===nombre;
+    });
+    if(!existe){
+      var op=document.createElement('option');
+      op.value=nombre;
+      op.textContent=nombre+' · histórica';
+      op.dataset.cqHistorica='1';
+      sel.appendChild(op);
+    }
+    sel.value=nombre;
+  }
+
+  var editarAnterior=window.editarPedido;
+  if(typeof editarAnterior==='function'){
+    window.editarPedido=function(id){
+      var p=(Array.isArray(pedidos)?pedidos:[]).find(function(x){
+        return String(x&&x.id)===String(id);
+      });
+      var r=editarAnterior.apply(this,arguments);
+      if(p&&p.obra)asegurarObraHistoricaEnEdicion(p.obra);
+      return r;
+    };
+  }
+
+  var cerrarAnterior=window.cerrar;
+  if(typeof cerrarAnterior==='function'){
+    window.cerrar=function(){
+      var r=cerrarAnterior.apply(this,arguments);
+      var sel=document.getElementById('obra');
+      if(sel){
+        Array.from(sel.querySelectorAll('option[data-cq-historica="1"]')).forEach(function(op){op.remove();});
+        if(window._cqEditId==null && Array.isArray(window.CQ_OBRAS_GASTOS) && typeof window.cqPintarObrasCorrectas==='function'){
+          window.cqPintarObrasCorrectas(window.CQ_OBRAS_GASTOS);
+        }
+      }
+      return r;
+    };
+  }
 })();
 </script>
 

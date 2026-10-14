@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- CQ 13/10/2026 · permisos individuales de obra: Materiales -->
+
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -5323,9 +5325,16 @@ function obrasGastosTodasMateriales(){
     ? obrasGastosMateriales.filter(function(o){return o&&o.id&&o.id!=='oficina';})
     : [];
 }
+function obraModuloMaterialesHabilitado(o){
+  if(!o||o.archived===true)return false;
+  if(String(o.id)==='oficina')return false;
+  var legacyDefault=(o.integrarModulos!==false);
+  var mods=(o.modulos&&typeof o.modulos==='object'&&!Array.isArray(o.modulos))?o.modulos:null;
+  return mods&&mods.materiales!==undefined ? mods.materiales!==false : legacyDefault;
+}
 function obrasGastosActivasMateriales(){
   return obrasGastosTodasMateriales().filter(function(o){
-    return o.integrarModulos!==false && o.archived!==true;
+    return obraModuloMaterialesHabilitado(o);
   });
 }
 function obraGastosPorClaveMateriales(clave){
@@ -5345,7 +5354,22 @@ function obraGastosExcluidaMateriales(nombre){
     if(clave && [x.label,x.short,x.id].some(function(v){return claveLoteMz(v)===clave;}))return true;
     return [x.label,x.short,x.id].some(function(v){return String(v||'').trim().toLowerCase()===n;});
   })||null;
-  return !!(o && (o.integrarModulos===false || o.archived===true));
+  return !!(o && !obraModuloMaterialesHabilitado(o));
+}
+function obraVisibleMaterialesPorNombre(nombre){
+  var clave=claveLoteMz(nombre);
+  var n=String(nombre||'').trim().toLowerCase();
+  var o=obrasGastosTodasMateriales().find(function(x){
+    if(!x)return false;
+    if(clave && [x.label,x.short,x.id].some(function(v){return claveLoteMz(v)===clave;}))return true;
+    return [x.label,x.short,x.id].some(function(v){return String(v||'').trim().toLowerCase()===n;});
+  })||null;
+  // Obras locales antiguas que no existen en Gastos conservan su funcionamiento.
+  return o ? obraModuloMaterialesHabilitado(o) : true;
+}
+function obraVisibleMaterialesPorIndice(idx,obras){
+  obras=obras||getObras();
+  return idx!=null && idx>=0 && idx<obras.length && obraVisibleMaterialesPorNombre(obras[idx]);
 }
 
 function nombreObraUnificadoMateriales(baseName,idx){
@@ -5354,8 +5378,8 @@ function nombreObraUnificadoMateriales(baseName,idx){
   if(g)return g.label||g.short||g.id;
   return (state.obraNombres&&state.obraNombres[idx])?state.obraNombres[idx]:baseName;
 }
-async function cargarObrasGastosMateriales(){
-  if(obrasGastosMateriales)return obrasGastosMateriales;
+async function cargarObrasGastosMateriales(force){
+  if(obrasGastosMateriales&&!force)return obrasGastosMateriales;
   if(!window._dbReady||!window._getDoc)return null;
   try{
     var snap=await window._getDoc(window._doc(window._db,'config','app'));
@@ -9001,7 +9025,7 @@ function aplicarIntegracion(ev){
     return cambio;
   }
   if(obraGastosExcluidaMateriales(ev.obraName)){
-    // La obra existe en Gastos pero fue marcada "Solo Gastos".
+    // La obra existe en Gastos pero tiene Materiales deshabilitado.
     // No crear ni actualizar nuevas cargas; una baja (active=false) ya fue atendida arriba.
     return false;
   }
@@ -9377,6 +9401,14 @@ setTimeout(function(){
 
 window.addEventListener('focus',function(){
   if(modoFirebase&&!firebaseStarted)startFirebase();
+  // Al volver a Materiales, renovar permisos de obras desde Gastos sin tocar históricos.
+  if(window._dbReady){
+    cargarObrasGastosMateriales(true).then(function(){
+      var migro=estabilizarObrasGastosMateriales();
+      if(migro)localStorage.setItem(DB_KEY,JSON.stringify(state));
+      renderActive();
+    }).catch(function(e){console.warn('Actualización permisos Materiales desde Gastos',e);});
+  }
 });
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='visible'&&modoFirebase&&!firebaseStarted)startFirebase();
@@ -9420,7 +9452,22 @@ function getObraOrder(){
 }
 function orderedObraEntries(){
   var obras=getObras();
-  return getObraOrder().map(function(i){return {o:obras[i],i:i};});
+  return getObraOrder()
+    .filter(function(i){return obraVisibleMaterialesPorIndice(i,obras);})
+    .map(function(i){return {o:obras[i],i:i};});
+}
+function opcionesObrasMaterialesHTML(selectedIdx){
+  var obras=getObras();
+  var entries=orderedObraEntries().slice();
+  // Al editar un registro histórico, conservar su obra actual aunque hoy esté oculta.
+  if(selectedIdx!=null && !isNaN(Number(selectedIdx)) && obras[Number(selectedIdx)]
+      && !entries.some(function(x){return Number(x.i)===Number(selectedIdx);})){
+    entries.push({o:obras[Number(selectedIdx)],i:Number(selectedIdx),historica:true});
+  }
+  return entries.map(function(x){
+    return '<option value="'+x.i+'"'+(Number(x.i)===Number(selectedIdx)?' selected':'')+'>'
+      +escapeHtml(x.o)+(x.historica?' · histórica':'')+'</option>';
+  }).join('');
 }
 function obraMoveControls(i){
   return '<button class="obra-move" title="Mover izquierda" onclick="window.moveObra('+i+',-1);event.stopPropagation()">‹</button><button class="obra-move" title="Mover derecha" onclick="window.moveObra('+i+',1);event.stopPropagation()">›</button>';
@@ -9454,7 +9501,7 @@ function closeOrdenObras(){
 }
 function renderOrdenObras(){
   var obras=getObras();
-  var order=getObraOrder();
+  var order=getObraOrder().filter(function(i){return obraVisibleMaterialesPorIndice(i,obras);});
   var rows=order.map(function(i,pos){
     return '<div class="orden-row"><div><div class="orden-name">'+obras[i]+'</div></div>'
       +'<div class="orden-actions">'
@@ -9671,6 +9718,10 @@ var showTerminadasCarga=false;
 function renderObraTab(){
   var obras=getObras();
   var obrasRev=orderedObraEntries().slice().reverse();
+  if(curObra!=null && !isNaN(curObra) && !obraVisibleMaterialesPorIndice(Number(curObra),obras)){
+    curObra=obrasRev.length?obrasRev[0].i:null;
+    if(curObra!=null)localStorage.setItem(LAST_OBRA_KEY,String(curObra));
+  }
   document.getElementById('chips-obra').innerHTML=obrasRev.map(function(x){
     return renderObraChipMovible(x.o,x.i,x.i===curObra,'window.selectObra('+x.i+')');
   }).join('')+'<button class="chip" onclick="window.openNuevaObra()" style="border-style:dashed">+ Obra</button><button class="chip btn-config-orden" onclick="window.openOrdenObras()">⚙ Ordenar obras</button>';
@@ -10558,12 +10609,10 @@ window.exportarReporteMaterialesPDF=exportarReporteMaterialesPDF;
 // ── FIN REPORTE ─────────────────────────────────────
 
 function selectTodasObras(){
-  var obras=getObras();
-  if(compareObrasSel.length===obras.length){
-    compareObrasSel=[];
-  } else {
-    compareObrasSel=obras.map(function(_,i){return i;});
-  }
+  var visibles=orderedObraEntries().map(function(x){return x.i;});
+  var todas=visibles.length>0 && compareObrasSel.length===visibles.length
+    && visibles.every(function(i){return compareObrasSel.indexOf(i)>=0;});
+  compareObrasSel=todas?[]:visibles.slice();
   renderCompareObras();
 }
 function toggleCompareObra(idx){
@@ -10575,9 +10624,13 @@ function toggleCompareObra(idx){
 function renderCompareObras(){
   var obras=getObras();
   var obrasRev=orderedObraEntries().slice().reverse();
+  var visibles=obrasRev.map(function(x){return x.i;});
+  compareObrasSel=(compareObrasSel||[]).filter(function(i){return visibles.indexOf(i)>=0;});
   var todasBtn=document.getElementById('btn-todas-reporte');
   if(todasBtn){
-    todasBtn.textContent=compareObrasSel.length===obras.length&&obras.length?'✓ Todas':'Todas';
+    var todas=visibles.length>0 && compareObrasSel.length===visibles.length
+      && visibles.every(function(i){return compareObrasSel.indexOf(i)>=0;});
+    todasBtn.textContent=todas?'✓ Todas':'Todas';
   }
   var chipsEl=document.getElementById('compare-obra-chips');
   if(chipsEl){
@@ -10666,8 +10719,10 @@ function renderMatTab(){
   var mat=ALL_MATS.filter(function(m){return m.id===curMatId;})[0];
   if(!mat) return;
   var obras=getObras(), max=0;
-  obras.forEach(function(_,i){var v=getVal(mat.id,i);if(v&&v>max)max=v;});
-  var rows=obras.map(function(o,i){
+  var indicesVisibles=orderedObraEntries().map(function(x){return x.i;});
+  indicesVisibles.forEach(function(i){var v=getVal(mat.id,i);if(v&&v>max)max=v;});
+  var rows=indicesVisibles.map(function(i){
+    var o=obras[i];
     var val=getVal(mat.id,i);
     var pct=mat.prom>0&&val!=null?((val-mat.prom)/mat.prom*100).toFixed(0):null;
     var diffCls=pct==null?'':Math.abs(pct)<15?'diff-ok':pct>0?'diff-hi':'diff-lo';
@@ -10698,7 +10753,8 @@ function selectMatFromDrop(){
 
 function renderCompTab(){
   var obras=getObras();
-  var scores=obras.map(function(o,i){
+  var scores=orderedObraEntries().map(function(x){
+    var o=x.o,i=x.i;
     var totalDiff=0,count=0;
     ALL_MATS.forEach(function(mat){
       var val=getVal(mat.id,i);
@@ -11687,6 +11743,10 @@ function initCargaForm(){
   if(!chipsEl) return;
   // Obras ordenables (oculta terminadas salvo que se pida verlas)
   var obrasRev=orderedObraEntries().slice().reverse();
+  if(selectedCargaObra!=null && !isNaN(selectedCargaObra) && !obraVisibleMaterialesPorIndice(Number(selectedCargaObra),obras)){
+    selectedCargaObra=obrasRev.length?obrasRev[0].i:null;
+    if(selectedCargaObra!=null)localStorage.setItem(LAST_CARGA_OBRA_KEY,String(selectedCargaObra));
+  }
   var nTerminadas=obrasRev.filter(function(x){return isTerminada(x.i);}).length;
   if(!showTerminadasCarga) obrasRev=obrasRev.filter(function(x){return !isTerminada(x.i)||selectedCargaObra===x.i;});
   chipsEl.innerHTML=obrasRev.map(function(x){
@@ -11988,6 +12048,9 @@ window.cqAbrirCargaNormal=cqAbrirCargaNormal;
 function registrarCarga(){
   var obraIdx=selectedCargaObra;
   if(obraIdx==null||isNaN(obraIdx)){alert('Seleccioná una obra.');return;}
+  if(!obraVisibleMaterialesPorIndice(Number(obraIdx),getObras())){
+    alert('Esta obra está oculta en Materiales desde Gastos.');return;
+  }
   var matId=selectedCargaMat;
   if(!matId){alert('Seleccioná un material.');return;}
   localStorage.setItem(LAST_CARGA_MAT_KEY,String(matId));
@@ -12141,8 +12204,10 @@ function renderCargaTab(){
   var curFCs=filterCat?Array.from(filterCat.selectedOptions||[]).map(function(o){return String(o.value);}):[];
 
   if(filterObra){
-    filterObra.innerHTML=obras.map(function(o,i){return '<option value="'+i+'">'+o+'</option>';}).join('');
+    var obrasFiltro=orderedObraEntries();
+    filterObra.innerHTML=obrasFiltro.map(function(x){return '<option value="'+x.i+'">'+escapeHtml(x.o)+'</option>';}).join('');
     Array.from(filterObra.options).forEach(function(o){o.selected=curFOs.indexOf(String(o.value))>=0;});
+    curFOs=Array.from(filterObra.selectedOptions||[]).map(function(o){return String(o.value);});
   }
 
   var catsUsadas={};
@@ -12258,7 +12323,7 @@ function renderCargaTab(){
         var editRow=isEditing
           ? '<div class="hist-edit-row">'
             +'<select id="edit-obra-'+c.id+'" style="min-width:150px">'
-              +obras.map(function(o,i){return '<option value="'+i+'"'+(Number(i)===Number(c.obraIdx)?' selected':'')+'>'+o+'</option>';}).join('')
+              +opcionesObrasMaterialesHTML(c.obraIdx)
             +'</select>'
             +'<input type="number" id="edit-qty-'+c.id+'" value="'+c.qty+'" min="0" step="1" placeholder="Cant.">'
             +'<input type="text" id="edit-nota-'+c.id+'" value="'+(c.nota||'')+'" placeholder="Unidad/nota">'
@@ -12299,6 +12364,10 @@ function guardarEditCarga(id){
   var obraIdx=obraEl?Number(obraEl.value):NaN;
   var obras=getObras();
   if(isNaN(obraIdx)||!obras[obraIdx]){alert('Seleccioná una obra válida.');return;}
+  var cargaActual=(state.cargas||[]).find(function(c){return String(c.id)===String(id);})||null;
+  if(!obraVisibleMaterialesPorIndice(obraIdx,obras) && !(cargaActual&&Number(cargaActual.obraIdx)===Number(obraIdx))){
+    alert('Esta obra está oculta en Materiales desde Gastos.');return;
+  }
   if(isNaN(qty)||qty<=0){alert('Cantidad inválida.');return;}
   if(!fecha){alert('Fecha inválida.');return;}
   state.cargas=state.cargas.map(function(c){

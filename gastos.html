@@ -10443,6 +10443,173 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
 })();
 </script>
 
+<style id="cq-v41-modulos-individuales-css">
+/* Permisos individuales de obra por módulo */
+.obra-modulos-box{border:1px solid #DDE8DE;border-radius:12px;background:#F8FBF8;padding:11px 12px}
+.obra-modulos-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;flex-wrap:wrap}
+.obra-modulos-title{font-size:11px;font-weight:900;color:#294B5A}
+.obra-modulos-actions{display:flex;gap:5px;flex-wrap:wrap}
+.obra-modulos-actions button{border:1px solid #CFE0D5;background:#fff;color:#315447;border-radius:999px;padding:4px 8px;font:800 9.5px 'Space Grotesk',sans-serif;cursor:pointer}
+.obra-modulos-actions button:hover{background:#EDF8F2;border-color:#8EC8AA}
+.obra-modulos-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.obra-modulo-opt{display:flex;align-items:center;gap:8px;min-height:37px;padding:7px 9px;border:1px solid #E1EAE3;border-radius:9px;background:#fff;cursor:pointer}
+.obra-modulo-opt:hover{border-color:#AFCDBD;background:#FBFEFC}
+.obra-modulo-opt input{width:17px;height:17px;flex:0 0 auto;accent-color:#00A960}
+.obra-modulo-opt span{font-size:11px;font-weight:800;color:#355247;line-height:1.15}
+.obra-modulos-note{font-size:9.5px;color:#7A9E82;line-height:1.4;margin-top:8px}
+.obra-modulos-note strong{color:#315447}
+.obra-vinculo-badge{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:900;white-space:nowrap}
+.obra-vinculo-badge.all{background:#EAF4FF;color:#28659A}
+.obra-vinculo-badge.partial{background:#FFF3D9;color:#94600B}
+.obra-vinculo-badge.none{background:#F1F3F2;color:#687A70}
+@media(max-width:520px){.obra-modulos-grid{grid-template-columns:1fr}.obra-modulos-actions{width:100%}}
+</style>
+
+<script id="cq-v41-modulos-individuales-js">
+(function(){
+  /*
+    Esta lista queda centralizada en Gastos. Los demás archivos sólo tienen que
+    consultar cqObraVisibleEnModulo(obra, 'clave') para respetar el permiso.
+  */
+  const MODULOS_OBRA=[
+    ['cajaChica','Caja Chica'],
+    ['cajaGerencia','Caja Gerencia'],
+    ['materiales','Materiales'],
+    ['acopio','Acopio'],
+    ['panol','Pañol'],
+    ['pedidos','Solicitud de pedidos']
+  ];
+  window.CQ_MODULOS_OBRA=MODULOS_OBRA.map(([id,label])=>({id,label}));
+
+  function defaultMap(value=true){
+    const r={};MODULOS_OBRA.forEach(([id])=>r[id]=!!value);return r;
+  }
+  function normalizedMap(obra){
+    if(!obra)return defaultMap(true);
+    if(String(obra.id)==='oficina')return defaultMap(true);
+    const legacyDefault=(obra.integrarModulos!==false);
+    const raw=(obra.modulos&&typeof obra.modulos==='object'&&!Array.isArray(obra.modulos))?obra.modulos:{};
+    const out={};
+    MODULOS_OBRA.forEach(([id])=>{out[id]=(raw[id]===undefined)?legacyDefault:(raw[id]!==false)});
+    return out;
+  }
+  window.cqObraModulos=function(obra){return normalizedMap(obra)};
+  window.cqObraVisibleEnModulo=function(obra,modulo){
+    if(!obra||obra.archived===true)return false;
+    if(String(obra.id)==='oficina')return true;
+    const map=normalizedMap(obra);
+    return map[modulo]!==false;
+  };
+  /* Compatibilidad con módulos viejos: sólo devuelve false cuando todos los permisos están apagados. */
+  window.cqObraIntegraModulos=function(obra){
+    if(!obra||obra.archived===true)return false;
+    if(String(obra.id)==='oficina')return true;
+    return Object.values(normalizedMap(obra)).some(Boolean);
+  };
+
+  function ensureModuleSelector(){
+    /* Retira el control viejo de todo/nada creado por v40. */
+    document.getElementById('obra-integracion-wrap')?.remove();
+    const visual=document.getElementById('obra-visual-selector-wrap');
+    const short=document.getElementById('obra-short');
+    const anchor=visual||(short?short.closest('.fld'):null);
+    if(!anchor)return;
+    let wrap=document.getElementById('obra-modulos-wrap');
+    if(!wrap){
+      wrap=document.createElement('div');
+      wrap.className='fld';wrap.id='obra-modulos-wrap';
+      wrap.innerHTML=`<label>Mostrar esta obra en</label>
+        <div class="obra-modulos-box">
+          <div class="obra-modulos-head">
+            <div class="obra-modulos-title">Módulos vinculados</div>
+            <div class="obra-modulos-actions">
+              <button type="button" onclick="cqSetObraModulos('todos')">Todos</button>
+              <button type="button" onclick="cqSetObraModulos('financiero')">Solo financiero</button>
+              <button type="button" onclick="cqSetObraModulos('ninguno')">Ninguno</button>
+            </div>
+          </div>
+          <div class="obra-modulos-grid">${MODULOS_OBRA.map(([id,label])=>`<label class="obra-modulo-opt"><input type="checkbox" data-obra-modulo="${id}" checked><span>${label}</span></label>`).join('')}</div>
+          <div class="obra-modulos-note"><strong>Gastos siempre conserva la obra.</strong> Desmarcar un módulo sólo evita que esa obra aparezca allí. “Solo financiero” deja Caja Chica y Caja Gerencia activas.</div>
+        </div>`;
+      anchor.insertAdjacentElement('afterend',wrap);
+    }
+    return wrap;
+  }
+  function setChecks(map,disabled=false){
+    ensureModuleSelector();
+    document.querySelectorAll('[data-obra-modulo]').forEach(el=>{
+      el.checked=map[el.dataset.obraModulo]!==false;
+      el.disabled=disabled;
+    });
+    const actions=document.querySelectorAll('#obra-modulos-wrap .obra-modulos-actions button');
+    actions.forEach(b=>b.disabled=disabled);
+  }
+  function getChecks(){
+    const out={};
+    MODULOS_OBRA.forEach(([id])=>{const el=document.querySelector(`[data-obra-modulo="${id}"]`);out[id]=el?!!el.checked:true});
+    return out;
+  }
+  window.cqSetObraModulos=function(mode){
+    let map=defaultMap(mode==='todos');
+    if(mode==='financiero'){
+      map=defaultMap(false);map.cajaChica=true;map.cajaGerencia=true;
+    }
+    setChecks(map,false);
+  };
+
+  const oldOpen=window.openObraModal;
+  window.openObraModal=function(id=''){
+    if(typeof oldOpen==='function')oldOpen(id);
+    ensureModuleSelector();
+    const obra=id?(config.obras||[]).find(o=>o.id===id):null;
+    const isOficina=!!obra&&String(obra.id)==='oficina';
+    setChecks(obra?normalizedMap(obra):defaultMap(true),isOficina);
+  };
+
+  const oldSave=window.saveObra;
+  window.saveObra=function(){
+    const editId=document.getElementById('obra-id-edit')?.value||'';
+    const label=document.getElementById('obra-label')?.value.trim()||'';
+    const short=document.getElementById('obra-short')?.value.trim()||'';
+    const selected=getChecks();
+    const targetId=editId||((typeof slug==='function'&&label)?slug(label):'');
+    /* Dejamos que la validación visual original muestre el mensaje, pero no tocamos permisos si el alta no es válida. */
+    if(!label||!short){if(typeof oldSave==='function')oldSave();return;}
+    if(!editId&&targetId&&(config.obras||[]).some(o=>o.id===targetId)){if(typeof oldSave==='function')oldSave();return;}
+    if(typeof oldSave==='function')oldSave();
+    if(!targetId)return;
+    const obra=(config.obras||[]).find(o=>o.id===targetId);
+    if(!obra)return;
+    obra.modulos=(String(obra.id)==='oficina')?defaultMap(true):selected;
+    /* Mantiene funcionando el esquema viejo durante la transición: sólo false si no queda ningún módulo activo. */
+    obra.integrarModulos=(String(obra.id)==='oficina')?true:Object.values(obra.modulos).some(Boolean);
+    if(typeof persistConfig==='function')persistConfig();
+    if(typeof renderConfig==='function'&&document.getElementById('view-config')?.classList.contains('active'))renderConfig();
+  };
+
+  function vinculoSummary(obra){
+    if(String(obra?.id)==='oficina')return '<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Sistema</span>';
+    const map=normalizedMap(obra);const total=MODULOS_OBRA.length;const on=Object.values(map).filter(Boolean).length;
+    if(on===total)return `<span class="obra-vinculo-badge all">Todos (${on}/${total})</span>`;
+    if(on===0)return '<span class="obra-vinculo-badge none">Solo Gastos</span>';
+    return `<span class="obra-vinculo-badge partial">${on}/${total} módulos</span>`;
+  }
+
+  const oldRenderConfigV41=window.renderConfig;
+  window.renderConfig=function(){
+    if(typeof oldRenderConfigV41==='function')oldRenderConfigV41();
+    const rows=[...document.querySelectorAll('#obras-config tbody tr')];
+    rows.forEach((tr,i)=>{
+      const obra=(config.obras||[])[i];
+      if(obra&&tr.children[4])tr.children[4].innerHTML=vinculoSummary(obra);
+    });
+  };
+
+  /* Deja el selector preparado si el modal ya existe. */
+  ensureModuleSelector();
+})();
+</script>
+
 
 <script id="cq-no-startup-flash-runtime">
 (function(){

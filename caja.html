@@ -793,24 +793,36 @@ function selectedObraIdCC(){
   const dest=document.getElementById('mDestType').value;
   return dest==='oficina'?'oficina':document.getElementById('mWork').value;
 }
-function obraIntegrableCC(id){
+function obraVisibleEnModuloCC(id,modulo){
   if(!id||String(id)==='oficina')return true;
   const o=(gastosConfigCC?.obras||[]).find(x=>x&&String(x.id)===String(id));
-  return !o || (o.integrarModulos!==false && o.archived!==true);
+  // Compatibilidad: si Caja todavía ve una obra que no está en config, no la bloqueamos.
+  if(!o)return true;
+  if(o.archived===true)return false;
+  const raw=(o.modulos&&typeof o.modulos==='object'&&!Array.isArray(o.modulos))?o.modulos:null;
+  if(raw&&raw[modulo]!==undefined)return raw[modulo]!==false;
+  // Obras existentes sin el nuevo mapa conservan el comportamiento anterior.
+  return o.integrarModulos!==false;
+}
+function obraIntegrableCC(id){
+  return obraVisibleEnModuloCC(id,'cajaChica');
 }
 function fillWorksFromGastos(selected=''){
   const el=document.getElementById('mWork');
   const todas=(gastosConfigCC?.obras||[]);
-  const obras=todas.filter(o=>o&&o.id&&o.id!=='oficina'&&!isOficinaCC(o.id)&&o.integrarModulos!==false&&o.archived!==true);
+  const obras=todas.filter(o=>o&&o.id&&o.id!=='oficina'&&!isOficinaCC(o.id)&&obraVisibleEnModuloCC(o.id,'cajaChica'));
 
-  // Si se edita un movimiento histórico de una obra hoy marcada "Solo Gastos",
+  // Si se edita un movimiento histórico de una obra hoy oculta en Caja Chica,
   // conservarla visible sólo para no perder la referencia existente.
   if(selected && !obras.some(o=>String(o.id)===String(selected))){
     const hist=todas.find(o=>o&&String(o.id)===String(selected));
     if(hist)obras.push(hist);
   }
 
-  el.innerHTML='<option value="">Seleccionar obra</option>'+obras.map(o=>`<option value="${esc(o.id)}">${esc(o.label||o.short||o.id)}${o.integrarModulos===false?' · Solo Gastos':''}</option>`).join('');
+  el.innerHTML='<option value="">Seleccionar obra</option>'+obras.map(o=>{
+    const oculta=!obraVisibleEnModuloCC(o.id,'cajaChica');
+    return `<option value="${esc(o.id)}">${esc(o.label||o.short||o.id)}${oculta?' · Oculta en Caja Chica':''}</option>`;
+  }).join('');
   if(selected)el.value=selected;
 }
 function fillCategories(selected=''){
@@ -1267,9 +1279,9 @@ async function syncMaterialesCC(m,oldM){
     }
   }
 
-  if(!obraIntegrableCC(m.gastosObraId)){
+  if(!obraVisibleEnModuloCC(m.gastosObraId,'materiales')){
     m.materialesSyncEstado='omitido';
-    m.materialesSyncError='Obra configurada como Solo Gastos';
+    m.materialesSyncError='Obra oculta en Materiales desde Gastos';
     m.materialesSyncAt=new Date().toISOString();
     cqCcSetCurrentSyncState(m.id,'materiales','omitido',m.materialesSyncError);
     save();render();
@@ -1451,15 +1463,9 @@ async function syncMovementCC(m,oldM=null){
     await upsertGastoCC(oldObra,gastoPayloadCC(oldM),true);
   }
 
-  if(!obraIntegrableCC(newObra)){
-    m.gastosSyncEstado='omitido';
-    m.gastosSyncError='Obra configurada como Solo Gastos';
-    m.gastosSyncAt=new Date().toISOString();
-    cqCcSetCurrentSyncState(m.id,'gastos','omitido',m.gastosSyncError);
-    save();render();
-    return;
-  }
-
+  // El permiso de Caja Chica controla la VISIBILIDAD de la obra en este módulo.
+  // Si existe un movimiento histórico de una obra luego ocultada, sigue sincronizando
+  // con Gastos para no romper el dato financiero ya cargado.
   await upsertGastoCC(newObra,gastoPayloadCC(m),false);
   m.gastosSyncEstado='ok';
   m.gastosSyncError='';
@@ -1491,7 +1497,7 @@ async function verifyGastosCC(){
   if(verifyingCC||!window._cqGastosBridge)return;
   verifyingCC=true;
   try{
-    const gastos=db.movements.filter(m=>m.type==='gasto'&&m.gastosObraId&&obraIntegrableCC(m.gastosObraId));
+    const gastos=db.movements.filter(m=>m.type==='gasto'&&m.gastosObraId);
     const obraIds=[...new Set(gastos.map(m=>m.gastosObraId))];
     const docs={};
     const f=window._cqGastosBridge;
@@ -1537,7 +1543,7 @@ async function verifyMaterialesCC(){
   verifyingMaterialesCC=true;
   try{
     const f=window._cqGastosBridge;
-    const movs=db.movements.filter(m=>m.type==='gasto'&&m.category==='mat'&&obraIntegrableCC(m.gastosObraId));
+    const movs=db.movements.filter(m=>m.type==='gasto'&&m.category==='mat'&&obraVisibleEnModuloCC(m.gastosObraId,'materiales'));
 
     // Autorreparación: si hay cargas vinculadas pendientes/rojas, Caja Chica
     // vuelve a intentar materializarlas sin necesitar abrir Materiales.
@@ -3395,9 +3401,18 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
 
   function getObrasDisponibles(){
     const cat=document.getElementById('mCategory')?.value||'';
-    return (gastosConfigCC?.obras||[])
-      .filter(o=>o&&o.id&&o.id!=='oficina'&&!isOficinaCC(o.id))
-      .filter(o=>!cat || categoriasPermitidasCC(o.id).includes(cat));
+    const todas=(gastosConfigCC?.obras||[]).filter(o=>o&&o.id&&o.id!=='oficina'&&!isOficinaCC(o.id));
+    const arr=todas.filter(o=>obraVisibleEnModuloCC(o.id,'cajaChica'));
+
+    // Al editar un movimiento histórico, mantener a la vista su obra aunque hoy esté oculta.
+    (window.cqObrasSeleccionadasCC||[]).forEach(id=>{
+      if(!arr.some(o=>String(o.id)===String(id))){
+        const hist=todas.find(o=>String(o.id)===String(id));
+        if(hist)arr.push(hist);
+      }
+    });
+
+    return arr.filter(o=>!cat || categoriasPermitidasCC(o.id).includes(cat));
   }
 
   function ensureUI(){
@@ -4138,5 +4153,7 @@ modal.addEventListener("click",e=>{if(e.target===modal)close.click()});
 manual.addEventListener("click",async()=>{manual.disabled=true;try{await createBackup("Manual");alert("Backup creado.")}catch(e){alert("No se pudo crear: "+e.message)}finally{manual.disabled=false}});
 setTimeout(ensureDaily,2200);
 </script>
+
+<!-- CQ 2026-10-13: permisos individuales de obras por módulo. Caja Chica respeta modulos.cajaChica y Materiales respeta modulos.materiales. -->
 </body>
 </html>
