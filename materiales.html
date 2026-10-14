@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- CQ 13/10/2026 · permisos individuales de obra: Materiales -->
+
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -4522,6 +4524,50 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 }
 </style>
 
+
+<style id="cq-fix-filtros-tablet-overlay-v2">
+@media (min-width:651px) and (max-width:1800px){
+  #view-carga .premium-hist{
+    position:relative!important;
+    z-index:100000!important;
+    overflow:visible!important;
+  }
+  #view-carga #carga-historial{
+    position:relative!important;
+    z-index:1!important;
+  }
+  #view-carga .premium-hist .cq-multi-filter-menu,
+  #view-carga .premium-hist .hist-mat-dropdown{
+    position:fixed!important;
+    right:auto!important;
+    z-index:2147483000!important;
+    max-height:58vh!important;
+    box-shadow:0 20px 55px rgba(10,38,30,.28)!important;
+  }
+  #view-carga .premium-hist .cq-multi-filter-menu{
+    min-width:320px!important;
+    max-width:min(520px,calc(100vw - 20px))!important;
+    max-height:72vh!important;
+    overflow:hidden!important;
+    background:#fff!important;
+    border:1px solid #cfded6!important;
+  }
+  #view-carga .premium-hist .cq-multi-filter-options{
+    max-height:52vh!important;
+    overflow:auto!important;
+    background:#fff!important;
+  }
+  #view-carga .premium-hist .hist-mat-dropdown{
+    min-width:340px!important;
+    max-width:min(620px,calc(100vw - 20px))!important;
+    max-height:70vh!important;
+    overflow:auto!important;
+    background:#fff!important;
+    border:1px solid #cfded6!important;
+  }
+}
+</style>
+
 <style id="cq-reporte-comentarios-definitivo">
 #modal-reporte .cq-report-number-cell,
 #view-obras #obras-content .cq-report-number-cell{position:relative;cursor:pointer}
@@ -4537,6 +4583,25 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
 #cq-report-comment-text{display:block;width:calc(100% - 32px);height:125px;margin:16px;padding:12px;border:1px solid #CCD9D2;border-radius:10px;box-sizing:border-box;font:600 13px Arial;resize:vertical;color:#173E32}
 .cq-report-comment-actions{display:flex;gap:8px;padding:0 16px 16px}.cq-report-comment-actions button{border:0;border-radius:9px;padding:10px 13px;font-weight:800}
 .cq-report-comment-delete{background:#FBE7E5;color:#A53C34}.cq-report-comment-cancel{margin-left:auto;background:#EDF2EF;color:#4E685F}.cq-report-comment-save{background:#1F7A5B;color:#fff}
+</style>
+
+<style id="cq-fix-filtros-tablet-visible-v4">
+@media (min-width:651px) and (max-width:1800px){
+  #view-carga .premium-hist,
+  #view-carga .hist-filters-premium,
+  #view-carga .cq-multi-filter,
+  #view-carga .hist-material-picker{overflow:visible!important;}
+  #view-carga .premium-hist .cq-multi-filter-menu,
+  #view-carga .premium-hist .hist-mat-dropdown{
+    z-index:2147483640!important;
+    overscroll-behavior:contain!important;
+  }
+  #view-carga .premium-hist .hist-mat-dropdown,
+  #view-carga .premium-hist .cq-multi-filter-options{
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+}
 </style>
 </head>
 <body>
@@ -5237,7 +5302,7 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
       <button class="btn btn-p btn-sm" style="flex:1;min-width:95px" onclick="window.openNuevoMat()">＋ Material</button>
     </div>
   </div>
-  <div class="catalog-merge-note">Los materiales con el mismo nombre o código se unifican automáticamente y conservan sus cantidades.</div>
+  <div class="catalog-merge-note">Los materiales sólo se unifican automáticamente si tienen el mismo nombre exacto. Un código repetido se trata como conflicto y nunca mezcla cantidades.</div>
   <div id="catalogo-content"></div>
 </div>
 
@@ -5255,25 +5320,66 @@ function claveLoteMz(v){
   m=raw.match(/\b(\d+)\s*\/\s*(\d+)\b/);
   return m?(Number(m[1])+'/'+Number(m[2])):'';
 }
-function obrasGastosActivasMateriales(){
+function obrasGastosTodasMateriales(){
   return Array.isArray(obrasGastosMateriales)
     ? obrasGastosMateriales.filter(function(o){return o&&o.id&&o.id!=='oficina';})
     : [];
 }
+function obraModuloMaterialesHabilitado(o){
+  if(!o||o.archived===true)return false;
+  if(String(o.id)==='oficina')return false;
+  var legacyDefault=(o.integrarModulos!==false);
+  var mods=(o.modulos&&typeof o.modulos==='object'&&!Array.isArray(o.modulos))?o.modulos:null;
+  return mods&&mods.materiales!==undefined ? mods.materiales!==false : legacyDefault;
+}
+function obrasGastosActivasMateriales(){
+  return obrasGastosTodasMateriales().filter(function(o){
+    return obraModuloMaterialesHabilitado(o);
+  });
+}
 function obraGastosPorClaveMateriales(clave){
   if(!clave)return null;
-  return obrasGastosActivasMateriales().find(function(o){
+  // Para resolver históricos se consulta también una obra marcada "Solo Gastos".
+  // Esa obra no se inyecta como nueva selección, pero sus registros viejos conservan nombre.
+  return obrasGastosTodasMateriales().find(function(o){
     return [o.label,o.short,o.id].some(function(v){return claveLoteMz(v)===clave;});
   })||null;
 }
+
+function obraGastosExcluidaMateriales(nombre){
+  var clave=claveLoteMz(nombre);
+  var n=String(nombre||'').trim().toLowerCase();
+  var o=obrasGastosTodasMateriales().find(function(x){
+    if(!x)return false;
+    if(clave && [x.label,x.short,x.id].some(function(v){return claveLoteMz(v)===clave;}))return true;
+    return [x.label,x.short,x.id].some(function(v){return String(v||'').trim().toLowerCase()===n;});
+  })||null;
+  return !!(o && !obraModuloMaterialesHabilitado(o));
+}
+function obraVisibleMaterialesPorNombre(nombre){
+  var clave=claveLoteMz(nombre);
+  var n=String(nombre||'').trim().toLowerCase();
+  var o=obrasGastosTodasMateriales().find(function(x){
+    if(!x)return false;
+    if(clave && [x.label,x.short,x.id].some(function(v){return claveLoteMz(v)===clave;}))return true;
+    return [x.label,x.short,x.id].some(function(v){return String(v||'').trim().toLowerCase()===n;});
+  })||null;
+  // Obras locales antiguas que no existen en Gastos conservan su funcionamiento.
+  return o ? obraModuloMaterialesHabilitado(o) : true;
+}
+function obraVisibleMaterialesPorIndice(idx,obras){
+  obras=obras||getObras();
+  return idx!=null && idx>=0 && idx<obras.length && obraVisibleMaterialesPorNombre(obras[idx]);
+}
+
 function nombreObraUnificadoMateriales(baseName,idx){
   if(idx<OBRA_GASTOS_DESDE_IDX)return (state.obraNombres&&state.obraNombres[idx])?state.obraNombres[idx]:baseName;
   var g=obraGastosPorClaveMateriales(claveLoteMz(baseName));
   if(g)return g.label||g.short||g.id;
   return (state.obraNombres&&state.obraNombres[idx])?state.obraNombres[idx]:baseName;
 }
-async function cargarObrasGastosMateriales(){
-  if(obrasGastosMateriales)return obrasGastosMateriales;
+async function cargarObrasGastosMateriales(force){
+  if(obrasGastosMateriales&&!force)return obrasGastosMateriales;
   if(!window._dbReady||!window._getDoc)return null;
   try{
     var snap=await window._getDoc(window._doc(window._db,'config','app'));
@@ -5355,67 +5461,12 @@ function indiceObraEstableMateriales(nombre){
 // terminadas y orden). El remapeo sólo se aplica cuando para un índice viejo hay una única obra
 // destino inequívoca; ante cualquier ambigüedad no toca ese índice.
 function reubicarEstadoIndexadoPorCargasMateriales(){
-  if(!state||!Array.isArray(state.cargas))return false;
-  var destinos={};
-  state.cargas.forEach(function(c){
-    if(!c)return;
-    var viejo=Number(c.obraIdx);
-    if(!Number.isInteger(viejo)||viejo<0)return;
-    var fuente=String(c.obraNameOrigen||c.obraName||'').trim();
-    if(!fuente)return;
-    var nuevo=indiceObraEstableMateriales(fuente);
-    if(nuevo<0)return;
-    if(!destinos[viejo])destinos[viejo]={};
-    destinos[viejo][nuevo]=true;
-  });
-
-  var mapa={};
-  Object.keys(destinos).forEach(function(k){
-    var ds=Object.keys(destinos[k]);
-    if(ds.length===1){
-      var viejo=Number(k),nuevo=Number(ds[0]);
-      if(viejo!==nuevo)mapa[viejo]=nuevo;
-    }
-  });
-  if(!Object.keys(mapa).length)return false;
-
-  function remapDiccionarioPorSufijo(origen){
-    var salida={};
-    Object.keys(origen||{}).forEach(function(k){
-      var m=String(k).match(/^(.*)-(\d+)$/);
-      if(!m){salida[k]=origen[k];return;}
-      var idx=Number(m[2]);
-      var nk=m[1]+'-'+(Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx);
-      // Construcción simultánea: si hubiera una colisión inesperada, conservar el valor
-      // que ya pertenece al destino para no pisar información silenciosamente.
-      if(!Object.prototype.hasOwnProperty.call(salida,nk))salida[nk]=origen[k];
-    });
-    return salida;
-  }
-
-  state.overrides=remapDiccionarioPorSufijo(state.overrides||{});
-  state.historial=remapDiccionarioPorSufijo(state.historial||{});
-
-  if(state.obrasTerminadas){
-    var nt={};
-    Object.keys(state.obrasTerminadas).forEach(function(k){
-      var idx=Number(k),nk=Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx;
-      if(state.obrasTerminadas[k])nt[nk]=true;
-    });
-    state.obrasTerminadas=nt;
-  }
-
-  if(Array.isArray(state.obraOrder)){
-    var vistos={};
-    state.obraOrder=state.obraOrder.map(function(idx){
-      idx=Number(idx);
-      return Object.prototype.hasOwnProperty.call(mapa,idx)?mapa[idx]:idx;
-    }).filter(function(idx){
-      if(vistos[idx])return false;
-      vistos[idx]=true;return true;
-    });
-  }
-  return true;
+  // CQ 13/10/2026 — DESACTIVADO.
+  // Antes se infería un mapa desde algunas cargas y luego se movían EN BLOQUE
+  // overrides/historial/obrasTerminadas. Esa heurística podía trasladar números
+  // de una obra a otra. A partir de ahora sólo se reubican cargas individuales
+  // usando obraNameOrigen; los valores indexados no se mueven sin evidencia directa.
+  return false;
 }
 
 // Reubica cargas por la IDENTIDAD guardada de la obra, nunca por la posición actual.
@@ -5459,54 +5510,12 @@ function normalizarNombresObraCargasMateriales(){
   return cambio;
 }
 function consolidarExtrasDuplicadasConGastos(){
-  if(!state||!Array.isArray(state.extraObras)||!state.extraObras.length)return false;
-  var oldExtras=state.extraObras.slice();
-  var keep=[], oldToNew={}, cambio=false;
-
-  oldExtras.forEach(function(nombre,extraIdx){
-    var clave=claveLoteMz(nombre);
-    var canonical=indiceBasePorClaveGastos(clave);
-    var oldGlobal=OBRAS_BASE.length+extraIdx;
-    if(canonical>=OBRA_GASTOS_DESDE_IDX){
-      oldToNew[oldGlobal]=canonical;
-      cambio=true;
-    }else{
-      oldToNew[oldGlobal]=OBRAS_BASE.length+keep.length;
-      keep.push(nombre);
-    }
-  });
-
-  if(!cambio)return false;
-
-  (state.cargas||[]).forEach(function(c){
-    if(Object.prototype.hasOwnProperty.call(oldToNew,c.obraIdx)){
-      c.obraIdx=oldToNew[c.obraIdx];
-      c.obraName=nombreObraUnificadoMateriales(OBRAS_BASE[c.obraIdx]||'',c.obraIdx);
-    }
-  });
-
-  if(state.obrasTerminadas){
-    var nt={};
-    Object.keys(state.obrasTerminadas).forEach(function(k){
-      var n=Number(k);
-      var nk=Object.prototype.hasOwnProperty.call(oldToNew,n)?oldToNew[n]:n;
-      if(state.obrasTerminadas[k])nt[nk]=true;
-    });
-    state.obrasTerminadas=nt;
-  }
-
-  if(Array.isArray(state.obraOrder)){
-    var seen={};
-    state.obraOrder=state.obraOrder.map(function(n){
-      return Object.prototype.hasOwnProperty.call(oldToNew,n)?oldToNew[n]:n;
-    }).filter(function(n){
-      if(seen[n])return false;
-      seen[n]=true;return true;
-    });
-  }
-
-  state.extraObras=keep;
-  return true;
+  // CQ 13/10/2026 — DESACTIVADO POR SEGURIDAD DE ÍNDICES.
+  // Nunca retirar/recompactar state.extraObras automáticamente.
+  // Los valores históricos de Materiales usan obraIdx como posición y eliminar
+  // una obra intermedia desplaza todas las siguientes. La lista queda append-only.
+  // La equivalencia por lote/manzana se resuelve al mostrar/buscar, sin mover columnas.
+  return false;
 }
 
 var CATS = [
@@ -7557,38 +7566,41 @@ function cqMismoProductoEspecial(a,b){
 }
 function buscarCoincidenciaMaterial(mat,excluirId){
   if(!mat)return null;
-  var nk=claveMaterialUnificar(mat.mat),ck=codigoMaterialUnificar(mat);
+  var nk=claveMaterialUnificar(mat.mat);
+  if(!nk)return null;
+
+  // CQ 13/10/2026 — IDENTIDAD SEGURA:
+  // un código repetido NO convierte dos productos en el mismo material.
+  // Sólo se propone una unificación automática cuando el NOMBRE normalizado es idéntico.
+  // Esto evita cruces como "Adicional de 100 cm" ↔ "Codo Duratop".
   return getAllMats().find(function(x){
     if(Number(x.id)===Number(excluirId)||isMatDeleted(x.id))return false;
-    var esp=cqMismoProductoEspecial(mat,x);
-    if(esp===false)return false;
-    if(ck&&codigoMaterialUnificar(x)===ck)return true;
-    return nk&&claveMaterialUnificar(x.mat)===nk;
+    return claveMaterialUnificar(x.mat)===nk;
   })||null;
 }
 function consolidarMaterialesDuplicados(){
   var activos=getAllMats().filter(function(m){return m&&!isMatDeleted(m.id);}).slice();
-  var vistosNombre={},vistosCodigo={},cambio=false;
+  var vistosNombre={},cambio=false;
+
   activos.forEach(function(m){
     if(isMatDeleted(m.id)||!ALL_MATS.some(function(x){return Number(x.id)===Number(m.id);}))return;
-    var nk=claveMaterialUnificar(m.mat),ck=codigoMaterialUnificar(m),otro=null;
-    if(ck&&vistosCodigo[ck]){
-      var candidato=vistosCodigo[ck];
-      var esp=cqMismoProductoEspecial(m,candidato);
-      if(esp!==false)otro=candidato;
-    }
-    if(!otro&&nk&&vistosNombre[nk])otro=vistosNombre[nk];
+    var nk=claveMaterialUnificar(m.mat);
+    if(!nk)return;
+
+    // CQ 13/10/2026 — Nunca fusionar automáticamente por código.
+    // El código sirve como dato de referencia/integración, no como identidad destructiva.
+    var otro=vistosNombre[nk]||null;
     if(otro&&Number(otro.id)!==Number(m.id)){
-      var can=elegirCanonicoMaterial(otro,m),dup=Number(can.id)===Number(otro.id)?m:otro;
+      var can=elegirCanonicoMaterial(otro,m);
+      var dup=Number(can.id)===Number(otro.id)?m:otro;
       unificarDosMateriales(can,dup,{toast:false});
       cambio=true;
-      if(nk)vistosNombre[nk]=can;
-      if(ck)vistosCodigo[ck]=can;
+      vistosNombre[nk]=can;
     }else{
-      if(nk)vistosNombre[nk]=m;
-      if(ck)vistosCodigo[ck]=m;
+      vistosNombre[nk]=m;
     }
   });
+
   if(cambio)state._materialesUnificadosAt=new Date().toISOString();
   return cambio;
 }
@@ -7993,6 +8005,263 @@ function cqForzarCementoHolcimCanonico(){
   return true;
 }
 
+
+/* ==========================================================
+   CQ 13/10/2026 — BLINDAJE DE IDENTIDAD DE MATERIALES
+   - Un código nunca autoriza una fusión destructiva.
+   - Las cargas automáticas se pueden reparar usando el nombre de ORIGEN
+     que quedó guardado por Acopio/Pañol/Cajas.
+   - Regla definitiva: 902001103 pertenece al CODO DURATOP 45° HH 63MM.
+   ========================================================== */
+var CQ_MAT_CODO_DURATOP_45_63_CODIGO='902001103';
+var CQ_MAT_CODO_DURATOP_45_63_NOMBRE='CODO DURATOP 45° HH 63MM';
+var CQ_MAT_WEBER_MEMBRANA_CODIGO='3309301312';
+var CQ_MAT_WEBER_MEMBRANA_NOMBRE='WEBER MEMBRANA LIQUIDA TECHOS PU X 20 KG BCO';
+
+function cqEsCodoDuratop45HH63Materiales(v){
+  var n=claveMaterialUnificar(v);
+  return n.indexOf('codo')>=0 && n.indexOf('duratop')>=0 && n.indexOf('45')>=0 && n.indexOf('63')>=0;
+}
+function cqEsAdicional100Materiales(v){
+  var n=claveMaterialUnificar(v);
+  return n.indexOf('adicional')>=0 && (n.indexOf('100')>=0 || n.indexOf('cm')>=0 || n==='adicional');
+}
+function cqEsWeberMembranaMateriales(v){
+  return claveMaterialUnificar(v)===claveMaterialUnificar(CQ_MAT_WEBER_MEMBRANA_NOMBRE);
+}
+function cqCodigoSeguroMaterialesParaNombre(codigo,nombre){
+  var c=String(codigo||'').trim();
+  if(c===CQ_MAT_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Materiales(nombre))return '';
+  if(c===CQ_MAT_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaMateriales(nombre))return '';
+  return c;
+}
+function cqBuscarMaterialExactoPorNombreMateriales(nombre){
+  var nk=claveMaterialUnificar(nombre);
+  if(!nk)return null;
+  return getAllMats().find(function(m){
+    return m&&!isMatDeleted(m.id)&&claveMaterialUnificar(m.mat)===nk;
+  })||null;
+}
+function cqCrearMaterialOrigenSeguroMateriales(nombre,codigo,categoria,origen){
+  var limpio=String(nombre||'').trim();
+  if(!limpio)return null;
+  var existe=cqBuscarMaterialExactoPorNombreMateriales(limpio);
+  if(existe)return existe;
+
+  var maxId=10000;
+  getAllMats().forEach(function(m){
+    var id=Number(m&&m.id)||0;
+    if(id>=maxId)maxId=id+1;
+  });
+
+  var cat=String(categoria||'VARIOS').trim()||'VARIOS';
+  if(!CATS.some(function(c){return c&&!isCatDeleted(c.name)&&String(c.name).toLowerCase()===cat.toLowerCase();}))cat='VARIOS';
+  var code=cqCodigoSeguroMaterialesParaNombre(codigo,limpio);
+  if(cqEsCodoDuratop45HH63Materiales(limpio))code=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+
+  var mat={
+    id:maxId,
+    mat:limpio,
+    codigo:code,
+    prom:0,
+    data:[],
+    catName:cat,
+    comentarios:'Recuperado automáticamente desde '+String(origen||'integración'),
+    autoCreated:true
+  };
+  if(!Array.isArray(state.extraMats))state.extraMats=[];
+  state.extraMats.push(mat);
+  if(!state.matCodigos)state.matCodigos={};
+  if(code)state.matCodigos[mat.id]=code;
+  if(!state.matCategorias)state.matCategorias={};
+  state.matCategorias[mat.id]=cat;
+  var catObj=CATS.find(function(c){return c&&String(c.name).toLowerCase()===cat.toLowerCase();});
+  if(catObj&&!catObj.items.some(function(x){return Number(x.id)===Number(mat.id);}))catObj.items.push(mat);
+  if(!ALL_MATS.some(function(x){return Number(x.id)===Number(mat.id);}))ALL_MATS.push(mat);
+  return mat;
+}
+function cqRepararIdentidadCargasAutomaticasMateriales(){
+  var cambio=false;
+
+  // 1) Códigos exclusivos: nunca pueden quedar asignados a otro producto.
+  getAllMats().forEach(function(mat){
+    if(!mat)return;
+    var raw=String((state.matCodigos&&state.matCodigos[mat.id])!=null?state.matCodigos[mat.id]:(mat.codigo||'')).trim();
+    var invalidoCodo=raw===CQ_MAT_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63Materiales(mat.mat||'');
+    var invalidoWeber=raw===CQ_MAT_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaMateriales(mat.mat||'');
+    if(invalidoCodo||invalidoWeber){
+      if(state.matCodigos)delete state.matCodigos[mat.id];
+      mat.codigo='';
+      var ex=(state.extraMats||[]).find(function(x){return Number(x.id)===Number(mat.id);});
+      if(ex)ex.codigo='';
+      cambio=true;
+    }
+  });
+
+  // 2) Una carga automática conserva materialNameOrigen/codigoOrigen.
+  // Si hoy está apuntando a otro producto, devolverla al producto de origen.
+  (state.cargas||[]).forEach(function(c){
+    if(!c||!c.automatico)return;
+    var nombreOrigen=String(c.materialNameOrigen||'').trim();
+    var codigoOrigen=String(c.codigoOrigen||'').trim();
+    // Recuperaciones históricas por código exclusivo: si una versión vieja perdió
+    // materialNameOrigen, estos códigos siguen identificando un solo producto.
+    if(!nombreOrigen && codigoOrigen===CQ_MAT_CODO_DURATOP_45_63_CODIGO)nombreOrigen=CQ_MAT_CODO_DURATOP_45_63_NOMBRE;
+    if(!nombreOrigen && codigoOrigen===CQ_MAT_WEBER_MEMBRANA_CODIGO)nombreOrigen=CQ_MAT_WEBER_MEMBRANA_NOMBRE;
+    if(!nombreOrigen)return;
+
+    var actual=getAllMats().find(function(m){return Number(m.id)===Number(c.matId)&&!isMatDeleted(m.id);})||null;
+    var nkOrigen=claveMaterialUnificar(nombreOrigen);
+    var nkActual=actual?claveMaterialUnificar(actual.mat):'';
+
+    // Mismo nombre exacto: nada que reparar.
+    if(actual&&nkOrigen&&nkActual===nkOrigen){
+      var codigoExclusivo='';
+      if(cqEsCodoDuratop45HH63Materiales(nombreOrigen))codigoExclusivo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+      if(cqEsWeberMembranaMateriales(nombreOrigen))codigoExclusivo=CQ_MAT_WEBER_MEMBRANA_CODIGO;
+      if(codigoExclusivo){
+        if(!state.matCodigos)state.matCodigos={};
+        if(String(state.matCodigos[actual.id]||getMatCodigo(actual)||'')!==codigoExclusivo){
+          state.matCodigos[actual.id]=codigoExclusivo;
+          actual.codigo=codigoExclusivo;
+          cambio=true;
+        }
+      }
+      return;
+    }
+
+    // No mover por pequeñas variantes compatibles: sólo cuando la identidad de origen
+    // es inequívoca o en el cruce conocido Codo ↔ Adicional.
+    var cruceCodoAdicional=actual && (
+      (cqEsCodoDuratop45HH63Materiales(nombreOrigen)&&cqEsAdicional100Materiales(actual.mat)) ||
+      (cqEsAdicional100Materiales(nombreOrigen)&&cqEsCodoDuratop45HH63Materiales(actual.mat))
+    );
+    // WEBER 3309301312 se fuerza siempre a su ficha exacta; no se acepta una
+    // coincidencia aproximada por palabras compartidas ni por código heredado.
+    var cruceWeber=actual && cqEsWeberMembranaMateriales(nombreOrigen) && !cqEsWeberMembranaMateriales(actual.mat);
+    var incompatible=actual ? !cqNombresCompatiblesIntegracion(actual.mat,nombreOrigen) : true;
+    if(!cruceCodoAdicional && !cruceWeber && !incompatible)return;
+
+    var destino=cqBuscarMaterialExactoPorNombreMateriales(nombreOrigen);
+    if(!destino){
+      destino=cqCrearMaterialOrigenSeguroMateriales(
+        nombreOrigen,
+        c.codigoOrigen||'',
+        c.materialCategoryOrigen||c.categoryOrigen||'VARIOS',
+        c.origen||'integración'
+      );
+    }
+    if(!destino)return;
+
+    // Para el caso conocido, el Codo siempre recupera su código exclusivo.
+    if(cqEsCodoDuratop45HH63Materiales(nombreOrigen)){
+      if(!state.matCodigos)state.matCodigos={};
+      state.matCodigos[destino.id]=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+      destino.codigo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+    }
+    if(cqEsWeberMembranaMateriales(nombreOrigen)){
+      if(!state.matCodigos)state.matCodigos={};
+      state.matCodigos[destino.id]=CQ_MAT_WEBER_MEMBRANA_CODIGO;
+      destino.codigo=CQ_MAT_WEBER_MEMBRANA_CODIGO;
+    }
+
+    if(Number(c.matId)!==Number(destino.id) || String(c.matName||'')!==String(destino.mat||'')){
+      c.matId=destino.id;
+      c.matName=destino.mat;
+      cambio=true;
+    }
+  });
+
+  if(cambio)state._identidadMaterialesReparadaAt=new Date().toISOString();
+  return cambio;
+}
+
+/* CQ 13/10/2026 — DEPURACIÓN DE RESIDUOS DEL CRUCE CODO ↔ ADICIONAL 100 CM
+   La antigua unificación destructiva podía copiar la matriz/override del Codo sobre
+   "Adicional de 100 cm". Aunque hoy la identidad ya está blindada, esos overrides
+   persistidos en Firebase seguían sumándose en Reporte. El Adicional es una ficha
+   dinámica: su valor válido debe venir de cargas reales, no de una matriz heredada. */
+function cqDepurarOverridesAdicional100Materiales(){
+  if(state._cqAdicional100OverridesDepuradosV2)return false;
+
+  var adicionales=getAllMats().filter(function(m){
+    return m && !isMatDeleted(m.id) && cqEsAdicional100Materiales(m.mat||'');
+  });
+  if(!adicionales.length)return false;
+
+  var cambio=false;
+  adicionales.forEach(function(mat){
+    var extra=(state.extraMats||[]).find(function(x){return Number(x&&x.id)===Number(mat.id);})||null;
+    var nuevo=(state.materialesNuevos||[]).find(function(x){return Number(x&&x.id)===Number(mat.id);})||null;
+    var dinamico=!!extra || !!nuevo || Number(mat.id)>=10000 || mat.autoCreated===true;
+    if(!dinamico)return;
+
+    var pref=String(mat.id)+'-';
+    Object.keys(state.overrides||{}).forEach(function(k){
+      if(k.indexOf(pref)===0){
+        delete state.overrides[k];
+        cambio=true;
+      }
+    });
+    Object.keys(state.historial||{}).forEach(function(k){
+      if(k.indexOf(pref)===0){
+        delete state.historial[k];
+        cambio=true;
+      }
+    });
+  });
+
+  if(cambio){
+    state._cqAdicional100OverridesDepuradosV2=new Date().toISOString();
+    console.info('Materiales: eliminados overrides heredados del cruce Codo ↔ Adicional 100 cm.');
+  }
+  return cambio;
+}
+
+/* CQ 13/10/2026 — limpiar SOLO las 8 cargas erróneas visibles del 02/06.
+   Son residuos históricos del cruce de identidad y NO son consumos de Pañol.
+   Firma observada: Adicional de 100 cm · 10 u · obras 5/98, 18/78, 6/92 y 7/100,
+   duplicadas. Las cargas cuyo origen real es Pañol se preservan. */
+function cqDepurarCargasErroneasAdicional100_0206(){
+  if(state._cqAdicional100CargasErroneas0206DepuradasV1)return false;
+  if(!Array.isArray(state.cargas))state.cargas=[];
+  var obrasMal={'5/98':true,'18/78':true,'6/92':true,'7/100':true};
+  var removidas=0;
+  var obras=getObras();
+  state.cargas=state.cargas.filter(function(c){
+    if(!c)return true;
+    var nombre=String(c.matName||c.materialName||'');
+    if(!cqEsAdicional100Materiales(nombre))return true;
+
+    // Lo correcto proveniente de Pañol se conserva siempre.
+    var origen=cqOrigenCargaNormalizado(c);
+    var iid=String(c.integracionId||'');
+    if(origen==='panol'||iid.indexOf('panol_')===0)return true;
+
+    if(Math.abs((Number(c.qty)||0)-10)>0.000001)return true;
+    var fecha=String(c.fecha||'').trim();
+    var es0206=/-06-02$/.test(fecha)||/^02[\/-]06(?:[\/-]|$)/.test(fecha);
+    if(!es0206)return true;
+
+    var obra=String(c.obraNameOrigen||c.obraName||obras[Number(c.obraIdx)]||'');
+    var clave=claveLoteMz(obra);
+    if(!obrasMal[clave])return true;
+
+    removidas++;
+    return false;
+  });
+  if(removidas){
+    state._cqAdicional100CargasErroneas0206DepuradasV1={
+      at:new Date().toISOString(),
+      removidas:removidas
+    };
+    console.info('Materiales: eliminadas '+removidas+' cargas erróneas de Adicional 100 cm del 02/06.');
+    return true;
+  }
+  return false;
+}
+
+
 function normalizeState(){
   if(!state.overrides)state.overrides={};
   if(!state.historial)state.historial={};
@@ -8038,6 +8307,9 @@ function normalizeState(){
   aplicarNombresMateriales();
   aplicarCodigosMateriales();
   aplicarCategoriasMateriales();
+  cqRepararIdentidadCargasAutomaticasMateriales();
+  cqDepurarOverridesAdicional100Materiales();
+  cqDepurarCargasErroneasAdicional100_0206();
   consolidarMaterialesDuplicados();
 }
 function setSyncStatus(txt,cls){
@@ -8173,7 +8445,12 @@ async function completarCodigosDesdeAcopioYPanol(forzar){
         return;
       }
 
-      var codigo=codigos[0];
+      var codigo=cqCodigoSeguroMaterialesParaNombre(codigos[0],mat.mat||'');
+      if(!codigo && codigos[0]){
+        conflictos++;
+        console.warn('Código descartado por conflicto de identidad',mat.mat,codigos[0]);
+        return;
+      }
 
       /* El cemento canónico no puede volver al código histórico aunque Acopio/Pañol
          todavía publiquen el dato anterior. */
@@ -8538,10 +8815,25 @@ function cqNombresCompatiblesIntegracion(a,b){
   if(pa.some(function(w){return pb.includes(w);}))return true;
   return false;
 }
-function buscarMaterialIntegracion(codigo,nombre,origen){
+function buscarMaterialIntegracion(codigo,nombre,origen,materialId){
   var code=String(codigo||'').trim().toLowerCase();
   var mats=getAllMats().filter(function(mat){return !isMatDeleted(mat.id);});
   var nk=claveMaterialUnificar(nombre);
+
+  var incomingId=materialId!=null?String(materialId):'';
+  if(incomingId){
+    var byId=mats.find(function(mat){return String(mat.id)===incomingId;})||null;
+    if(byId){
+      // El ID sólo es confiable si el nombre de origen sigue describiendo ese mismo producto.
+      // Si el catálogo cambió/estuvo contaminado, caer al nombre exacto en vez de mezclar.
+      if(!String(nombre||'').trim() || claveMaterialUnificar(byId.mat)===nk){
+        return byId;
+      }
+      console.warn('ID de material en conflicto; se ignora el ID y se resuelve por nombre',{
+        materialId:materialId,recibido:nombre,actual:byId.mat
+      });
+    }
+  }
 
   /* CEMENTO blindado: cualquier payload viejo/nuevo va siempre al ID 7. */
   if(code===CQ_CEMENTO_CANON_CODIGO.toLowerCase()
@@ -8594,7 +8886,10 @@ function buscarMaterialIntegracion(codigo,nombre,origen){
   mats.forEach(function(mat){if(mat.id>=maxId)maxId=mat.id+1;});
   var cat=categoriaAprendidaPara(codigo,nombre)||'VARIOS';
   if(!CATS.some(function(c){return c.name===cat&&!isCatDeleted(c.name);}))cat='VARIOS';
-  var newMat={id:maxId,mat:String(nombre||('Material '+codigo)).trim(),codigo:String(codigo||'').trim(),prom:0,data:[],catName:cat,comentarios:'Creado automáticamente desde '+(origen||'integración'),autoCreated:true};
+  var nombreNuevo=String(nombre||('Material '+codigo)).trim();
+  var codigoNuevo=cqCodigoSeguroMaterialesParaNombre(codigo,nombreNuevo);
+  if(cqEsCodoDuratop45HH63Materiales(nombreNuevo))codigoNuevo=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
+  var newMat={id:maxId,mat:nombreNuevo,codigo:codigoNuevo,prom:0,data:[],catName:cat,comentarios:'Creado automáticamente desde '+(origen||'integración'),autoCreated:true};
   if(!state.matCategorias)state.matCategorias={};
   state.matCategorias[maxId]=cat;
   if(!state.extraMats)state.extraMats=[];
@@ -8729,45 +9024,33 @@ function aplicarIntegracion(ev){
     });
     return cambio;
   }
-  var obraIdx=buscarObraIntegracion(ev.obraName);
-  var mat=buscarMaterialIntegracion(ev.materialCode,ev.materialName,ev.sourceLabel||ev.source);
+  if(obraGastosExcluidaMateriales(ev.obraName)){
+    // La obra existe en Gastos pero tiene Materiales deshabilitado.
+    // No crear ni actualizar nuevas cargas; una baja (active=false) ya fue atendida arriba.
+    return false;
+  }
 
-  // Si no pudo resolverlo con la lógica histórica:
-  // 1) buscar por código exacto;
-  // 2) buscar por nombre exacto normalizado;
-  // 3) si no existe, crear un producto nuevo en el catálogo conservando código/nombre.
+  var obraIdx=buscarObraIntegracion(ev.obraName);
+  var mat=buscarMaterialIntegracion(ev.materialCode,ev.materialName,ev.sourceLabel||ev.source,ev.materialId);
+
+  // Respaldo defensivo: si el resolvedor principal no devolvió material,
+  // jamás resolver sólo por código. Nombre exacto o producto nuevo.
   if(!mat){
     var codigoEntrante=String(ev.materialCode||'').trim();
     var nombreEntrante=String(ev.materialName||'').trim();
-
-    if(codigoEntrante){
-      mat=getAllMats().find(function(m){
-        return !isMatDeleted(m.id)
-          && String(getMatCodigo(m)||'').trim().toLowerCase()===codigoEntrante.toLowerCase();
-      })||null;
-    }
-
-    if(!mat && nombreEntrante){
+    if(nombreEntrante){
       var nk=cqNombreExactoCodigo(nombreEntrante);
       mat=getAllMats().find(function(m){
         return !isMatDeleted(m.id) && cqNombreExactoCodigo(m.mat||'')===nk;
       })||null;
     }
-
     if(!mat && nombreEntrante){
-      var ids=getAllMats().map(function(m){return Number(m.id)||0;});
-      var nuevoId=(ids.length?Math.max.apply(null,ids):0)+1;
-      mat={
-        id:nuevoId,
-        mat:nombreEntrante,
-        catName:String(ev.category||ev.materialCategory||'VARIOS').trim()||'VARIOS',
-        codigo:codigoEntrante
-      };
-      if(!Array.isArray(state.materialesNuevos))state.materialesNuevos=[];
-      state.materialesNuevos.push(mat);
-      if(!state.matCodigos)state.matCodigos={};
-      if(codigoEntrante)state.matCodigos[nuevoId]=codigoEntrante;
-      guardarMemoriaCategoriaMaterial(mat,mat.catName||'VARIOS');
+      mat=cqCrearMaterialOrigenSeguroMateriales(
+        nombreEntrante,
+        codigoEntrante,
+        ev.materialCategory||ev.category||'VARIOS',
+        ev.sourceLabel||ev.source||'integración'
+      );
     }
   }
 
@@ -8812,7 +9095,8 @@ function aplicarIntegracion(ev){
 
   // Si se unificó por nombre y el catálogo todavía no tenía código,
   // copiar inmediatamente el código que viene de Acopio/Pañol/Caja.
-  var codigoIntegracion=String(ev.materialCode||'').trim();
+  var codigoIntegracion=cqCodigoSeguroMaterialesParaNombre(ev.materialCode,mat.mat||'');
+  if(cqEsCodoDuratop45HH63Materiales(mat.mat||''))codigoIntegracion=CQ_MAT_CODO_DURATOP_45_63_CODIGO;
   if(codigoIntegracion && !String(getMatCodigo(mat)||'').trim()){
     if(!state.matCodigos)state.matCodigos={};
     state.matCodigos[mat.id]=codigoIntegracion;
@@ -8838,6 +9122,8 @@ function aplicarIntegracion(ev){
     automatico:true,
     integracionId:ev.integrationId,
     codigoOrigen:ev.materialCode||'',
+    materialIdOrigen:ev.materialId!=null?ev.materialId:'',
+    materialCategoryOrigen:ev.materialCategory||ev.category||'',
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||''
   };
@@ -9115,6 +9401,14 @@ setTimeout(function(){
 
 window.addEventListener('focus',function(){
   if(modoFirebase&&!firebaseStarted)startFirebase();
+  // Al volver a Materiales, renovar permisos de obras desde Gastos sin tocar históricos.
+  if(window._dbReady){
+    cargarObrasGastosMateriales(true).then(function(){
+      var migro=estabilizarObrasGastosMateriales();
+      if(migro)localStorage.setItem(DB_KEY,JSON.stringify(state));
+      renderActive();
+    }).catch(function(e){console.warn('Actualización permisos Materiales desde Gastos',e);});
+  }
 });
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='visible'&&modoFirebase&&!firebaseStarted)startFirebase();
@@ -9158,7 +9452,22 @@ function getObraOrder(){
 }
 function orderedObraEntries(){
   var obras=getObras();
-  return getObraOrder().map(function(i){return {o:obras[i],i:i};});
+  return getObraOrder()
+    .filter(function(i){return obraVisibleMaterialesPorIndice(i,obras);})
+    .map(function(i){return {o:obras[i],i:i};});
+}
+function opcionesObrasMaterialesHTML(selectedIdx){
+  var obras=getObras();
+  var entries=orderedObraEntries().slice();
+  // Al editar un registro histórico, conservar su obra actual aunque hoy esté oculta.
+  if(selectedIdx!=null && !isNaN(Number(selectedIdx)) && obras[Number(selectedIdx)]
+      && !entries.some(function(x){return Number(x.i)===Number(selectedIdx);})){
+    entries.push({o:obras[Number(selectedIdx)],i:Number(selectedIdx),historica:true});
+  }
+  return entries.map(function(x){
+    return '<option value="'+x.i+'"'+(Number(x.i)===Number(selectedIdx)?' selected':'')+'>'
+      +escapeHtml(x.o)+(x.historica?' · histórica':'')+'</option>';
+  }).join('');
 }
 function obraMoveControls(i){
   return '<button class="obra-move" title="Mover izquierda" onclick="window.moveObra('+i+',-1);event.stopPropagation()">‹</button><button class="obra-move" title="Mover derecha" onclick="window.moveObra('+i+',1);event.stopPropagation()">›</button>';
@@ -9192,7 +9501,7 @@ function closeOrdenObras(){
 }
 function renderOrdenObras(){
   var obras=getObras();
-  var order=getObraOrder();
+  var order=getObraOrder().filter(function(i){return obraVisibleMaterialesPorIndice(i,obras);});
   var rows=order.map(function(i,pos){
     return '<div class="orden-row"><div><div class="orden-name">'+obras[i]+'</div></div>'
       +'<div class="orden-actions">'
@@ -9409,6 +9718,10 @@ var showTerminadasCarga=false;
 function renderObraTab(){
   var obras=getObras();
   var obrasRev=orderedObraEntries().slice().reverse();
+  if(curObra!=null && !isNaN(curObra) && !obraVisibleMaterialesPorIndice(Number(curObra),obras)){
+    curObra=obrasRev.length?obrasRev[0].i:null;
+    if(curObra!=null)localStorage.setItem(LAST_OBRA_KEY,String(curObra));
+  }
   document.getElementById('chips-obra').innerHTML=obrasRev.map(function(x){
     return renderObraChipMovible(x.o,x.i,x.i===curObra,'window.selectObra('+x.i+')');
   }).join('')+'<button class="chip" onclick="window.openNuevaObra()" style="border-style:dashed">+ Obra</button><button class="chip btn-config-orden" onclick="window.openOrdenObras()">⚙ Ordenar obras</button>';
@@ -10296,12 +10609,10 @@ window.exportarReporteMaterialesPDF=exportarReporteMaterialesPDF;
 // ── FIN REPORTE ─────────────────────────────────────
 
 function selectTodasObras(){
-  var obras=getObras();
-  if(compareObrasSel.length===obras.length){
-    compareObrasSel=[];
-  } else {
-    compareObrasSel=obras.map(function(_,i){return i;});
-  }
+  var visibles=orderedObraEntries().map(function(x){return x.i;});
+  var todas=visibles.length>0 && compareObrasSel.length===visibles.length
+    && visibles.every(function(i){return compareObrasSel.indexOf(i)>=0;});
+  compareObrasSel=todas?[]:visibles.slice();
   renderCompareObras();
 }
 function toggleCompareObra(idx){
@@ -10313,9 +10624,13 @@ function toggleCompareObra(idx){
 function renderCompareObras(){
   var obras=getObras();
   var obrasRev=orderedObraEntries().slice().reverse();
+  var visibles=obrasRev.map(function(x){return x.i;});
+  compareObrasSel=(compareObrasSel||[]).filter(function(i){return visibles.indexOf(i)>=0;});
   var todasBtn=document.getElementById('btn-todas-reporte');
   if(todasBtn){
-    todasBtn.textContent=compareObrasSel.length===obras.length&&obras.length?'✓ Todas':'Todas';
+    var todas=visibles.length>0 && compareObrasSel.length===visibles.length
+      && visibles.every(function(i){return compareObrasSel.indexOf(i)>=0;});
+    todasBtn.textContent=todas?'✓ Todas':'Todas';
   }
   var chipsEl=document.getElementById('compare-obra-chips');
   if(chipsEl){
@@ -10404,8 +10719,10 @@ function renderMatTab(){
   var mat=ALL_MATS.filter(function(m){return m.id===curMatId;})[0];
   if(!mat) return;
   var obras=getObras(), max=0;
-  obras.forEach(function(_,i){var v=getVal(mat.id,i);if(v&&v>max)max=v;});
-  var rows=obras.map(function(o,i){
+  var indicesVisibles=orderedObraEntries().map(function(x){return x.i;});
+  indicesVisibles.forEach(function(i){var v=getVal(mat.id,i);if(v&&v>max)max=v;});
+  var rows=indicesVisibles.map(function(i){
+    var o=obras[i];
     var val=getVal(mat.id,i);
     var pct=mat.prom>0&&val!=null?((val-mat.prom)/mat.prom*100).toFixed(0):null;
     var diffCls=pct==null?'':Math.abs(pct)<15?'diff-ok':pct>0?'diff-hi':'diff-lo';
@@ -10436,7 +10753,8 @@ function selectMatFromDrop(){
 
 function renderCompTab(){
   var obras=getObras();
-  var scores=obras.map(function(o,i){
+  var scores=orderedObraEntries().map(function(x){
+    var o=x.o,i=x.i;
     var totalDiff=0,count=0;
     ALL_MATS.forEach(function(mat){
       var val=getVal(mat.id,i);
@@ -11083,6 +11401,64 @@ function renderActive(){
   else if(t==='catalogo') renderCatalogo();
 }
 
+function cqEsTabletHistorial(){
+  var w=window.innerWidth||document.documentElement.clientWidth||0;
+  return w>=651&&w<=1800;
+}
+function cqPosicionarDropdownHistorial(anchor,menu,minWidth){
+  if(!anchor||!menu)return;
+  if(!cqEsTabletHistorial()){
+    menu.style.removeProperty('left');
+    menu.style.removeProperty('top');
+    menu.style.removeProperty('width');
+    menu.style.removeProperty('right');
+    menu.style.removeProperty('max-height');
+    return;
+  }
+
+  var r=anchor.getBoundingClientRect();
+  var vw=window.innerWidth||document.documentElement.clientWidth||1024;
+  var vh=window.innerHeight||document.documentElement.clientHeight||700;
+  var hdr=document.querySelector('.hdr');
+  var hdrBottom=hdr?Math.ceil(hdr.getBoundingClientRect().bottom):0;
+  var safeTop=Math.max(10,hdrBottom+10);
+
+  var width=Math.max(Number(minWidth)||280,Math.round(r.width));
+  width=Math.min(width,vw-20);
+  var left=Math.max(10,Math.min(Math.round(r.left),vw-width-10));
+
+  /* Tablet: NUNCA invertir el menú hacia arriba. Si no entra debajo,
+     queda a la altura del control y reduce su alto con scroll interno. */
+  var top=Math.max(safeTop,Math.round(r.bottom+6));
+  var disponible=vh-top-12;
+  if(disponible<170){
+    top=Math.max(safeTop,Math.min(Math.round(r.top),vh-182));
+    disponible=vh-top-12;
+  }
+  disponible=Math.max(130,disponible);
+
+  menu.style.setProperty('left',left+'px','important');
+  menu.style.setProperty('top',top+'px','important');
+  menu.style.setProperty('right','auto','important');
+  menu.style.setProperty('width',width+'px','important');
+  menu.style.setProperty('max-height',disponible+'px','important');
+
+  var opciones=menu.querySelector('.cq-multi-filter-options');
+  if(opciones){
+    opciones.style.setProperty('max-height',Math.max(80,disponible-92)+'px','important');
+    opciones.style.setProperty('overflow-y','auto','important');
+  }
+}
+function cqCerrarDropdownsHistorialTablet(){
+  try{
+    document.querySelectorAll('#view-carga .cq-multi-filter').forEach(function(w){w.classList.remove('open');});
+    var hm=document.getElementById('hist-mat-dropdown');if(hm)hm.classList.remove('open');
+  }catch(_e){}
+}
+window.addEventListener('resize',cqCerrarDropdownsHistorialTablet);
+window.addEventListener('orientationchange',cqCerrarDropdownsHistorialTablet);
+
+
 function escapeHtml(v){return String(v==null?'':v).replace(/[&<>"']/g,function(ch){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch];});}
 
 function getMatComentario(mat){
@@ -11367,6 +11743,10 @@ function initCargaForm(){
   if(!chipsEl) return;
   // Obras ordenables (oculta terminadas salvo que se pida verlas)
   var obrasRev=orderedObraEntries().slice().reverse();
+  if(selectedCargaObra!=null && !isNaN(selectedCargaObra) && !obraVisibleMaterialesPorIndice(Number(selectedCargaObra),obras)){
+    selectedCargaObra=obrasRev.length?obrasRev[0].i:null;
+    if(selectedCargaObra!=null)localStorage.setItem(LAST_CARGA_OBRA_KEY,String(selectedCargaObra));
+  }
   var nTerminadas=obrasRev.filter(function(x){return isTerminada(x.i);}).length;
   if(!showTerminadasCarga) obrasRev=obrasRev.filter(function(x){return !isTerminada(x.i)||selectedCargaObra===x.i;});
   chipsEl.innerHTML=obrasRev.map(function(x){
@@ -11668,6 +12048,9 @@ window.cqAbrirCargaNormal=cqAbrirCargaNormal;
 function registrarCarga(){
   var obraIdx=selectedCargaObra;
   if(obraIdx==null||isNaN(obraIdx)){alert('Seleccioná una obra.');return;}
+  if(!obraVisibleMaterialesPorIndice(Number(obraIdx),getObras())){
+    alert('Esta obra está oculta en Materiales desde Gastos.');return;
+  }
   var matId=selectedCargaMat;
   if(!matId){alert('Seleccioná un material.');return;}
   localStorage.setItem(LAST_CARGA_MAT_KEY,String(matId));
@@ -11764,7 +12147,15 @@ function renderHistMatDropdown(query){
   var mats=(window.__histMatsOrdenados||[]).filter(function(m){return !q||String(m.name).toLowerCase().indexOf(q)!==-1||String(m.cat).toLowerCase().indexOf(q)!==-1;});
   box.innerHTML='<button type="button" class="hist-mat-option'+(selected==='all'?' active':'')+'" onclick="window.setHistMatFilter(\'all\')"><span>Todos los materiales</span><small>A–Z</small></button>'+mats.map(function(m){return '<button type="button" class="hist-mat-option'+(String(selected)===String(m.id)?' active':'')+'" onclick="window.setHistMatFilter(\''+String(m.id).replace(/'/g,"\\'")+'\')"><span>'+escapeHtml(m.name)+'</span><small>'+escapeHtml(m.cat)+'</small></button>';}).join('');
 }
-function openHistMatDropdown(){var box=document.getElementById('hist-mat-dropdown');if(box){renderHistMatDropdown();box.classList.add('open');}}
+function openHistMatDropdown(){
+  var box=document.getElementById('hist-mat-dropdown');
+  var anchor=document.getElementById('hist-filter-mat-search');
+  if(box){
+    renderHistMatDropdown();
+    box.classList.add('open');
+    cqPosicionarDropdownHistorial(anchor,box,320);
+  }
+}
 function onHistMatSearch(v){var sel=document.getElementById('hist-filter-mat');if(sel&&sel.value!=='all'){sel.value='all';}renderHistMatDropdown(v);openHistMatDropdown();var c=document.getElementById('hist-mat-clear');if(c)c.classList.toggle('show',!!String(v).trim());window.renderCargaTab();}
 function setHistMatFilter(id){var sel=document.getElementById('hist-filter-mat');if(!sel)return;sel.value=String(id);var box=document.getElementById('hist-mat-dropdown');if(box)box.classList.remove('open');syncHistMatSearchLabel();window.renderCargaTab();}
 function clearHistMatFilter(){var sel=document.getElementById('hist-filter-mat'),inp=document.getElementById('hist-filter-mat-search'),box=document.getElementById('hist-mat-dropdown');if(sel)sel.value='all';if(inp)inp.value='';if(box)box.classList.remove('open');syncHistMatSearchLabel();window.renderCargaTab();}
@@ -11813,8 +12204,10 @@ function renderCargaTab(){
   var curFCs=filterCat?Array.from(filterCat.selectedOptions||[]).map(function(o){return String(o.value);}):[];
 
   if(filterObra){
-    filterObra.innerHTML=obras.map(function(o,i){return '<option value="'+i+'">'+o+'</option>';}).join('');
+    var obrasFiltro=orderedObraEntries();
+    filterObra.innerHTML=obrasFiltro.map(function(x){return '<option value="'+x.i+'">'+escapeHtml(x.o)+'</option>';}).join('');
     Array.from(filterObra.options).forEach(function(o){o.selected=curFOs.indexOf(String(o.value))>=0;});
+    curFOs=Array.from(filterObra.selectedOptions||[]).map(function(o){return String(o.value);});
   }
 
   var catsUsadas={};
@@ -11930,7 +12323,7 @@ function renderCargaTab(){
         var editRow=isEditing
           ? '<div class="hist-edit-row">'
             +'<select id="edit-obra-'+c.id+'" style="min-width:150px">'
-              +obras.map(function(o,i){return '<option value="'+i+'"'+(Number(i)===Number(c.obraIdx)?' selected':'')+'>'+o+'</option>';}).join('')
+              +opcionesObrasMaterialesHTML(c.obraIdx)
             +'</select>'
             +'<input type="number" id="edit-qty-'+c.id+'" value="'+c.qty+'" min="0" step="1" placeholder="Cant.">'
             +'<input type="text" id="edit-nota-'+c.id+'" value="'+(c.nota||'')+'" placeholder="Unidad/nota">'
@@ -11971,6 +12364,10 @@ function guardarEditCarga(id){
   var obraIdx=obraEl?Number(obraEl.value):NaN;
   var obras=getObras();
   if(isNaN(obraIdx)||!obras[obraIdx]){alert('Seleccioná una obra válida.');return;}
+  var cargaActual=(state.cargas||[]).find(function(c){return String(c.id)===String(id);})||null;
+  if(!obraVisibleMaterialesPorIndice(obraIdx,obras) && !(cargaActual&&Number(cargaActual.obraIdx)===Number(obraIdx))){
+    alert('Esta obra está oculta en Materiales desde Gastos.');return;
+  }
   if(isNaN(qty)||qty<=0){alert('Cantidad inválida.');return;}
   if(!fecha){alert('Fecha inválida.');return;}
   state.cargas=state.cargas.map(function(c){
@@ -12999,7 +13396,17 @@ html.cq-employee-materiales-readonly #view-obras [onclick*="openEdit("]{
       if(w&&t!==tipo)w.classList.remove('open');
     });
     var w=document.getElementById(cfg(tipo).wrap);
-    if(w){w.classList.toggle('open');if(w.classList.contains('open'))cqRenderMultiFilter(tipo);}
+    if(w){
+      w.classList.toggle('open');
+      if(w.classList.contains('open')){
+        cqRenderMultiFilter(tipo);
+        if(tipo==='hist-obras'||tipo==='hist-cats'){
+          var btn=w.querySelector('.cq-multi-filter-btn');
+          var menu=w.querySelector('.cq-multi-filter-menu');
+          cqPosicionarDropdownHistorial(btn,menu,300);
+        }
+      }
+    }
   }
 
   function cqToggleMultiValue(chk,ev){

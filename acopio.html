@@ -4781,6 +4781,145 @@ async function saveToFirebase(){
     }
   }
 }
+
+
+/* ==========================================================
+   CQ 12/10/2026 — REPARACIÓN CODO DURATOP 45° HH 63MM
+   Causa histórica: durante un período "Adicional de 100 cm"
+   recibió por error el código 902001103. La carga masiva resolvía
+   primero por código, por lo que retiros del CODO podían quedar
+   guardados en Acopio con el nombre/ID del Adicional.
+   Esta reparación usa la regla de negocio definitiva:
+   902001103 pertenece exclusivamente al CODO DURATOP 45° HH 63MM.
+   ========================================================== */
+var CQ_DURATOP_FIX_CODE='902001103';
+function cqDuratopFixNorm(v){
+  return String(v||'').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');
+}
+function cqDuratopFixEsCodo(v){
+  var n=cqDuratopFixNorm(v);
+  return n.indexOf('codo')>=0 && n.indexOf('duratop')>=0 && n.indexOf('45')>=0 && n.indexOf('63')>=0;
+}
+function cqDuratopFixEsAdicional(v){
+  var n=cqDuratopFixNorm(v);
+  return n.indexOf('adicional')>=0 && (n.indexOf('100')>=0 || n.indexOf('cm')>=0 || n==='adicional');
+}
+function cqDuratopFixBuscarCodo(ac){
+  var mats=ac&&Array.isArray(ac.mats)?ac.mats:[];
+  return mats.find(function(m){return m&&cqDuratopFixEsCodo(m.nom||m.nombre||'');})
+    || mats.find(function(m){
+      return m && String(m.cod||m.codigo||'').trim()===CQ_DURATOP_FIX_CODE && !cqDuratopFixEsAdicional(m.nom||m.nombre||'');
+    }) || null;
+}
+function cqRepararCruceDuratopEnAcopio(){
+  var resultado={cambio:false,retiros:[],codigosLimpiados:0};
+  if(!DB||!Array.isArray(DB.acopios))return resultado;
+
+  DB.acopios.forEach(function(ac){
+    if(!ac)return;
+    if(!Array.isArray(ac.mats))ac.mats=[];
+    if(!Array.isArray(ac.retiros))ac.retiros=[];
+    var codo=cqDuratopFixBuscarCodo(ac);
+
+    // El código 902001103 no puede permanecer en ningún producto distinto del CODO.
+    ac.mats.forEach(function(m){
+      if(!m)return;
+      var code=String(m.cod||m.codigo||'').trim();
+      if(code===CQ_DURATOP_FIX_CODE && !cqDuratopFixEsCodo(m.nom||m.nombre||'')){
+        if('cod' in m)m.cod='';
+        if('codigo' in m)m.codigo='';
+        resultado.codigosLimpiados++;
+        resultado.cambio=true;
+      }
+    });
+
+    ac.retiros.forEach(function(r){
+      if(!r)return;
+      var code=String(r.materialCode||'').trim();
+      if(code!==CQ_DURATOP_FIX_CODE)return;
+
+      var matActual=ac.mats.find(function(m){return String(m&&m.id)===String(r.matId);})||null;
+      var nombreRetiro=String(r.materialName||'').trim();
+      var nombreActual=String(matActual&&(matActual.nom||matActual.nombre)||'').trim();
+
+      // Sólo tocar el cruce inequívoco: retiro guardado como Adicional + código exclusivo del CODO.
+      if(!cqDuratopFixEsAdicional(nombreRetiro||nombreActual))return;
+
+      var nombreCodo=String(codo&&(codo.nom||codo.nombre)||'CODO DURATOP 45° HH 63MM').trim();
+      r.materialName=nombreCodo;
+      r.materialCode=CQ_DURATOP_FIX_CODE;
+      if(codo){
+        r.matId=codo.id;
+        if(codo.unidad!=null)r.materialUnidad=String(codo.unidad||'');
+      }
+      r.materialesSyncEstado='pendiente';
+      r.materialesSyncError='';
+      resultado.retiros.push({acopio:ac,retiro:r});
+      resultado.cambio=true;
+    });
+  });
+  return resultado;
+}
+
+async function cqReenviarRetirosDuratopCorregidos(items){
+  items=Array.isArray(items)?items:[];
+  if(!items.length||!window._cqFirebaseReady||!window._cqFirebase)return {ok:0,error:0};
+  var f=window._cqFirebase,ok=0,error=0;
+
+  for(var i=0;i<items.length;i++){
+    var ac=items[i].acopio,r=items[i].retiro;
+    if(!ac||!r)continue;
+    try{
+      var obraObj=r.gastosObraId && typeof getObrasGastosObjects==='function'
+        ?getObrasGastosObjects().find(function(o){return String(o&&o.id)===String(r.gastosObraId);})
+        :null;
+      var obra=String((obraObj&&(obraObj.label||obraObj.short||obraObj.id))||r.obraHistorica||'').trim();
+      if(!obra && typeof getObras==='function')obra=String((getObras()||[])[Number(r.obraIdx)]||'').trim();
+      if(!obra)throw new Error('Obra no encontrada para retiro '+r.id);
+
+      var iid=integracionRetiroId(ac.id,r.id);
+      var payload={
+        integrationId:iid,
+        source:'acopio',
+        sourceLabel:r.comentario?('Acopio · '+String(r.comentario)):'Acopio',
+        comentario:String(r.comentario||''),
+        sourceContainerId:String(ac.id),
+        sourceMovementId:String(r.id),
+        obraName:obra,
+        materialCode:CQ_DURATOP_FIX_CODE,
+        materialName:String(r.materialName||'CODO DURATOP 45° HH 63MM'),
+        materialCategory:String(r.subrubro||'').trim()||'VARIOS',
+        category:String(r.subrubro||'').trim()||'VARIOS',
+        autoCreateCatalog:true,
+        qty:Number(r.qty)||0,
+        unidad:String(r.materialUnidad||''),
+        fecha:String(r.fecha||''),
+        active:true,
+        updatedAt:new Date().toISOString()
+      };
+
+      await cqMaterializarEnMaterialesDirecto(payload,{db:f.db,doc:f.doc,runTransaction:f.runTransaction});
+      await f.setDoc(f.doc(f.db,'materiales_integraciones',iid),payload,{merge:true});
+      r.materialesSyncEstado='ok';
+      r.materialesSyncError='';
+      r.materialesSyncAt=new Date().toISOString();
+      ok++;
+    }catch(e){
+      error++;
+      r.materialesSyncEstado='error';
+      r.materialesSyncError=String(e&&e.message||e);
+      console.warn('No se pudo reparar retiro DURATOP',r&&r.id,e);
+    }
+  }
+
+  if(ok||error){
+    try{persist();}catch(_e){}
+    try{renderRetirarHistorial();}catch(_e){}
+  }
+  return {ok:ok,error:error};
+}
+
 async function loadFromFirebase(){
   if(!window._cqFirebaseReady||!window._cqFirebase)return;
   try{
@@ -4814,6 +4953,17 @@ async function loadFromFirebase(){
       await cqBackupDiarioDesdeRemoto(snap.data().db,snap.data().updatedAt||'');
       var localBackups=(DB&&DB.backups)||[];
       DB=sanitizeDB(snap.data().db);
+
+      // CQ 12/10/2026 — reparar retiros históricos que quedaron como
+      // "Adicional de 100 cm" por el código duplicado 902001103.
+      var cqFixDuratop=cqRepararCruceDuratopEnAcopio();
+      if(cqFixDuratop.cambio){
+        marcarAcopioDirty();
+        saveRequested=true;
+        setTimeout(function(){
+          cqReenviarRetirosDuratopCorregidos(cqFixDuratop.retiros).catch(function(e){console.warn(e);});
+        },120);
+      }
 
       // CQ 01/09/2026 — IMPORTANTE:
       // Firebase no transporta los backups locales. Hay que reponerlos ANTES de
@@ -5021,22 +5171,54 @@ function makeMatsFromTemplate(){
 var curAcopioId=null;
 function getAcopio(){return DB.acopios.find(function(a){return a.id===curAcopioId;});}
 function getAllMats(){var a=getAcopio();return a?a.mats:[];}
-function getObras(){
-  return gastosConfigAcopio&&Array.isArray(gastosConfigAcopio.obras)
-    ? gastosConfigAcopio.obras.filter(function(o){return o&&o.id&&o.id!=='oficina';}).map(function(o){return o.label||o.short||o.id;})
-    : [];
-}
-function getObrasGastosObjects(){
+function getObrasGastosAllObjects(){
   return gastosConfigAcopio&&Array.isArray(gastosConfigAcopio.obras)
     ? gastosConfigAcopio.obras.filter(function(o){return o&&o.id&&o.id!=='oficina';})
     : [];
 }
+
+// CQ 13/10/2026 — permisos individuales definidos desde Gastos.
+// Compatibilidad hacia atrás: si una obra todavía no tiene `modulos`, conserva
+// el comportamiento histórico de `integrarModulos` (ausente = habilitada).
+function obraGastosPermiteModuloAcopio(obra,modulo){
+  if(!obra)return true;
+  if(obra.archived===true)return false;
+  var legacyDefault=obra.integrarModulos!==false;
+  var mods=(obra.modulos&&typeof obra.modulos==='object'&&!Array.isArray(obra.modulos))
+    ?obra.modulos:{};
+  return mods[modulo]===undefined ? legacyDefault : mods[modulo]!==false;
+}
+function getObrasGastosObjects(){
+  // Sólo las obras habilitadas específicamente para Acopio aparecen en nuevas cargas.
+  return getObrasGastosAllObjects().filter(function(o){
+    return obraGastosPermiteModuloAcopio(o,'acopio');
+  });
+}
+function getObras(){
+  return getObrasGastosObjects().map(function(o){return o.label||o.short||o.id;});
+}
+function obraGastosIntegrableAcopio(id){
+  if(!id)return true;
+  var o=getObrasGastosAllObjects().find(function(x){return String(x.id)===String(id);})||null;
+  return !o || obraGastosPermiteModuloAcopio(o,'acopio');
+}
+function obraGastosPermiteMaterialesAcopio(id){
+  if(!id)return true;
+  var o=getObrasGastosAllObjects().find(function(x){return String(x.id)===String(id);})||null;
+  return !o || obraGastosPermiteModuloAcopio(o,'materiales');
+}
+function obraGastosPermitePanolAcopio(id){
+  if(!id)return true;
+  var o=getObrasGastosAllObjects().find(function(x){return String(x.id)===String(id);})||null;
+  return !o || obraGastosPermiteModuloAcopio(o,'panol');
+}
+
 function obraGastosActualPorIdx(idx){return getObrasGastosObjects()[idx]||null;}
 function retiroObraLabel(r){
   if(!r)return 'Obra';
   if(r.obraHistorica)return r.obraHistorica;
   if(r.gastosObraId){
-    var o=getObrasGastosObjects().find(function(x){return x.id===r.gastosObraId;});
+    var o=getObrasGastosAllObjects().find(function(x){return x.id===r.gastosObraId;});
     if(o)return o.label||o.short||o.id;
   }
   var a=getAcopio();
@@ -5481,8 +5663,19 @@ async function sincronizarRetiroConGastos(retiro,activo,obraIdAnterior){
 
   if(!obraId){
     // Sólo para registros viejos que no tengan gastosObraId.
+    // Primero resolver por el nombre histórico: al ocultar obras de Acopio cambia
+    // la lista visible y nunca debemos reinterpretar un índice viejo como otra obra.
     await cargarConfigGastosAcopio();
-    var obraFallback=obraGastosActualPorIdx(retiro.obraIdx);
+    var nombreHistorico=String(retiro.obraHistorica||'').trim();
+    if(!nombreHistorico){
+      try{
+        var acHist=getAcopio();
+        var obrasLegacy=acHist&&Array.isArray(acHist.obras)?acHist.obras:[];
+        nombreHistorico=String(obrasLegacy[Number(retiro.obraIdx)]||'').trim();
+      }catch(_e){}
+    }
+    var obraFallback=nombreHistorico?obraGastosDesdeNombre(nombreHistorico):null;
+    if(!obraFallback)obraFallback=obraGastosActualPorIdx(retiro.obraIdx);
     obraId=String(obraFallback&&obraFallback.id||'').trim();
   }
 
@@ -5559,6 +5752,7 @@ async function verificarGastosAcopio(){
     await cargarConfigGastosAcopio();
     var a=getAcopio();
     if(!a)return;
+    // Gastos conserva el histórico aunque la obra deje de mostrarse en Acopio.
     var retiros=(a.retiros||[]).filter(function(r){return r.gastosObraId&&r.cargarGastos!==false;});
     var ids=[...new Set(retiros.map(function(r){return r.gastosObraId;}))];
     var docs={},f=window._cqFirebase;
@@ -6742,6 +6936,10 @@ document.addEventListener('click',function(e){
 // ═══════════════════════════════════════════
 var materialesIntegradosAcopio=null;
 var materialesCargasSnapshotAcopio=[];
+// CQ 13/10/2026 — IDs de productos que existen realmente en el catálogo de Materiales.
+// El verde exige carga + ficha visible; una carga huérfana se fuerza a reparar.
+var materialesCatalogoIdsAcopio=new Set();
+var materialesCatalogoPorIdAcopio=new Map();
 var materialesIntegracionesAuditadasAcopio=null;
 var materialesAuditandoAcopio=false;
 var materialesVerificacionErrorAcopio=false;
@@ -6812,6 +7010,13 @@ function cqIdentidadCannesTripoli(nombreA,nombreB){
   return (aCan&&bCan)||(aTri&&bTri);
 }
 function cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nomCarga,codCarga){
+  if(cqCruceCodoDuratopAdicionalAcopio(nomRet,nomCarga))return false;
+  var retWeber=cqEsWeberMembranaNombreAcopio(nomRet), cargaWeber=cqEsWeberMembranaNombreAcopio(nomCarga);
+  if((retWeber||cargaWeber) && !(retWeber&&cargaWeber))return false;
+  if((codRet===cqNormVerifMat(CQ_WEBER_MEMBRANA_CODIGO)||codCarga===cqNormVerifMat(CQ_WEBER_MEMBRANA_CODIGO))
+     && !(retWeber&&cargaWeber))return false;
+  if((cqEsCodoDuratop45HH63NombreAcopio(nomRet)||cqEsCodoDuratop45HH63NombreAcopio(nomCarga))
+     && !(cqEsCodoDuratop45HH63NombreAcopio(nomRet)&&cqEsCodoDuratop45HH63NombreAcopio(nomCarga)))return false;
   var esp=cqIdentidadCannesTripoli(nomRet,nomCarga);
   if(esp!==null)return esp;
   return !!(
@@ -6899,17 +7104,46 @@ async function cargarIntegracionesAuditadasMaterialesAcopio(){
   return materialesIntegracionesAuditadasAcopio;
 }
 
+function cqCargaTieneFichaCatalogoMaterialesAcopio(c,retiro){
+  if(!c||c.matId==null)return false;
+  var id=String(c.matId);
+  if(!(materialesCatalogoIdsAcopio instanceof Set) || !materialesCatalogoIdsAcopio.has(id))return false;
+  if(!retiro)return true;
+  var ficha=materialesCatalogoPorIdAcopio instanceof Map?materialesCatalogoPorIdAcopio.get(id):null;
+  if(!ficha)return false;
+
+  var nomRet=String(retiro.materialName||((getMat(retiro.matId)||{}).nom)||'');
+  var codRet=String(retiro.materialCode||((getMat(retiro.matId)||{}).cod)||'');
+  var nomFicha=String(ficha.nombre||'');
+  var codFicha=String(ficha.codigo||'');
+
+  // Productos con código reservado: el verde exige también identidad de nombre.
+  if(codRet===CQ_WEBER_MEMBRANA_CODIGO || cqEsWeberMembranaNombreAcopio(nomRet)){
+    return cqEsWeberMembranaNombreAcopio(nomFicha) && (!codFicha || codFicha===CQ_WEBER_MEMBRANA_CODIGO);
+  }
+  if(codRet===CQ_CODO_DURATOP_45_63_CODIGO || cqEsCodoDuratop45HH63NombreAcopio(nomRet)){
+    return cqEsCodoDuratop45HH63NombreAcopio(nomFicha) && (!codFicha || codFicha===CQ_CODO_DURATOP_45_63_CODIGO);
+  }
+  return true;
+}
+
 function cqRetiroExisteRealEnMateriales(retiro,a){
   a=a||getAcopio();
   if(!a||!retiro)return false;
   var iid=integracionRetiroId(a.id,retiro.id);
 
   // Fuente de verdad: el documento REAL materiales/data_planilla_exacta_v4.
-  if(materialesIntegradosAcopio instanceof Set && materialesIntegradosAcopio.has(iid)){
-    return true;
+  // Para marcar verde no alcanza con que exista el integrationId: la CARGA
+  // concreta debe apuntar a un matId cuya ficha exista en Catálogo/Reportes.
+  var porId=(materialesCargasSnapshotAcopio||[]).find(function(c){
+    return String(c&&c.integracionId||'')===String(iid);
+  });
+  if(porId){
+    return cqCargaTieneFichaCatalogoMaterialesAcopio(porId,retiro);
   }
   return (materialesCargasSnapshotAcopio||[]).some(function(c){
-    return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a);
+    return cqCargaMaterialesCoincideRetiroUnico(c,retiro,a)
+      && cqCargaTieneFichaCatalogoMaterialesAcopio(c,retiro);
   });
 }
 
@@ -6986,7 +7220,12 @@ async function cqAutoRepararMaterialesFaltantesActual(){
 
   var faltantes=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
     if(!r||r.cargarMateriales===false)return false;
-    if(String(r.materialesSyncEstado||'')!=='ok')return false;
+    // Si Materiales está deshabilitado para esta obra desde Gastos, no recrear
+    // automáticamente una integración faltante. El histórico existente no se borra.
+    if(r.gastosObraId && !obraGastosPermiteMaterialesAcopio(r.gastosObraId))return false;
+    // CQ 13/10/2026 FIX 2 — no depender de una marca histórica `ok`.
+    // Si el retiro debía ir a Materiales y hoy no existe con ficha visible,
+    // se repone idempotentemente por integrationId.
     return !cqRetiroExisteRealEnMateriales(r,a);
   });
 
@@ -7035,11 +7274,31 @@ function iniciarVerificacionMaterialesAcopio(){
   unsubVerificacionMaterialesAcopio=f.onSnapshot(f.doc(f.db,'materiales','data_planilla_exacta_v4'),function(snap){
     materialesVerificacionErrorAcopio=false;
     var ids=new Set();
+    materialesCatalogoIdsAcopio=new Set();
+    materialesCatalogoPorIdAcopio=new Map();
     if(snap.exists()){
       var d=snap.data()||{};
+      var borrados=new Set((Array.isArray(d.deletedMatIds)?d.deletedMatIds:[]).map(function(x){return String(x);}));
+      function registrarFicha(m){
+        if(!m||m.id==null||borrados.has(String(m.id)))return;
+        var id=String(m.id);
+        var nombre=String((d.matNombres&&d.matNombres[m.id])!=null?d.matNombres[m.id]:(m.mat||''));
+        var codigo=String((d.matCodigos&&d.matCodigos[m.id])!=null?d.matCodigos[m.id]:(m.codigo||''));
+        materialesCatalogoIdsAcopio.add(id);
+        materialesCatalogoPorIdAcopio.set(id,{nombre:nombre,codigo:codigo});
+      }
+      // Catálogo base + fichas dinámicas. El callback ocurre después de cargar el script,
+      // por lo que CQ_MAT_BASE_DIRECTO ya está disponible.
+      try{
+        (Array.isArray(CQ_MAT_BASE_DIRECTO)?CQ_MAT_BASE_DIRECTO:[]).forEach(registrarFicha);
+      }catch(_e){}
+      (Array.isArray(d.extraMats)?d.extraMats:[]).forEach(registrarFicha);
+
       materialesCargasSnapshotAcopio=Array.isArray(d.cargas)?d.cargas.slice():[];
       materialesCargasSnapshotAcopio.forEach(function(c){
-        if(c&&c.integracionId)ids.add(String(c.integracionId));
+        if(c&&c.integracionId&&cqCargaTieneFichaCatalogoMaterialesAcopio(c)){
+          ids.add(String(c.integracionId));
+        }
       });
     }else{
       materialesCargasSnapshotAcopio=[];
@@ -7512,6 +7771,27 @@ function cqMatNormDirecto(v){
     .replace(/[^a-z0-9]+/g,'')
     .trim();
 }
+
+var CQ_CODO_DURATOP_45_63_CODIGO='902001103';
+var CQ_WEBER_MEMBRANA_CODIGO='3309301312';
+var CQ_WEBER_MEMBRANA_NOMBRE='WEBER MEMBRANA LIQUIDA TECHOS PU X 20 KG BCO';
+function cqEsCodoDuratop45HH63NombreAcopio(v){
+  var n=cqMatNormDirecto(v||'');
+  return n.indexOf('codo')>=0
+    && n.indexOf('duratop')>=0
+    && n.indexOf('45')>=0
+    && n.indexOf('63')>=0;
+}
+function cqEsAdicionalNombreAcopio(v){
+  return cqMatNormDirecto(v||'').indexOf('adicional')>=0;
+}
+function cqEsWeberMembranaNombreAcopio(v){
+  return cqMatNormDirecto(v||'')===cqMatNormDirecto(CQ_WEBER_MEMBRANA_NOMBRE);
+}
+function cqCruceCodoDuratopAdicionalAcopio(a,b){
+  return (cqEsCodoDuratop45HH63NombreAcopio(a)&&cqEsAdicionalNombreAcopio(b))
+      || (cqEsCodoDuratop45HH63NombreAcopio(b)&&cqEsAdicionalNombreAcopio(a));
+}
 function cqMatClaveObraDirecto(v){
   var raw=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   var m=raw.match(/(?:lote|l)?\s*(\d+)\s*(?:\/|[- ]*mz|[- ]*manzana)\s*(\d+)/i);
@@ -7520,6 +7800,7 @@ function cqMatClaveObraDirecto(v){
   return m?(Number(m[1])+'/'+Number(m[2])):'';
 }
 function cqMatNombreCompatibleDirecto(a,b){
+  if(cqCruceCodoDuratopAdicionalAcopio(a,b))return false;
   var x=cqMatNormDirecto(a),y=cqMatNormDirecto(b);
   if(!x||!y)return true;
   if(x===y)return true;
@@ -7572,7 +7853,10 @@ function cqMatResolverObraDirecto(data,nombre){
 function cqMatCodigoDirecto(data,mat){
   if(!mat)return '';
   var mapa=data.matCodigos&&typeof data.matCodigos==='object'?data.matCodigos:{};
-  return String(mapa[mat.id]!=null?mapa[mat.id]:(mat.codigo||'')).trim();
+  var code=String(mapa[mat.id]!=null?mapa[mat.id]:(mat.codigo||'')).trim();
+  if(code===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))return '';
+  if(code===CQ_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaNombreAcopio(mat.mat||''))return '';
+  return code;
 }
 function cqMatTodosDirecto(data){
   var extras=Array.isArray(data.extraMats)?data.extraMats:[];
@@ -7586,6 +7870,19 @@ function cqMatResolverMaterialDirecto(data,ev){
   if(!data.matCodigos||typeof data.matCodigos!=='object')data.matCodigos={};
   if(!data.matCategorias||typeof data.matCategorias!=='object')data.matCategorias={};
 
+  // Limpiar el código 902001103 si alguna versión vieja lo dejó en otro producto.
+  cqMatTodosDirecto(data).forEach(function(x){
+    if(!x)return;
+    var raw=String((data.matCodigos&&data.matCodigos[x.id])!=null?data.matCodigos[x.id]:(x.codigo||'')).trim();
+    var invalidoCodo=raw===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(x.mat||'');
+    var invalidoWeber=raw===CQ_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaNombreAcopio(x.mat||'');
+    if(invalidoCodo||invalidoWeber){
+      data.matCodigos[x.id]='';
+      var ex=(data.extraMats||[]).find(function(m){return String(m.id)===String(x.id);});
+      if(ex)ex.codigo='';
+    }
+  });
+
   var deleted=Array.isArray(data.deletedMatIds)?data.deletedMatIds.map(String):[];
   var mats=cqMatTodosDirecto(data).filter(function(x){return deleted.indexOf(String(x.id))<0;});
   var nombre=String(ev.materialName||'').trim();
@@ -7593,7 +7890,14 @@ function cqMatResolverMaterialDirecto(data,ev){
   var code=String(ev.materialCode||'').trim().toLowerCase();
   var mat=null;
 
-  if(nk){
+  if(cqEsCodoDuratop45HH63NombreAcopio(nombre)){
+    mat=mats.find(function(x){return cqEsCodoDuratop45HH63NombreAcopio(x.mat||'');})||null;
+  }
+  if(!mat&&cqEsWeberMembranaNombreAcopio(nombre)){
+    mat=mats.find(function(x){return cqEsWeberMembranaNombreAcopio(x.mat||'');})||null;
+  }
+
+  if(!mat&&nk){
     mat=mats.find(function(x){return cqMatNormDirecto(x.mat)===nk;})||null;
   }
 
@@ -7634,10 +7938,16 @@ function cqMatResolverMaterialDirecto(data,ev){
       data.extraCats.push({name:cat,color:'#6FA58D',autoCreated:true,source:'acopio'});
     }
 
+    var nombreNuevo=nombre||('Material '+String(ev.materialCode||''));
+    var codigoNuevo=cqCodigoMaterialSeguro(ev.materialCode);
+    if(cqEsCodoDuratop45HH63NombreAcopio(nombreNuevo))codigoNuevo=CQ_CODO_DURATOP_45_63_CODIGO;
+    if(cqEsWeberMembranaNombreAcopio(nombreNuevo))codigoNuevo=CQ_WEBER_MEMBRANA_CODIGO;
+    if(codigoNuevo===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(nombreNuevo))codigoNuevo='';
+    if(codigoNuevo===CQ_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaNombreAcopio(nombreNuevo))codigoNuevo='';
     mat={
       id:maxId,
-      mat:nombre||('Material '+String(ev.materialCode||'')),
-      codigo:cqCodigoMaterialSeguro(ev.materialCode),
+      mat:nombreNuevo,
+      codigo:codigoNuevo,
       prom:0,
       data:[],
       catName:cat,
@@ -7652,6 +7962,10 @@ function cqMatResolverMaterialDirecto(data,ev){
   }
 
   var incomingCode=cqCodigoMaterialSeguro(ev.materialCode);
+  if(cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))incomingCode=CQ_CODO_DURATOP_45_63_CODIGO;
+  if(cqEsWeberMembranaNombreAcopio(mat.mat||''))incomingCode=CQ_WEBER_MEMBRANA_CODIGO;
+  if(incomingCode===CQ_CODO_DURATOP_45_63_CODIGO && !cqEsCodoDuratop45HH63NombreAcopio(mat.mat||''))incomingCode='';
+  if(incomingCode===CQ_WEBER_MEMBRANA_CODIGO && !cqEsWeberMembranaNombreAcopio(mat.mat||''))incomingCode='';
   if(incomingCode&&!cqMatCodigoDirecto(data,mat)){
     data.matCodigos[mat.id]=incomingCode;
     mat.codigo=incomingCode;
@@ -7883,7 +8197,7 @@ async function sincronizarRetiroConMateriales(retiro,activo){
 
   var m=getMat(retiro.matId);
   var obraObj=retiro.gastosObraId
-    ?getObrasGastosObjects().find(function(o){return String(o.id)===String(retiro.gastosObraId);})
+    ?getObrasGastosAllObjects().find(function(o){return String(o.id)===String(retiro.gastosObraId);})
     :null;
   var obra=String(
     (obraObj&&(obraObj.label||obraObj.short||obraObj.id))
@@ -7894,6 +8208,11 @@ async function sincronizarRetiroConMateriales(retiro,activo){
 
   var materialCode=cqCodigoMaterialSeguro(retiro.materialCode!=null?retiro.materialCode:(m&&m.cod)||'');
   var materialName=String(retiro.materialName!=null?retiro.materialName:(m&&m.nom)||'').trim();
+  // Códigos exclusivos de producto: nunca se heredan a otro nombre.
+  if(cqEsCodoDuratop45HH63NombreAcopio(materialName))materialCode=CQ_CODO_DURATOP_45_63_CODIGO;
+  else if(materialCode===CQ_CODO_DURATOP_45_63_CODIGO)materialCode='';
+  if(cqEsWeberMembranaNombreAcopio(materialName))materialCode=CQ_WEBER_MEMBRANA_CODIGO;
+  else if(materialCode===CQ_WEBER_MEMBRANA_CODIGO)materialCode='';
   var materialUnidad=String(retiro.materialUnidad!=null?retiro.materialUnidad:(m&&m.unidad)||'').trim();
   var categoria=String(retiro.subrubro||'').trim()||'VARIOS';
 
@@ -8320,6 +8639,16 @@ async function guardarRetiro(){
 
   var obraSel=obraGastosActualPorIdx(curRetirarObra);
   if(!obraSel){alert('No se pudo identificar la obra seleccionada. Volvé a elegirla.');return;}
+
+  // Los permisos son independientes: Acopio puede estar habilitado y otro destino no.
+  if(cargarMateriales && !obraGastosPermiteMaterialesAcopio(obraSel.id)){
+    alert('Esta obra tiene Materiales deshabilitado desde Gastos. Marcá Materiales en la configuración de la obra para poder enviar este retiro.');
+    return;
+  }
+  if(cargarPanol && !obraGastosPermitePanolAcopio(obraSel.id)){
+    alert('Esta obra tiene Pañol deshabilitado desde Gastos. Marcá Pañol en la configuración de la obra para poder enviar este retiro.');
+    return;
+  }
 
   var a=getAcopio();
   if(!a.retiros)a.retiros=[];
@@ -9212,11 +9541,14 @@ async function cqRepararMaterialesPendientes(){
   var btn=document.getElementById('cq-reparar-materiales-btn');
   var info=document.getElementById('cq-reparar-materiales-info');
   if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no está listo','err');return;}
+  try{await cargarConfigGastosAcopio();}catch(e){toast('No se pudo leer la configuración de obras de Gastos','err');return;}
   var acopios=(DB&&Array.isArray(DB.acopios))?DB.acopios:[];
   var candidatos=[];
   acopios.forEach(function(ac){
     (Array.isArray(ac.retiros)?ac.retiros:[]).forEach(function(r){
-      if(r&&r.cargarMateriales===true)candidatos.push({acopio:ac,retiro:r});
+      if(r&&r.cargarMateriales===true && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
+        candidatos.push({acopio:ac,retiro:r});
+      }
     });
   });
   if(!candidatos.length){toast('No hay retiros marcados para Materiales');return;}
@@ -9312,7 +9644,9 @@ async function cqRepararGastosPendientes(){
       try{
         var obraId=String(r.gastosObraId||'').trim();
         if(!obraId){
-          var of=obraGastosActualPorIdx(r.obraIdx);
+          var nombreHist=String(r.obraHistorica||'').trim();
+          var of=nombreHist?obraGastosDesdeNombre(nombreHist):null;
+          if(!of)of=obraGastosActualPorIdx(r.obraIdx);
           obraId=String(of&&of.id||'').trim();
           if(obraId)r.gastosObraId=obraId;
         }
@@ -9374,7 +9708,10 @@ async function cqRepararPanolPendientes(){
   var a=getAcopio();
   if(!a){toast('Abrí un acopio primero','err');return;}
 
-  var candidatos=(a.retiros||[]).filter(function(r){return r&&r.cargarPanol===true;});
+  try{await cargarConfigGastosAcopio();}catch(e){toast('No se pudo leer la configuración de obras de Gastos','err');return;}
+  var candidatos=(a.retiros||[]).filter(function(r){
+    return r&&r.cargarPanol===true&&(!r.gastosObraId||obraGastosPermitePanolAcopio(r.gastosObraId));
+  });
   if(!candidatos.length){toast('No hay retiros marcados para Pañol');return;}
 
   btn.disabled=true;
@@ -9508,6 +9845,18 @@ async function guardarEditRetiro(){
     || Number(anterior.obraIdx)!==Number(obraNuevaIdx)
     || normObraAcopio(anterior.obraHistorica||'')!==normObraAcopio(obraNueva.label||obraNueva.short||obraNueva.id)
   ) : false;
+
+  // Si el vínculo ya existía en la misma obra, permitir mantener/editar el histórico.
+  // Sólo bloqueamos una NUEVA vinculación o el traslado a otra obra deshabilitada.
+  var obraDestinoId=String((obraNueva&&obraNueva.id)||obraAnterior||'').trim();
+  if(cargarMateriales && (!antesMateriales||cambioObra) && obraDestinoId && !obraGastosPermiteMaterialesAcopio(obraDestinoId)){
+    alert('Esta obra tiene Materiales deshabilitado desde Gastos. Marcá Materiales antes de crear o mover este vínculo.');
+    return;
+  }
+  if(cargarPanol && (!antesPanol||cambioObra) && obraDestinoId && !obraGastosPermitePanolAcopio(obraDestinoId)){
+    alert('Esta obra tiene Pañol deshabilitado desde Gastos. Marcá Pañol antes de crear o mover este vínculo.');
+    return;
+  }
 
   a.retiros=(a.retiros||[]).map(function(r){
     if(r.id!==editRetiroId)return r;
@@ -14349,6 +14698,13 @@ document.addEventListener('click',function(e){
     var mats=typeof getAllMats==='function'?(getAllMats()||[]):[];
     var cod={},nom={};
     mats.forEach(function(m){var c=norm(m.cod),n=norm(m.nom);if(c&&!cod[c])cod[c]=m;if(n&&!nom[n])nom[n]=m;});
+    // 902001103 pertenece exclusivamente al CODO DURATOP 45° HH 63MM.
+    // Si alguna versión vieja dejó el mismo código en "Adicional de 100 cm",
+    // la carga masiva nunca debe tomar el primer duplicado por orden del catálogo.
+    var codoReservado=mats.find(function(m){return m&&cqEsCodoDuratop45HH63NombreAcopio(m.nom||'');});
+    if(codoReservado)cod[norm(CQ_CODO_DURATOP_45_63_CODIGO)]=codoReservado;
+    var weberReservado=mats.find(function(m){return m&&cqEsWeberMembranaNombreAcopio(m.nom||'');});
+    if(weberReservado)cod[norm(CQ_WEBER_MEMBRANA_CODIGO)]=weberReservado;
     return {cod:cod,nom:nom};
   }
   function lineas(id){
@@ -14364,7 +14720,7 @@ document.addEventListener('click',function(e){
       var code=String(codes[i]||'').trim(),name=String(names[i]||'').trim(),qtxt=String(qtys[i]||'').trim();
       if(!code&&!name&&!qtxt)continue;
       if(i===0 && /codigo|código/i.test(code) && /material/i.test(name) && /cantidad/i.test(qtxt))continue;
-      var byCode=code?idx.cod[norm(code)]:null,byName=name?idx.nom[norm(name)]:null,mat=byCode||byName||null,qty=num(qtxt),error='';
+      var byCode=code?idx.cod[norm(code)]:null,byName=name?idx.nom[norm(name)]:null,mat=(name&&byName)?byName:(byCode||byName||null),qty=num(qtxt),error='';
       if(!mat)error='Material no encontrado';
       else if(!(qty>0))error='Cantidad inválida';
       else if(byCode&&byName&&Number(byCode.id)!==Number(byName.id))error='Código y material no coinciden';
@@ -14457,6 +14813,20 @@ document.addEventListener('click',function(e){
     var bad=rows.filter(function(r){return r.error;});if(bad.length){cqPreviewCargaMasivaRetiros();alert('Hay '+bad.length+' fila'+(bad.length===1?'':'s')+' con error. Corregilas antes de registrar.');return;}
     var obras=indices.map(function(i){return {idx:i,obj:typeof obraGastosActualPorIdx==='function'?obraGastosActualPorIdx(i):null};}).filter(function(x){return !!x.obj;});
     if(obras.length!==indices.length){alert('No se pudo identificar una de las obras seleccionadas.');return;}
+    if(destinos.cargarMateriales){
+      var sinMateriales=obras.filter(function(x){return !obraGastosPermiteMaterialesAcopio(x.obj.id);});
+      if(sinMateriales.length){
+        alert('Estas obras tienen Materiales deshabilitado desde Gastos:\n\n'+sinMateriales.map(function(x){return x.obj.label||x.obj.short||x.obj.id;}).join('\n'));
+        return;
+      }
+    }
+    if(destinos.cargarPanol){
+      var sinPanol=obras.filter(function(x){return !obraGastosPermitePanolAcopio(x.obj.id);});
+      if(sinPanol.length){
+        alert('Estas obras tienen Pañol deshabilitado desde Gastos:\n\n'+sinPanol.map(function(x){return x.obj.label||x.obj.short||x.obj.id;}).join('\n'));
+        return;
+      }
+    }
     var labels=obras.map(function(x){return x.obj.label||x.obj.short||x.obj.id||'';});
     var total=rows.length*obras.length;
     var destinoTxt=[];if(destinos.cargarMateriales)destinoTxt.push('Materiales');if(destinos.cargarGastos)destinoTxt.push('Gastos');if(destinos.cargarPanol)destinoTxt.push('Pañol'+(destinos.panolSinPrecio?' sin precio':''));

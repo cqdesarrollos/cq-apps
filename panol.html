@@ -1,3 +1,4 @@
+<!-- CQ 13/10/2026 · permisos individuales de obra: Pañol -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -2838,7 +2839,7 @@ async function cargarConfigGastosPanol(){
   })();
   return gastosConfigLoadingPanol;
 }
-function obrasGastosPanol(){
+function obrasGastosPanolTodas(){
   return gastosConfigPanol&&Array.isArray(gastosConfigPanol.obras)
     ? gastosConfigPanol.obras.filter(function(o){return o&&o.id;}).map(function(o){
         var x=Object.assign({},o);
@@ -2850,7 +2851,55 @@ function obrasGastosPanol(){
       })
     : [];
 }
-function obraGastosPanolPorId(id){return obrasGastosPanol().find(function(o){return o.id===id;})||null;}
+// CQ 13/10/2026 — permisos individuales de obra definidos desde Gastos.
+// Compatibilidad hacia atrás: si una obra todavía no tiene `modulos`, conserva
+// el comportamiento histórico de `integrarModulos` (ausente = habilitada).
+function obraGastosPermiteModuloPanol(obra,modulo){
+  if(!obra)return true;
+  if(obra.archived===true)return false;
+  if(String(obra.id)==='oficina')return true;
+  var legacyDefault=obra.integrarModulos!==false;
+  var mods=(obra.modulos&&typeof obra.modulos==='object'&&!Array.isArray(obra.modulos))
+    ?obra.modulos:{};
+  return mods[modulo]===undefined ? legacyDefault : mods[modulo]!==false;
+}
+function obrasGastosPanol(){
+  // Sólo las obras habilitadas específicamente para Pañol aparecen en nuevas cargas.
+  // Los registros históricos siguen resolviendo su nombre con obrasGastosPanolTodas().
+  return obrasGastosPanolTodas().filter(function(o){
+    return obraGastosPermiteModuloPanol(o,'panol');
+  });
+}
+function obraGastosPanolPorId(id){return obrasGastosPanolTodas().find(function(o){return String(o.id)===String(id);})||null;}
+function obraIntegrablePanol(id){
+  if(!id)return true;
+  var o=obraGastosPanolPorId(id);
+  return !o || obraGastosPermiteModuloPanol(o,'panol');
+}
+function obraPermiteMaterialesPanol(id){
+  if(!id)return true;
+  var o=obraGastosPanolPorId(id);
+  return !o || obraGastosPermiteModuloPanol(o,'materiales');
+}
+function movimientoVisiblePanol(m){
+  if(!m)return false;
+  if(m.gastosObraId)return obraIntegrablePanol(m.gastosObraId);
+
+  // Respaldo para movimientos antiguos sin gastosObraId: si el nombre coincide
+  // con una obra de Gastos, respetar también su permiso de Pañol.
+  var nombre=String(m.obra||'').trim();
+  if(!nombre)return true;
+  var clave=claveLoteMzPanol(nombre);
+  var normal=nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  var o=obrasGastosPanolTodas().find(function(x){
+    if(!x)return false;
+    if(clave && [x.label,x.short,x.id].some(function(v){return claveLoteMzPanol(v)===clave;}))return true;
+    return [x.label,x.short,x.id].some(function(v){
+      return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim()===normal;
+    });
+  })||null;
+  return o ? obraGastosPermiteModuloPanol(o,'panol') : true;
+}
 function nombreObraMovPanol(m){
   if(m&&m.gastosObraId){
     var o=obraGastosPanolPorId(m.gastosObraId);
@@ -3141,6 +3190,14 @@ async function sincronizarConsumoConGastos(mov,activo){
   if(!mov)throw new Error('Consumo no encontrado');
   await cargarConfigGastosPanol();
   if(!mov.gastosObraId)throw new Error('La salida no tiene obra vinculada con Gastos');
+  if(activo!==false && !obraIntegrablePanol(mov.gastosObraId)){
+    mov.gastosSyncEstado='omitido';
+    mov.gastosSyncError='Pañol deshabilitado para esta obra desde Gastos';
+    mov.gastosSyncAt=new Date().toISOString();
+    cqPanolSetSyncEstadoActual(mov.id,'gastos','omitido',mov.gastosSyncError);
+    await persist();
+    return true;
+  }
   await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),activo===false);
   mov.gastosSyncEstado=activo===false?'error':'ok';
   mov.gastosSyncError=activo===false?'Eliminado de Gastos':'';
@@ -3169,7 +3226,7 @@ async function verificarGastosPanol(){
   verificandoGastosPanol=true;
   try{
     var movs=state.movimientos.filter(function(m){
-      return m.tipo==='salida'&&m.gastosObraId&&m.gastosDebeCargar!==false;
+      return m.tipo==='salida'&&m.gastosObraId&&m.gastosDebeCargar!==false&&obraIntegrablePanol(m.gastosObraId);
     });
     var ids=[...new Set(movs.map(function(m){return m.gastosObraId;}))],docs={};
     for(var i=0;i<ids.length;i++){
@@ -3212,11 +3269,79 @@ document.addEventListener('firebase-ready',function(){
     setTimeout(verificarGastosPanol,800);
   }).catch(function(e){console.warn(e);});
 });
+
+// CQ 13/10/2026 — al volver a Pañol, renovar sólo la configuración de Gastos.
+// No se toca ningún movimiento histórico: únicamente cambia qué obras están visibles
+// y qué integraciones nuevas pueden generarse según los tildes individuales.
+var cqUltimoRefreshPermisosPanol=0;
+async function cqRefrescarPermisosObrasPanol(){
+  if(!window._dbReady||!window._getDoc||!window._doc||!window._db)return;
+  if(Date.now()-cqUltimoRefreshPermisosPanol<1200)return;
+  cqUltimoRefreshPermisosPanol=Date.now();
+  try{
+    gastosConfigPanol=null;
+    gastosConfigLoadingPanol=null;
+    await cargarConfigGastosPanol();
+    if(curObra&&curObra!=='__all__'&&!obraIntegrablePanol(curObra))curObra=null;
+    if(curTab==='obras')renderObrasTab();
+    if(curTab==='reportes')renderReportes();
+  }catch(e){
+    console.warn('No se pudieron actualizar los permisos de obras de Gastos en Pañol',e);
+  }
+}
+window.addEventListener('focus',function(){cqRefrescarPermisosObrasPanol();});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible')cqRefrescarPermisosObrasPanol();
+});
 async function aplicarResetPanolUnaVez(){
   // DESACTIVADO: en una app multiusuario un "reset por dispositivo" puede
   // vaciar el Pañol compartido cuando entra un navegador nuevo.
   try{localStorage.setItem(PANOL_RESET_KEY,'1');}catch(e){}
   return false;
+}
+
+
+/* CQ 13/10/2026 — reversión del bloqueo erróneo de Adicional 100 cm.
+   La versión anterior marcó esos consumos como "solo Pañol" y puso materialesCantidad=0.
+   Sólo se restauran movimientos que llevan exactamente esa marca, sin tocar otros consumos. */
+function cqNormAdicional100RestorePanol(v){
+  return String(v||'').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');
+}
+function cqEsAdicional100RestorePanol(v){
+  var n=cqNormAdicional100RestorePanol(v);
+  return n.indexOf('adicional')>=0 && n.indexOf('100')>=0;
+}
+function cqRestaurarAdicional100TrasBloqueoErroneo(){
+  if(!state)return false;
+  if(!Array.isArray(state.productos))state.productos=[];
+  if(!Array.isArray(state.movimientos))state.movimientos=[];
+  var ids={};
+  var cambio=false;
+  state.productos.forEach(function(p){
+    if(!p||!cqEsAdicional100RestorePanol(p.nombre||''))return;
+    ids[String(p.id)]=true;
+    if(p.materialesSoloPanol===true){delete p.materialesSoloPanol;cambio=true;}
+  });
+  var marca='Producto exclusivo de Pañol · no se envía a Materiales';
+  state.movimientos.forEach(function(m){
+    if(!m||m.tipo!=='salida')return;
+    var esAdic=!!ids[String(m.prodId)]||cqEsAdicional100RestorePanol(m.materialName||'');
+    if(!esAdic)return;
+    // Únicamente deshacer lo que modificó nuestra versión anterior.
+    if(String(m.materialesSyncError||'')!==marca)return;
+    var cantidad=Number(m.cantidad)||0;
+    var omitida=Math.max(0,Number(m.materialesOmitidosCantidad)||0);
+    var aMateriales=Math.max(0,cantidad-omitida);
+    if(aMateriales<=0 && cantidad>0 && omitida<=0)aMateriales=cantidad;
+    m.materialesAgregar=aMateriales>0;
+    m.materialesCantidad=aMateriales;
+    m.materialesProducto=null; // se reconcilia por nombre exacto con el catálogo actual.
+    m.materialesSyncEstado=aMateriales>0?'pendiente':'no';
+    m.materialesSyncError=aMateriales>0?'':'Registrado en Materiales anteriormente.';
+    cambio=true;
+  });
+  return cambio;
 }
 
 function normalizeState(){
@@ -3225,6 +3350,7 @@ function normalizeState(){
   if(!state.movimientos) state.movimientos=[];
   if(!state.obras || !state.obras.length) state.obras=OBRAS_SEED.slice();
   if(!state.rubros) state.rubros=[];
+  cqRestaurarAdicional100TrasBloqueoErroneo();
   state.movimientos.forEach(function(m){
     if(m&&m.tipo==='salida'&&typeof m.materialesAgregar==='undefined'){
       m.materialesAgregar=true;
@@ -5050,7 +5176,7 @@ function renderTodasObrasPanol(){
   var obras=obrasGastosPanol();
 
   var movs=state.movimientos.filter(function(m){
-    return m.tipo==='salida';
+    return m.tipo==='salida' && movimientoVisiblePanol(m);
   }).slice().sort(function(a,b){return b.ts-a.ts;});
 
   var totalGastado=movs.reduce(function(a,m){return a+importeDetallePanol(m.detalle||[]);},0);
@@ -5376,6 +5502,8 @@ async function actualizarMaterialesObraPanol(){
     var existentes=new Set((Array.isArray(d.cargas)?d.cargas:[]).map(function(c){return String(c&&c.integracionId||'');}).filter(Boolean));
     var movs=state.movimientos.filter(function(m){
       if(!m||m.tipo!=='salida'||m.materialesAgregar===false)return false;
+      if(!movimientoVisiblePanol(m))return false;
+      if(m.gastosObraId && !obraPermiteMaterialesPanol(m.gastosObraId))return false;
       if(obraId!=='__all__'&&m.gastosObraId!==obraId)return false;
       return !existentes.has(String(integracionConsumoId(m.id)));
     });
@@ -5401,7 +5529,7 @@ async function actualizarGastosObraPanol(){
     if(!window._dbReady)throw new Error('Firebase no está disponible');
     await cargarConfigGastosPanol();
     var movs=state.movimientos.filter(function(m){
-      return m&&m.tipo==='salida'&&(obraId==='__all__'||m.gastosObraId===obraId)&&m.gastosDebeCargar!==false&&m.gastosSyncEstado!=='ok';
+      return m&&m.tipo==='salida'&&movimientoVisiblePanol(m)&&(obraId==='__all__'||m.gastosObraId===obraId)&&m.gastosDebeCargar!==false&&m.gastosSyncEstado!=='ok';
     });
     var errores=[];
     for(var i=0;i<movs.length;i++){
@@ -5542,20 +5670,31 @@ var conciliandoCatalogoPanol=false;
 
 function encontrarMaterialCatalogoParaProductoPanol(prod){
   if(!prod||prod.materialesProducto)return null;
+  var catalogo=cqCatalogoMaterialesPanol||[];
+  var nombre=normCatalogoPanol(prod.nombre);
   var codigo=String(prod.codigo||'').trim().toLowerCase();
 
-  if(codigo){
-    var porCodigo=(cqCatalogoMaterialesPanol||[]).find(function(x){
-      return String(x.code||'').trim().toLowerCase()===codigo;
-    });
-    if(porCodigo)return porCodigo;
+  // 1) Nombre exacto: identidad principal.
+  if(nombre){
+    var porNombre=catalogo.find(function(x){return normCatalogoPanol(x.name)===nombre;})||null;
+    if(porNombre)return porNombre;
   }
 
-  var nombre=normCatalogoPanol(prod.nombre);
-  if(!nombre)return null;
-  return (cqCatalogoMaterialesPanol||[]).find(function(x){
-    return normCatalogoPanol(x.name)===nombre;
-  })||null;
+  // 2) Código sólo como respaldo y únicamente si el nombre es compatible.
+  // Un código repetido/mal heredado nunca puede cambiar la identidad del producto.
+  if(codigo){
+    var candidatos=catalogo.filter(function(x){
+      return String(x.code||'').trim().toLowerCase()===codigo;
+    });
+    var compatible=candidatos.find(function(x){
+      return cqMatNombreCompatibleDirecto(x.name||'',prod.nombre||'');
+    })||null;
+    if(compatible)return compatible;
+    if(candidatos.length){
+      console.warn('Pañol: código en conflicto; no se auto-vincula',codigo,prod.nombre,candidatos.map(function(x){return x.name;}));
+    }
+  }
+  return null;
 }
 
 async function conciliarProductosNuevosConMaterialesPanol(){
@@ -5736,6 +5875,7 @@ var cqReparandoMaterialesPanol=new Set();
 
 function cqProgramarReparacionMaterialesPanol(mov){
   if(!mov||mov.tipo!=='salida'||mov.materialesAgregar===false)return;
+  if(!movimientoVisiblePanol(mov) || (mov.gastosObraId&&!obraPermiteMaterialesPanol(mov.gastosObraId)))return;
   var iid=integracionConsumoId(mov.id);
   if(cqReparandoMaterialesPanol.has(String(iid)))return;
 
@@ -5830,7 +5970,7 @@ function iniciarVerificacionMaterialesPanol(){
     // Pañol la reconstruye automáticamente en Materiales.
     var cambioEstado=false;
     state.movimientos.forEach(function(m){
-      if(!m||m.tipo!=='salida'||m.materialesAgregar===false)return;
+      if(!m||m.tipo!=='salida'||m.materialesAgregar===false||!movimientoVisiblePanol(m)||(m.gastosObraId&&!obraPermiteMaterialesPanol(m.gastosObraId)))return;
       var iid=integracionConsumoId(m.id);
       var existe=ids.has(String(iid));
 
@@ -5963,29 +6103,45 @@ function cqMatResolverMaterialDirecto(data,ev){
 
   var deleted=Array.isArray(data.deletedMatIds)?data.deletedMatIds.map(String):[];
   var mats=cqMatTodosDirecto(data).filter(function(x){return deleted.indexOf(String(x.id))<0;});
+  var incomingId=ev.materialId!=null?String(ev.materialId):'';
   var nombre=String(ev.materialName||'').trim();
   var nk=cqMatNormDirecto(nombre);
   var code=String(ev.materialCode||'').trim().toLowerCase();
   var mat=null;
 
-  // 1) Nombre exacto.
-  if(nk){
+  // 1) ID del catálogo real, pero validando que el nombre siga siendo el mismo producto.
+  if(incomingId){
+    var byId=mats.find(function(x){return String(x.id)===incomingId;})||null;
+    if(byId && (!nombre || cqMatNormDirecto(byId.mat)===nk)){
+      mat=byId;
+    }else if(byId){
+      console.warn('Pañol: materialId en conflicto; se ignora y se resuelve por nombre',{
+        materialId:incomingId,recibido:nombre,actual:byId.mat
+      });
+    }
+  }
+
+  // 2) Nombre exacto.
+  if(!mat&&nk){
     mat=mats.find(function(x){return cqMatNormDirecto(x.mat)===nk;})||null;
   }
 
-  // 2) Código: si es único, es autoridad aunque el nombre esté escrito distinto.
-  // Si hubiese más de un material con el mismo código, usamos compatibilidad de nombre.
+  // 3) Código sólo si el nombre es compatible, aunque exista un único candidato.
   if(!mat&&code){
     var candidatos=mats.filter(function(x){
       return cqMatCodigoDirecto(data,x).toLowerCase()===code;
     });
-    if(candidatos.length===1)mat=candidatos[0];
-    else if(candidatos.length>1){
-      mat=candidatos.find(function(x){return cqMatNombreCompatibleDirecto(x.mat,nombre);})||null;
+    mat=candidatos.find(function(x){
+      return cqMatNombreCompatibleDirecto(x.mat,nombre);
+    })||null;
+    if(!mat&&candidatos.length){
+      console.warn('Pañol → Materiales: código en conflicto; no se reutiliza otro producto',{
+        codigo:ev.materialCode,recibido:nombre,existentes:candidatos.map(function(x){return x.mat;})
+      });
     }
   }
 
-  // 3) Si no existe, crear AUTOMÁTICAMENTE el producto en catálogo.
+  // 4) Si no existe coincidencia segura, crear el producto recibido.
   if(!mat){
     var maxId=10000;
     mats.forEach(function(x){if(Number(x.id)>=maxId)maxId=Number(x.id)+1;});
@@ -5993,9 +6149,7 @@ function cqMatResolverMaterialDirecto(data,ev){
 
     if(!Array.isArray(data.extraCats))data.extraCats=[];
     var existeCat=data.extraCats.some(function(c){return String(c&&c.name||'')===cat;});
-    if(!existeCat){
-      data.extraCats.push({name:cat,color:'#6FA58D',autoCreated:true,source:'panol'});
-    }
+    if(!existeCat)data.extraCats.push({name:cat,color:'#6FA58D',autoCreated:true,source:'panol'});
 
     mat={
       id:maxId,
@@ -6004,7 +6158,7 @@ function cqMatResolverMaterialDirecto(data,ev){
       prom:0,
       data:[],
       catName:cat,
-      comentarios:'Creado automáticamente desde '+(String(ev.source||'integración')==='acopio'?'Acopio':'Pañol'),
+      comentarios:'Creado automáticamente desde Pañol',
       autoCreated:true,
       source:'panol',
       createdAt:new Date().toISOString()
@@ -6016,6 +6170,7 @@ function cqMatResolverMaterialDirecto(data,ev){
 
   var incomingCode=String(ev.materialCode||'').trim();
   if(incomingCode&&!cqMatCodigoDirecto(data,mat)){
+    // Copiar código sólo al mismo producto que ya fue resuelto de forma segura.
     data.matCodigos[mat.id]=incomingCode;
     mat.codigo=incomingCode;
   }
@@ -6100,6 +6255,8 @@ function cqMatAplicarEventoDirecto(data,ev){
     automatico:true,
     integracionId:iid,
     codigoOrigen:ev.materialCode||'',
+    materialIdOrigen:ev.materialId!=null?ev.materialId:'',
+    materialCategoryOrigen:ev.materialCategory||ev.category||'',
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||''
   };
@@ -6234,6 +6391,18 @@ async function cqVerificarCargaMaterialesReal(iid,payload){
 async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
   if(!window._dbReady) throw new Error('Firebase no disponible');
   if(!mov) throw new Error('Consumo no encontrado');
+  if(activo!==false && mov.gastosObraId && !obraIntegrablePanol(mov.gastosObraId)){
+    mov.materialesSyncEstado='omitido';
+    mov.materialesSyncError='Pañol deshabilitado para esta obra desde Gastos';
+    cqPanolSetSyncEstadoActual(mov.id,'materiales','omitido',mov.materialesSyncError);
+    return true;
+  }
+  if(activo!==false && mov.gastosObraId && !obraPermiteMaterialesPanol(mov.gastosObraId)){
+    mov.materialesSyncEstado='omitido';
+    mov.materialesSyncError='Materiales deshabilitado para esta obra desde Gastos';
+    cqPanolSetSyncEstadoActual(mov.id,'materiales','omitido',mov.materialesSyncError);
+    return true;
+  }
 
   var destino=mov.materialesProducto||null;
   var prod=prodFallback || state.productos.find(function(p){return p.id===mov.prodId;}) || null;
@@ -6257,6 +6426,7 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
     comentario:String(mov.comentario||''),
     sourceMovementId:String(mov.id),
     obraName:String(nombreObraMovPanol(mov)||mov.obra||''),
+    materialId:destino&&destino.id!=null?destino.id:null,
     materialCode:materialCode,
     materialName:materialName,
     category:materialCategory,
@@ -6385,10 +6555,11 @@ async function registrarConsumo(){
   var subrubro=(document.getElementById('consumo-subrubro')?document.getElementById('consumo-subrubro').value:'').trim();
   var comentario=(document.getElementById('consumo-comentario')?document.getElementById('consumo-comentario').value:'').trim();
   var obraObj=obraGastosPanolPorId(curObra);
-  // Por defecto TODO material consumido desde Pañol se envía a Materiales.
-  // La única excepción es la cantidad proveniente de lotes marcados
-  // explícitamente como "no cargar en materiales".
-  var cargarMateriales=!!prod;
+  // Por defecto TODO material consumido desde Pañol se envía a Materiales,
+  // salvo que esa obra tenga Materiales deshabilitado desde Gastos.
+  // También se respeta la excepción de lotes ya imputados en Materiales.
+  var materialesPermitidosObra=obraObj?obraGastosPermiteModuloPanol(obraObj,'materiales'):true;
+  var cargarMateriales=!!prod && materialesPermitidosObra;
 
   // Si ya existe vínculo con el catálogo, lo conservamos.
   // Si no existe, sincronizarConsumoConMateriales lo crea automáticamente
@@ -6407,6 +6578,10 @@ async function registrarConsumo(){
   if(!prodId){alert('Elegí un producto válido de la lista.');return;}
   if(!cantidad||cantidad<=0){alert('Ingresá una cantidad válida.');return;}
   if(!obraObj){alert('No se pudo identificar la obra de Gastos.');return;}
+  if(!obraGastosPermiteModuloPanol(obraObj,'panol')){
+    alert('Esta obra está oculta en Pañol desde Gastos. Volvé a habilitar Pañol en la edición de la obra para cargar nuevos consumos.');
+    return;
+  }
 
   var subValido=validarSubrubroPanol(categoria,subrubro);
   if(!subValido){alert('Elegí un subrubro existente de la lista de Gastos.');return;}
@@ -6463,11 +6638,13 @@ async function registrarConsumo(){
       code:cqMaterialSeleccionadoPanol.code||'',
       category:cqMaterialSeleccionadoPanol.category||''
     }:null,
-    materialesSyncEstado:cargarMateriales?'pendiente':'no',
+    materialesSyncEstado:cargarMateriales?'pendiente':(materialesPermitidosObra?'no':'omitido'),
     materialesSyncError:cargarMateriales?'':(
-      cantidadNoMateriales>0
-        ?'No se envía a Materiales porque el lote fue marcado como ya imputado.'
-        :'No corresponde enviar este consumo a Materiales.'
+      !materialesPermitidosObra
+        ?'Materiales deshabilitado para esta obra desde Gastos.'
+        :(cantidadNoMateriales>0
+          ?'No se envía a Materiales porque el lote fue marcado como ya imputado.'
+          :'No corresponde enviar este consumo a Materiales.')
     ),
     gastosCategoria:categoria,gastosSubrubro:subrubro,comentario:comentario,
     gastosDebeCargar:gastosDebeCargar,
@@ -7015,6 +7192,7 @@ function renderReportes(){
   refreshProductoFiltroReportes();
   var salidas=state.movimientos.filter(function(m){
     if(m.tipo!=='salida')return false;
+    if(!movimientoVisiblePanol(m))return false;
     if(repObrasFiltro.length&&repObrasFiltro.indexOf(m.gastosObraId)<0)return false;
     if(repSubrubroFiltro&&m.gastosSubrubro!==repSubrubroFiltro)return false;
     if(repProductoFiltro&&m.prodId!==repProductoFiltro)return false;
