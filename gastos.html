@@ -14079,3 +14079,154 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   try{ toggleReporteObra = window.toggleReporteObra; }catch(e){}
 })();
 </script>
+
+<!-- CQ FINAL · Reporte financiero: botones neutros + multiselección + justificado en teléfono horizontal -->
+<style id="cq-fin-metricas-neutras-multisel-final">
+/* Único cambio visual de estos botones: neutros en reposo, un solo color al seleccionar. */
+#view-reporte-financiero .rep-fin-metric-tabs .rep-fin-metric-btn{
+  background:#FFFFFF!important;
+  border-color:#D7E0E6!important;
+  color:#304255!important;
+  box-shadow:none!important;
+}
+#view-reporte-financiero .rep-fin-metric-tabs .rep-fin-metric-btn:hover:not(.active){
+  background:#F7F9FA!important;
+  border-color:#C8D3DA!important;
+  color:#1E3346!important;
+}
+#view-reporte-financiero .rep-fin-metric-tabs .rep-fin-metric-btn.active{
+  background:#169466!important;
+  border-color:#169466!important;
+  color:#FFFFFF!important;
+  box-shadow:0 5px 12px rgba(22,148,102,.20)!important;
+}
+
+/* Cuando hay varias métricas elegidas, cada una conserva su propio gráfico. */
+#view-reporte-financiero .cq-fin-multi-shell{
+  display:grid;
+  gap:12px;
+  margin:12px 14px;
+}
+#view-reporte-financiero .cq-fin-selected-charts{
+  display:grid;
+  gap:10px;
+}
+#view-reporte-financiero .cq-fin-metric-panel{
+  margin:0!important;
+  display:block!important;
+}
+
+/* Teléfono horizontal: botones repartidos y justificados en todo el ancho. */
+@media (orientation:landscape) and (max-height:550px){
+  #view-reporte-financiero .rep-fin-metric-tabs{
+    display:flex!important;
+    flex-wrap:wrap!important;
+    width:100%!important;
+    gap:6px!important;
+    justify-content:space-between!important;
+    align-items:stretch!important;
+  }
+  #view-reporte-financiero .rep-fin-metric-tabs .rep-fin-metric-btn{
+    flex:1 1 122px!important;
+    min-width:108px!important;
+    max-width:none!important;
+    min-height:34px!important;
+    height:auto!important;
+    padding:6px 9px!important;
+    font-size:9.8px!important;
+    line-height:1.08!important;
+    white-space:normal!important;
+    text-align:center!important;
+  }
+  #view-reporte-financiero .cq-fin-multi-shell{
+    margin:10px!important;
+  }
+}
+</style>
+
+<script id="cq-fin-metricas-neutras-multisel-final-js">
+(function(){
+  function metricOrder(){
+    return Object.keys(window.REP_FIN_METRICS||{});
+  }
+
+  function normalizeSelection(){
+    const order=metricOrder();
+    let selected=Array.isArray(window.repFinMetricKeys)
+      ? window.repFinMetricKeys.filter(k=>order.includes(k))
+      : [];
+
+    if(!selected.length){
+      const fallback=order.includes(window.repFinMetricKey)
+        ? window.repFinMetricKey
+        : (order.includes('margen')?'margen':order[0]);
+      if(fallback) selected=[fallback];
+    }
+
+    /* Mantener siempre el orden visual de los botones. */
+    selected=order.filter(k=>selected.includes(k));
+    window.repFinMetricKeys=selected;
+    if(!selected.includes(window.repFinMetricKey)) window.repFinMetricKey=selected[0];
+    return selected;
+  }
+
+  window.setReporteFinMetric=function(key){
+    const order=metricOrder();
+    if(!order.includes(key)) return;
+
+    const selected=normalizeSelection().slice();
+    const pos=selected.indexOf(key);
+
+    if(pos>=0){
+      /* Siempre queda por lo menos una métrica visible. */
+      if(selected.length>1) selected.splice(pos,1);
+    }else{
+      selected.push(key);
+      window.repFinMetricKey=key;
+    }
+
+    window.repFinMetricKeys=order.filter(k=>selected.includes(k));
+    if(!window.repFinMetricKeys.includes(window.repFinMetricKey)){
+      window.repFinMetricKey=window.repFinMetricKeys[0];
+    }
+
+    if(typeof renderReporteFinancieroComparativo==='function'){
+      renderReporteFinancieroComparativo();
+    }
+  };
+  try{ setReporteFinMetric=window.setReporteFinMetric; }catch(e){}
+
+  window.renderRepFinChart=function(rows){
+    const metrics=window.REP_FIN_METRICS||{};
+    const selected=normalizeSelection();
+
+    const tabs=Object.entries(metrics).map(([k,info])=>{
+      const active=selected.includes(k);
+      return `<button type="button" class="rep-fin-metric-btn metric-${k} ${active?'active':''}" aria-pressed="${active?'true':'false'}" onclick="setReporteFinMetric('${k}')">${info.label}</button>`;
+    }).join('');
+
+    const charts=selected.map(key=>{
+      const meta=metrics[key]||{};
+      const vals=rows.map(r=>window.repFinMetricValueRow(r,key));
+      const finite=vals.filter(v=>Number.isFinite(Number(v))).map(Number);
+      const max=Math.max(1,...finite.map(v=>Math.abs(v)));
+
+      const bars=rows.map(r=>{
+        const v=window.repFinMetricValueRow(r,key);
+        const numeric=Number(v);
+        const width=Number.isFinite(numeric)?Math.min(100,Math.abs(numeric)/max*100):0;
+        const neg=Number.isFinite(numeric)&&numeric<0;
+        const good=!neg && (key==='margen'||key==='resultadoNeto');
+        return `<div class="rep-fin-bar-row"><div class="rep-fin-bar-lbl">${r.o.short||r.o.label}</div><div class="rep-fin-track"><div class="rep-fin-fill ${neg?'neg':''}" style="width:${width}%"></div></div><div class="rep-fin-bar-val ${neg?'bad':(good?'good':'')}">${window.repFinMetricTextRow(v,key)}</div></div>`;
+      }).join('');
+
+      return `<div class="rep-fin-chart-shell metric-${key} cq-fin-metric-panel"><div class="rep-fin-chart-box"><div class="rep-fin-chart-head"><div class="rep-fin-chart-title">Comparativo · ${meta.label||key}</div><div class="rep-fin-chart-sub">Obras seleccionadas</div></div><div class="rep-fin-bars">${bars}</div></div></div>`;
+    }).join('');
+
+    return `<div class="cq-fin-multi-shell"><div class="rep-fin-metric-tabs">${tabs}</div><div class="cq-fin-selected-charts">${charts}</div></div>`;
+  };
+  try{ renderRepFinChart=window.renderRepFinChart; }catch(e){}
+
+  normalizeSelection();
+})();
+</script>
