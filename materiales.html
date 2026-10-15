@@ -10816,10 +10816,27 @@ function cqReporteObrasActivas(){
 function cqReporteObrasArchivadas(){
   return orderedObraEntries().filter(function(x){return cqReporteObraArchivadaIdx(x.i);});
 }
+function cqFormatoNombreObraReporte(nombre){
+  var n=String(nombre||'').trim();
+  var m=n.match(/^L\s*(\d+)\s*Mz\s*(\d+)\s*(.*)$/i);
+  if(m){
+    var extra=String(m[3]||'').trim();
+    return '<span class="cq-report-line">L'+escapeHtml(m[1])+'</span>'
+      +'<span class="cq-report-line">Mz'+escapeHtml(m[2])+'</span>'
+      +(extra?'<span class="cq-report-line cq-report-line-extra">'+escapeHtml(extra)+'</span>':'');
+  }
+  var slash=n.match(/^(\d+)\s*\/\s*(\d+)\s*(.*)$/);
+  if(slash){
+    var extra2=String(slash[3]||'').trim();
+    return '<span class="cq-report-line">'+escapeHtml(slash[1]+'/'+slash[2])+'</span>'
+      +(extra2?'<span class="cq-report-line cq-report-line-extra">'+escapeHtml(extra2)+'</span>':'');
+  }
+  return '<span class="cq-report-line cq-report-line-generic">'+escapeHtml(n)+'</span>';
+}
 function cqReporteObraTile(nombre,idx,seleccionada){
   return '<button type="button" class="cq-report-obra-tile'+(seleccionada?' active':'')+'" '
     +'onclick="window.toggleCompareObra('+idx+')" title="'+escapeHtml(nombre)+'">'
-    +'<span class="cq-report-obra-name">'+escapeHtml(nombre)+'</span>'
+    +'<span class="cq-report-obra-name">'+cqFormatoNombreObraReporte(nombre)+'</span>'
     +(seleccionada?'<span class="cq-report-obra-check">✓</span>':'')
     +'</button>';
 }
@@ -16023,6 +16040,90 @@ window.abrirGraficoDirecto = function(){
     height:11px!important;
     font-size:7px!important;
     line-height:11px!important;
+  }
+}
+</style>
+
+<style id="cq-movil-nombre-obra-completo-real-v13">
+/* SOLO teléfono: reproducción del mockup aprobado, 6 obras por fila y nombre COMPLETO. */
+@media (max-width:620px){
+  #compare-obra-chips.cq-report-obras-grid{
+    display:grid!important;
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    gap:5px!important;
+    width:100%!important;
+    align-items:stretch!important;
+  }
+  #compare-obra-chips .cq-report-obra-tile{
+    box-sizing:border-box!important;
+    position:relative!important;
+    width:100%!important;
+    min-width:0!important;
+    height:64px!important;
+    min-height:64px!important;
+    max-height:64px!important;
+    padding:4px 2px!important;
+    border-radius:10px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    overflow:hidden!important;
+    font-size:7.6px!important;
+    line-height:1.08!important;
+    letter-spacing:0!important;
+    text-align:center!important;
+  }
+  #compare-obra-chips .cq-report-obra-name{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    width:100%!important;
+    min-width:0!important;
+    height:auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+    white-space:normal!important;
+    text-overflow:clip!important;
+    line-height:1.08!important;
+  }
+  #compare-obra-chips .cq-report-line{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+    text-overflow:clip!important;
+    line-height:1.08!important;
+    text-align:center!important;
+  }
+  #compare-obra-chips .cq-report-line-extra{
+    font-size:.92em!important;
+  }
+  #compare-obra-chips .cq-report-line-generic{
+    white-space:normal!important;
+    overflow-wrap:anywhere!important;
+    word-break:normal!important;
+    line-height:1.08!important;
+  }
+  #compare-obra-chips .cq-report-obra-tile.active{
+    padding-left:2px!important;
+    padding-right:14px!important;
+  }
+  #compare-obra-chips .cq-report-obra-check{
+    position:absolute!important;
+    right:2px!important;
+    top:3px!important;
+    transform:none!important;
+    width:12px!important;
+    height:12px!important;
+    min-width:12px!important;
+    font-size:7px!important;
+    line-height:12px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    pointer-events:none!important;
   }
 }
 </style>
