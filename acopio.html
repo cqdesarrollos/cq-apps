@@ -6098,13 +6098,40 @@ function guardarNuevoAcopio(){
   abrirAcopio(nuevo.id);
 }
 var pendingDeleteAcopioId=null;
-function confirmarBorrarAcopio(id){
+async function confirmarBorrarAcopio(id){
   if(pendingDeleteAcopioId===id){
+    var acEliminar=(DB.acopios||[]).find(function(a){return String(a&&a.id)===String(id);})||null;
+    var retirosEliminar=acEliminar&&Array.isArray(acEliminar.retiros)
+      ?JSON.parse(JSON.stringify(acEliminar.retiros))
+      :[];
+
     pushUndo();
     cqDesprotegerAcopioNuevo(id);
-    DB.acopios=DB.acopios.filter(function(a){return a.id!==id;});
-    persist();pendingDeleteAcopioId=null;toast('Acopio eliminado');
+    retirosEliminar.forEach(function(r){
+      try{cqAgregarTombstoneRetiro(id,r.id);}catch(_e){}
+      try{cqIntegracionesRetiroCanceladas.add(String(id)+'::'+String(r.id));}catch(_e){}
+    });
+    DB.acopios=DB.acopios.filter(function(a){return String(a&&a.id)!==String(id);});
+    persist();pendingDeleteAcopioId=null;
+    toast('Acopio eliminado · limpiando vínculos');
+
     if(document.getElementById('home-archivados-panel')&&document.getElementById('home-archivados-panel').classList.contains('open'))renderArchivados();else renderHome();
+
+    // Borrar el acopio completo debe equivaler a borrar uno por uno todos sus retiros.
+    // Así no quedan cargas huérfanas activas en Materiales/Gastos/Pañol.
+    if(retirosEliminar.length && window._cqFirebaseReady&&window._cqFirebase){
+      var fallas=0;
+      for(var i=0;i<retirosEliminar.length;i++){
+        try{
+          var errs=await cqLimpiarDestinosRetiroExacto(id,retirosEliminar[i]);
+          if(errs&&errs.length)fallas+=errs.length;
+        }catch(e){
+          fallas++;
+          console.warn('Limpieza al borrar acopio',id,retirosEliminar[i]&&retirosEliminar[i].id,e);
+        }
+      }
+      toast(fallas?'⚠️ Acopio eliminado · revisar '+fallas+' vínculo(s)':'✓ Acopio eliminado y vínculos limpiados',fallas?'err':undefined);
+    }
   } else {
     pendingDeleteAcopioId=id;
     toast('Tocá de nuevo ✕ para confirmar eliminación');
@@ -6929,6 +6956,39 @@ document.addEventListener('click',function(e){
   if(!inp||!dd)return;
   if(e.target!==inp && !dd.contains(e.target)) dd.style.display='none';
 });
+
+// CQ 15/10/2026 — CORTE ACOPIO → MATERIALES POR FECHA DEL RETIRO.
+// El esquema con linkeo a Materiales comenzó el 05/08/2026.
+// IMPORTANTE: el corte aplica al RETIRO, no a la fecha de creación del Acopio.
+// Un Acopio creado antes del 05/08 puede tener retiros posteriores válidos que sí deben linkear.
+var CQ_ACOPIO_MATERIALES_DESDE='2026-08-05';
+
+function cqFechaISOCorteAcopio(v){
+  var s=String(v==null?'':v).trim();
+  if(!s)return '';
+  var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+  if(m)return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+  var d=new Date(s);
+  if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);
+  return '';
+}
+
+function cqAcopioSistemaViejoSinMateriales(a){
+  // Ya NO se bloquea un Acopio completo por su fecha de creación.
+  // La regla correcta es únicamente la fecha de cada retiro.
+  return false;
+}
+
+function cqRetiroDebeIrAMateriales(r,a){
+  if(!r||r.cargarMateriales!==true)return false;
+  var f=cqFechaISOCorteAcopio(r.fecha);
+  if(f && f<CQ_ACOPIO_MATERIALES_DESDE)return false;
+  return true;
+}
+
+
 // ═══════════════════════════════════════════
 // VERIFICACIÓN PERSISTENTE: ¿EL RETIRO EXISTE REALMENTE EN MATERIALES?
 // Se mira directamente materiales/data_planilla_exacta_v4. Si alguien borra
@@ -7151,7 +7211,10 @@ function estadoMaterialesRetiro(retiro){
   var a=getAcopio();
   if(!a||!retiro)return {cls:'err',txt:'No se pudo verificar Materiales'};
 
-  if(retiro.cargarMateriales===false){
+  if(!cqRetiroDebeIrAMateriales(retiro,a)){
+    if(cqAcopioSistemaViejoSinMateriales(a)){
+      return {cls:'off',txt:'Retiro anterior al 05/08/2026 · sin link a Materiales'};
+    }
     return retiro.cargarPanol===true
       ?{cls:'off',txt:'Materiales se registra luego al consumir desde Pañol'}
       :{cls:'off',txt:'Materiales fue omitido en este retiro'};
@@ -7219,7 +7282,7 @@ async function cqAutoRepararMaterialesFaltantesActual(){
   if(!a)return;
 
   var faltantes=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
-    if(!r||r.cargarMateriales===false)return false;
+    if(!cqRetiroDebeIrAMateriales(r,a))return false;
     // Si Materiales está deshabilitado para esta obra desde Gastos, no recrear
     // automáticamente una integración faltante. El histórico existente no se borra.
     if(r.gastosObraId && !obraGastosPermiteMaterialesAcopio(r.gastosObraId))return false;
@@ -7864,6 +7927,51 @@ function cqMatTodosDirecto(data){
     return {id:x.id,mat:x.mat,catName:x.catName,codigo:x.codigo||''};
   }).concat(extras);
 }
+
+function cqMatNormIdentidadCategoriaDirecto(v){
+  return String(v||'').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function cqMatCategoriaManualDirecto(data,mat,ev){
+  data=data||{};mat=mat||{};ev=ev||{};
+  var id=mat.id;
+  var lock=(data.catalogoManual&&((data.catalogoManual[id])||(data.catalogoManual[String(id)])))||null;
+  if(lock&&lock.manual!==false&&String(lock.categoria||'').trim())return String(lock.categoria).trim();
+
+  var byId=data.categoriaManual&&((data.categoriaManual[id])||(data.categoriaManual[String(id)]));
+  if(String(byId||'').trim())return String(byId).trim();
+
+  var mapa=(data.categoriaManualIdentidad&&typeof data.categoriaManualIdentidad==='object')
+    ?data.categoriaManualIdentidad:{};
+  var nombre=String(ev.materialName||mat.mat||'').trim();
+  var codigo=String(ev.materialCode||(data.matCodigos&&data.matCodigos[id])||mat.codigo||'').trim();
+  var nk=cqMatNormIdentidadCategoriaDirecto(nombre);
+  var ck=codigo.toLowerCase().replace(/\s+/g,'');
+  var ln=nk?mapa['name:'+nk]:null;
+  if(ln&&ln.manual!==false&&String(ln.categoria||'').trim())return String(ln.categoria).trim();
+  var lc=ck?mapa['code:'+ck]:null;
+  if(lc&&lc.manual!==false&&String(lc.categoria||'').trim()){
+    var lockNombre=cqMatNormIdentidadCategoriaDirecto(lc.nombre||'');
+    if(!nk||!lockNombre||lockNombre===nk)return String(lc.categoria).trim();
+  }
+  return '';
+}
+function cqMatCategoriaFinalDirecto(data,mat,ev){
+  var manual=cqMatCategoriaManualDirecto(data,mat,ev);
+  if(manual)return manual;
+
+  var actual=String((data.matCategorias&&data.matCategorias[mat.id])||mat.catName||'').trim();
+  var entrante=String(ev.category||ev.materialCategory||'').trim();
+
+  // Materiales manda: si el artículo ya tiene un rubro real, Acopio no lo pisa.
+  if(actual&&!/^varios$/i.test(actual))return actual;
+
+  // Sólo completar desde Acopio cuando Materiales todavía está sin clasificar/VARIOS.
+  if(entrante&&!/^varios$/i.test(entrante))return entrante;
+
+  return actual||entrante||'VARIOS';
+}
+
 function cqMatResolverMaterialDirecto(data,ev){
   if(!Array.isArray(data.extraMats))data.extraMats=[];
   if(!Array.isArray(data.extraCats))data.extraCats=[];
@@ -7930,7 +8038,11 @@ function cqMatResolverMaterialDirecto(data,ev){
   if(!mat){
     var maxId=10000;
     mats.forEach(function(x){if(Number(x.id)>=maxId)maxId=Number(x.id)+1;});
-    var cat=String(ev.category||ev.materialCategory||'VARIOS').trim()||'VARIOS';
+    var cat=cqMatCategoriaFinalDirecto(
+      data,
+      {id:maxId,mat:nombre||('Material '+String(ev.materialCode||'')),codigo:cqCodigoMaterialSeguro(ev.materialCode)},
+      ev
+    );
 
     if(!data.extraCats.some(function(c){
       return String(c&&c.name||'').trim().toLowerCase()===cat.toLowerCase();
@@ -7971,10 +8083,10 @@ function cqMatResolverMaterialDirecto(data,ev){
     mat.codigo=incomingCode;
   }
 
-  var incomingCat=String(ev.category||ev.materialCategory||'').trim();
-  if(incomingCat){
-    data.matCategorias[mat.id]=incomingCat;
-    mat.catName=incomingCat;
+  var finalCat=cqMatCategoriaFinalDirecto(data,mat,ev);
+  if(finalCat){
+    data.matCategorias[mat.id]=finalCat;
+    mat.catName=finalCat;
   }
   return mat;
 }
@@ -8038,8 +8150,10 @@ function cqMatAplicarEventoDirecto(data,ev){
   var mat=cqMatResolverMaterialDirecto(data,ev);
   if(obraIdx<0||!mat)throw new Error('No se pudo resolver obra/material en Materiales');
 
-  // Asegurar que el subrubro exista también como categoría visible.
-  var cat=String(ev.category||ev.materialCategory||data.matCategorias[mat.id]||mat.catName||'VARIOS').trim()||'VARIOS';
+  // Materiales es la fuente maestra del rubro. Acopio sólo completa si el artículo
+  // todavía está sin clasificar/VARIOS; nunca pisa una reclasificación manual.
+  var cat=cqMatCategoriaFinalDirecto(data,mat,ev);
+  var categoriaOrigen=String(ev.category||ev.materialCategory||'').trim()||'VARIOS';
   data.matCategorias[mat.id]=cat;
   mat.catName=cat;
   if(!data.extraCats.some(function(c){return String(c&&c.name||'').trim().toLowerCase()===cat.toLowerCase();})){
@@ -8066,7 +8180,7 @@ function cqMatAplicarEventoDirecto(data,ev){
     codigoOrigen:cqCodigoMaterialSeguro(ev.materialCode),
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||'',
-    categoriaOrigen:cat
+    categoriaOrigen:categoriaOrigen
   };
 
   var mismo=prev
@@ -8194,6 +8308,13 @@ async function sincronizarRetiroConMateriales(retiro,activo){
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
   var a=getAcopio();
   if(!a||!retiro)throw new Error('Retiro no encontrado');
+  if(activo!==false && !cqRetiroDebeIrAMateriales(retiro,a)){
+    // El sistema viejo no tenía vínculo con Materiales. No crear integraciones
+    // retroactivas por estados faltantes o reparaciones automáticas.
+    retiro.materialesSyncEstado='omitido';
+    retiro.materialesSyncError='';
+    return true;
+  }
 
   var m=getMat(retiro.matId);
   var obraObj=retiro.gastosObraId
@@ -8493,7 +8614,7 @@ async function cqCompletarRetiroEnSegundoPlano(acopioId,retiro){
   if(cqIntegracionesRetiroEnCurso.has(key))return;
   cqIntegracionesRetiroEnCurso.add(key);
 
-  var cargarMateriales=retiro.cargarMateriales!==false;
+  var cargarMateriales=cqRetiroDebeIrAMateriales(retiro,(DB.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);})||getAcopio());
   var cargarGastos=retiro.cargarGastos!==false;
   var cargarPanol=retiro.cargarPanol===true;
 
@@ -8773,7 +8894,7 @@ async function cqReconciliarIntegracionesRecientes(){
       if(!(t && now-t<6*60*60*1000))return false;
       // Sólo reconciliar retiros que realmente quedaron pendientes o con error.
       // Los ya confirmados no necesitan releer Acopio + Materiales + Gastos cada 15 s.
-      var matPend=r.cargarMateriales!==false && ['pendiente','sincronizando','error'].indexOf(String(r.materialesSyncEstado||''))>=0;
+      var matPend=cqRetiroDebeIrAMateriales(r,a) && ['pendiente','sincronizando','error'].indexOf(String(r.materialesSyncEstado||''))>=0;
       var gasPend=r.cargarGastos!==false && ['pendiente','sincronizando','error'].indexOf(String(r.gastosSyncEstado||''))>=0;
       return matPend||gasPend;
     });
@@ -8795,14 +8916,14 @@ async function cqReconciliarIntegracionesRecientes(){
         continue;
       }
       try{
-        if(r.cargarMateriales!==false){matOk=await cqVerificarMaterialesRetiroReal(r,true);if(!matOk)necesita=true;}
+        if(cqRetiroDebeIrAMateriales(r,a)){matOk=await cqVerificarMaterialesRetiroReal(r,true);if(!matOk)necesita=true;}
       }catch(e){matOk=false;}
       try{
         if(r.cargarGastos!==false){gasOk=await cqVerificarGastoRetiroReal(r,true);if(!gasOk)necesita=true;}
       }catch(e){gasOk=false;}
       if(!necesita)continue;
       cqUltimoReintentoIntegracion[key]=Date.now();
-      if(r.cargarMateriales!==false && !matOk){
+      if(cqRetiroDebeIrAMateriales(r,a) && !matOk){
         try{await sincronizarRetiroConMateriales(r,true);r.materialesSyncEstado='ok';r.materialesSyncError='';}
         catch(e){r.materialesSyncEstado='error';r.materialesSyncError=String(e&&e.message||e);}
       }
@@ -9526,7 +9647,7 @@ async function openEditRetiro(id){
   document.getElementById('retiro-fecha').value=r.fecha;
   llenarSubrubrosAcopio('retiro-subrubro',r.subrubro||'');
   document.getElementById('retiro-comentario').value=r.comentario||'';
-  document.getElementById('retiro-cargar-materiales').checked=r.cargarMateriales!==false;
+  document.getElementById('retiro-cargar-materiales').checked=cqRetiroDebeIrAMateriales(r,a);
   document.getElementById('retiro-cargar-gastos').checked=r.cargarGastos!==false;
   document.getElementById('retiro-cargar-panol').checked=r.cargarPanol===true;
   document.getElementById('retiro-panol-sin-precio').checked=r.panolSinPrecio===true;
@@ -9546,7 +9667,7 @@ async function cqRepararMaterialesPendientes(){
   var candidatos=[];
   acopios.forEach(function(ac){
     (Array.isArray(ac.retiros)?ac.retiros:[]).forEach(function(r){
-      if(r&&r.cargarMateriales===true && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
+      if(cqRetiroDebeIrAMateriales(r,ac) && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
         candidatos.push({acopio:ac,retiro:r});
       }
     });
@@ -9837,7 +9958,7 @@ async function guardarEditRetiro(){
   // cualquier vínculo viejo antes de moverlo a la obra nueva.
   var anteriorSnapshot=Object.assign({},anterior);
   var obraAnterior=anterior.gastosObraId;
-  var antesMateriales=anterior.cargarMateriales!==false;
+  var antesMateriales=cqRetiroDebeIrAMateriales(anterior,a);
   var antesGastos=anterior.cargarGastos!==false;
   var antesPanol=anterior.cargarPanol===true;
   var cambioObra=!mantenerObraActual && obraNueva ? (
