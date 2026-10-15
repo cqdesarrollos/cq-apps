@@ -3748,6 +3748,11 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
     </button>
     <div id="cq-reparar-gastos-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#F7F6F3;font-size:11px;color:#567065;line-height:1.35"></div>
 
+    <button type="button" id="cq-limpiar-legacy-btn" class="btn btn-s btn-full" onclick="cqLimpiarVinculosLegacyErroneos()" style="margin:0 0 8px">
+      🧹 Limpiar vínculos históricos erróneos
+    </button>
+    <div id="cq-limpiar-legacy-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#FFF7E8;font-size:11px;color:#6E592B;line-height:1.35"></div>
+
     <button type="button" id="cq-reparar-panol-btn" class="btn btn-s btn-full" onclick="cqRepararPanolPendientes()" style="margin:0 0 8px">
       🧰 Reparar retiros pendientes en Pañol
     </button>
@@ -4278,64 +4283,8 @@ var lastAutoBackupAt=0;
 var lastSaveKind='manual';
 var lastSyncedAt=null;
 
-// CQ 14/10/2026 — excepción ESTRICTAMENTE limitada al Acopio 18 creado el 27/05/2026.
-// Este acopio pertenece al esquema histórico: sus retiros se asignaban por a.obras/obraIdx
-// (por ejemplo 18/78, 6/92) y NO se vinculaban con Gastos ni Materiales.
-var CQ_ACOPIO18_LEGACY_FECHA='2026-05-27';
-var CQ_ACOPIO18_LEGACY_NOMBRE='18';
-
-function cqEsAcopio18Legacy(a){
-  if(!a)return false;
-  return String(a.creado||'').trim()===CQ_ACOPIO18_LEGACY_FECHA
-    && String(a.nombre||'').trim()===CQ_ACOPIO18_LEGACY_NOMBRE;
-}
-
-function cqNormalizarSoloAcopio18Legacy(db){
-  if(!db||!Array.isArray(db.acopios))return false;
-  var a=db.acopios.find(function(x){return cqEsAcopio18Legacy(x);});
-  if(!a)return false;
-
-  var cambio=false;
-  var obrasLegacy=Array.isArray(a.obras)?a.obras:[];
-  (Array.isArray(a.retiros)?a.retiros:[]).forEach(function(r){
-    if(!r)return;
-    var idx=Number(r.obraIdx);
-    var obraOriginal=(Number.isInteger(idx)&&obrasLegacy[idx]!=null)
-      ?String(obrasLegacy[idx]).trim():'';
-
-    // La obra original del retiro manda por encima de cualquier vínculo nuevo agregado después.
-    if(obraOriginal && String(r.obraHistorica||'').trim()!==obraOriginal){
-      r.obraHistorica=obraOriginal;
-      cambio=true;
-    }
-
-    // Acopio 18 nunca debe reinterpretar obraIdx contra la configuración actual de Gastos.
-    if(String(r.gastosObraId||'').trim()!==''){
-      r.gastosObraId='';
-      cambio=true;
-    }
-
-    // Esquema histórico: no enviar ni reparar automáticamente hacia Materiales/Gastos.
-    if(r.cargarMateriales!==false){r.cargarMateriales=false;cambio=true;}
-    if(r.cargarGastos!==false){r.cargarGastos=false;cambio=true;}
-
-    if(String(r.materialesSyncEstado||'')!=='omitido'){r.materialesSyncEstado='omitido';cambio=true;}
-    if(String(r.materialesSyncError||'')!==''){r.materialesSyncError='';cambio=true;}
-    if(String(r.gastosSyncEstado||'')!=='omitido'){r.gastosSyncEstado='omitido';cambio=true;}
-    if(String(r.gastosSyncError||'')!==''){r.gastosSyncError='';cambio=true;}
-  });
-  return cambio;
-}
-
 function loadDB(){
-  try{
-    var s=JSON.parse(localStorage.getItem(DB_KEY)||'null');
-    if(s){
-      var dbLocal=sanitizeDB(s);
-      cqNormalizarSoloAcopio18Legacy(dbLocal);
-      return dbLocal;
-    }
-  }catch(e){}
+  try{var s=JSON.parse(localStorage.getItem(DB_KEY)||'null');if(s)return sanitizeDB(s);}catch(e){}
   return {acopios:[],backups:[],cats:CATS_BASE.slice()}; // each acopio: {id,nombre,creado,tc,obras,mats,pagos,retiros}
 }
 function sanitizeDB(s){
@@ -5009,7 +4958,6 @@ async function loadFromFirebase(){
       await cqBackupDiarioDesdeRemoto(snap.data().db,snap.data().updatedAt||'');
       var localBackups=(DB&&DB.backups)||[];
       DB=sanitizeDB(snap.data().db);
-      var cqFixSoloAcopio18Legacy=cqNormalizarSoloAcopio18Legacy(DB);
 
       // CQ 12/10/2026 — reparar retiros históricos que quedaron como
       // "Adicional de 100 cm" por el código duplicado 902001103.
@@ -5053,10 +5001,6 @@ async function loadFromFirebase(){
       cqGuardarLocalSeguro();
       lastSyncedAt=snap.data().updatedAt||null;
       guardarBaseAcopio(lastSyncedAt);
-      if(cqFixSoloAcopio18Legacy){
-        marcarAcopioDirty();
-        scheduleFirebaseSave();
-      }
     }else{
       marcarAcopioDirty();
       await saveToFirebase();
@@ -5114,7 +5058,6 @@ function listenFirebase(){
 
       var localBackups=(DB&&DB.backups)||[];
       var remoteDB=sanitizeDB(snap.data().db);
-      var cqFixSoloAcopio18LegacyListener=cqNormalizarSoloAcopio18Legacy(remoteDB);
 
       // CQ 01/09/2026 — conservar backups locales antes de validar tombstones.
       // Se usa DB temporalmente para que la reparación segura pueda comparar el
@@ -5184,7 +5127,7 @@ function listenFirebase(){
 
       // Si el snapshot venía atrasado y todavía contenía un retiro borrado,
       // volver a publicar inmediatamente la versión correcta sin ese retiro.
-      if(teniaBorradosPendientes || teniaMatsBorrados || teniaRetirosNuevos || teniaAcopiosNuevos || reparoMatsListener || cqFixSoloAcopio18LegacyListener){
+      if(teniaBorradosPendientes || teniaMatsBorrados || teniaRetirosNuevos || teniaAcopiosNuevos || reparoMatsListener){
         marcarAcopioDirty();
         scheduleFirebaseSave();
       }
@@ -5257,10 +5200,6 @@ function getObrasGastosObjects(){
   });
 }
 function getObras(){
-  var a=getAcopio();
-  if(cqEsAcopio18Legacy(a) && Array.isArray(a.obras)){
-    return a.obras.slice();
-  }
   return getObrasGastosObjects().map(function(o){return o.label||o.short||o.id;});
 }
 function obraGastosIntegrableAcopio(id){
@@ -5280,23 +5219,81 @@ function obraGastosPermitePanolAcopio(id){
 }
 
 function obraGastosActualPorIdx(idx){return getObrasGastosObjects()[idx]||null;}
+
+// CQ 14/10/2026 — compatibilidad REAL con retiros del esquema viejo.
+// Antes de vincular Acopio con Gastos/Materiales, cada retiro quedaba asociado
+// únicamente por obraIdx contra la lista propia del acopio (a.obras).
+// Si más tarde a uno de esos retiros se le agregó por error gastosObraId u
+// obraHistorica, NO debemos dejar que esos campos modernos reemplacen la obra
+// con la que el retiro fue creado.
+var CQ_OBRAS_VINCULADAS_DESDE_MS=Date.parse('2026-08-18T00:00:00-03:00');
+
+// IMPORTANTE: toda la compatibilidad especial del esquema viejo queda limitada
+// EXCLUSIVAMENTE al Acopio 18. Los demás acopios conservan exactamente el flujo actual.
+function cqEsAcopio18(a){
+  a=a||getAcopio();
+  if(!a)return false;
+  var n=String(a.nombre||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[º°]/g,'').replace(/\s+/g,' ');
+  if(n==='18'||n==='acopio 18'||n==='acopio n 18'||n==='acopio nro 18'||n==='acopio numero 18')return true;
+
+  // Respaldo por las obras históricas propias de ese acopio, por si el nombre fue editado.
+  var obras=Array.isArray(a.obras)?a.obras:[];
+  function k(v){
+    var x=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    var m=x.match(/\b(\d+)\s*\/\s*(\d+)\b/);
+    return m?(Number(m[1])+'/'+Number(m[2])):x.replace(/\s+/g,' ');
+  }
+  var ks=obras.map(k);
+  return ks.indexOf('18/78')>=0 && ks.indexOf('6/92')>=0;
+}
+
+function cqRetiroUsaObraLegacy(r,acopioCtx){
+  if(!r||r.obraEsquema==='v2')return false;
+  var a=acopioCtx||getAcopio();
+  if(!cqEsAcopio18(a))return false;
+  var idx=Number(r.obraIdx);
+  if(!a||!Array.isArray(a.obras)||!Number.isInteger(idx)||idx<0||idx>=a.obras.length)return false;
+
+  // FUENTE PRINCIPAL PARA HISTÓRICOS: la fecha real del retiro.
+  // Si el movimiento es anterior al inicio del esquema vinculado, SIEMPRE es legacy,
+  // aunque una versión posterior le haya agregado por error createdAt, gastosObraId
+  // o banderas cargarMateriales/cargarGastos.
+  var fechaLegacy=Date.parse(String(r.fecha||'')+'T12:00:00-03:00');
+  if(Number.isFinite(fechaLegacy)&&fechaLegacy<CQ_OBRAS_VINCULADAS_DESDE_MS)return true;
+
+  // Como respaldo, también respetar un createdAt anterior al cambio.
+  var creado=Date.parse(String(r.createdAt||''));
+  if(Number.isFinite(creado)&&creado<CQ_OBRAS_VINCULADAS_DESDE_MS)return true;
+
+  // Registros viejos sin fechas confiables tampoco tenían marcadores de integración.
+  var own=Object.prototype.hasOwnProperty;
+  var tieneMarcadoresModernos=own.call(r,'cargarMateriales')||own.call(r,'cargarGastos')||own.call(r,'cargarPanol')
+    ||own.call(r,'materialesSyncEstado')||own.call(r,'gastosSyncEstado')||own.call(r,'panolSyncEstado');
+  if(!String(r.createdAt||'').trim()&&!tieneMarcadoresModernos)return true;
+
+  return false;
+}
+function cqRetiroObraLegacyLabel(r){
+  if(!cqRetiroUsaObraLegacy(r))return '';
+  var a=getAcopio();
+  var idx=Number(r.obraIdx);
+  return String((a&&Array.isArray(a.obras)&&a.obras[idx])||'').trim();
+}
 function retiroObraLabel(r){
   if(!r)return 'Obra';
-  var a=getAcopio();
-  var legacy=a&&Array.isArray(a.obras)?a.obras:[];
 
-  // Sólo en Acopio 18 (27/05/2026) la fuente de verdad es obraIdx + a.obras.
-  if(cqEsAcopio18Legacy(a)){
-    var idx18=Number(r.obraIdx);
-    if(Number.isInteger(idx18) && legacy[idx18]!=null)return String(legacy[idx18]);
-    return String(r.obraHistorica||'Obra');
-  }
+  // Para el esquema viejo, la fuente de verdad es la lista histórica del propio acopio.
+  var legacyLabel=cqRetiroObraLegacyLabel(r);
+  if(legacyLabel)return legacyLabel;
 
   if(r.obraHistorica)return r.obraHistorica;
   if(r.gastosObraId){
     var o=getObrasGastosAllObjects().find(function(x){return x.id===r.gastosObraId;});
     if(o)return o.label||o.short||o.id;
   }
+  var a=getAcopio();
+  var legacy=a&&Array.isArray(a.obras)?a.obras:[];
   return legacy[Number.isInteger(r.obraIdx)?r.obraIdx:0]||'Obra';
 }
 function getMat(id){return getAllMats().find(function(m){return m.id===id;});}
@@ -5631,6 +5628,9 @@ function gastoAcopioId(acopioId,retiroId){return 'acopio_'+String(acopioId)+'_'+
 var gastosVerificacionInicialLista=false;
 
 function gastoSyncEstadoAcopio(r){
+  if(cqRetiroUsaObraLegacy(r)){
+    return {cls:'off',txt:'Retiro histórico · no corresponde vincular a Gastos'};
+  }
   // Gris solamente si Gastos fue excluido intencionalmente por Pañol con precio.
   if(r&&r.cargarGastos===false && r.cargarPanol===true && r.panolSinPrecio!==true){
     return {cls:'off',txt:'Gastos se registra al consumir desde Pañol'};
@@ -5728,12 +5728,8 @@ async function upsertGastoAcopio(obraId,payload,removeOnly){
 async function sincronizarRetiroConGastos(retiro,activo,obraIdAnterior){
   if(!retiro)throw new Error('Retiro no encontrado');
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
-
-  var acopioActualSyncGastos=getAcopio();
-  // Acopio 18 del 27/05/2026 pertenece al esquema sin linkeo a Gastos.
-  // active=false queda habilitado para limpiezas/borrados idempotentes.
-  if(cqEsAcopio18Legacy(acopioActualSyncGastos) && activo!==false){
-    return true;
+  if(activo!==false && cqRetiroUsaObraLegacy(retiro)){
+    throw new Error('Retiro histórico: Gastos no corresponde en el esquema viejo');
   }
 
   // IMPORTANTE: usar primero la obra EXACTA que quedó guardada en el retiro.
@@ -5834,7 +5830,7 @@ async function verificarGastosAcopio(){
     var a=getAcopio();
     if(!a)return;
     // Gastos conserva el histórico aunque la obra deje de mostrarse en Acopio.
-    var retiros=(a.retiros||[]).filter(function(r){return r.gastosObraId&&r.cargarGastos!==false;});
+    var retiros=(a.retiros||[]).filter(function(r){return !cqRetiroUsaObraLegacy(r)&&r.gastosObraId&&r.cargarGastos!==false;});
     var ids=[...new Set(retiros.map(function(r){return r.gastosObraId;}))];
     var docs={},f=window._cqFirebase;
     for(var i=0;i<ids.length;i++){
@@ -6206,6 +6202,10 @@ function abrirAcopio(id){
   document.getElementById('hdr-back').style.display='inline';
   document.getElementById('hdr-acopio-name').textContent=a.nombre;
   document.getElementById('tc-display').textContent='$'+fmtN(a.tc||TC_DEFAULT,0);
+  var legacyBtn=document.getElementById('cq-limpiar-legacy-btn');
+  var legacyInfo=document.getElementById('cq-limpiar-legacy-info');
+  if(legacyBtn)legacyBtn.style.display=cqEsAcopio18(a)?'block':'none';
+  if(legacyInfo){legacyInfo.style.display='none';legacyInfo.textContent='';}
   curRetirarObra=-1;curReporteObra=-1;
   cqTabAcopioActual='';
   cqRetirarMatSesion='';
@@ -6724,37 +6724,11 @@ function renderPagosList(){
 // ═══════════════════════════════════════════
 // RETIRAR
 // ═══════════════════════════════════════════
-function cqAplicarUIAcopio18Legacy(){
-  var a=getAcopio();
-  var legacy=cqEsAcopio18Legacy(a);
-  [
-    ['retirar-cargar-materiales',true],
-    ['retirar-cargar-gastos',true]
-  ].forEach(function(par){
-    var el=document.getElementById(par[0]);
-    if(!el)return;
-    if(legacy){
-      el.checked=false;
-      el.disabled=true;
-      el.dataset.cqAcopio18Legacy='1';
-      var lab=el.closest('.cq-sync-option');
-      if(lab)lab.classList.add('disabled-by-panol');
-    }else if(el.dataset.cqAcopio18Legacy==='1'){
-      el.disabled=false;
-      el.checked=par[1];
-      delete el.dataset.cqAcopio18Legacy;
-      var lab2=el.closest('.cq-sync-option');
-      if(lab2)lab2.classList.remove('disabled-by-panol');
-    }
-  });
-}
-
 function renderRetirar(){
   // Las obras de "Cargar material" vienen de la configuración de Gastos.
   // Antes la pantalla se dibujaba antes de que esa configuración terminara
   // de cargar; por eso a veces faltaban obras hasta cambiar de solapa.
-  var cqLegacy18Actual=cqEsAcopio18Legacy(getAcopio());
-  if(!cqLegacy18Actual && !gastosConfigAcopio){
+  if(!gastosConfigAcopio){
     var chipsCarga=document.getElementById('retirar-obra-chips');
     if(chipsCarga && !chipsCarga.innerHTML.trim()){
       chipsCarga.innerHTML='<span style="font-size:11px;color:#7A9E82;font-weight:700;padding:5px 2px">Cargando obras…</span>';
@@ -6766,8 +6740,6 @@ function renderRetirar(){
     });
     return;
   }
-
-  cqAplicarUIAcopio18Legacy();
 
   var sel=document.getElementById('retirar-subrubro');
   var cur=sel?sel.value:'';
@@ -7260,6 +7232,10 @@ function estadoMaterialesRetiro(retiro){
   var a=getAcopio();
   if(!a||!retiro)return {cls:'err',txt:'No se pudo verificar Materiales'};
 
+  if(cqRetiroUsaObraLegacy(retiro)){
+    return {cls:'off',txt:'Retiro histórico · no corresponde vincular a Materiales'};
+  }
+
   if(retiro.cargarMateriales===false){
     return retiro.cargarPanol===true
       ?{cls:'off',txt:'Materiales se registra luego al consumir desde Pañol'}
@@ -7326,10 +7302,9 @@ async function cqAutoRepararMaterialesFaltantesActual(){
 
   var a=getAcopio();
   if(!a)return;
-  if(cqEsAcopio18Legacy(a))return;
 
   var faltantes=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
-    if(!r||r.cargarMateriales===false)return false;
+    if(!r||cqRetiroUsaObraLegacy(r)||r.cargarMateriales===false)return false;
     // Si Materiales está deshabilitado para esta obra desde Gastos, no recrear
     // automáticamente una integración faltante. El histórico existente no se borra.
     if(r.gastosObraId && !obraGastosPermiteMaterialesAcopio(r.gastosObraId))return false;
@@ -8304,19 +8279,18 @@ async function sincronizarRetiroConMateriales(retiro,activo){
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
   var a=getAcopio();
   if(!a||!retiro)throw new Error('Retiro no encontrado');
-
-  // Acopio 18 del 27/05/2026 es histórico: jamás crear/actualizar integraciones nuevas.
-  // active=false sí se permite para que un borrado pueda limpiar residuos viejos.
-  if(cqEsAcopio18Legacy(a) && activo!==false){
-    return true;
+  if(activo!==false && cqRetiroUsaObraLegacy(retiro)){
+    throw new Error('Retiro histórico: Materiales no corresponde en el esquema viejo');
   }
 
   var m=getMat(retiro.matId);
-  var obraObj=retiro.gastosObraId
+  var esLegacyObra=cqRetiroUsaObraLegacy(retiro);
+  var obraObj=(!esLegacyObra&&retiro.gastosObraId)
     ?getObrasGastosAllObjects().find(function(o){return String(o.id)===String(retiro.gastosObraId);})
     :null;
   var obra=String(
-    (obraObj&&(obraObj.label||obraObj.short||obraObj.id))
+    (esLegacyObra?retiroObraLabel(retiro):'')
+    ||(obraObj&&(obraObj.label||obraObj.short||obraObj.id))
     ||retiro.obraHistorica
     ||getObras()[retiro.obraIdx]
     ||''
@@ -8609,8 +8583,9 @@ async function cqCompletarRetiroEnSegundoPlano(acopioId,retiro){
   if(cqIntegracionesRetiroEnCurso.has(key))return;
   cqIntegracionesRetiroEnCurso.add(key);
 
-  var cargarMateriales=retiro.cargarMateriales!==false;
-  var cargarGastos=retiro.cargarGastos!==false;
+  var retiroLegacy=cqRetiroUsaObraLegacy(retiro);
+  var cargarMateriales=retiroLegacy?false:(retiro.cargarMateriales!==false);
+  var cargarGastos=retiroLegacy?false:(retiro.cargarGastos!==false);
   var cargarPanol=retiro.cargarPanol===true;
 
   var resultados={acopio:false,mat:!cargarMateriales,gas:!cargarGastos,panol:!cargarPanol};
@@ -8726,15 +8701,6 @@ async function guardarRetiro(){
   var cargarPanol=document.getElementById('retirar-cargar-panol').checked;
   var panolSinPrecio=document.getElementById('retirar-panol-sin-precio').checked;
 
-  var a=getAcopio();
-  var cqLegacy18=cqEsAcopio18Legacy(a);
-
-  // Acopio 18 (27/05/2026) mantiene el esquema original: sólo registra en Acopio.
-  if(cqLegacy18){
-    cargarMateriales=false;
-    cargarGastos=false;
-  }
-
   // Pañol y Materiales son excluyentes: el consumo futuro desde Pañol será
   // el que impacte en Materiales, evitando duplicados.
   if(cargarPanol)cargarMateriales=false;
@@ -8762,19 +8728,20 @@ async function guardarRetiro(){
     subrubro=subMatch;
   }
 
-  var obraSel=cqLegacy18?null:obraGastosActualPorIdx(curRetirarObra);
-  if(!cqLegacy18 && !obraSel){alert('No se pudo identificar la obra seleccionada. Volvé a elegirla.');return;}
+  var obraSel=obraGastosActualPorIdx(curRetirarObra);
+  if(!obraSel){alert('No se pudo identificar la obra seleccionada. Volvé a elegirla.');return;}
 
   // Los permisos son independientes: Acopio puede estar habilitado y otro destino no.
-  if(!cqLegacy18 && cargarMateriales && !obraGastosPermiteMaterialesAcopio(obraSel.id)){
+  if(cargarMateriales && !obraGastosPermiteMaterialesAcopio(obraSel.id)){
     alert('Esta obra tiene Materiales deshabilitado desde Gastos. Marcá Materiales en la configuración de la obra para poder enviar este retiro.');
     return;
   }
-  if(!cqLegacy18 && cargarPanol && !obraGastosPermitePanolAcopio(obraSel.id)){
+  if(cargarPanol && !obraGastosPermitePanolAcopio(obraSel.id)){
     alert('Esta obra tiene Pañol deshabilitado desde Gastos. Marcá Pañol en la configuración de la obra para poder enviar este retiro.');
     return;
   }
 
+  var a=getAcopio();
   if(!a.retiros)a.retiros=[];
   var matSeleccionado=getMat(matId);
   if(!matSeleccionado){alert('No se pudo identificar el material seleccionado. Volvé a elegirlo.');return;}
@@ -8783,9 +8750,7 @@ async function guardarRetiro(){
     if(qty>saldoCantidad+0.000001){alert('Stock insuficiente. Disponible: '+fmtN(saldoCantidad,2)+' '+(matSeleccionado.unidad||'')+'.');return;}
   }
 
-  var obraConfirmar=cqLegacy18
-    ?(getObras()[curRetirarObra]||'')
-    :(obraSel.label||obraSel.short||obraSel.id||getObras()[curRetirarObra]||'');
+  var obraConfirmar=obraSel.label||obraSel.short||obraSel.id||getObras()[curRetirarObra]||'';
   var confirmado=await cqConfirmarRetiroBonito({
     obra:obraConfirmar,
     material:String(matSeleccionado.nom||''),
@@ -8801,9 +8766,7 @@ async function guardarRetiro(){
     retiroId++;
   }
 
-  var obraHistorica=cqLegacy18
-    ?(getObras()[curRetirarObra]||'')
-    :(obraSel?(obraSel.label||obraSel.short||obraSel.id):(getObras()[curRetirarObra]||''));
+  var obraHistorica=obraSel?(obraSel.label||obraSel.short||obraSel.id):(getObras()[curRetirarObra]||'');
 
   var retiro={
     id:retiroId,
@@ -8813,7 +8776,7 @@ async function guardarRetiro(){
     materialUnidad:String(matSeleccionado.unidad||'').trim(),
     qty:qty,
     obraIdx:curRetirarObra,
-    gastosObraId:cqLegacy18?'':(obraSel?obraSel.id:''),
+    gastosObraId:obraSel?obraSel.id:'',
     obraHistorica:obraHistorica,
     fecha:fecha,
     subrubro:subrubro,
@@ -8852,16 +8815,15 @@ async function guardarRetiro(){
   cqRetirarMatSesion=String(matId);
   document.getElementById('retirar-qty').value='';
   document.getElementById('retirar-comentario').value='';
-  // Próximo retiro: en Acopio 18 se mantiene el esquema histórico sin linkeo.
-  // En los demás acopios, Materiales y Gastos vuelven ON; Pañol OFF.
-  document.getElementById('retirar-cargar-materiales').checked=!cqLegacy18;
-  document.getElementById('retirar-cargar-materiales').disabled=cqLegacy18;
+  // Próximo retiro: Materiales y Gastos ON; Pañol siempre OFF por defecto.
+  document.getElementById('retirar-cargar-materiales').checked=true;
+  document.getElementById('retirar-cargar-materiales').disabled=false;
   var matLblReset=document.getElementById('retirar-cargar-materiales').closest('.cq-sync-option');
-  if(matLblReset)matLblReset.classList.toggle('disabled-by-panol',cqLegacy18);
-  document.getElementById('retirar-cargar-gastos').checked=!cqLegacy18;
-  document.getElementById('retirar-cargar-gastos').disabled=cqLegacy18;
+  if(matLblReset)matLblReset.classList.remove('disabled-by-panol');
+  document.getElementById('retirar-cargar-gastos').checked=true;
+  document.getElementById('retirar-cargar-gastos').disabled=false;
   var gasLblReset=document.getElementById('retirar-cargar-gastos').closest('.cq-sync-option');
-  if(gasLblReset)gasLblReset.classList.toggle('disabled-by-panol',cqLegacy18);
+  if(gasLblReset)gasLblReset.classList.remove('disabled-by-panol');
   document.getElementById('retirar-cargar-panol').checked=false;
   document.getElementById('retirar-panol-sin-precio').checked=false;
   document.getElementById('retirar-panol-sin-precio-wrap').classList.remove('show');
@@ -8898,6 +8860,7 @@ async function cqReconciliarIntegracionesRecientes(){
   try{
     var now=Date.now();
     var recientes=(a.retiros||[]).filter(function(r){
+      if(cqRetiroUsaObraLegacy(r))return false;
       var t=Date.parse(r.createdAt||'');
       if(!(t && now-t<6*60*60*1000))return false;
       // Sólo reconciliar retiros que realmente quedaron pendientes o con error.
@@ -9063,7 +9026,12 @@ function renderRetirarHistorial(){
   var obraActual=obraGastosActualPorIdx(curRetirarObra);
   var retiros=(a.retiros||[]).filter(function(r){
     var coincideActual;
-    if(r.gastosObraId){
+    if(cqRetiroUsaObraLegacy(r)){
+      // Para históricos, comparar por lote/manzana del nombre original y no por
+      // un gastosObraId que pudo haberse agregado después de forma incorrecta.
+      var actualLabel=obraActual?(obraActual.label||obraActual.short||obraActual.id):'';
+      coincideActual=!!actualLabel && cqClaveColorObra(retiroObraLabel(r))===cqClaveColorObra(actualLabel);
+    }else if(r.gastosObraId){
       coincideActual=obraActual ? r.gastosObraId===obraActual.id : false;
     }else{
       coincideActual=r.obraIdx===curRetirarObra;
@@ -9596,19 +9564,27 @@ function llenarObrasEditRetiro(selectedId,retiro){
 
   addLabel(retiro&&retiro.obraHistorica);
 
+  var esLegacy=!!(retiro&&cqRetiroUsaObraLegacy(retiro));
   try{
     if(retiro){
-      var obrasAcopio=getObras();
-      var oi=Number(retiro.obraIdx);
-      if(Number.isInteger(oi) && obrasAcopio[oi])addLabel(obrasAcopio[oi]);
+      // En un retiro viejo, agregar PRIMERO la obra original del acopio.
+      // No usar el índice contra la lista actual de Gastos porque puede apuntar a otra obra.
+      if(esLegacy)addLabel(cqRetiroObraLegacyLabel(retiro));
+      else{
+        var obrasAcopio=getObras();
+        var oi=Number(retiro.obraIdx);
+        if(Number.isInteger(oi) && obrasAcopio[oi])addLabel(obrasAcopio[oi]);
+      }
       addLabel(retiroObraLabel(retiro));
     }
   }catch(_e){}
 
   var matchId='';
-  if(actualId && obras.some(function(o){return String(o.id)===actualId;})){
+  // Los retiros legacy se abren SIEMPRE en "mantener obra actual".
+  // Sólo pasan al esquema nuevo si el usuario elige deliberadamente una obra actual.
+  if(!esLegacy && actualId && obras.some(function(o){return String(o.id)===actualId;})){
     matchId=actualId;
-  }else{
+  }else if(!esLegacy){
     for(var li=0;li<labels.length&&!matchId;li++){
       var nl=normObraAcopio(labels[li]);
       var om=obras.find(function(o){
@@ -9641,55 +9617,28 @@ async function openEditRetiro(id){
   var a=getAcopio();
   var r=(a.retiros||[]).find(function(r){return r.id===id;});
   if(!r)return;
-  var cqLegacy18=cqEsAcopio18Legacy(a);
 
-  if(!cqLegacy18){
-    try{
-      await cargarConfigGastosAcopio();
-    }catch(e){
-      console.warn('No se pudieron cargar las obras de Gastos para editar el retiro',e);
-      alert('No se pudieron cargar las obras vinculadas de Gastos. Revisá la conexión.');
-      return;
-    }
-    llenarObrasEditRetiro(r.gastosObraId||'',r);
-  }else{
-    var selObra18=document.getElementById('retiro-obra');
-    var obra18=retiroObraLabel(r);
-    if(selObra18){
-      selObra18.innerHTML='<option value="__CQ_KEEP_CURRENT__" selected>Actual: '+String(obra18).replace(/</g,'&lt;')+' · mantener sin cambios</option>';
-      selObra18.value='__CQ_KEEP_CURRENT__';
-      selObra18.disabled=true;
-      selObra18.dataset.cqAcopio18Legacy='1';
-    }
+  try{
+    await cargarConfigGastosAcopio();
+  }catch(e){
+    console.warn('No se pudieron cargar las obras de Gastos para editar el retiro',e);
+    alert('No se pudieron cargar las obras vinculadas de Gastos. Revisá la conexión.');
+    return;
   }
 
-  var selObraNormal=document.getElementById('retiro-obra');
-  if(!cqLegacy18 && selObraNormal && selObraNormal.dataset.cqAcopio18Legacy==='1'){
-    selObraNormal.disabled=false;
-    delete selObraNormal.dataset.cqAcopio18Legacy;
-  }
-
+  llenarObrasEditRetiro(r.gastosObraId||'',r);
   document.getElementById('retiro-qty').value=r.qty;
   document.getElementById('retiro-fecha').value=r.fecha;
   llenarSubrubrosAcopio('retiro-subrubro',r.subrubro||'');
   document.getElementById('retiro-comentario').value=r.comentario||'';
-
-  var matChk=document.getElementById('retiro-cargar-materiales');
-  var gasChk=document.getElementById('retiro-cargar-gastos');
-  matChk.checked=cqLegacy18?false:(r.cargarMateriales!==false);
-  gasChk.checked=cqLegacy18?false:(r.cargarGastos!==false);
-  matChk.disabled=cqLegacy18;
-  gasChk.disabled=cqLegacy18;
-  matChk.dataset.cqAcopio18Legacy=cqLegacy18?'1':'';
-  gasChk.dataset.cqAcopio18Legacy=cqLegacy18?'1':'';
-
+  var retiroLegacy=cqRetiroUsaObraLegacy(r);
+  // En el esquema viejo "undefined" significaba que NO existía integración.
+  // No debe interpretarse como true al abrir una edición.
+  document.getElementById('retiro-cargar-materiales').checked=retiroLegacy?false:(r.cargarMateriales!==false);
+  document.getElementById('retiro-cargar-gastos').checked=retiroLegacy?false:(r.cargarGastos!==false);
   document.getElementById('retiro-cargar-panol').checked=r.cargarPanol===true;
   document.getElementById('retiro-panol-sin-precio').checked=r.panolSinPrecio===true;
   cqAplicarBloqueosPorPanol('retiro');
-  if(cqLegacy18){
-    matChk.checked=false;matChk.disabled=true;
-    gasChk.checked=false;gasChk.disabled=true;
-  }
   openModal('modal-retiro');
 }
 
@@ -9705,7 +9654,7 @@ async function cqRepararMaterialesPendientes(){
   var candidatos=[];
   acopios.forEach(function(ac){
     (Array.isArray(ac.retiros)?ac.retiros:[]).forEach(function(r){
-      if(r&&r.cargarMateriales===true && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
+      if(r&&!cqRetiroUsaObraLegacy(r,ac)&&r.cargarMateriales===true && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
         candidatos.push({acopio:ac,retiro:r});
       }
     });
@@ -9943,6 +9892,65 @@ async function cqRepararPanolPendientes(){
 window.cqRepararPanolPendientes=cqRepararPanolPendientes;
 
 
+// CQ 14/10/2026 — limpieza MANUAL y segura de vínculos creados por error
+// en retiros del esquema viejo. Sólo elimina integraciones automáticas cuyo
+// origen es este retiro de Acopio; no toca cargas manuales de Materiales/Gastos.
+async function cqLimpiarVinculosLegacyErroneos(){
+  var a=getAcopio();
+  if(!a){toast('Abrí un acopio primero','err');return;}
+  if(!cqEsAcopio18(a)){toast('Esta herramienta sólo aplica al Acopio 18');return;}
+  var legacy=(a.retiros||[]).filter(function(r){return cqRetiroUsaObraLegacy(r,a);});
+  if(!legacy.length){toast('Este acopio no tiene retiros históricos para limpiar');return;}
+
+  var ok=confirm(
+    'Se revisarán '+legacy.length+' retiros históricos.\n\n'+
+    'Se quitarán únicamente vínculos automáticos creados desde Acopio en Materiales y Gastos. '+
+    'No se borran cargas manuales. ¿Continuar?'
+  );
+  if(!ok)return;
+
+  var btn=document.getElementById('cq-limpiar-legacy-btn');
+  var info=document.getElementById('cq-limpiar-legacy-info');
+  if(btn){btn.disabled=true;btn.textContent='Limpiando históricos…';}
+  if(info){info.style.display='block';info.textContent='Revisando vínculos automáticos de retiros históricos…';}
+
+  var matOk=0,gasOk=0,errores=[];
+  for(var i=0;i<legacy.length;i++){
+    var r=legacy[i];
+    try{
+      await sincronizarRetiroConMateriales(r,false);
+      matOk++;
+    }catch(e){errores.push('Materiales '+r.id+': '+String(e&&e.message||e));}
+
+    try{
+      if(r.gastosObraId){
+        await sincronizarRetiroConGastos(r,false);
+        gasOk++;
+      }
+    }catch(e){errores.push('Gastos '+r.id+': '+String(e&&e.message||e));}
+
+    r.cargarMateriales=false;
+    r.materialesSyncEstado='omitido';
+    r.materialesSyncError='';
+    r.cargarGastos=false;
+    r.gastosSyncEstado='omitido';
+    r.gastosSyncError='';
+  }
+
+  try{persist();}catch(_e){}
+  try{renderRetirarHistorial();}catch(_e){}
+  if(info){
+    info.textContent='Listo. Históricos revisados: '+legacy.length+
+      ' · Materiales: '+matOk+' · Gastos: '+gasOk+
+      (errores.length?' · Errores: '+errores.length:' · Sin errores');
+  }
+  if(btn){btn.disabled=false;btn.textContent='🧹 Limpiar vínculos históricos erróneos';}
+  if(errores.length)toast('⚠️ Limpieza terminada con '+errores.length+' error(es)','err');
+  else toast('✓ Vínculos históricos automáticos limpiados');
+}
+window.cqLimpiarVinculosLegacyErroneos=cqLimpiarVinculosLegacyErroneos;
+
+
 async function guardarEditRetiro(){
   pushUndo();
   var qty=parseFloat(document.getElementById('retiro-qty').value);
@@ -9953,16 +9961,9 @@ async function guardarEditRetiro(){
   var cargarGastos=document.getElementById('retiro-cargar-gastos').checked;
   var cargarPanol=document.getElementById('retiro-cargar-panol').checked;
   var panolSinPrecio=document.getElementById('retiro-panol-sin-precio').checked;
-  var a=getAcopio();
-  var cqLegacy18=cqEsAcopio18Legacy(a);
-
-  if(cqLegacy18){
-    cargarMateriales=false;
-    cargarGastos=false;
-  }
   if(cargarPanol)cargarMateriales=false;
   if(cargarPanol&&!panolSinPrecio)cargarGastos=false;
-  var obraNuevaId=cqLegacy18?'__CQ_KEEP_CURRENT__':(document.getElementById('retiro-obra').value||'').trim();
+  var obraNuevaId=(document.getElementById('retiro-obra').value||'').trim();
   var mantenerObraActual=obraNuevaId==='__CQ_KEEP_CURRENT__';
 
   if(!qty||qty<=0){alert('Cantidad inválida');return;}
@@ -9995,15 +9996,22 @@ async function guardarEditRetiro(){
     subrubro=subMatch;
   }
 
+  var a=getAcopio();
   var anterior=(a.retiros||[]).find(function(r){return r.id===editRetiroId;});
   if(!anterior)return;
+
+  var anteriorLegacy=cqRetiroUsaObraLegacy(anterior);
+  if(anteriorLegacy && mantenerObraActual && (cargarMateriales||cargarGastos||cargarPanol)){
+    alert('Este retiro pertenece al esquema viejo. Para vincularlo a Materiales, Gastos o Pañol elegí manualmente una obra actual. Si sólo querés editar el histórico, dejá esos vínculos desmarcados.');
+    return;
+  }
 
   // Guardamos una copia completa del retiro anterior para poder limpiar
   // cualquier vínculo viejo antes de moverlo a la obra nueva.
   var anteriorSnapshot=Object.assign({},anterior);
   var obraAnterior=anterior.gastosObraId;
-  var antesMateriales=cqLegacy18?false:(anterior.cargarMateriales!==false);
-  var antesGastos=cqLegacy18?false:(anterior.cargarGastos!==false);
+  var antesMateriales=anteriorLegacy?(anterior.cargarMateriales===true):(anterior.cargarMateriales!==false);
+  var antesGastos=anteriorLegacy?(anterior.cargarGastos===true):(anterior.cargarGastos!==false);
   var antesPanol=anterior.cargarPanol===true;
   var cambioObra=!mantenerObraActual && obraNueva ? (
     String(obraAnterior||'')!==String(obraNueva.id)
@@ -10025,7 +10033,7 @@ async function guardarEditRetiro(){
 
   a.retiros=(a.retiros||[]).map(function(r){
     if(r.id!==editRetiroId)return r;
-    return Object.assign({},r,{
+    var cambios={
       qty:qty,
       fecha:fecha,
       subrubro:subrubro,
@@ -10041,7 +10049,10 @@ async function guardarEditRetiro(){
       gastosSyncError:'',
       panolSyncEstado:cargarPanol?'pendiente':'omitido',
       panolSyncError:''
-    });
+    };
+    // Sólo en Acopio 18 una selección explícita de obra actual convierte el retiro viejo a v2.
+    if(cqEsAcopio18(a))cambios.obraEsquema=obraNueva?'v2':(r.obraEsquema||'');
+    return Object.assign({},r,cambios);
   });
 
   var actualizado=(a.retiros||[]).find(function(r){return r.id===editRetiroId;});
@@ -14930,11 +14941,7 @@ document.addEventListener('click',function(e){
   function cargarSelects(){
     var wrap=document.getElementById('cq-mass-obras'),sub=document.getElementById('cq-mass-subrubro');
     if(!wrap||!sub)return;
-    var acActual=typeof getAcopio==='function'?getAcopio():null;
-    var esLegacy18=typeof cqEsAcopio18Legacy==='function'&&cqEsAcopio18Legacy(acActual);
-    var objs=esLegacy18
-      ?(typeof getObras==='function'?getObras():[]).map(function(label,i){return {id:'',label:String(label),_legacyIdx:i};})
-      :(typeof getObrasGastosObjects==='function'?getObrasGastosObjects():[]);
+    var objs=typeof getObrasGastosObjects==='function'?getObrasGastosObjects():[];
     wrap.innerHTML=objs.map(function(o,i){
       var checked=(typeof curRetirarObra!=='undefined'&&Number(curRetirarObra)===i)?' checked':'';
       return '<label class="cq-mass-obra-chip"><input type="checkbox" value="'+i+'"'+checked+'><span>'+esc(o.label||o.short||o.id)+'</span></label>';
@@ -14968,12 +14975,6 @@ document.addEventListener('click',function(e){
     if(cqMassSyncRunning){alert('La carga masiva anterior todavía se está sincronizando. Esperá a que termine.');return;}
     var indices=obrasSeleccionadas(),subEl=document.getElementById('cq-mass-subrubro'),sub=String(subEl&&subEl.value||'').trim();
     var destinos=cqMassActualizarDestinos();
-    var acMass=typeof getAcopio==='function'?getAcopio():null;
-    var legacy18Mass=typeof cqEsAcopio18Legacy==='function'&&cqEsAcopio18Legacy(acMass);
-    if(legacy18Mass){
-      destinos.cargarMateriales=false;
-      destinos.cargarGastos=false;
-    }
     if(!indices.length){alert('Seleccioná al menos una obra.');return;}
     var validos=typeof subrubrosMaterialesAcopio==='function'?subrubrosMaterialesAcopio():[],subMatch=sub?validos.find(function(x){return norm(x)===norm(sub);}):null;
     // Igual que la carga estándar: subrubro obligatorio cuando va a Gastos o Pañol.
@@ -14986,13 +14987,7 @@ document.addEventListener('click',function(e){
     }
     var rows=parse();if(!rows.length){alert('Cargá al menos una fila con Código, Material y Cantidad.');return;}
     var bad=rows.filter(function(r){return r.error;});if(bad.length){cqPreviewCargaMasivaRetiros();alert('Hay '+bad.length+' fila'+(bad.length===1?'':'s')+' con error. Corregilas antes de registrar.');return;}
-    var obras=indices.map(function(i){
-      if(legacy18Mass){
-        var label=(typeof getObras==='function'?getObras():[])[i];
-        return {idx:i,obj:label!=null?{id:'',label:String(label),short:String(label)}:null};
-      }
-      return {idx:i,obj:typeof obraGastosActualPorIdx==='function'?obraGastosActualPorIdx(i):null};
-    }).filter(function(x){return !!x.obj;});
+    var obras=indices.map(function(i){return {idx:i,obj:typeof obraGastosActualPorIdx==='function'?obraGastosActualPorIdx(i):null};}).filter(function(x){return !!x.obj;});
     if(obras.length!==indices.length){alert('No se pudo identificar una de las obras seleccionadas.');return;}
     if(destinos.cargarMateriales){
       var sinMateriales=obras.filter(function(x){return !obraGastosPermiteMaterialesAcopio(x.obj.id);});
