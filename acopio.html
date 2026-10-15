@@ -305,7 +305,6 @@ tr.subtotal td{background:#F7F6F3;font-weight:800;border-top:1px solid var(--san
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module">
   import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, doc, setDoc, getDoc, getDocs, collection, onSnapshot, runTransaction, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -3681,7 +3680,6 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
       <button class="btn btn-p btn-sm" onclick="openPago()">+ Pago</button>
       <button class="btn btn-s btn-sm" onclick="openNuevoMaterial()">+ Material</button>
       <button class="btn btn-s btn-sm" onclick="openCargaMasivaMateriales()">Carga masiva de retiros</button>
-      <button class="btn btn-s btn-sm" onclick="exportarMaterialesAcopioExcel()">⬇ Excel</button>
       <button class="btn btn-s btn-sm" onclick="openCategoriasMateriales()">Categorías</button>
     </div>
     <div id="materiales-content"></div>
@@ -6283,38 +6281,6 @@ function renderMateriales(){
 }
 
 
-// CQ 15/10/2026 — Exportación XLSX de la solapa Materiales del acopio abierto.
-// Exporta exactamente dos columnas: Código y Material.
-function cqNombreArchivoSeguro(v){
-  return String(v||'Acopio')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/[\\/:*?"<>|]+/g,' ')
-    .replace(/\s+/g,' ').trim()
-    .replace(/\s/g,'_') || 'Acopio';
-}
-function exportarMaterialesAcopioExcel(){
-  var a=getAcopio();
-  if(!a){toast('Abrí un acopio primero','err');return;}
-  if(!window.XLSX){toast('No se pudo cargar el exportador de Excel','err');return;}
-  var mats=ordenarMaterialesAlfabeticamente(Array.isArray(a.mats)?a.mats:[]);
-  if(!mats.length){toast('Este acopio no tiene materiales','err');return;}
-
-  var filas=[['Código','Material']];
-  mats.forEach(function(m){
-    filas.push([String(m&&m.cod||''),String(m&&m.nom||'')]);
-  });
-
-  var ws=XLSX.utils.aoa_to_sheet(filas);
-  ws['!cols']=[{wch:18},{wch:58}];
-  ws['!autofilter']={ref:'A1:B'+filas.length};
-  var wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Materiales');
-  XLSX.writeFile(wb,'Materiales_'+cqNombreArchivoSeguro(a.nombre||('Acopio_'+a.id))+'.xlsx');
-  toast('✓ Excel generado: '+mats.length+' materiales');
-}
-window.exportarMaterialesAcopioExcel=exportarMaterialesAcopioExcel;
-
-
 function lastMatCatStorageKey(){
   return 'cq_acopio_last_mat_cat_'+(curAcopioId||'general');
 }
@@ -7294,7 +7260,6 @@ var cqAutoReparandoMaterialesAcopio=false;
 var cqAutoRepararMaterialesTimer=null;
 
 function cqProgramarAutoReparacionMaterialesAcopio(){
-  if(cqReparacionManualMaterialesEnCurso)return;
   clearTimeout(cqAutoRepararMaterialesTimer);
   cqAutoRepararMaterialesTimer=setTimeout(function(){
     cqAutoRepararMaterialesFaltantesActual().catch(function(e){
@@ -7365,63 +7330,52 @@ async function cqAutoRepararMaterialesFaltantesActual(){
   }
 }
 
-function cqActualizarSnapshotMaterialesDesdeData(d){
-  d=d||{};
-  var ids=new Set();
-  materialesCatalogoIdsAcopio=new Set();
-  materialesCatalogoPorIdAcopio=new Map();
-  var borrados=new Set((Array.isArray(d.deletedMatIds)?d.deletedMatIds:[]).map(function(x){return String(x);}));
-
-  function registrarFicha(m){
-    if(!m||m.id==null||borrados.has(String(m.id)))return;
-    var id=String(m.id);
-    var nombre=String((d.matNombres&&d.matNombres[m.id])!=null?d.matNombres[m.id]:(m.mat||m.nombre||''));
-    var codigo=String((d.matCodigos&&d.matCodigos[m.id])!=null?d.matCodigos[m.id]:(m.codigo||m.cod||''));
-    // Una ficha sin nombre no demuestra que el producto siga visible en Materiales.
-    if(!nombre.trim())return;
-    materialesCatalogoIdsAcopio.add(id);
-    materialesCatalogoPorIdAcopio.set(id,{nombre:nombre,codigo:codigo});
-  }
-
-  // Catálogo conocido por Acopio.
-  try{
-    (Array.isArray(CQ_MAT_BASE_DIRECTO)?CQ_MAT_BASE_DIRECTO:[]).forEach(registrarFicha);
-  }catch(_e){}
-  (Array.isArray(d.extraMats)?d.extraMats:[]).forEach(registrarFicha);
-
-  // CQ 15/10/2026 — Materiales puede conservar fichas válidas en matNombres aunque
-  // no estén en el catálogo base embebido de Acopio ni en extraMats. Antes esas fichas
-  // quedaban invisibles para la verificación y el punto volvía a rojo aun estando cargado.
-  if(d.matNombres&&typeof d.matNombres==='object'){
-    Object.keys(d.matNombres).forEach(function(id){
-      registrarFicha({id:id,mat:d.matNombres[id],codigo:d.matCodigos&&d.matCodigos[id]});
-    });
-  }
-
-  materialesCargasSnapshotAcopio=Array.isArray(d.cargas)?d.cargas.slice():[];
-  materialesCargasSnapshotAcopio.forEach(function(c){
-    if(c&&c.integracionId&&cqCargaTieneFichaCatalogoMaterialesAcopio(c)){
-      ids.add(String(c.integracionId));
-    }
-  });
-  materialesIntegradosAcopio=ids;
-  materialesConfirmadosRecientesAcopio.forEach(function(ts,iid){
-    if(Date.now()-ts>=15000)materialesConfirmadosRecientesAcopio.delete(iid);
-  });
-}
-
-var cqReparacionManualMaterialesEnCurso=false;
-
 function iniciarVerificacionMaterialesAcopio(){
   if(!window._cqFirebaseReady||!window._cqFirebase){setTimeout(iniciarVerificacionMaterialesAcopio,700);return;}
   var f=window._cqFirebase;
   try{ if(unsubVerificacionMaterialesAcopio) unsubVerificacionMaterialesAcopio(); }catch(_e){}
   unsubVerificacionMaterialesAcopio=f.onSnapshot(f.doc(f.db,'materiales','data_planilla_exacta_v4'),function(snap){
     materialesVerificacionErrorAcopio=false;
-    cqActualizarSnapshotMaterialesDesdeData(snap.exists()?(snap.data()||{}):{});
+    var ids=new Set();
+    materialesCatalogoIdsAcopio=new Set();
+    materialesCatalogoPorIdAcopio=new Map();
+    if(snap.exists()){
+      var d=snap.data()||{};
+      var borrados=new Set((Array.isArray(d.deletedMatIds)?d.deletedMatIds:[]).map(function(x){return String(x);}));
+      function registrarFicha(m){
+        if(!m||m.id==null||borrados.has(String(m.id)))return;
+        var id=String(m.id);
+        var nombre=String((d.matNombres&&d.matNombres[m.id])!=null?d.matNombres[m.id]:(m.mat||''));
+        var codigo=String((d.matCodigos&&d.matCodigos[m.id])!=null?d.matCodigos[m.id]:(m.codigo||''));
+        materialesCatalogoIdsAcopio.add(id);
+        materialesCatalogoPorIdAcopio.set(id,{nombre:nombre,codigo:codigo});
+      }
+      // Catálogo base + fichas dinámicas. El callback ocurre después de cargar el script,
+      // por lo que CQ_MAT_BASE_DIRECTO ya está disponible.
+      try{
+        (Array.isArray(CQ_MAT_BASE_DIRECTO)?CQ_MAT_BASE_DIRECTO:[]).forEach(registrarFicha);
+      }catch(_e){}
+      (Array.isArray(d.extraMats)?d.extraMats:[]).forEach(registrarFicha);
+
+      materialesCargasSnapshotAcopio=Array.isArray(d.cargas)?d.cargas.slice():[];
+      materialesCargasSnapshotAcopio.forEach(function(c){
+        if(c&&c.integracionId&&cqCargaTieneFichaCatalogoMaterialesAcopio(c)){
+          ids.add(String(c.integracionId));
+        }
+      });
+    }else{
+      materialesCargasSnapshotAcopio=[];
+    }
+    // El Set representa SOLAMENTE lo que existe en el documento real de Materiales.
+    // No mezclar confirmaciones locales: podían mantener un punto verde aunque la
+    // carga ya no estuviera realmente en Materiales.
+    materialesConfirmadosRecientesAcopio.forEach(function(ts,iid){
+      if(Date.now()-ts>=15000)materialesConfirmadosRecientesAcopio.delete(iid);
+    });
+    materialesIntegradosAcopio=ids;
     // Si Acopio conservó un estado OK histórico pero el retiro desapareció de
     // Materiales, reponerlo de forma idempotente por integrationId.
-    if(!cqReparacionManualMaterialesEnCurso)cqProgramarAutoReparacionMaterialesAcopio();
+    cqProgramarAutoReparacionMaterialesAcopio();
     // CQ 27/08/2026 — no releer toda la colección materiales_integraciones en cada cambio.
     // data_planilla_exacta_v4 es la fuente principal y ya contiene los integrationId.
     try{ renderRetirarHistorial(); }catch(_e){}
@@ -7973,6 +7927,51 @@ function cqMatTodosDirecto(data){
     return {id:x.id,mat:x.mat,catName:x.catName,codigo:x.codigo||''};
   }).concat(extras);
 }
+
+function cqMatNormIdentidadCategoriaDirecto(v){
+  return String(v||'').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function cqMatCategoriaManualDirecto(data,mat,ev){
+  data=data||{};mat=mat||{};ev=ev||{};
+  var id=mat.id;
+  var lock=(data.catalogoManual&&((data.catalogoManual[id])||(data.catalogoManual[String(id)])))||null;
+  if(lock&&lock.manual!==false&&String(lock.categoria||'').trim())return String(lock.categoria).trim();
+
+  var byId=data.categoriaManual&&((data.categoriaManual[id])||(data.categoriaManual[String(id)]));
+  if(String(byId||'').trim())return String(byId).trim();
+
+  var mapa=(data.categoriaManualIdentidad&&typeof data.categoriaManualIdentidad==='object')
+    ?data.categoriaManualIdentidad:{};
+  var nombre=String(ev.materialName||mat.mat||'').trim();
+  var codigo=String(ev.materialCode||(data.matCodigos&&data.matCodigos[id])||mat.codigo||'').trim();
+  var nk=cqMatNormIdentidadCategoriaDirecto(nombre);
+  var ck=codigo.toLowerCase().replace(/\s+/g,'');
+  var ln=nk?mapa['name:'+nk]:null;
+  if(ln&&ln.manual!==false&&String(ln.categoria||'').trim())return String(ln.categoria).trim();
+  var lc=ck?mapa['code:'+ck]:null;
+  if(lc&&lc.manual!==false&&String(lc.categoria||'').trim()){
+    var lockNombre=cqMatNormIdentidadCategoriaDirecto(lc.nombre||'');
+    if(!nk||!lockNombre||lockNombre===nk)return String(lc.categoria).trim();
+  }
+  return '';
+}
+function cqMatCategoriaFinalDirecto(data,mat,ev){
+  var manual=cqMatCategoriaManualDirecto(data,mat,ev);
+  if(manual)return manual;
+
+  var actual=String((data.matCategorias&&data.matCategorias[mat.id])||mat.catName||'').trim();
+  var entrante=String(ev.category||ev.materialCategory||'').trim();
+
+  // Materiales manda: si el artículo ya tiene un rubro real, Acopio no lo pisa.
+  if(actual&&!/^varios$/i.test(actual))return actual;
+
+  // Sólo completar desde Acopio cuando Materiales todavía está sin clasificar/VARIOS.
+  if(entrante&&!/^varios$/i.test(entrante))return entrante;
+
+  return actual||entrante||'VARIOS';
+}
+
 function cqMatResolverMaterialDirecto(data,ev){
   if(!Array.isArray(data.extraMats))data.extraMats=[];
   if(!Array.isArray(data.extraCats))data.extraCats=[];
@@ -8039,7 +8038,11 @@ function cqMatResolverMaterialDirecto(data,ev){
   if(!mat){
     var maxId=10000;
     mats.forEach(function(x){if(Number(x.id)>=maxId)maxId=Number(x.id)+1;});
-    var cat=String(ev.category||ev.materialCategory||'VARIOS').trim()||'VARIOS';
+    var cat=cqMatCategoriaFinalDirecto(
+      data,
+      {id:maxId,mat:nombre||('Material '+String(ev.materialCode||'')),codigo:cqCodigoMaterialSeguro(ev.materialCode)},
+      ev
+    );
 
     if(!data.extraCats.some(function(c){
       return String(c&&c.name||'').trim().toLowerCase()===cat.toLowerCase();
@@ -8080,10 +8083,10 @@ function cqMatResolverMaterialDirecto(data,ev){
     mat.codigo=incomingCode;
   }
 
-  var incomingCat=String(ev.category||ev.materialCategory||'').trim();
-  if(incomingCat){
-    data.matCategorias[mat.id]=incomingCat;
-    mat.catName=incomingCat;
+  var finalCat=cqMatCategoriaFinalDirecto(data,mat,ev);
+  if(finalCat){
+    data.matCategorias[mat.id]=finalCat;
+    mat.catName=finalCat;
   }
   return mat;
 }
@@ -8147,8 +8150,10 @@ function cqMatAplicarEventoDirecto(data,ev){
   var mat=cqMatResolverMaterialDirecto(data,ev);
   if(obraIdx<0||!mat)throw new Error('No se pudo resolver obra/material en Materiales');
 
-  // Asegurar que el subrubro exista también como categoría visible.
-  var cat=String(ev.category||ev.materialCategory||data.matCategorias[mat.id]||mat.catName||'VARIOS').trim()||'VARIOS';
+  // Materiales es la fuente maestra del rubro. Acopio sólo completa si el artículo
+  // todavía está sin clasificar/VARIOS; nunca pisa una reclasificación manual.
+  var cat=cqMatCategoriaFinalDirecto(data,mat,ev);
+  var categoriaOrigen=String(ev.category||ev.materialCategory||'').trim()||'VARIOS';
   data.matCategorias[mat.id]=cat;
   mat.catName=cat;
   if(!data.extraCats.some(function(c){return String(c&&c.name||'').trim().toLowerCase()===cat.toLowerCase();})){
@@ -8175,7 +8180,7 @@ function cqMatAplicarEventoDirecto(data,ev){
     codigoOrigen:cqCodigoMaterialSeguro(ev.materialCode),
     materialNameOrigen:ev.materialName||'',
     obraNameOrigen:ev.obraName||'',
-    categoriaOrigen:cat
+    categoriaOrigen:categoriaOrigen
   };
 
   var mismo=prev
@@ -9657,113 +9662,74 @@ async function cqRepararMaterialesPendientes(){
   var btn=document.getElementById('cq-reparar-materiales-btn');
   var info=document.getElementById('cq-reparar-materiales-info');
   if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no está listo','err');return;}
-  var a=getAcopio();
-  if(!a){toast('Abrí un acopio primero','err');return;}
   try{await cargarConfigGastosAcopio();}catch(e){toast('No se pudo leer la configuración de obras de Gastos','err');return;}
-
-  // El botón pertenece al acopio abierto: reparar TODO lo de este acopio en una sola pasada.
-  var candidatos=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
-    return cqRetiroDebeIrAMateriales(r,a)
-      && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId));
+  var acopios=(DB&&Array.isArray(DB.acopios))?DB.acopios:[];
+  var candidatos=[];
+  acopios.forEach(function(ac){
+    (Array.isArray(ac.retiros)?ac.retiros:[]).forEach(function(r){
+      if(cqRetiroDebeIrAMateriales(r,ac) && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
+        candidatos.push({acopio:ac,retiro:r});
+      }
+    });
   });
   if(!candidatos.length){toast('No hay retiros marcados para Materiales');return;}
 
-  btn.disabled=true;
-  btn.textContent='Verificando Materiales…';
-  cqReparacionManualMaterialesEnCurso=true;
-  clearTimeout(cqAutoRepararMaterialesTimer);
-  if(info){
-    info.style.display='block';
-    info.textContent='Verificando todos los retiros de este acopio contra Materiales…';
-  }
+  btn.disabled=true;btn.textContent='Verificando Materiales…';
+  if(info){info.style.display='block';info.textContent='Comparando los retiros de Acopio con Materiales. No se vuelve a descontar stock.';}
 
-  var f=window._cqFirebase,ref=f.doc(f.db,'materiales','data_planilla_exacta_v4');
+  var f=window._cqFirebase, ref=f.doc(f.db,'materiales','data_planilla_exacta_v4');
   try{
-    // Usar exactamente la misma fuente/criterio que pinta los puntos rojo/verde.
-    var snap=await f.getDoc(ref);
-    cqActualizarSnapshotMaterialesDesdeData(snap.exists()?(snap.data()||{}):{});
-
-    var faltantes=candidatos.filter(function(r){
-      return !cqRetiroExisteRealEnMateriales(r,a);
-    });
-
-    // Los que ya existen quedan confirmados y no se vuelven a tocar.
-    candidatos.forEach(function(r){
-      if(cqRetiroExisteRealEnMateriales(r,a)){
-        r.materialesSyncEstado='ok';
-        r.materialesSyncError='';
-      }
+    var snap=await f.getDoc(ref), data=snap.exists()?(snap.data()||{}):{}, cargas=Array.isArray(data.cargas)?data.cargas:[];
+    var faltantes=candidatos.filter(function(x){
+      var iid=integracionRetiroId(x.acopio.id,x.retiro.id);
+      // Primero ID canónico; luego huella segura ya existente en esta app para históricos.
+      if(cargas.some(function(c){return String(c&&c.integracionId||'')===String(iid);})){return false;}
+      try{
+        return !cargas.some(function(c){return cqCargaMaterialesCoincideRetiroUnico(c,x.retiro,x.acopio);});
+      }catch(_e){return true;}
     });
 
     if(!faltantes.length){
-      try{persist();}catch(_e){}
-      try{renderRetirarHistorial();}catch(_e){}
-      if(info)info.textContent='✓ Todos los retiros de este acopio están cargados correctamente en Materiales.';
+      if(info)info.textContent='✓ Todos los retiros marcados para Materiales ya tienen correspondencia.';
       toast('✓ Materiales está completo');
       return;
     }
 
-    var ok=0,errores=[];
+    var ok=0, errores=[];
     btn.textContent='Reparando 0 / '+faltantes.length+'…';
     for(var i=0;i<faltantes.length;i++){
-      var r=faltantes[i];
+      var x=faltantes[i];
+      // sincronizarRetiroConMateriales usa getAcopio(); cambiar sólo el contexto activo
+      // temporalmente sería riesgoso. La reparación está destinada al acopio actualmente abierto.
+      if(!getAcopio() || String(getAcopio().id)!==String(x.acopio.id)){
+        continue;
+      }
       try{
-        r.materialesSyncEstado='sincronizando';
-        r.materialesSyncError='';
-        await sincronizarRetiroConMateriales(r,true);
-        r.materialesSyncEstado='ok';
-        r.materialesSyncError='';
-        r.materialesSyncAt=new Date().toISOString();
+        await sincronizarRetiroConMateriales(x.retiro,true);
+        x.retiro.materialesSyncEstado='ok';
+        x.retiro.materialesSyncError='';
+        x.retiro.materialesSyncAt=new Date().toISOString();
         ok++;
       }catch(e){
-        r.materialesSyncEstado='error';
-        r.materialesSyncError=String(e&&e.message||e);
-        r.materialesSyncAt=new Date().toISOString();
-        errores.push((r.materialName||'Material')+': '+String(e&&e.message||e));
+        x.retiro.materialesSyncEstado='error';
+        x.retiro.materialesSyncError=String(e&&e.message||e);
+        errores.push((x.retiro.materialName||'Material')+': '+String(e&&e.message||e));
       }
       btn.textContent='Reparando '+(i+1)+' / '+faltantes.length+'…';
     }
-
-    // Releer UNA vez al final y volver a pintar con el estado real del destino.
-    var snapFinal=await f.getDoc(ref);
-    cqActualizarSnapshotMaterialesDesdeData(snapFinal.exists()?(snapFinal.data()||{}):{});
-
-    var siguenFaltando=0;
-    candidatos.forEach(function(r){
-      if(cqRetiroExisteRealEnMateriales(r,a)){
-        r.materialesSyncEstado='ok';
-        r.materialesSyncError='';
-        r.materialesSyncAt=new Date().toISOString();
-      }else{
-        siguenFaltando++;
-        if(r.materialesSyncEstado!=='error'){
-          r.materialesSyncEstado='error';
-          r.materialesSyncError='No se confirmó la carga en Materiales después de reparar';
-        }
-      }
-    });
-
-    try{persist();}catch(_e){}
+    persist();
     try{renderRetirarHistorial();}catch(_e){}
-
-    var yaEstaban=candidatos.length-faltantes.length;
-    if(info){
-      info.textContent='Resultado: '+ok+' reparado(s) · '+yaEstaban+' ya estaban OK'
-        +(siguenFaltando?' · '+siguenFaltando+' siguen sin confirmarse':'')+'.';
-    }
-    if(siguenFaltando||errores.length){
-      toast('⚠️ Reparados '+ok+'; '+siguenFaltando+' siguen pendientes','err');
-    }else{
-      toast('✓ Materiales reparado: '+ok+' retiro(s)');
-    }
+    var omitidos=faltantes.length-ok-errores.length;
+    if(info)info.textContent='Resultado: '+ok+' reparado(s)'+(errores.length?' · '+errores.length+' con error':'')+(omitidos?' · '+omitidos+' pertenecen a otro acopio; abrilo para repararlos':'')+'.';
+    if(errores.length)toast('⚠️ Reparados '+ok+'; '+errores.length+' siguen con error','err');
+    else if(omitidos)toast('✓ Reparados '+ok+'. Abrí los otros acopios para continuar.');
+    else toast('✓ '+ok+' retiro(s) reparado(s) en Materiales');
   }catch(e){
     console.error('Reparar Materiales',e);
     if(info)info.textContent='No se pudo completar: '+String(e&&e.message||e);
     toast('No se pudo reparar Materiales','err');
   }finally{
-    cqReparacionManualMaterialesEnCurso=false;
-    btn.disabled=false;
-    btn.textContent='🔧 Reparar retiros pendientes en Materiales';
+    btn.disabled=false;btn.textContent='🔧 Reparar retiros pendientes en Materiales';
   }
 }
 
