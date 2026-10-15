@@ -3748,6 +3748,11 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
     </button>
     <div id="cq-reparar-gastos-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#F7F6F3;font-size:11px;color:#567065;line-height:1.35"></div>
 
+    <button type="button" id="cq-limpiar-legacy-btn" class="btn btn-s btn-full" onclick="cqLimpiarVinculosLegacyErroneos()" style="margin:0 0 8px">
+      🧹 Limpiar vínculos históricos erróneos
+    </button>
+    <div id="cq-limpiar-legacy-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#FFF7E8;font-size:11px;color:#6E592B;line-height:1.35"></div>
+
     <button type="button" id="cq-reparar-panol-btn" class="btn btn-s btn-full" onclick="cqRepararPanolPendientes()" style="margin:0 0 8px">
       🧰 Reparar retiros pendientes en Pañol
     </button>
@@ -5214,8 +5219,74 @@ function obraGastosPermitePanolAcopio(id){
 }
 
 function obraGastosActualPorIdx(idx){return getObrasGastosObjects()[idx]||null;}
+
+// CQ 14/10/2026 — compatibilidad REAL con retiros del esquema viejo.
+// Antes de vincular Acopio con Gastos/Materiales, cada retiro quedaba asociado
+// únicamente por obraIdx contra la lista propia del acopio (a.obras).
+// Si más tarde a uno de esos retiros se le agregó por error gastosObraId u
+// obraHistorica, NO debemos dejar que esos campos modernos reemplacen la obra
+// con la que el retiro fue creado.
+var CQ_OBRAS_VINCULADAS_DESDE_MS=Date.parse('2026-08-18T00:00:00-03:00');
+
+// IMPORTANTE: toda la compatibilidad especial del esquema viejo queda limitada
+// EXCLUSIVAMENTE al Acopio 18. Los demás acopios conservan exactamente el flujo actual.
+function cqEsAcopio18(a){
+  a=a||getAcopio();
+  if(!a)return false;
+  var n=String(a.nombre||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[º°]/g,'').replace(/\s+/g,' ');
+  if(n==='18'||n==='acopio 18'||n==='acopio n 18'||n==='acopio nro 18'||n==='acopio numero 18')return true;
+
+  // Respaldo por las obras históricas propias de ese acopio, por si el nombre fue editado.
+  var obras=Array.isArray(a.obras)?a.obras:[];
+  function k(v){
+    var x=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    var m=x.match(/\b(\d+)\s*\/\s*(\d+)\b/);
+    return m?(Number(m[1])+'/'+Number(m[2])):x.replace(/\s+/g,' ');
+  }
+  var ks=obras.map(k);
+  return ks.indexOf('18/78')>=0 && ks.indexOf('6/92')>=0;
+}
+
+function cqRetiroUsaObraLegacy(r,acopioCtx){
+  if(!r||r.obraEsquema==='v2')return false;
+  var a=acopioCtx||getAcopio();
+  if(!cqEsAcopio18(a))return false;
+  var idx=Number(r.obraIdx);
+  if(!a||!Array.isArray(a.obras)||!Number.isInteger(idx)||idx<0||idx>=a.obras.length)return false;
+
+  // FUENTE PRINCIPAL PARA HISTÓRICOS: la fecha real del retiro.
+  // Si el movimiento es anterior al inicio del esquema vinculado, SIEMPRE es legacy,
+  // aunque una versión posterior le haya agregado por error createdAt, gastosObraId
+  // o banderas cargarMateriales/cargarGastos.
+  var fechaLegacy=Date.parse(String(r.fecha||'')+'T12:00:00-03:00');
+  if(Number.isFinite(fechaLegacy)&&fechaLegacy<CQ_OBRAS_VINCULADAS_DESDE_MS)return true;
+
+  // Como respaldo, también respetar un createdAt anterior al cambio.
+  var creado=Date.parse(String(r.createdAt||''));
+  if(Number.isFinite(creado)&&creado<CQ_OBRAS_VINCULADAS_DESDE_MS)return true;
+
+  // Registros viejos sin fechas confiables tampoco tenían marcadores de integración.
+  var own=Object.prototype.hasOwnProperty;
+  var tieneMarcadoresModernos=own.call(r,'cargarMateriales')||own.call(r,'cargarGastos')||own.call(r,'cargarPanol')
+    ||own.call(r,'materialesSyncEstado')||own.call(r,'gastosSyncEstado')||own.call(r,'panolSyncEstado');
+  if(!String(r.createdAt||'').trim()&&!tieneMarcadoresModernos)return true;
+
+  return false;
+}
+function cqRetiroObraLegacyLabel(r){
+  if(!cqRetiroUsaObraLegacy(r))return '';
+  var a=getAcopio();
+  var idx=Number(r.obraIdx);
+  return String((a&&Array.isArray(a.obras)&&a.obras[idx])||'').trim();
+}
 function retiroObraLabel(r){
   if(!r)return 'Obra';
+
+  // Para el esquema viejo, la fuente de verdad es la lista histórica del propio acopio.
+  var legacyLabel=cqRetiroObraLegacyLabel(r);
+  if(legacyLabel)return legacyLabel;
+
   if(r.obraHistorica)return r.obraHistorica;
   if(r.gastosObraId){
     var o=getObrasGastosAllObjects().find(function(x){return x.id===r.gastosObraId;});
@@ -5557,6 +5628,9 @@ function gastoAcopioId(acopioId,retiroId){return 'acopio_'+String(acopioId)+'_'+
 var gastosVerificacionInicialLista=false;
 
 function gastoSyncEstadoAcopio(r){
+  if(cqRetiroUsaObraLegacy(r)){
+    return {cls:'off',txt:'Retiro histórico · no corresponde vincular a Gastos'};
+  }
   // Gris solamente si Gastos fue excluido intencionalmente por Pañol con precio.
   if(r&&r.cargarGastos===false && r.cargarPanol===true && r.panolSinPrecio!==true){
     return {cls:'off',txt:'Gastos se registra al consumir desde Pañol'};
@@ -5654,6 +5728,9 @@ async function upsertGastoAcopio(obraId,payload,removeOnly){
 async function sincronizarRetiroConGastos(retiro,activo,obraIdAnterior){
   if(!retiro)throw new Error('Retiro no encontrado');
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
+  if(activo!==false && cqRetiroUsaObraLegacy(retiro)){
+    throw new Error('Retiro histórico: Gastos no corresponde en el esquema viejo');
+  }
 
   // IMPORTANTE: usar primero la obra EXACTA que quedó guardada en el retiro.
   // Antes se recalculaba por obraIdx contra la configuración actual de Gastos.
@@ -5753,7 +5830,7 @@ async function verificarGastosAcopio(){
     var a=getAcopio();
     if(!a)return;
     // Gastos conserva el histórico aunque la obra deje de mostrarse en Acopio.
-    var retiros=(a.retiros||[]).filter(function(r){return r.gastosObraId&&r.cargarGastos!==false;});
+    var retiros=(a.retiros||[]).filter(function(r){return !cqRetiroUsaObraLegacy(r)&&r.gastosObraId&&r.cargarGastos!==false;});
     var ids=[...new Set(retiros.map(function(r){return r.gastosObraId;}))];
     var docs={},f=window._cqFirebase;
     for(var i=0;i<ids.length;i++){
@@ -6125,6 +6202,10 @@ function abrirAcopio(id){
   document.getElementById('hdr-back').style.display='inline';
   document.getElementById('hdr-acopio-name').textContent=a.nombre;
   document.getElementById('tc-display').textContent='$'+fmtN(a.tc||TC_DEFAULT,0);
+  var legacyBtn=document.getElementById('cq-limpiar-legacy-btn');
+  var legacyInfo=document.getElementById('cq-limpiar-legacy-info');
+  if(legacyBtn)legacyBtn.style.display=cqEsAcopio18(a)?'block':'none';
+  if(legacyInfo){legacyInfo.style.display='none';legacyInfo.textContent='';}
   curRetirarObra=-1;curReporteObra=-1;
   cqTabAcopioActual='';
   cqRetirarMatSesion='';
@@ -7151,6 +7232,10 @@ function estadoMaterialesRetiro(retiro){
   var a=getAcopio();
   if(!a||!retiro)return {cls:'err',txt:'No se pudo verificar Materiales'};
 
+  if(cqRetiroUsaObraLegacy(retiro)){
+    return {cls:'off',txt:'Retiro histórico · no corresponde vincular a Materiales'};
+  }
+
   if(retiro.cargarMateriales===false){
     return retiro.cargarPanol===true
       ?{cls:'off',txt:'Materiales se registra luego al consumir desde Pañol'}
@@ -7219,7 +7304,7 @@ async function cqAutoRepararMaterialesFaltantesActual(){
   if(!a)return;
 
   var faltantes=(Array.isArray(a.retiros)?a.retiros:[]).filter(function(r){
-    if(!r||r.cargarMateriales===false)return false;
+    if(!r||cqRetiroUsaObraLegacy(r)||r.cargarMateriales===false)return false;
     // Si Materiales está deshabilitado para esta obra desde Gastos, no recrear
     // automáticamente una integración faltante. El histórico existente no se borra.
     if(r.gastosObraId && !obraGastosPermiteMaterialesAcopio(r.gastosObraId))return false;
@@ -8194,13 +8279,18 @@ async function sincronizarRetiroConMateriales(retiro,activo){
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
   var a=getAcopio();
   if(!a||!retiro)throw new Error('Retiro no encontrado');
+  if(activo!==false && cqRetiroUsaObraLegacy(retiro)){
+    throw new Error('Retiro histórico: Materiales no corresponde en el esquema viejo');
+  }
 
   var m=getMat(retiro.matId);
-  var obraObj=retiro.gastosObraId
+  var esLegacyObra=cqRetiroUsaObraLegacy(retiro);
+  var obraObj=(!esLegacyObra&&retiro.gastosObraId)
     ?getObrasGastosAllObjects().find(function(o){return String(o.id)===String(retiro.gastosObraId);})
     :null;
   var obra=String(
-    (obraObj&&(obraObj.label||obraObj.short||obraObj.id))
+    (esLegacyObra?retiroObraLabel(retiro):'')
+    ||(obraObj&&(obraObj.label||obraObj.short||obraObj.id))
     ||retiro.obraHistorica
     ||getObras()[retiro.obraIdx]
     ||''
@@ -8493,8 +8583,9 @@ async function cqCompletarRetiroEnSegundoPlano(acopioId,retiro){
   if(cqIntegracionesRetiroEnCurso.has(key))return;
   cqIntegracionesRetiroEnCurso.add(key);
 
-  var cargarMateriales=retiro.cargarMateriales!==false;
-  var cargarGastos=retiro.cargarGastos!==false;
+  var retiroLegacy=cqRetiroUsaObraLegacy(retiro);
+  var cargarMateriales=retiroLegacy?false:(retiro.cargarMateriales!==false);
+  var cargarGastos=retiroLegacy?false:(retiro.cargarGastos!==false);
   var cargarPanol=retiro.cargarPanol===true;
 
   var resultados={acopio:false,mat:!cargarMateriales,gas:!cargarGastos,panol:!cargarPanol};
@@ -8769,6 +8860,7 @@ async function cqReconciliarIntegracionesRecientes(){
   try{
     var now=Date.now();
     var recientes=(a.retiros||[]).filter(function(r){
+      if(cqRetiroUsaObraLegacy(r))return false;
       var t=Date.parse(r.createdAt||'');
       if(!(t && now-t<6*60*60*1000))return false;
       // Sólo reconciliar retiros que realmente quedaron pendientes o con error.
@@ -8934,7 +9026,12 @@ function renderRetirarHistorial(){
   var obraActual=obraGastosActualPorIdx(curRetirarObra);
   var retiros=(a.retiros||[]).filter(function(r){
     var coincideActual;
-    if(r.gastosObraId){
+    if(cqRetiroUsaObraLegacy(r)){
+      // Para históricos, comparar por lote/manzana del nombre original y no por
+      // un gastosObraId que pudo haberse agregado después de forma incorrecta.
+      var actualLabel=obraActual?(obraActual.label||obraActual.short||obraActual.id):'';
+      coincideActual=!!actualLabel && cqClaveColorObra(retiroObraLabel(r))===cqClaveColorObra(actualLabel);
+    }else if(r.gastosObraId){
       coincideActual=obraActual ? r.gastosObraId===obraActual.id : false;
     }else{
       coincideActual=r.obraIdx===curRetirarObra;
@@ -9467,19 +9564,27 @@ function llenarObrasEditRetiro(selectedId,retiro){
 
   addLabel(retiro&&retiro.obraHistorica);
 
+  var esLegacy=!!(retiro&&cqRetiroUsaObraLegacy(retiro));
   try{
     if(retiro){
-      var obrasAcopio=getObras();
-      var oi=Number(retiro.obraIdx);
-      if(Number.isInteger(oi) && obrasAcopio[oi])addLabel(obrasAcopio[oi]);
+      // En un retiro viejo, agregar PRIMERO la obra original del acopio.
+      // No usar el índice contra la lista actual de Gastos porque puede apuntar a otra obra.
+      if(esLegacy)addLabel(cqRetiroObraLegacyLabel(retiro));
+      else{
+        var obrasAcopio=getObras();
+        var oi=Number(retiro.obraIdx);
+        if(Number.isInteger(oi) && obrasAcopio[oi])addLabel(obrasAcopio[oi]);
+      }
       addLabel(retiroObraLabel(retiro));
     }
   }catch(_e){}
 
   var matchId='';
-  if(actualId && obras.some(function(o){return String(o.id)===actualId;})){
+  // Los retiros legacy se abren SIEMPRE en "mantener obra actual".
+  // Sólo pasan al esquema nuevo si el usuario elige deliberadamente una obra actual.
+  if(!esLegacy && actualId && obras.some(function(o){return String(o.id)===actualId;})){
     matchId=actualId;
-  }else{
+  }else if(!esLegacy){
     for(var li=0;li<labels.length&&!matchId;li++){
       var nl=normObraAcopio(labels[li]);
       var om=obras.find(function(o){
@@ -9526,8 +9631,11 @@ async function openEditRetiro(id){
   document.getElementById('retiro-fecha').value=r.fecha;
   llenarSubrubrosAcopio('retiro-subrubro',r.subrubro||'');
   document.getElementById('retiro-comentario').value=r.comentario||'';
-  document.getElementById('retiro-cargar-materiales').checked=r.cargarMateriales!==false;
-  document.getElementById('retiro-cargar-gastos').checked=r.cargarGastos!==false;
+  var retiroLegacy=cqRetiroUsaObraLegacy(r);
+  // En el esquema viejo "undefined" significaba que NO existía integración.
+  // No debe interpretarse como true al abrir una edición.
+  document.getElementById('retiro-cargar-materiales').checked=retiroLegacy?false:(r.cargarMateriales!==false);
+  document.getElementById('retiro-cargar-gastos').checked=retiroLegacy?false:(r.cargarGastos!==false);
   document.getElementById('retiro-cargar-panol').checked=r.cargarPanol===true;
   document.getElementById('retiro-panol-sin-precio').checked=r.panolSinPrecio===true;
   cqAplicarBloqueosPorPanol('retiro');
@@ -9546,7 +9654,7 @@ async function cqRepararMaterialesPendientes(){
   var candidatos=[];
   acopios.forEach(function(ac){
     (Array.isArray(ac.retiros)?ac.retiros:[]).forEach(function(r){
-      if(r&&r.cargarMateriales===true && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
+      if(r&&!cqRetiroUsaObraLegacy(r,ac)&&r.cargarMateriales===true && (!r.gastosObraId || obraGastosPermiteMaterialesAcopio(r.gastosObraId))){
         candidatos.push({acopio:ac,retiro:r});
       }
     });
@@ -9784,6 +9892,65 @@ async function cqRepararPanolPendientes(){
 window.cqRepararPanolPendientes=cqRepararPanolPendientes;
 
 
+// CQ 14/10/2026 — limpieza MANUAL y segura de vínculos creados por error
+// en retiros del esquema viejo. Sólo elimina integraciones automáticas cuyo
+// origen es este retiro de Acopio; no toca cargas manuales de Materiales/Gastos.
+async function cqLimpiarVinculosLegacyErroneos(){
+  var a=getAcopio();
+  if(!a){toast('Abrí un acopio primero','err');return;}
+  if(!cqEsAcopio18(a)){toast('Esta herramienta sólo aplica al Acopio 18');return;}
+  var legacy=(a.retiros||[]).filter(function(r){return cqRetiroUsaObraLegacy(r,a);});
+  if(!legacy.length){toast('Este acopio no tiene retiros históricos para limpiar');return;}
+
+  var ok=confirm(
+    'Se revisarán '+legacy.length+' retiros históricos.\n\n'+
+    'Se quitarán únicamente vínculos automáticos creados desde Acopio en Materiales y Gastos. '+
+    'No se borran cargas manuales. ¿Continuar?'
+  );
+  if(!ok)return;
+
+  var btn=document.getElementById('cq-limpiar-legacy-btn');
+  var info=document.getElementById('cq-limpiar-legacy-info');
+  if(btn){btn.disabled=true;btn.textContent='Limpiando históricos…';}
+  if(info){info.style.display='block';info.textContent='Revisando vínculos automáticos de retiros históricos…';}
+
+  var matOk=0,gasOk=0,errores=[];
+  for(var i=0;i<legacy.length;i++){
+    var r=legacy[i];
+    try{
+      await sincronizarRetiroConMateriales(r,false);
+      matOk++;
+    }catch(e){errores.push('Materiales '+r.id+': '+String(e&&e.message||e));}
+
+    try{
+      if(r.gastosObraId){
+        await sincronizarRetiroConGastos(r,false);
+        gasOk++;
+      }
+    }catch(e){errores.push('Gastos '+r.id+': '+String(e&&e.message||e));}
+
+    r.cargarMateriales=false;
+    r.materialesSyncEstado='omitido';
+    r.materialesSyncError='';
+    r.cargarGastos=false;
+    r.gastosSyncEstado='omitido';
+    r.gastosSyncError='';
+  }
+
+  try{persist();}catch(_e){}
+  try{renderRetirarHistorial();}catch(_e){}
+  if(info){
+    info.textContent='Listo. Históricos revisados: '+legacy.length+
+      ' · Materiales: '+matOk+' · Gastos: '+gasOk+
+      (errores.length?' · Errores: '+errores.length:' · Sin errores');
+  }
+  if(btn){btn.disabled=false;btn.textContent='🧹 Limpiar vínculos históricos erróneos';}
+  if(errores.length)toast('⚠️ Limpieza terminada con '+errores.length+' error(es)','err');
+  else toast('✓ Vínculos históricos automáticos limpiados');
+}
+window.cqLimpiarVinculosLegacyErroneos=cqLimpiarVinculosLegacyErroneos;
+
+
 async function guardarEditRetiro(){
   pushUndo();
   var qty=parseFloat(document.getElementById('retiro-qty').value);
@@ -9833,12 +10000,18 @@ async function guardarEditRetiro(){
   var anterior=(a.retiros||[]).find(function(r){return r.id===editRetiroId;});
   if(!anterior)return;
 
+  var anteriorLegacy=cqRetiroUsaObraLegacy(anterior);
+  if(anteriorLegacy && mantenerObraActual && (cargarMateriales||cargarGastos||cargarPanol)){
+    alert('Este retiro pertenece al esquema viejo. Para vincularlo a Materiales, Gastos o Pañol elegí manualmente una obra actual. Si sólo querés editar el histórico, dejá esos vínculos desmarcados.');
+    return;
+  }
+
   // Guardamos una copia completa del retiro anterior para poder limpiar
   // cualquier vínculo viejo antes de moverlo a la obra nueva.
   var anteriorSnapshot=Object.assign({},anterior);
   var obraAnterior=anterior.gastosObraId;
-  var antesMateriales=anterior.cargarMateriales!==false;
-  var antesGastos=anterior.cargarGastos!==false;
+  var antesMateriales=anteriorLegacy?(anterior.cargarMateriales===true):(anterior.cargarMateriales!==false);
+  var antesGastos=anteriorLegacy?(anterior.cargarGastos===true):(anterior.cargarGastos!==false);
   var antesPanol=anterior.cargarPanol===true;
   var cambioObra=!mantenerObraActual && obraNueva ? (
     String(obraAnterior||'')!==String(obraNueva.id)
@@ -9860,7 +10033,7 @@ async function guardarEditRetiro(){
 
   a.retiros=(a.retiros||[]).map(function(r){
     if(r.id!==editRetiroId)return r;
-    return Object.assign({},r,{
+    var cambios={
       qty:qty,
       fecha:fecha,
       subrubro:subrubro,
@@ -9876,7 +10049,10 @@ async function guardarEditRetiro(){
       gastosSyncError:'',
       panolSyncEstado:cargarPanol?'pendiente':'omitido',
       panolSyncError:''
-    });
+    };
+    // Sólo en Acopio 18 una selección explícita de obra actual convierte el retiro viejo a v2.
+    if(cqEsAcopio18(a))cambios.obraEsquema=obraNueva?'v2':(r.obraEsquema||'');
+    return Object.assign({},r,cambios);
   });
 
   var actualizado=(a.retiros||[]).find(function(r){return r.id===editRetiroId;});
