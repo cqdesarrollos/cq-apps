@@ -18267,3 +18267,260 @@ body:has(#modal-reporte.open) #modal-reporte{
   setTimeout(function(){try{renderCompareObras();}catch(_e){}},250);
 })();
 </script>
+
+<style id="cq-reporte-4-obras-y-botones-v3">
+/* CQ 15/10/2026 — Reporte compacto: SIEMPRE 4 obras por renglón. */
+#view-reporte .cq-report-obras-grid,
+.cq-report-obras-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:7px!important;
+}
+.cq-report-obra-tile{
+  min-width:0!important;
+  min-height:50px!important;
+  padding:7px 6px!important;
+  font-size:10.5px!important;
+  line-height:1.08!important;
+  border-radius:13px!important;
+}
+.cq-report-obra-name{
+  white-space:normal!important;
+  overflow-wrap:anywhere!important;
+  text-align:center!important;
+}
+@media(max-width:620px){
+  #view-reporte .cq-report-obras-grid,
+  .cq-report-obras-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important}
+  .cq-report-obra-tile{min-height:46px!important;padding:6px 4px!important;font-size:9px!important;border-radius:11px!important}
+  .cq-report-obra-check{font-size:12px!important}
+}
+
+/* Acciones claramente distintas. */
+#btn-archivar-reporte{
+  background:linear-gradient(180deg,#FFF4DC,#F5D79B)!important;
+  border:1px solid #D7A84D!important;
+  color:#704A08!important;
+  box-shadow:0 6px 14px rgba(176,124,29,.14)!important;
+}
+#btn-archivar-reporte:not(:disabled):hover{background:linear-gradient(180deg,#FFECC0,#EFCA76)!important}
+#btn-archivar-reporte:disabled{opacity:.48!important;filter:saturate(.55)!important}
+#btn-archivadas-reporte{
+  background:linear-gradient(180deg,#EAF3FF,#D6E8FF)!important;
+  border:1px solid #8EB6E8!important;
+  color:#245B91!important;
+  box-shadow:0 6px 14px rgba(59,112,169,.13)!important;
+}
+#btn-archivadas-reporte:hover{background:linear-gradient(180deg,#DFEDFF,#C9E0FF)!important}
+#btn-archivadas-reporte .cq-report-archive-count{
+  background:#245B91!important;color:#fff!important;border-radius:999px!important;padding:1px 6px!important
+}
+</style>
+
+<script id="cq-categoria-manual-permanente-v3">
+(function(){
+  if(window.__cqCategoriaManualPermanenteV3)return;
+  window.__cqCategoriaManualPermanenteV3=true;
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function kNombre(v){var n=norm(v);return n?'name:'+n:'';}
+  function kCodigo(v){var c=String(v||'').trim().toLowerCase().replace(/\s+/g,'');return c?'code:'+c:'';}
+  function ensure(){
+    if(!state.categoriaManualIdentidad||typeof state.categoriaManualIdentidad!=='object')state.categoriaManualIdentidad={};
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+  }
+  function matById(id){return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;}
+  function codigoMat(m){
+    if(!m)return '';
+    try{if(typeof getMatCodigo==='function')return String(getMatCodigo(m)||'').trim();}catch(_e){}
+    return String((state.matCodigos&&state.matCodigos[m.id])||m.codigo||m.cod||'').trim();
+  }
+  function catCanon(v){
+    var n=norm(v);if(!n)return '';
+    var cats=(CATS||[]).filter(function(c){
+      if(!c)return false;
+      try{if(typeof isCatDeleted==='function'&&isCatDeleted(c.name))return false;}catch(_e){}
+      return true;
+    });
+    var c=cats.find(function(x){return norm(x.name)===n;});
+    if(c)return c.name;
+    // Alias entre nombres abreviados de Acopio/Gastos y Materiales.
+    if(n.indexOf('gas')>=0&&n.indexOf('aprob')>=0){
+      c=cats.find(function(x){var z=norm(x.name);return z.indexOf('gas')>=0&&z.indexOf('aprob')>=0;});
+      if(c)return c.name;
+    }
+    return '';
+  }
+  function ponerLock(nombre,codigo,categoria){
+    ensure();
+    var can=catCanon(categoria)||String(categoria||'').trim();
+    if(!can||norm(can)==='varios')return false;
+    var lock={categoria:can,nombre:String(nombre||'').trim(),codigo:String(codigo||'').trim(),manual:true,updatedAt:new Date().toISOString()};
+    var kn=kNombre(nombre),kc=kCodigo(codigo),cambio=false;
+    if(kn){state.categoriaManualIdentidad[kn]=lock;cambio=true;}
+    if(kc){state.categoriaManualIdentidad[kc]=lock;cambio=true;}
+    return cambio;
+  }
+  function buscarLock(nombre,codigo){
+    ensure();
+    var kn=kNombre(nombre),kc=kCodigo(codigo);
+    // Código primero; nombre exacto es respaldo definitivo aunque Acopio mande otro rubro.
+    return (kc&&state.categoriaManualIdentidad[kc])||(kn&&state.categoriaManualIdentidad[kn])||null;
+  }
+  function aplicarCategoria(m,categoria,guardarId){
+    if(!m)return false;
+    ensure();
+    var can=catCanon(categoria)||String(categoria||'').trim();
+    if(!can||norm(can)==='varios')return false;
+    var id=Number(m.id);
+    var actual=String((state.matCategorias&&state.matCategorias[id])||m.catName||'').trim();
+    var cambio=norm(actual)!==norm(can) || norm(state.categoriaManual[id]||'')!==norm(can);
+    state.matCategorias[id]=can;
+    if(guardarId!==false)state.categoriaManual[id]=can;
+    m.catName=can;
+    (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.catName=can;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x.id)===id)x.catName=can;});
+    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{}, {categoria:can,manual:true,updatedAt:new Date().toISOString()});
+    try{if(typeof moverMaterialACategoria==='function')moverMaterialACategoria(id,can);}catch(_e){}
+    try{if(typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(m,can);}catch(_e){}
+    return cambio;
+  }
+
+  // Convierte las clasificaciones manuales YA existentes en locks por identidad.
+  function migrarLocksExistentes(){
+    ensure();var cambio=false;
+    (ALL_MATS||[]).forEach(function(m){
+      if(!m)return;
+      var id=Number(m.id);
+      var cat='';
+      var l=state.catalogoManual[id]||state.catalogoManual[String(id)];
+      if(l&&l.manual!==false)cat=String(l.categoria||'').trim();
+      if(!cat)cat=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
+      if(!cat||norm(cat)==='varios')return;
+      cambio=ponerLock(m.mat,codigoMat(m),cat)||cambio;
+    });
+    return cambio;
+  }
+
+  function restaurarTodos(){
+    ensure();var cambio=false;
+    (ALL_MATS||[]).forEach(function(m){
+      if(!m)return;
+      var lock=buscarLock(m.mat,codigoMat(m));
+      if(lock&&lock.manual!==false)cambio=aplicarCategoria(m,lock.categoria,true)||cambio;
+    });
+    return cambio;
+  }
+
+  // Guardado manual: nombre/código/rubro elegido en Catálogo pasa a ser la verdad maestra.
+  var guardarPrev=window.guardarNombreMat || (typeof guardarNombreMat==='function'?guardarNombreMat:null);
+  if(typeof guardarPrev==='function'){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var idAntes=Number(selectedCargaMat),mAntes=matById(idAntes);
+      var nombreAntes=mAntes?String(mAntes.mat||'').trim():'';
+      var codigoAntes=mAntes?codigoMat(mAntes):'';
+      var nomEl=document.getElementById('editar-mat-nombre-input');
+      var codEl=document.getElementById('editar-mat-codigo');
+      var catEl=document.getElementById('editar-mat-cat');
+      var nombreNuevo=nomEl?String(nomEl.value||'').trim():nombreAntes;
+      var codigoNuevo=codEl?String(codEl.value||'').trim():codigoAntes;
+      var categoria=catEl?String(catEl.value||'').trim():'';
+      var can=catCanon(categoria)||categoria;
+
+      var r=await guardarPrev.apply(this,arguments);
+
+      var id=Number(selectedCargaMat),m=matById(id)||mAntes;
+      if(m&&can&&norm(can)!=='varios'){
+        // Guardar tanto identidad anterior como la editada: evita perder el lock tras renombres.
+        ponerLock(nombreAntes,codigoAntes,can);
+        ponerLock(nombreNuevo,codigoNuevo,can);
+        ponerLock(m.mat,codigoMat(m),can);
+        aplicarCategoria(m,can,true);
+        try{
+          suppressRemoteUntil=Date.now()+5000;
+          if(typeof cqGuardarMaterialesSeguro==='function')await cqGuardarMaterialesSeguro();
+          else if(typeof persist==='function')await persist();
+        }catch(e){console.warn('No se pudo persistir categoría manual permanente',e);}
+        try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(_e){}
+      }
+      return r;
+    };
+  }
+
+  // Integraciones: si el producto ya fue reclasificado manualmente, el rubro de
+  // Acopio/Pañol queda IGNORADO. La categoría maestra de Materiales gana siempre.
+  var aplicarPrev=window.aplicarIntegracion || (typeof aplicarIntegracion==='function'?aplicarIntegracion:null);
+  if(typeof aplicarPrev==='function'){
+    window.aplicarIntegracion=aplicarIntegracion=function(ev){
+      var r=aplicarPrev.apply(this,arguments),cambio=false;
+      if(ev&&ev.active!==false){
+        var carga=(state.cargas||[]).find(function(c){return String(c&&c.integracionId||'')===String(ev.integrationId||'');});
+        var m=carga?matById(carga.matId):null;
+        var lock=buscarLock(ev.materialName||'',ev.materialCode||'');
+        if(!lock&&m)lock=buscarLock(m.mat,codigoMat(m));
+        if(lock&&lock.manual!==false&&m){
+          // Ampliar el lock a la identidad que llegó hoy desde Acopio/Pañol.
+          ponerLock(ev.materialName||m.mat,ev.materialCode||codigoMat(m),lock.categoria);
+          cambio=aplicarCategoria(m,lock.categoria,true)||cambio;
+        }
+      }
+      cambio=restaurarTodos()||cambio;
+      // IMPORTANTE: si sólo cambió el rubro manual, devolver true para que
+      // procesarSnapshotIntegraciones persista el cambio en Firebase.
+      return !!(r||cambio);
+    };
+  }
+
+  // Después de cualquier normalización, volver a imponer la clasificación maestra.
+  var normPrev=(typeof normalizeState==='function')?normalizeState:null;
+  if(normPrev){
+    normalizeState=function(){
+      var r=normPrev.apply(this,arguments);
+      migrarLocksExistentes();
+      restaurarTodos();
+      return r;
+    };
+  }
+
+  setTimeout(function(){
+    try{
+      var mig=migrarLocksExistentes();
+      var cam=restaurarTodos();
+      if((mig||cam)&&typeof cqGuardarMaterialesSeguro==='function'){
+        suppressRemoteUntil=Date.now()+5000;
+        cqGuardarMaterialesSeguro().catch(function(e){console.warn('Migración locks de categorías',e);});
+      }
+      try{renderCatalogo();}catch(_e){}
+    }catch(e){console.warn('Categoría manual permanente v3',e);}
+  },1200);
+})();
+</script>
+
+<script id="cq-botones-archivo-iconos-v3">
+(function(){
+  function actualizar(){
+    var a=document.getElementById('btn-archivar-reporte');
+    if(a){
+      var n=(typeof compareObrasSel!=='undefined'&&compareObrasSel)?compareObrasSel.length:0;
+      a.innerHTML='🗄️ Archivar';
+      a.disabled=n!==1;
+    }
+    var b=document.getElementById('btn-archivadas-reporte');
+    if(b){
+      var cant=0;
+      try{cant=typeof cqReporteObrasArchivadas==='function'?cqReporteObrasArchivadas().length:0;}catch(_e){}
+      b.innerHTML='📂 Archivadas'+(cant?' <span class="cq-report-archive-count">'+cant+'</span>':'');
+    }
+  }
+  var ant=window.cqActualizarBotonArchivoReporte;
+  window.cqActualizarBotonArchivoReporte=cqActualizarBotonArchivoReporte=function(){
+    try{if(typeof ant==='function')ant.apply(this,arguments);}catch(_e){}
+    actualizar();
+  };
+  setTimeout(actualizar,300);
+})();
+</script>
