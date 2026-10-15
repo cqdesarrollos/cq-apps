@@ -18203,3 +18203,136 @@ body:has(#modal-reporte.open) #modal-reporte{
   }
 }
 </style>
+
+<style id="cq-fix-final-real-nombres-obras-movil-v14">
+/* FINAL REAL — teléfono: 6 por fila y cada parte del nombre completa, sin recorte horizontal. */
+@media (max-width:620px){
+  #compare-obra-chips.cq-report-obras-grid{
+    display:grid!important;
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    gap:4px!important;
+    width:100%!important;
+    align-items:stretch!important;
+  }
+  #compare-obra-chips .cq-report-obra-tile{
+    box-sizing:border-box!important;
+    position:relative!important;
+    width:100%!important;
+    min-width:0!important;
+    height:62px!important;
+    min-height:62px!important;
+    max-height:62px!important;
+    padding:4px 2px!important;
+    border-radius:10px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    overflow:hidden!important;
+    font-size:7.4px!important;
+    line-height:1.06!important;
+    letter-spacing:0!important;
+    text-align:center!important;
+  }
+  #compare-obra-chips .cq-report-obra-name{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:1px!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    height:auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+    white-space:normal!important;
+    text-overflow:clip!important;
+    line-height:1.06!important;
+    text-align:center!important;
+  }
+  #compare-obra-chips .cq-report-line{
+    display:block!important;
+    box-sizing:border-box!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+    padding:0!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+    text-overflow:clip!important;
+    word-break:normal!important;
+    overflow-wrap:normal!important;
+    hyphens:none!important;
+    line-height:1.06!important;
+    text-align:center!important;
+  }
+  #compare-obra-chips .cq-report-line-extra{
+    font-size:.94em!important;
+  }
+  #compare-obra-chips .cq-report-line-generic{
+    white-space:normal!important;
+    overflow:hidden!important;
+    overflow-wrap:anywhere!important;
+    word-break:normal!important;
+    line-height:1.03!important;
+  }
+  #compare-obra-chips .cq-report-obra-tile.active{
+    padding-left:2px!important;
+    padding-right:14px!important;
+  }
+  #compare-obra-chips .cq-report-obra-check{
+    position:absolute!important;
+    right:2px!important;
+    top:3px!important;
+    transform:none!important;
+    width:12px!important;
+    height:12px!important;
+    min-width:12px!important;
+    font-size:7px!important;
+    line-height:12px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    pointer-events:none!important;
+  }
+}
+</style>
+<script id="cq-auto-fit-nombres-obras-movil-v14">
+(function(){
+  if(window.__cqAutoFitNombresObrasMovilV14)return;
+  window.__cqAutoFitNombresObrasMovilV14=true;
+
+  function fitLine(el){
+    if(!el || !window.matchMedia || !window.matchMedia('(max-width:620px)').matches)return;
+    if(el.classList.contains('cq-report-line-generic'))return;
+    var fs=7.4, min=5.4;
+    el.style.setProperty('font-size',fs+'px','important');
+    var guard=0;
+    while(el.scrollWidth > el.clientWidth + 0.5 && fs>min && guard<20){
+      fs=Math.max(min,fs-0.2);
+      el.style.setProperty('font-size',fs.toFixed(1)+'px','important');
+      guard++;
+    }
+  }
+  function fitAll(){
+    var root=document.getElementById('compare-obra-chips');
+    if(!root)return;
+    root.querySelectorAll('.cq-report-line').forEach(fitLine);
+  }
+  function schedule(){requestAnimationFrame(function(){fitAll();setTimeout(fitAll,40);});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
+  window.addEventListener('resize',schedule,{passive:true});
+  var root=document.getElementById('compare-obra-chips');
+  if(root && window.MutationObserver){
+    new MutationObserver(schedule).observe(root,{childList:true,subtree:true,characterData:true});
+  }else{
+    document.addEventListener('DOMContentLoaded',function(){
+      var r=document.getElementById('compare-obra-chips');
+      if(r&&window.MutationObserver)new MutationObserver(schedule).observe(r,{childList:true,subtree:true,characterData:true});
+    },{once:true});
+  }
+  window.__cqFitReporteObrasMovil=schedule;
+})();
+</script>
+
