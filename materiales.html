@@ -18349,3 +18349,36 @@ body:has(#modal-reporte.open) #modal-reporte{
 })();
 </script>
 
+
+
+<script id="cq-forzar-altura-movil-obras-v15">
+(function(){
+  if(window.__cqForzarAlturaMovilObrasV15)return;
+  window.__cqForzarAlturaMovilObrasV15=true;
+  function aplicar(){
+    if(!window.matchMedia || !window.matchMedia('(max-width:620px)').matches)return;
+    var root=document.getElementById('compare-obra-chips');
+    if(!root)return;
+    root.style.setProperty('grid-template-columns','repeat(6,minmax(0,1fr))','important');
+    root.style.setProperty('gap','4px','important');
+    root.querySelectorAll('.cq-report-obra-tile').forEach(function(btn){
+      btn.style.setProperty('height','68px','important');
+      btn.style.setProperty('min-height','68px','important');
+      btn.style.setProperty('max-height','68px','important');
+      btn.style.setProperty('padding-top','5px','important');
+      btn.style.setProperty('padding-bottom','5px','important');
+      btn.style.setProperty('align-items','center','important');
+      btn.style.setProperty('justify-content','center','important');
+    });
+  }
+  function programar(){requestAnimationFrame(function(){aplicar();setTimeout(aplicar,40);setTimeout(aplicar,180);});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',programar,{once:true});else programar();
+  window.addEventListener('resize',programar,{passive:true});
+  document.addEventListener('click',function(e){
+    if(e.target&&e.target.closest&&e.target.closest('#view-obras'))setTimeout(programar,0);
+  },true);
+  var obs=new MutationObserver(function(){programar();});
+  function observar(){var root=document.getElementById('compare-obra-chips');if(root)obs.observe(root,{childList:true,subtree:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',observar,{once:true});else observar();
+})();
+</script>
