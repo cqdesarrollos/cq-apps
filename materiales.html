@@ -5249,7 +5249,8 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
       </div>
       <div class="cq-report-obras-actions">
         <button id="btn-todas-reporte" class="cq-report-head-btn primary" onclick="window.selectTodasObras()">Todas</button>
-        <button id="btn-archivar-reporte" class="cq-report-head-btn" onclick="window.openReporteArchivarObras()">📁 Archivar obras</button>
+        <button id="btn-archivar-reporte" class="cq-report-head-btn" onclick="window.archivarObraSeleccionadaReporte()">📁 Archivar</button>
+        <button id="btn-archivadas-reporte" class="cq-report-head-btn" onclick="window.openReporteArchivadas()">📂 Archivadas</button>
         <button class="cq-report-head-btn" onclick="window.openOrdenObras()">⚙ Ordenar</button>
       </div>
     </div>
@@ -17986,3 +17987,283 @@ body:has(#modal-reporte.open) #modal-reporte{
   }
 }
 </style>
+
+
+<style id="cq-ajustes-reporte-4-columnas-v2">
+/* CQ 15/10/2026 — cuatro obras por renglón en Reporte. */
+.cq-report-obras-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important}
+@media(max-width:800px){.cq-report-obras-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+@media(max-width:620px){.cq-report-obras-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}}
+#btn-archivar-reporte:disabled{opacity:.42;cursor:not-allowed;filter:grayscale(.3)}
+#btn-archivadas-reporte .cq-report-archive-count{background:#F3E9D7;color:#84632D}
+</style>
+
+<script id="cq-categoria-manual-identidad-v2">
+(function(){
+  if(window.__cqCategoriaManualIdentidadV2)return;
+  window.__cqCategoriaManualIdentidadV2=true;
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function keyNombre(v){var n=norm(v);return n?'name:'+n:'';}
+  function keyCodigo(v){var c=String(v||'').trim().toLowerCase();return c?'code:'+c:'';}
+  function ensure(){
+    if(!state.categoriaManualIdentidad||typeof state.categoriaManualIdentidad!=='object')state.categoriaManualIdentidad={};
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+  }
+  function catValida(nombre){
+    var n=norm(nombre); if(!n)return '';
+    var cats=(CATS||[]).filter(function(c){
+      if(!c)return false;
+      try{if(typeof isCatDeleted==='function'&&isCatDeleted(c.name))return false;}catch(_e){}
+      return true;
+    });
+    var exacta=cats.find(function(c){return norm(c.name)===n;});
+    if(exacta)return exacta.name;
+
+    // Alias habitual entre Acopio/Gastos y Materiales: "Gas y aprob" / "Gas+Aprobación".
+    if(n.indexOf('gas')>=0 && n.indexOf('aprob')>=0){
+      var gas=cats.find(function(c){var x=norm(c.name);return x.indexOf('gas')>=0&&x.indexOf('aprob')>=0;});
+      if(gas)return gas.name;
+    }
+    return '';
+  }
+  function matById(id){return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;}
+  function codigoMat(m){
+    if(!m)return '';
+    try{if(typeof getMatCodigo==='function')return String(getMatCodigo(m)||'').trim();}catch(_e){}
+    return String((state.matCodigos&&state.matCodigos[m.id])||m.codigo||m.cod||'').trim();
+  }
+  function guardarLockIdentidad(m,categoria,nombreForzado,codigoForzado){
+    if(!m)return false; ensure();
+    var can=catValida(categoria); if(!can||norm(can)==='varios')return false;
+    var nombre=String(nombreForzado||m.mat||'').trim();
+    var codigo=String(codigoForzado!=null?codigoForzado:codigoMat(m)).trim();
+    var lock={categoria:can,nombre:nombre,codigo:codigo,manual:true,updatedAt:new Date().toISOString()};
+    var kc=keyCodigo(codigo),kn=keyNombre(nombre);
+    if(kc)state.categoriaManualIdentidad[kc]=lock;
+    // Nombre exacto sirve de respaldo si el material automático se recrea con otro ID.
+    if(kn)state.categoriaManualIdentidad[kn]=lock;
+    return true;
+  }
+  function lockIdentidad(m){
+    if(!m)return null; ensure();
+    var codigo=codigoMat(m), nombre=String(m.mat||'').trim();
+    var kc=keyCodigo(codigo),kn=keyNombre(nombre);
+    var l=(kc&&state.categoriaManualIdentidad[kc])||(kn&&state.categoriaManualIdentidad[kn])||null;
+    if(!l||l.manual===false)return null;
+    // Si el lock por nombre tenía código propio y el actual también tiene otro código, no mezclar.
+    if(l===state.categoriaManualIdentidad[kn]){
+      var lc=String(l.codigo||'').trim().toLowerCase();
+      var mc=String(codigo||'').trim().toLowerCase();
+      if(lc&&mc&&lc!==mc)return null;
+    }
+    return l;
+  }
+  function categoriaManualReal(m){
+    if(!m)return '';
+    ensure();
+    var c=String(state.categoriaManual[m.id]||state.categoriaManual[String(m.id)]||'').trim();
+    // VARIOS histórico no es una decisión manual útil: se libera para poder corregirlo.
+    if(c&&norm(c)!=='varios')return catValida(c)||c;
+    var l=lockIdentidad(m);
+    return l?catValida(l.categoria):'';
+  }
+  function aplicar(m,categoria,marcarId){
+    if(!m)return false; ensure();
+    var can=catValida(categoria); if(!can||norm(can)==='varios')return false;
+    var id=Number(m.id);
+    state.matCategorias[id]=can; m.catName=can;
+    if(marcarId)state.categoriaManual[id]=can;
+    (state.extraMats||[]).forEach(function(x){if(Number(x.id)===id)x.catName=can;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x.id)===id)x.catName=can;});
+    try{
+      (CATS||[]).forEach(function(c){c.items=(c.items||[]).filter(function(x){return Number(x.id)!==id;});});
+      var dest=(CATS||[]).find(function(c){return norm(c&&c.name)===norm(can);});
+      if(dest&&!dest.items.some(function(x){return Number(x.id)===id;}))dest.items.push(m);
+    }catch(_e){}
+    try{if(typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(m,can);}catch(_e){}
+    return true;
+  }
+  function restaurar(){
+    if(!window.state||!Array.isArray(window.ALL_MATS))return false;
+    ensure(); var cambio=false;
+    (ALL_MATS||[]).forEach(function(m){
+      if(!m)return;
+      try{if(typeof isMatDeleted==='function'&&isMatDeleted(m.id))return;}catch(_e){}
+      var c=categoriaManualReal(m); if(!c)return;
+      var act=String((state.matCategorias&&state.matCategorias[m.id])||m.catName||'').trim();
+      if(norm(act)!==norm(c)){aplicar(m,c,false);cambio=true;}
+    });
+    return cambio;
+  }
+
+  // Migración puntual solicitada: CANO CHAPA GALV.100 X 1 MT pertenece a Gas+Aprobación.
+  function migrarCanoChapa(){
+    if(!window.state||!Array.isArray(window.ALL_MATS))return false;
+    var gas=catValida('Gas y aprob'); if(!gas)return false;
+    var cambio=false;
+    (ALL_MATS||[]).forEach(function(m){
+      if(!m)return;
+      var n=norm(m.mat||'');
+      if(n==='cano chapa galv 100 x 1 mt' || (n.indexOf('cano chapa galv')>=0&&n.indexOf('100')>=0&&n.indexOf('1 mt')>=0)){
+        ensure();
+        // Limpiar un viejo lock VARIOS por ID si existe.
+        if(norm(state.categoriaManual[m.id]||'')==='varios')delete state.categoriaManual[m.id];
+        guardarLockIdentidad(m,gas,m.mat,codigoMat(m));
+        state.categoriaManual[m.id]=gas;
+        state.catalogoManual[m.id]=Object.assign({},state.catalogoManual[m.id]||{}, {categoria:gas,manual:true,updatedAt:new Date().toISOString()});
+        aplicar(m,gas,true); cambio=true;
+      }
+    });
+    return cambio;
+  }
+
+  // Capturar la elección manual ANTES de que el guardado haga su lectura/escritura Firebase.
+  var guardarPrev=window.guardarNombreMat || (typeof guardarNombreMat==='function'?guardarNombreMat:null);
+  if(typeof guardarPrev==='function'){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var id=Number(selectedCargaMat),m=matById(id);
+      var catEl=document.getElementById('editar-mat-cat');
+      var nomEl=document.getElementById('editar-mat-nombre-input');
+      var codEl=document.getElementById('editar-mat-codigo');
+      var cat=catEl?String(catEl.value||'').trim():'';
+      var nom=nomEl?String(nomEl.value||'').trim():(m?m.mat:'');
+      var cod=codEl?String(codEl.value||'').trim():(m?codigoMat(m):'');
+      var can=catValida(cat);
+      if(m&&can&&norm(can)!=='varios'){
+        ensure();
+        state.categoriaManual[id]=can;
+        state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{}, {categoria:can,manual:true,updatedAt:new Date().toISOString()});
+        guardarLockIdentidad(m,can,nom,cod);
+        aplicar(m,can,true);
+      }
+      var r=await guardarPrev.apply(this,arguments);
+      restaurar();
+      return r;
+    };
+  }
+
+  // Un material recreado por Acopio/Pañol con otro ID recupera la categoría manual por código/nombre.
+  var aplicarPrev=(typeof aplicarIntegracion==='function')?aplicarIntegracion:null;
+  if(aplicarPrev){
+    aplicarIntegracion=function(ev){
+      var r=aplicarPrev.apply(this,arguments);
+      if(ev&&ev.active!==false){
+        var carga=(state.cargas||[]).find(function(c){return String(c&&c.integracionId||'')===String(ev.integrationId||'');});
+        var m=carga?matById(carga.matId):null;
+        if(m){
+          var lock=lockIdentidad(m);
+          if(lock)aplicar(m,lock.categoria,true);
+          else {
+            var rubro=String(ev.materialCategory||ev.category||'').trim();
+            var rc=catValida(rubro);
+            var act=String((state.matCategorias&&state.matCategorias[m.id])||m.catName||'').trim();
+            if(rc&&norm(rc)!=='varios'&&(!act||norm(act)==='varios'))aplicar(m,rc,false);
+          }
+        }
+      }
+      restaurar();
+      return r;
+    };
+    window.aplicarIntegracion=aplicarIntegracion;
+  }
+
+  var normPrev=(typeof normalizeState==='function')?normalizeState:null;
+  if(normPrev){
+    normalizeState=function(){var r=normPrev.apply(this,arguments);migrarCanoChapa();restaurar();return r;};
+  }
+
+  // Aplicación inicial y persistencia de la migración puntual una sola vez por carga.
+  setTimeout(function(){
+    try{
+      var ch=migrarCanoChapa(); restaurar();
+      if(ch&&typeof cqGuardarMaterialesSeguro==='function'){
+        suppressRemoteUntil=Date.now()+5000;
+        cqGuardarMaterialesSeguro().catch(function(e){console.warn('No se pudo fijar CANO CHAPA en Gas',e);});
+      }
+      try{renderCatalogo();}catch(_e){}
+    }catch(e){console.warn('Categorías manuales por identidad',e);}
+  },1800);
+
+  window.cqRestaurarCategoriasManualIdentidad=restaurar;
+})();
+</script>
+
+<script id="cq-reporte-archivo-simple-v2">
+(function(){
+  if(window.__cqReporteArchivoSimpleV2)return;
+  window.__cqReporteArchivoSimpleV2=true;
+
+  function toastLocal(msg,err){try{showToast(msg,err?'err':undefined);}catch(_e){try{toast(msg,err?'err':undefined);}catch(_e2){}}}
+  function mapa(){return typeof cqReporteObrasArchivadasMap==='function'?cqReporteObrasArchivadasMap():{};}
+  function clave(nombre){return typeof cqReporteObraClave==='function'?cqReporteObraClave(nombre):String(nombre||'');}
+  function archivadas(){return typeof cqReporteObrasArchivadas==='function'?cqReporteObrasArchivadas():[];}
+
+  window.archivarObraSeleccionadaReporte=function(){
+    var sel=(compareObrasSel||[]).slice();
+    if(sel.length!==1){
+      toastLocal(sel.length?'Seleccioná una sola obra para archivar':'Seleccioná una obra y después tocá Archivar',true);
+      return;
+    }
+    var idx=Number(sel[0]),obras=getObras(),nombre=obras[idx]||'';
+    if(!nombre)return;
+    mapa()[clave(nombre)]=true;
+    compareObrasSel=[];
+    try{persist();}catch(_e){}
+    renderCompareObras();
+    toastLocal('✓ '+nombre+' archivada del Reporte');
+  };
+
+  function asegurarModal(){
+    var old=document.getElementById('modal-reporte-archivadas-simple');
+    if(old)return old;
+    var modal=document.createElement('div');
+    modal.id='modal-reporte-archivadas-simple';modal.className='modal-bg';
+    modal.innerHTML='<div class="modal cq-report-archive-modal">'
+      +'<div class="modal-hd"><div><div class="modal-ttl">📂 Obras archivadas</div><div class="cq-report-archive-help">Acá sólo aparecen las obras que ocultaste del Reporte. Podés recuperarlas con un toque.</div></div><button class="modal-x" onclick="window.closeReporteArchivadas()">×</button></div>'
+      +'<div class="mbody"><div id="cq-report-archivadas-simple-content"></div></div>'
+      +'<div class="mfooter"><button class="btn btn-s" onclick="window.closeReporteArchivadas()">Cerrar</button></div></div>';
+    modal.addEventListener('click',function(e){if(e.target===modal)window.closeReporteArchivadas();});
+    document.body.appendChild(modal);return modal;
+  }
+  function renderModal(){
+    var box=document.getElementById('cq-report-archivadas-simple-content');if(!box)return;
+    var arr=archivadas().slice().reverse();
+    box.innerHTML=arr.length?arr.map(function(x){
+      return '<div class="cq-report-archive-row archived"><div class="cq-report-archive-name">'+escapeHtml(x.o)+'</div>'
+        +'<button type="button" class="cq-report-archive-action restore" onclick="window.restaurarObraArchivadaReporte('+x.i+')">↩ Restaurar</button></div>';
+    }).join(''):'<div class="cq-report-archive-empty">No hay obras archivadas.</div>';
+  }
+  window.openReporteArchivadas=function(){var m=asegurarModal();renderModal();m.classList.add('open');};
+  window.closeReporteArchivadas=function(){var m=document.getElementById('modal-reporte-archivadas-simple');if(m)m.classList.remove('open');};
+  window.restaurarObraArchivadaReporte=function(idx){
+    var obras=getObras(),nombre=obras[Number(idx)]||'';if(!nombre)return;
+    delete mapa()[clave(nombre)];
+    try{persist();}catch(_e){}
+    renderCompareObras();renderModal();toastLocal('✓ '+nombre+' restaurada');
+  };
+
+  // Actualiza sólo los dos botones simples: Archivar + carpeta Archivadas.
+  cqActualizarBotonArchivoReporte=function(){
+    var b=document.getElementById('btn-archivar-reporte');
+    if(b){
+      var n=(compareObrasSel||[]).length;
+      b.disabled=n!==1;
+      b.title=n===1?'Archivar la obra seleccionada':'Seleccioná una sola obra para archivar';
+    }
+    var f=document.getElementById('btn-archivadas-reporte');
+    if(f){
+      var cant=archivadas().length;
+      f.innerHTML='📂 Archivadas'+(cant?' <span class="cq-report-archive-count">'+cant+'</span>':'');
+    }
+  };
+  window.cqActualizarBotonArchivoReporte=cqActualizarBotonArchivoReporte;
+
+  setTimeout(function(){try{renderCompareObras();}catch(_e){}},250);
+})();
+</script>
