@@ -18757,3 +18757,416 @@ body:has(#modal-reporte.open) #modal-reporte{
   },500);
 })();
 </script>
+
+<!-- CQ 15/10/2026 — AJUSTE FINAL: filas de obras más altas + categoría maestra persistente -->
+<style id="cq-reporte-obras-filas-amplias-v5">
+/* 4 obras por fila siempre. Más altura real en tablet/teléfono y check fuera del texto. */
+#view-reporte .cq-report-obras-grid,
+.cq-report-obras-grid{
+  width:100%!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  grid-auto-flow:row!important;
+  gap:10px!important;
+}
+#view-reporte .cq-report-obra-tile,
+.cq-report-obra-tile{
+  box-sizing:border-box!important;
+  position:relative!important;
+  min-width:0!important;
+  min-height:84px!important;
+  height:auto!important;
+  padding:12px 32px 12px 9px!important;
+  border-radius:14px!important;
+  font-size:11.5px!important;
+  line-height:1.22!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+}
+#view-reporte .cq-report-obra-name,
+.cq-report-obra-name{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  text-align:center!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+  line-height:1.22!important;
+}
+#view-reporte .cq-report-obra-check,
+.cq-report-obra-check{
+  position:absolute!important;
+  right:5px!important;
+  top:6px!important;
+  transform:none!important;
+  width:22px!important;
+  height:22px!important;
+  min-width:22px!important;
+  line-height:22px!important;
+  font-size:12px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  pointer-events:none!important;
+}
+/* Tablet: además de 4 por fila, más altura para que no parezcan tiras. */
+@media (min-width:621px) and (max-width:1200px){
+  #view-reporte .cq-report-obra-tile,.cq-report-obra-tile{
+    min-height:90px!important;
+    padding:13px 36px 13px 10px!important;
+    font-size:12px!important;
+  }
+  #view-reporte .cq-report-obra-check,.cq-report-obra-check{
+    width:24px!important;height:24px!important;min-width:24px!important;line-height:24px!important;font-size:13px!important;
+  }
+}
+/* Teléfono: 4 columnas, pero cada fila mantiene altura suficiente para 3/4 líneas. */
+@media (max-width:620px){
+  #view-reporte .cq-report-obras-grid,.cq-report-obras-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:7px!important;
+  }
+  #view-reporte .cq-report-obra-tile,.cq-report-obra-tile{
+    min-height:88px!important;
+    padding:11px 25px 11px 6px!important;
+    font-size:10.2px!important;
+    line-height:1.2!important;
+    border-radius:12px!important;
+  }
+  #view-reporte .cq-report-obra-check,.cq-report-obra-check{
+    right:4px!important;top:5px!important;
+    width:19px!important;height:19px!important;min-width:19px!important;line-height:19px!important;font-size:10px!important;
+  }
+}
+</style>
+
+<script id="cq-categoria-maestra-estable-v5">
+(function(){
+  if(window.__cqCategoriaMaestraEstableV5)return;
+  window.__cqCategoriaMaestraEstableV5=true;
+
+  var LS_KEY='cq_materiales_categoria_maestra_v1';
+  var DOC_COL='materiales';
+  var DOC_ID='catalogo_categorias_manual_v1';
+  var master={byName:{},byCode:{},updatedAt:''};
+  var remoteLoaded=false;
+  var saveTimer=null;
+  var primerSnapshotIntegraciones=true;
+
+  function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function keyName(v){var n=norm(v);return n?n:'';}
+  function keyCode(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,'');}
+  function ts(v){var t=Date.parse(String(v&&v.updatedAt||''));return Number.isFinite(t)?t:0;}
+  function loadLocal(){
+    try{
+      var x=JSON.parse(localStorage.getItem(LS_KEY)||'null');
+      if(x&&typeof x==='object'){
+        master.byName=(x.byName&&typeof x.byName==='object')?x.byName:{};
+        master.byCode=(x.byCode&&typeof x.byCode==='object')?x.byCode:{};
+        master.updatedAt=String(x.updatedAt||'');
+      }
+    }catch(e){}
+  }
+  function saveLocal(){
+    master.updatedAt=new Date().toISOString();
+    try{localStorage.setItem(LS_KEY,JSON.stringify(master));}catch(e){}
+  }
+  loadLocal();
+
+  function allCats(){
+    var out=[];
+    try{(CATS||[]).forEach(function(c){if(c&&c.name)out.push(c.name);});}catch(e){}
+    try{(cqSubrubrosGastos||[]).forEach(function(c){if(c&&out.indexOf(c)<0)out.push(c);});}catch(e){}
+    return out;
+  }
+  function canonCat(v){
+    var raw=String(v||'').trim(),n=norm(raw);if(!n)return '';
+    var cats=allCats();
+    var x=cats.find(function(c){return norm(c)===n;});
+    if(x)return x;
+    // Alias conocidos entre abreviaciones de Acopio/Gastos y el nombre canónico.
+    if(n.indexOf('gas')>=0&&n.indexOf('aprob')>=0){
+      x=cats.find(function(c){var z=norm(c);return z.indexOf('gas')>=0&&z.indexOf('aprob')>=0;});
+      if(x)return x;
+    }
+    if(n.indexOf('bacha')>=0&&n.indexOf('sanitario')>=0&&n.indexOf('grifer')>=0){
+      x=cats.find(function(c){var z=norm(c);return z.indexOf('bacha')>=0&&z.indexOf('sanitario')>=0&&z.indexOf('grifer')>=0;});
+      if(x)return x;
+    }
+    return raw;
+  }
+  function validCat(v){var c=canonCat(v);return c&&norm(c)!=='varios'?c:'';}
+  function matById(id){try{return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;}catch(e){return null;}}
+  function codeOf(m){
+    if(!m)return '';
+    try{if(typeof getMatCodigo==='function')return String(getMatCodigo(m)||'').trim();}catch(e){}
+    try{return String((state.matCodigos&&state.matCodigos[m.id])||m.codigo||m.cod||'').trim();}catch(e){return '';}
+  }
+  function mergeMap(dest,src){
+    Object.keys(src||{}).forEach(function(k){
+      var a=dest[k],b=src[k];
+      if(!a||ts(b)>=ts(a))dest[k]=clone(b);
+    });
+  }
+  function mergeMaster(x){
+    if(!x||typeof x!=='object')return;
+    mergeMap(master.byName,x.byName||{});
+    mergeMap(master.byCode,x.byCode||{});
+    saveLocal();
+  }
+  function entry(nombre,codigo,categoria,updatedAt){
+    return {nombre:String(nombre||'').trim(),codigo:String(codigo||'').trim(),categoria:canonCat(categoria),manual:true,updatedAt:updatedAt||new Date().toISOString()};
+  }
+  function recordLocal(nombre,codigo,categoria,updatedAt){
+    var cat=validCat(categoria);if(!cat)return false;
+    var e=entry(nombre,codigo,cat,updatedAt),kn=keyName(nombre),kc=keyCode(codigo),cambio=false;
+    if(kn){
+      var old=master.byName[kn];
+      if(!old||norm(old.categoria)!==norm(cat)||String(old.codigo||'')!==String(e.codigo||'')){master.byName[kn]=clone(e);cambio=true;}
+    }
+    if(kc){
+      var oldc=master.byCode[kc];
+      // Un código históricamente duplicado NO pisa un nombre diferente. El nombre exacto manda.
+      if(!oldc||!oldc.nombre||norm(oldc.nombre)===norm(nombre)||!String(nombre||'').trim()){
+        if(!oldc||norm(oldc.categoria)!==norm(cat)||norm(oldc.nombre)!==norm(e.nombre)){master.byCode[kc]=clone(e);cambio=true;}
+      }
+    }
+    if(cambio)saveLocal();
+    return cambio;
+  }
+  function lockFor(nombre,codigo){
+    var kn=keyName(nombre),kc=keyCode(codigo);
+    // Nombre exacto primero: protege contra códigos reciclados/duplicados del histórico.
+    var l=kn&&master.byName[kn]?master.byName[kn]:null;
+    if(l&&validCat(l.categoria))return l;
+    l=kc&&master.byCode[kc]?master.byCode[kc]:null;
+    if(l&&validCat(l.categoria)){
+      if(!String(nombre||'').trim()||!String(l.nombre||'').trim()||norm(l.nombre)===norm(nombre))return l;
+    }
+    return null;
+  }
+  function ensureState(){
+    if(!window.state)return;
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+    if(!state.categoriaManualIdentidad||typeof state.categoriaManualIdentidad!=='object')state.categoriaManualIdentidad={};
+  }
+  function applyMaterial(m,cat){
+    if(!m)return false;cat=validCat(cat);if(!cat)return false;ensureState();
+    var id=Number(m.id);
+    var before='';
+    try{before=String((state.matCategorias&&state.matCategorias[id])||m.catName||'');}catch(e){}
+    state.matCategorias[id]=cat;
+    state.categoriaManual[id]=cat;
+    m.catName=cat;
+    (state.extraMats||[]).forEach(function(x){if(Number(x&&x.id)===id)x.catName=cat;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x&&x.id)===id)x.catName=cat;});
+    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{}, {categoria:cat,manual:true,updatedAt:new Date().toISOString()});
+    // Compatibilidad con los locks previos del archivo.
+    var lock={categoria:cat,nombre:String(m.mat||''),codigo:codeOf(m),manual:true,updatedAt:new Date().toISOString()};
+    var kn='name:'+norm(m.mat||''),kc='code:'+keyCode(codeOf(m));
+    if(kn!=='name:')state.categoriaManualIdentidad[kn]=lock;
+    if(kc!=='code:')state.categoriaManualIdentidad[kc]=lock;
+    try{if(typeof moverMaterialACategoria==='function')moverMaterialACategoria(id,cat);}catch(e){}
+    try{if(typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(m,cat);}catch(e){}
+    return norm(before)!==norm(cat);
+  }
+  function applyAll(){
+    if(!window.state||!Array.isArray(window.ALL_MATS))return false;
+    var cambio=false;
+    (ALL_MATS||[]).forEach(function(m){
+      if(!m)return;
+      var l=lockFor(m.mat,codeOf(m));
+      if(l)cambio=applyMaterial(m,l.categoria)||cambio;
+    });
+    return cambio;
+  }
+  function migrateCurrentManual(){
+    if(!window.state||!Array.isArray(window.ALL_MATS))return false;ensureState();
+    var cambio=false;
+    (ALL_MATS||[]).forEach(function(m){
+      if(!m)return;
+      var id=Number(m.id),cat='';
+      var l=state.catalogoManual[id]||state.catalogoManual[String(id)];
+      if(l&&l.manual!==false)cat=String(l.categoria||'').trim();
+      if(!validCat(cat))cat=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
+      if(validCat(cat))cambio=recordLocal(m.mat,codeOf(m),cat,l&&l.updatedAt)||cambio;
+    });
+    // Migrar también locks por identidad ya creados por versiones anteriores.
+    Object.keys(state.categoriaManualIdentidad||{}).forEach(function(k){
+      var l=state.categoriaManualIdentidad[k];
+      if(!l||l.manual===false||!validCat(l.categoria))return;
+      cambio=recordLocal(l.nombre||'',l.codigo||'',l.categoria,l.updatedAt)||cambio;
+    });
+    return cambio;
+  }
+
+  function scheduleRemoteSave(){
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(function(){saveRemoteMaster().catch(function(e){console.warn('No se pudo guardar categoría maestra',e);});},180);
+  }
+  async function saveRemoteMaster(){
+    if(!window._dbReady||!window._doc||!window._db)return false;
+    var ref=window._doc(window._db,DOC_COL,DOC_ID);
+    var local=clone(master);local.updatedAt=new Date().toISOString();
+    if(window._runTransaction){
+      await window._runTransaction(window._db,async function(tx){
+        var snap=await tx.get(ref),rem=snap.exists()?(snap.data()||{}):{};
+        var merged={byName:{},byCode:{},updatedAt:new Date().toISOString()};
+        mergeMap(merged.byName,rem.byName||{});mergeMap(merged.byCode,rem.byCode||{});
+        mergeMap(merged.byName,local.byName||{});mergeMap(merged.byCode,local.byCode||{});
+        tx.set(ref,merged);
+        master=merged;saveLocal();
+      });
+    }else if(window._setDoc){
+      await window._setDoc(ref,local,{merge:false});
+    }
+    return true;
+  }
+  async function loadRemoteMaster(){
+    if(!window._dbReady||!window._doc||!window._getDoc||!window._db)return false;
+    try{
+      var ref=window._doc(window._db,DOC_COL,DOC_ID),snap=await window._getDoc(ref);
+      if(snap.exists())mergeMaster(snap.data()||{});
+      remoteLoaded=true;
+      var mig=migrateCurrentManual();
+      var cam=applyAll();
+      if(mig)scheduleRemoteSave();
+      if(cam){
+        try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(e){}
+      }
+      try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
+      try{if(typeof renderCargaTab==='function')renderCargaTab();}catch(e){}
+      return true;
+    }catch(e){console.warn('No se pudo leer categoría maestra',e);return false;}
+  }
+
+  // La función visual de categoría también respeta la decisión manual maestra.
+  var obtenerPrev=window.obtenerCategoriaMaterial || (typeof obtenerCategoriaMaterial==='function'?obtenerCategoriaMaterial:null);
+  if(typeof obtenerPrev==='function'){
+    window.obtenerCategoriaMaterial=obtenerCategoriaMaterial=function(id){
+      var m=matById(id),l=m?lockFor(m.mat,codeOf(m)):null;
+      if(l&&validCat(l.categoria))return canonCat(l.categoria);
+      return obtenerPrev.apply(this,arguments);
+    };
+  }
+
+  // Guardado manual: registrar la categoría maestra ANTES del guardado principal.
+  var guardarPrev=window.guardarNombreMat || (typeof guardarNombreMat==='function'?guardarNombreMat:null);
+  if(typeof guardarPrev==='function'){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var id0=Number(selectedCargaMat),m0=matById(id0);
+      var oldName=m0?String(m0.mat||'').trim():'',oldCode=m0?codeOf(m0):'';
+      var ne=document.getElementById('editar-mat-nombre-input');
+      var ce=document.getElementById('editar-mat-codigo');
+      var ke=document.getElementById('editar-mat-cat');
+      var newName=ne?String(ne.value||'').trim():oldName;
+      var newCode=ce?String(ce.value||'').trim():oldCode;
+      var cat=ke?validCat(ke.value):'';
+
+      if(cat){
+        recordLocal(oldName,oldCode,cat);
+        recordLocal(newName,newCode,cat);
+        if(m0)applyMaterial(m0,cat);
+        scheduleRemoteSave();
+      }
+
+      var r=await guardarPrev.apply(this,arguments);
+
+      var m=matById(Number(selectedCargaMat))||m0;
+      if(cat&&m){
+        recordLocal(m.mat,codeOf(m),cat);
+        applyMaterial(m,cat);
+        scheduleRemoteSave();
+        try{
+          suppressRemoteUntil=Date.now()+6500;
+          if(typeof cqGuardarMaterialesSeguro==='function')await cqGuardarMaterialesSeguro();
+          else if(typeof persist==='function')await persist();
+        }catch(e){console.warn('Persistencia final de categoría manual',e);}
+        try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
+      }
+      return r;
+    };
+  }
+
+  // Cada normalización puede recibir un snapshot viejo. La categoría maestra se
+  // impone al FINAL, después de todas las migraciones históricas del archivo.
+  var normalizePrev=(typeof normalizeState==='function')?normalizeState:null;
+  if(normalizePrev){
+    normalizeState=function(){
+      var r=normalizePrev.apply(this,arguments);
+      migrateCurrentManual();
+      applyAll();
+      return r;
+    };
+  }
+
+  // Evitar el replay destructivo de las últimas 80 integraciones al abrir la app.
+  // data_planilla_exacta_v4 ya se cargó primero y es la fuente real; el listener de
+  // auditoría queda para CAMBIOS posteriores al arranque.
+  var procPrev=window.procesarSnapshotIntegraciones || (typeof procesarSnapshotIntegraciones==='function'?procesarSnapshotIntegraciones:null);
+  if(typeof procPrev==='function'){
+    window.procesarSnapshotIntegraciones=procesarSnapshotIntegraciones=async function(snapshot){
+      if(primerSnapshotIntegraciones){
+        primerSnapshotIntegraciones=false;
+        console.info('Materiales: snapshot inicial de auditoría omitido; se usa la planilla principal como fuente.');
+        return;
+      }
+      return procPrev.apply(this,arguments);
+    };
+  }
+
+  // Una integración YA materializada no debe volver a resolver otra ficha en cada SYNC.
+  // Se conserva su matId actual y sólo se acepta el rubro manual maestro.
+  var aplicarPrev=window.aplicarIntegracion || (typeof aplicarIntegracion==='function'?aplicarIntegracion:null);
+  if(typeof aplicarPrev==='function'){
+    window.aplicarIntegracion=aplicarIntegracion=function(ev){
+      var entrada=ev;
+      if(ev&&ev.active!==false){
+        var carga=(state.cargas||[]).find(function(c){return String(c&&c.integracionId||'')===String(ev.integrationId||'');})||null;
+        var m=carga?matById(carga.matId):null;
+        var l=lockFor(ev.materialName||'',ev.materialCode||'') || (m?lockFor(m.mat,codeOf(m)):null);
+        if(m){
+          entrada=Object.assign({},ev,{
+            materialId:m.id,
+            materialName:m.mat,
+            materialCode:codeOf(m)||ev.materialCode||'',
+            materialCategory:l?l.categoria:(obtenerCategoriaMaterial(m.id)||ev.materialCategory||ev.category||''),
+            category:l?l.categoria:(obtenerCategoriaMaterial(m.id)||ev.category||ev.materialCategory||'')
+          });
+        }else if(l){
+          entrada=Object.assign({},ev,{materialCategory:l.categoria,category:l.categoria});
+        }
+      }
+      var r=aplicarPrev.call(this,entrada),cam=applyAll();
+      return !!(r||cam);
+    };
+  }
+
+  // Arranque: primero recuperar los locks locales y luego el documento maestro compartido.
+  function boot(){
+    try{migrateCurrentManual();applyAll();}catch(e){}
+    if(window._dbReady)loadRemoteMaster();
+  }
+  document.addEventListener('firebase-ready',function(){setTimeout(loadRemoteMaster,80);});
+  document.addEventListener('cq-firebase-ready',function(){setTimeout(loadRemoteMaster,80);});
+  setTimeout(boot,250);
+  setTimeout(function(){if(!remoteLoaded&&window._dbReady)loadRemoteMaster();},1200);
+
+  window.cqCategoriaMaestraMateriales={
+    reload:loadRemoteMaster,
+    apply:applyAll,
+    get:function(nombre,codigo){return lockFor(nombre,codigo);}
+  };
+})();
+</script>
