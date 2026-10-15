@@ -18524,3 +18524,236 @@ body:has(#modal-reporte.open) #modal-reporte{
   setTimeout(actualizar,300);
 })();
 </script>
+
+<style id="cq-reporte-obras-altura-v4">
+/* CQ 15/10/2026 — 4 obras por fila, pero con altura suficiente para nombres largos y tilde. */
+#view-reporte .cq-report-obras-grid,
+.cq-report-obras-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:9px!important;
+}
+#view-reporte .cq-report-obra-tile,
+.cq-report-obra-tile{
+  position:relative!important;
+  min-height:68px!important;
+  height:auto!important;
+  padding:10px 34px 10px 9px!important;
+  font-size:10.5px!important;
+  line-height:1.16!important;
+  border-radius:14px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  white-space:normal!important;
+  overflow:visible!important;
+}
+#view-reporte .cq-report-obra-name,
+.cq-report-obra-name{
+  display:block!important;
+  width:100%!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+  text-align:center!important;
+  line-height:1.16!important;
+}
+#view-reporte .cq-report-obra-check,
+.cq-report-obra-check{
+  right:7px!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  width:25px!important;
+  height:25px!important;
+  min-width:25px!important;
+  font-size:14px!important;
+  line-height:25px!important;
+  pointer-events:none!important;
+}
+@media(max-width:900px){
+  #view-reporte .cq-report-obra-tile,.cq-report-obra-tile{
+    min-height:72px!important;
+    padding:10px 31px 10px 7px!important;
+    font-size:10px!important;
+  }
+}
+@media(max-width:620px){
+  #view-reporte .cq-report-obras-grid,.cq-report-obras-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:7px!important;
+  }
+  #view-reporte .cq-report-obra-tile,.cq-report-obra-tile{
+    min-height:68px!important;
+    padding:9px 27px 9px 5px!important;
+    font-size:9.2px!important;
+    border-radius:12px!important;
+  }
+  #view-reporte .cq-report-obra-check,.cq-report-obra-check{
+    right:4px!important;
+    width:21px!important;
+    height:21px!important;
+    min-width:21px!important;
+    line-height:21px!important;
+    font-size:12px!important;
+  }
+}
+</style>
+
+<script id="cq-estabilidad-catalogo-sync-v4">
+(function(){
+  if(window.__cqEstabilidadCatalogoSyncV4)return;
+  window.__cqEstabilidadCatalogoSyncV4=true;
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function keyNombre(v){var n=norm(v);return n?'name:'+n:'';}
+  function keyCodigo(v){var c=String(v||'').trim().toLowerCase().replace(/\s+/g,'');return c?'code:'+c:'';}
+  function ensure(){
+    if(!state.categoriaManualIdentidad||typeof state.categoriaManualIdentidad!=='object')state.categoriaManualIdentidad={};
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+  }
+  function lockPorIdentidad(nombre,codigo){
+    ensure();
+    var kc=keyCodigo(codigo),kn=keyNombre(nombre);
+    var l=(kc&&state.categoriaManualIdentidad[kc])||(kn&&state.categoriaManualIdentidad[kn])||null;
+    if(!l||l.manual===false||!String(l.categoria||'').trim()||norm(l.categoria)==='varios')return null;
+    return l;
+  }
+  function matById(id){return (ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;}
+  function codigoMat(m){
+    if(!m)return '';
+    try{if(typeof getMatCodigo==='function')return String(getMatCodigo(m)||'').trim();}catch(_e){}
+    return String((state.matCodigos&&state.matCodigos[m.id])||m.codigo||m.cod||'').trim();
+  }
+  function categoriaCanon(v){
+    var n=norm(v); if(!n)return '';
+    var cats=(CATS||[]).filter(function(c){
+      if(!c)return false;
+      try{if(typeof isCatDeleted==='function'&&isCatDeleted(c.name))return false;}catch(_e){}
+      return true;
+    });
+    var x=cats.find(function(c){return norm(c.name)===n;});
+    if(x)return x.name;
+    if(n.indexOf('gas')>=0&&n.indexOf('aprob')>=0){
+      x=cats.find(function(c){var z=norm(c.name);return z.indexOf('gas')>=0&&z.indexOf('aprob')>=0;});
+      if(x)return x.name;
+    }
+    return String(v||'').trim();
+  }
+  function imponerCategoria(m,categoria){
+    if(!m)return false; ensure();
+    var can=categoriaCanon(categoria);
+    if(!can||norm(can)==='varios')return false;
+    var id=Number(m.id),antes=String((state.matCategorias&&state.matCategorias[id])||m.catName||'').trim();
+    state.matCategorias[id]=can;
+    state.categoriaManual[id]=can;
+    m.catName=can;
+    (state.extraMats||[]).forEach(function(x){if(Number(x&&x.id)===id)x.catName=can;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x&&x.id)===id)x.catName=can;});
+    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{}, {categoria:can,manual:true,updatedAt:new Date().toISOString()});
+    try{if(typeof moverMaterialACategoria==='function')moverMaterialACategoria(id,can);}catch(_e){}
+    try{if(typeof guardarMemoriaCategoriaMaterial==='function')guardarMemoriaCategoriaMaterial(m,can);}catch(_e){}
+    return norm(antes)!==norm(can);
+  }
+  function restaurarLocks(){
+    if(!window.state||!Array.isArray(window.ALL_MATS))return false;
+    ensure(); var cambio=false;
+    (ALL_MATS||[]).forEach(function(m){
+      if(!m)return;
+      var lock=lockPorIdentidad(m.mat,codigoMat(m));
+      if(lock)cambio=imponerCategoria(m,lock.categoria)||cambio;
+    });
+    return cambio;
+  }
+
+  /*
+   * CAUSA DE LA LISTA "VARIOS" QUE CRECÍA EN CADA SYNC:
+   * normalizeState() ejecutaba cqRepararIdentidadCargasAutomaticasMateriales().
+   * Esa reparación histórica recorría TODAS las cargas automáticas y, si encontraba
+   * una identidad vieja que no tenía ficha exacta, CREABA una ficha nueva. Cuando el
+   * movimiento histórico no conservaba subrubro, esa ficha nacía en VARIOS. Como
+   * normalizeState se ejecuta en cada snapshot de Firebase, el catálogo podía mutar
+   * mientras el usuario lo estaba usando.
+   *
+   * Desde acá la reparación histórica queda "no destructiva": puede volver a apuntar
+   * una carga a una ficha EXACTA que ya exista, pero NUNCA crea fichas de catálogo.
+   * Las altas reales nuevas siguen entrando por aplicarIntegracion().
+   */
+  window.cqRepararIdentidadCargasAutomaticasMateriales=cqRepararIdentidadCargasAutomaticasMateriales=function(){
+    if(!window.state||!Array.isArray(state.cargas))return false;
+    var cambio=false;
+
+    (state.cargas||[]).forEach(function(c){
+      if(!c||!c.automatico)return;
+      var nombreOrigen=String(c.materialNameOrigen||'').trim();
+      if(!nombreOrigen)return;
+
+      var actual=matById(c.matId);
+      if(actual&&norm(actual.mat)===norm(nombreOrigen))return;
+
+      // Sólo relinkear si YA existe una ficha con el mismo nombre exacto.
+      var destino=(ALL_MATS||[]).find(function(m){
+        if(!m)return false;
+        try{if(typeof isMatDeleted==='function'&&isMatDeleted(m.id))return false;}catch(_e){}
+        return norm(m.mat)===norm(nombreOrigen);
+      })||null;
+      if(!destino)return;
+
+      if(Number(c.matId)!==Number(destino.id)||String(c.matName||'')!==String(destino.mat||'')){
+        c.matId=destino.id;
+        c.matName=destino.mat;
+        cambio=true;
+      }
+    });
+
+    // La clasificación manual siempre se vuelve a imponer, sin crear nada nuevo.
+    cambio=restaurarLocks()||cambio;
+    return cambio;
+  };
+
+  // Si una integración llega con rubro equivocado pero Materiales ya tiene una
+  // clasificación manual por nombre/código, reemplazar el rubro ANTES de procesarla.
+  var aplicarAnterior=window.aplicarIntegracion || (typeof aplicarIntegracion==='function'?aplicarIntegracion:null);
+  if(typeof aplicarAnterior==='function'){
+    window.aplicarIntegracion=aplicarIntegracion=function(ev){
+      var entrada=ev;
+      if(ev&&ev.active!==false){
+        var lock=lockPorIdentidad(ev.materialName||'',ev.materialCode||'');
+        if(lock){
+          entrada=Object.assign({},ev,{
+            materialCategory:lock.categoria,
+            category:lock.categoria
+          });
+        }
+      }
+      var r=aplicarAnterior.call(this,entrada);
+      return !!(r||restaurarLocks());
+    };
+  }
+
+  // También evitar que una creación/reparación puntual ignore una categoría manual ya fijada.
+  var crearAnterior=window.cqCrearMaterialOrigenSeguroMateriales || (typeof cqCrearMaterialOrigenSeguroMateriales==='function'?cqCrearMaterialOrigenSeguroMateriales:null);
+  if(typeof crearAnterior==='function'){
+    window.cqCrearMaterialOrigenSeguroMateriales=cqCrearMaterialOrigenSeguroMateriales=function(nombre,codigo,categoria,origen){
+      var lock=lockPorIdentidad(nombre,codigo);
+      if(lock)categoria=lock.categoria;
+      var m=crearAnterior.call(this,nombre,codigo,categoria,origen);
+      if(m&&lock)imponerCategoria(m,lock.categoria);
+      return m;
+    };
+  }
+
+  // No forzar guardados periódicos: sólo estabilizar el estado que llega y renderizar.
+  setTimeout(function(){
+    try{
+      restaurarLocks();
+      if(typeof renderCatalogo==='function')renderCatalogo();
+    }catch(e){console.warn('Estabilidad Catálogo v4',e);}
+  },500);
+})();
+</script>
