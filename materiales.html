@@ -8544,10 +8544,10 @@ async function cqGuardarMaterialesSeguro(extra){
     // dando prioridad a la versión que ya está en Firebase para no borrar altas externas.
     var manuales=locCargas.filter(function(c){return !esAuto(c);});
     var mapa={};
-    locCargas.filter(esAuto).forEach(function(c){
+    locCargas.filter(esAuto).filter(function(c){return !cqEsAcopioAnteriorAlLinkeo(c);}).forEach(function(c){
       var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
     });
-    remCargas.filter(esAuto).forEach(function(c){
+    remCargas.filter(esAuto).filter(function(c){return !cqEsAcopioAnteriorAlLinkeo(c);}).forEach(function(c){
       var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
     });
     local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
@@ -8559,7 +8559,11 @@ async function cqGuardarMaterialesSeguro(extra){
   var ver=await window._getDoc(ref);
   if(ver.exists()){
     var d=ver.data()||{}; delete d.updatedAt; state=d; normalizeState();
+    var depPostGuardado=cqDepurarCargasAcopioPreviasAlLinkeo();
     localStorage.setItem(DB_KEY,JSON.stringify(state));
+    if(depPostGuardado.integraciones.length){
+      cqDesactivarIntegracionesAcopio(depPostGuardado.integraciones,'acopio_anterior_05_08_2026').catch(function(e){console.warn(e);});
+    }
   }
   return true;
 }
@@ -8608,6 +8612,112 @@ async function initApp(){
   renderActive();
 }
 
+
+// CQ 15/10/2026 — CORTE DEFINITIVO ACOPIO → MATERIALES.
+// Regla de negocio: el linkeo comenzó el 05/08/2026.
+// Todo Acopio creado antes de esa fecha pertenece al esquema viejo y NUNCA
+// debe generar cargas en Materiales. También se descarta cualquier retiro
+// de Acopio con fecha anterior al corte, aunque haya recibido una integración
+// por una reparación/version posterior.
+var CQ_ACOPIO_MATERIALES_DESDE='2026-08-05';
+
+function cqFechaISOCorteAcopio(v){
+  var s=String(v==null?'':v).trim();
+  if(!s)return '';
+  var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+  if(m)return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+  var d=new Date(s);
+  if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);
+  return '';
+}
+
+function cqFechaCreacionAcopioDesdeRegistro(x){
+  x=x||{};
+  var cid=String(x.sourceContainerId||'').trim();
+  if(!cid){
+    var iid=String(x.integracionId||'');
+    var m=iid.match(/^acopio_(\d{11,})_/i);
+    if(m)cid=m[1];
+  }
+  if(/^\d{11,}$/.test(cid)){
+    var n=Number(cid),d=new Date(n);
+    if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);
+  }
+  return '';
+}
+
+function cqEsRegistroDeAcopio(x){
+  if(!x)return false;
+  var iid=String(x.integracionId||'');
+  var origen='';
+  try{origen=cqOrigenCargaNormalizado(x);}catch(_e){
+    origen=String(x.origen||x.source||'').toLowerCase().trim();
+  }
+  return origen==='acopio'||/^acopio[_-]/i.test(iid)||String(x.source||'').toLowerCase()==='acopio';
+}
+
+function cqEsAcopioAnteriorAlLinkeo(x){
+  if(!cqEsRegistroDeAcopio(x))return false;
+  var fCont=cqFechaCreacionAcopioDesdeRegistro(x);
+  if(fCont && fCont<CQ_ACOPIO_MATERIALES_DESDE)return true;
+  var fRet=cqFechaISOCorteAcopio(x&&x.fecha);
+  return !!(fRet && fRet<CQ_ACOPIO_MATERIALES_DESDE);
+}
+
+function cqDepurarCargasAcopioPreviasAlLinkeo(){
+  var res={cambio:false,removidas:0,integraciones:[],matIds:[]};
+  if(!Array.isArray(state.cargas))return res;
+  var antes=state.cargas.length;
+  state.cargas=state.cargas.filter(function(c){
+    if(!cqEsAcopioAnteriorAlLinkeo(c))return true;
+    res.removidas++;
+    res.cambio=true;
+    if(c&&c.matId!=null)res.matIds.push(c.matId);
+    var iid=String(c&&c.integracionId||'').trim();
+    if(iid){
+      cqIgnorarIntegracion(iid);
+      res.integraciones.push(iid);
+    }
+    return false;
+  });
+  if(state.cargas.length!==antes)res.cambio=true;
+
+  Array.from(new Set(res.matIds.map(String))).forEach(function(mid){
+    var usado=(state.cargas||[]).some(function(c){return String(c&&c.matId)===mid;});
+    if(usado)return;
+    var idNum=Number(mid);
+    if(Number.isFinite(idNum)&&limpiarMaterialAutomaticoSinUso(idNum))res.cambio=true;
+  });
+
+  res.integraciones=Array.from(new Set(res.integraciones.map(String)));
+  return res;
+}
+
+async function cqDesactivarIntegracionesAcopio(ids,motivo){
+  if(!window._dbReady||!window._setDoc||!window._doc)return;
+  ids=Array.from(new Set((ids||[]).map(String).filter(Boolean)));
+  for(var i=0;i<ids.length;i++){
+    try{
+      await window._setDoc(
+        window._doc(window._db,'materiales_integraciones',ids[i]),
+        {
+          integrationId:ids[i],
+          active:false,
+          cleanupReason:motivo||'acopio_no_valido',
+          cleanupAt:new Date().toISOString(),
+          updatedAt:new Date().toISOString()
+        },
+        {merge:true}
+      );
+    }catch(e){
+      console.warn('No se pudo desactivar integración vieja de Acopio',ids[i],e);
+    }
+  }
+}
+
+
 // CQ 15/09/2026 — reconciliación definitiva Materiales <- Acopio.
 // Acopio es la fuente de verdad: si un retiro ya no existe allí, su carga automática
 // no puede sobrevivir en Materiales. También elimina el material automático si queda huérfano.
@@ -8627,12 +8737,17 @@ async function cqReconciliarMaterialesConAcopioActual(){
     });
 
     var matIds=[];
+    var integracionesHuerfanas=[];
     state.cargas=(state.cargas||[]).filter(function(c){
       var iid=String(c&&c.integracionId||'');
       var origen=cqOrigenCargaNormalizado(c);
       var esAcopio=(origen==='acopio')||iid.indexOf('acopio_')===0;
       if(esAcopio && iid.indexOf('acopio_')===0 && !validos.has(iid)){
         if(c&&c.matId!=null)matIds.push(c.matId);
+        if(iid){
+          cqIgnorarIntegracion(iid);
+          integracionesHuerfanas.push(iid);
+        }
         cambio=true;
         return false;
       }
@@ -8689,6 +8804,9 @@ async function cqReconciliarMaterialesConAcopioActual(){
         JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
       );
     }
+    if(integracionesHuerfanas.length){
+      await cqDesactivarIntegracionesAcopio(integracionesHuerfanas,'acopio_eliminado_fuente');
+    }
     return cambio;
   }catch(e){
     console.warn('Reconciliación Materiales/Acopio',e);
@@ -8715,7 +8833,15 @@ async function loadFromFirebase(){
       migro=normalizarNombresObraCargasMateriales()||migro;
       var limpioTechi=cqLimpiarTechiCau29_77Materiales();
       migro=limpioTechi||migro;
+      var depAcopioCorte=cqDepurarCargasAcopioPreviasAlLinkeo();
+      migro=depAcopioCorte.cambio||migro;
       localStorage.setItem(DB_KEY,JSON.stringify(state));
+      if(depAcopioCorte.integraciones.length){
+        cqDesactivarIntegracionesAcopio(depAcopioCorte.integraciones,'acopio_anterior_05_08_2026').catch(function(e){console.warn(e);});
+      }
+      if(depAcopioCorte.removidas){
+        console.warn('Materiales: eliminadas '+depAcopioCorte.removidas+' carga(s) de Acopio del esquema anterior al 05/08/2026.');
+      }
       if(migro){
         try{
           await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()})));
@@ -8960,6 +9086,24 @@ function cqLimpiarTechiCau29_77Materiales(){
 
 function aplicarIntegracion(ev){
   if(!ev||!ev.integrationId) return false;
+
+  // Corte 05/08/2026: una integración del esquema viejo de Acopio no puede
+  // volver a crear una carga aunque el documento de auditoría siga activo.
+  if(ev.active!==false && cqEsAcopioAnteriorAlLinkeo(ev)){
+    cqIgnorarIntegracion(ev.integrationId);
+    var idsViejos=[];
+    var antesViejos=(state.cargas||[]).length;
+    state.cargas=(state.cargas||[]).filter(function(c){
+      var coincide=String(c&&c.integracionId||'')===String(ev.integrationId||'')
+        || (String(c&&c.sourceMovementId||'') && String(c.sourceMovementId)===String(ev.sourceMovementId||'')
+          && cqOrigenCargaNormalizado(c)==='acopio');
+      if(coincide && c&&c.matId!=null)idsViejos.push(c.matId);
+      return !coincide;
+    });
+    idsViejos.forEach(function(id){try{limpiarMaterialAutomaticoSinUso(id);}catch(_e){}});
+    cqDesactivarIntegracionesAcopio([ev.integrationId],'acopio_anterior_05_08_2026').catch(function(e){console.warn(e);});
+    return state.cargas.length!==antesViejos;
+  }
 
   // Si el usuario eliminó expresamente una carga automática desde Materiales,
   // no permitir que el listener de Firebase la vuelva a crear.
@@ -9324,6 +9468,11 @@ async function startFirebase(){
             migro=reubicarEstadoIndexadoPorCargasMateriales()||migro;
             migro=reubicarCargasPorNombreEstableMateriales()||migro;
             migro=normalizarNombresObraCargasMateriales()||migro;
+            var depAcopioRealtime=cqDepurarCargasAcopioPreviasAlLinkeo();
+            migro=depAcopioRealtime.cambio||migro;
+            if(depAcopioRealtime.integraciones.length){
+              cqDesactivarIntegracionesAcopio(depAcopioRealtime.integraciones,'acopio_anterior_05_08_2026').catch(function(e){console.warn(e);});
+            }
 
             localStorage.setItem(DB_KEY,JSON.stringify(state));
             renderActive();
