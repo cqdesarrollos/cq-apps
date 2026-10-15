@@ -10806,9 +10806,9 @@ function cqReporteObrasArchivadas(){
 }
 function cqReporteObraTile(nombre,idx,seleccionada){
   return '<button type="button" class="cq-report-obra-tile'+(seleccionada?' active':'')+'" '
-    +'style="box-sizing:border-box!important;position:relative!important;min-width:0!important;min-height:82px!important;height:82px!important;padding:12px 30px 12px 8px!important;border-radius:14px!important;font-size:11.5px!important;line-height:1.22!important;white-space:normal!important;overflow:visible!important;display:flex!important;align-items:center!important;justify-content:center!important;" '
+    +'style="box-sizing:border-box!important;position:relative!important;min-width:0!important;min-height:62px!important;height:auto!important;padding:8px 26px 8px 8px!important;border-radius:14px!important;font-size:11px!important;line-height:1.18!important;white-space:normal!important;overflow:visible!important;display:flex!important;align-items:center!important;justify-content:center!important;" '
     +'onclick="window.toggleCompareObra('+idx+')" title="'+escapeHtml(nombre)+'">'
-    +'<span class="cq-report-obra-name" style="display:block!important;width:100%!important;text-align:center!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere!important;line-height:1.22!important;">'+escapeHtml(nombre)+'</span>'
+    +'<span class="cq-report-obra-name" style="display:block!important;width:100%!important;text-align:center!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:normal!important;word-break:normal!important;hyphens:none!important;line-height:1.18!important;">'+escapeHtml(nombre)+'</span>'
     +(seleccionada?'<span class="cq-report-obra-check" style="position:absolute!important;right:5px!important;top:6px!important;transform:none!important;width:22px!important;height:22px!important;display:flex!important;align-items:center!important;justify-content:center!important;pointer-events:none!important;">✓</span>':'')
     +'</button>';
 }
@@ -10916,11 +10916,11 @@ function renderCompareObras(){
       return cqReporteObraTile(x.o,x.i,sel);
     }).join(''):'<div class="cq-report-empty-obras">No hay obras activas en Reporte. Podés restaurarlas desde <b>Archivadas</b>.</div>';
     Array.from(chipsEl.querySelectorAll('.cq-report-obra-tile')).forEach(function(btn){
-      btn.style.setProperty('min-height','82px','important');
-      btn.style.setProperty('height','82px','important');
-      btn.style.setProperty('padding','12px 30px 12px 8px','important');
-      btn.style.setProperty('font-size','11.5px','important');
-      btn.style.setProperty('line-height','1.22','important');
+      btn.style.setProperty('min-height','62px','important');
+      btn.style.setProperty('height','auto','important');
+      btn.style.setProperty('padding','8px 26px 8px 8px','important');
+      btn.style.setProperty('font-size','11px','important');
+      btn.style.setProperty('line-height','1.18','important');
     });
   }
   var catSel=document.getElementById('obra-cat-filter');
@@ -17010,20 +17010,21 @@ body:has(#modal-reporte.open) #modal-reporte{
 </script>
 
 
-<style id="cq-reporte-obras-altura-definitiva-v6">
-/* 4 obras por fila, con altura suficiente en tablet y teléfono. */
+<style id="cq-reporte-obras-altura-estetica-v7">
+/* 4 obras por fila. Altura intermedia: legible sin ocupar de más. */
 #compare-obra-chips.cq-report-obras-grid{
   display:grid!important;
   grid-template-columns:repeat(4,minmax(0,1fr))!important;
-  gap:10px!important;
+  gap:9px!important;
   width:100%!important;
 }
 #compare-obra-chips .cq-report-obra-tile{
-  min-height:82px!important;
-  height:82px!important;
-  padding:12px 30px 12px 8px!important;
-  font-size:11.5px!important;
-  line-height:1.22!important;
+  min-height:62px!important;
+  height:auto!important;
+  padding:8px 26px 8px 8px!important;
+  border-radius:14px!important;
+  font-size:11px!important;
+  line-height:1.18!important;
   white-space:normal!important;
   overflow:visible!important;
 }
@@ -17031,20 +17032,51 @@ body:has(#modal-reporte.open) #modal-reporte{
   white-space:normal!important;
   overflow:visible!important;
   text-overflow:clip!important;
-  overflow-wrap:anywhere!important;
+  overflow-wrap:normal!important;
   word-break:normal!important;
+  hyphens:none!important;
+  line-height:1.18!important;
 }
 #compare-obra-chips .cq-report-obra-check{
   right:5px!important;
-  top:6px!important;
+  top:5px!important;
   transform:none!important;
+  width:20px!important;
+  height:20px!important;
+  font-size:13px!important;
 }
+/* Tablet: un poco más de aire sin transformar los botones en tarjetas altas. */
+@media (min-width:621px) and (max-width:1100px){
+  #compare-obra-chips.cq-report-obras-grid{gap:10px!important}
+  #compare-obra-chips .cq-report-obra-tile{
+    min-height:64px!important;
+    padding:9px 28px 9px 9px!important;
+    font-size:11.5px!important;
+  }
+}
+/* Teléfono: mantener 4 por fila, con texto compacto y sin cortar palabras. */
 @media(max-width:620px){
   #compare-obra-chips.cq-report-obras-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:7px!important}
   #compare-obra-chips .cq-report-obra-tile{
-    min-height:82px!important;height:82px!important;
-    padding:10px 24px 10px 5px!important;
-    font-size:10.2px!important;
+    min-height:60px!important;
+    height:auto!important;
+    padding:7px 20px 7px 5px!important;
+    font-size:9.4px!important;
+    line-height:1.15!important;
+    border-radius:12px!important;
+  }
+  #compare-obra-chips .cq-report-obra-name{
+    overflow-wrap:normal!important;
+    word-break:normal!important;
+    hyphens:none!important;
+    line-height:1.15!important;
+  }
+  #compare-obra-chips .cq-report-obra-check{
+    right:3px!important;
+    top:4px!important;
+    width:18px!important;
+    height:18px!important;
+    font-size:12px!important;
   }
 }
 </style>
