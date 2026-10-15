@@ -136,6 +136,86 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}a{text-decoratio
 .cq-summary-comments{display:grid;gap:5px;margin-top:8px}
 .cq-summary-comment{font-size:8.8px;color:#52665d;padding:6px 8px;border-radius:8px;background:#f7faf8;border:1px solid #e2e9e5}
 
+
+
+/* Tablet horizontal: alargar Trámites y Servicios */
+@media (min-width: 900px) and (max-width: 1600px){
+  #tramitesFull,
+  #serviciosGrid{gap:14px}
+
+  #tramitesFull .tramite-card,
+  #serviciosGrid .card{
+    min-height: 340px;
+  }
+
+  #tramitesFull .tramite-card{
+    padding:16px 16px 18px;
+  }
+
+  #tramitesFull .tramite-name,
+  #serviciosGrid .card-hd strong{
+    font-size:15px;
+  }
+
+  #tramitesFull .tramite-sub,
+  #tramitesFull .tramite-foot,
+  #serviciosGrid .fld input,
+  #serviciosGrid .fld select,
+  #serviciosGrid .fld textarea,
+  #serviciosGrid .card-body,
+  #serviciosGrid .card-hd,
+  #serviciosGrid .btn,
+  #serviciosGrid .badge{
+    font-size:12px;
+  }
+
+  #tramitesFull .tramite-progress{margin-top:14px}
+  #tramitesFull .tramite-foot{margin-top:14px}
+
+  #serviciosGrid .card-hd{
+    padding:14px 16px;
+  }
+
+  #serviciosGrid .card-body{
+    padding:16px;
+  }
+
+  #serviciosGrid .fld{margin-bottom:12px}
+
+  #serviciosGrid .fld label{
+    font-size:9.5px;
+    margin-bottom:6px;
+  }
+
+  #serviciosGrid .fld input,
+  #serviciosGrid .fld select{
+    min-height:44px;
+    padding:11px 12px;
+  }
+
+  #serviciosGrid .fld textarea{
+    min-height:90px;
+    padding:11px 12px;
+  }
+
+  #serviciosGrid .row2{gap:10px}
+}
+
+
+
+/* Unidades A / B en Servicios y Hermeticidad */
+.unit-section{border:1px solid #dfe8e3;border-radius:13px;background:#f8fbf9;padding:11px 12px;margin-bottom:11px}
+.unit-section:last-child{margin-bottom:0}
+.unit-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:10.5px;font-weight:900;color:#244a3e;text-transform:uppercase;letter-spacing:.045em}
+.unit-title .badge{font-size:8.5px}
+.unit-summary{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+@media (min-width:900px) and (max-width:1600px){
+  #serviciosGrid .unit-section{padding:14px;margin-bottom:14px}
+  #serviciosGrid .unit-title{font-size:12.5px;margin-bottom:12px}
+  #hermeticidadGrid .unit-section{padding:14px;margin-bottom:14px}
+  #hermeticidadGrid .unit-title{font-size:12px}
+}
+
 </style>
 </head>
 <body>
@@ -660,6 +740,239 @@ async function subscribeCurrent(){
     toastMsg('Firebase: '+(e.code||e.message||'error de lectura'),true);
   }
 }
+
+
+/* ===== CQ · UNIDADES A / B EN SERVICIOS Y HERMETICIDAD ===== */
+const CQ_UNITS=['A','B'];
+const CQ_SERV_KEYS=['agua','luz','gas'];
+const CQ_HERM_KEYS=['cloacal','pluvial','agua','gas','calefaccion'];
+
+function cqClonePair(v){return [!!(v?.[0]),!!(v?.[1])]}
+function cqCloneDates(v){return [v?.[0]||'',v?.[1]||'']}
+
+/* Compatibilidad automática con los datos anteriores: si había un único dato,
+   se replica en A y B para conservar exactamente el estado previo. */
+function normalize(d){
+  d=d||emptyData();
+  d.tramites=d.tramites||{};
+  Object.keys(TYPES).forEach(k=>d.tramites[k]=Object.assign({estado:'No iniciado',avance:0,exp:'',vto:'',presentado:'',aprobado:'',pagado:'No',obs:''},d.tramites[k]||{}));
+
+  d.servicios=d.servicios||{};
+  d.serviciosFechas=d.serviciosFechas||{};
+  d.serviciosComentarios=d.serviciosComentarios||{};
+  CQ_SERV_KEYS.forEach(k=>{
+    const oldV=d.servicios[k];
+    if(typeof oldV==='string') d.servicios[k]={A:oldV||'No iniciado',B:oldV||'No iniciado'};
+    else d.servicios[k]={A:oldV?.A||'No iniciado',B:oldV?.B||'No iniciado'};
+
+    const oldF=d.serviciosFechas[k];
+    if(oldF && !oldF.A && !oldF.B && ('inicio' in oldF || 'fin' in oldF)){
+      const f={inicio:oldF.inicio||'',fin:oldF.fin||''};
+      d.serviciosFechas[k]={A:{...f},B:{...f}};
+    }else{
+      d.serviciosFechas[k]={
+        A:Object.assign({inicio:'',fin:''},oldF?.A||{}),
+        B:Object.assign({inicio:'',fin:''},oldF?.B||{})
+      };
+    }
+
+    const oldC=d.serviciosComentarios[k];
+    if(typeof oldC==='string') d.serviciosComentarios[k]={A:oldC,B:oldC};
+    else d.serviciosComentarios[k]={A:oldC?.A||'',B:oldC?.B||''};
+  });
+
+  d.planos=d.planos||{};d.planosFechas=d.planosFechas||{};d.planosComentarios=d.planosComentarios||{};
+  d.planosEliminados=Array.isArray(d.planosEliminados)?d.planosEliminados:[];
+  PLANO_TYPES.forEach(k=>{if(!d.planosEliminados.includes(k)&&!d.planos[k])d.planos[k]='No iniciado'});
+  d.planosEliminados.forEach(k=>delete d.planos[k]);
+  d.files=Array.isArray(d.files)?d.files:[];d.pagos=Array.isArray(d.pagos)?d.pagos:[];
+
+  d.hermeticidad=d.hermeticidad||{};
+  d.hermeticidadFechas=d.hermeticidadFechas||{};
+  d.hermeticidadComentarios=d.hermeticidadComentarios||{};
+  CQ_HERM_KEYS.forEach(k=>{
+    const oldV=d.hermeticidad[k];
+    if(Array.isArray(oldV)) d.hermeticidad[k]={A:cqClonePair(oldV),B:cqClonePair(oldV)};
+    else d.hermeticidad[k]={A:cqClonePair(oldV?.A),B:cqClonePair(oldV?.B)};
+
+    const oldF=d.hermeticidadFechas[k];
+    if(Array.isArray(oldF)) d.hermeticidadFechas[k]={A:cqCloneDates(oldF),B:cqCloneDates(oldF)};
+    else d.hermeticidadFechas[k]={A:cqCloneDates(oldF?.A),B:cqCloneDates(oldF?.B)};
+
+    const oldC=d.hermeticidadComentarios[k];
+    if(typeof oldC==='string') d.hermeticidadComentarios[k]={A:oldC,B:oldC};
+    else d.hermeticidadComentarios[k]={A:oldC?.A||'',B:oldC?.B||''};
+  });
+
+  d.tasks=Array.isArray(d.tasks)?d.tasks:[];d.ficha=d.ficha||{};d.history=Array.isArray(d.history)?d.history:[];
+  return d;
+}
+
+async function migrateStatusValue(module,oldv,newv,scope=''){
+  for(const o of obras){
+    let d=normalize(allData[o.id]||((await dbApi.get(o.id))||emptyData())),changed=false;
+    if(module==='tramites'){
+      Object.keys(TYPES).forEach(k=>{if(d.tramites[k]?.estado===oldv){d.tramites[k].estado=newv;changed=true}});
+    }else if(module==='servicios'){
+      if(scope){
+        CQ_UNITS.forEach(u=>{if(d.servicios?.[scope]?.[u]===oldv){d.servicios[scope][u]=newv;changed=true}});
+      }
+    }else{
+      Object.keys(d.planos||{}).forEach(k=>{if(d.planos[k]===oldv){d.planos[k]=newv;changed=true}});
+    }
+    if(changed){allData[o.id]=d;await dbApi.save(o.id,d);if(o.id===curObra)obraData=d}
+  }
+}
+
+function avanceResumen(d){
+  d=normalize(d||emptyData());
+  const avgs=Object.values(d.tramites||{}).map(x=>Number(x.avance)||0);
+  const tramites=avgs.length?Math.round(avgs.reduce((a,b)=>a+b,0)/avgs.length):0;
+
+  let servDone=0,servTotal=0;
+  CQ_SERV_KEYS.forEach(k=>CQ_UNITS.forEach(u=>{servTotal++;if(servicioOk(d.servicios?.[k]?.[u],k))servDone++}));
+  const servicios=servTotal?Math.round(servDone/servTotal*100):0;
+
+  const plans=planoNames(d),planos=plans.length?Math.round(plans.filter(n=>(d.planos?.[n]||'No iniciado')==='Finalizado').length/plans.length*100):0;
+
+  let hechas=0,total=0;
+  CQ_HERM_KEYS.forEach(k=>CQ_UNITS.forEach(u=>{const v=d.hermeticidad?.[k]?.[u]||[false,false];hechas+=(v[0]?1:0)+(v[1]?1:0);total+=2}));
+  const hermeticidad=total?Math.round(hechas/total*100):0;
+  return {tramites,servicios,planos,hermeticidad};
+}
+
+function renderResumenEstadoGeneral(){
+  const el=document.getElementById('resumenEstadoGeneral');if(!el)return;
+  const servItems=[['agua','💧','Agua'],['luz','💡','Luz'],['gas','🔥','Gas']];
+  const hermItems=[['cloacal','🚽','Cloacal'],['pluvial','🌧️','Pluvial'],['agua','💧','Agua'],['gas','🔥','Gas'],['calefaccion','♨️','Calefacción']];
+  const cards=d=>{
+    d=normalize(d||emptyData());
+    const serv=servItems.map(([k,ico,n])=>CQ_UNITS.map(u=>{const v=d.servicios[k][u],ok=servicioOk(v,k);return `<span class="mini-status ${miniClass(v,ok)}">${ico} ${n} · ${u}: ${esc(v)} ${ok?'✓':''}</span>`}).join('')).join('');
+    const plans=planoNames(d).map(n=>{const v=d.planos?.[n]||'No iniciado',ok=isFinalStatus('planos',v);return `<span class="mini-status ${miniClass(v,ok)}">${planoIcon(n)} ${esc(n)}: ${esc(v)} ${ok?'✓':''}</span>`}).join('')||'<span class="all-note">Sin planos</span>';
+    const herm=hermItems.map(([k,ico,n])=>CQ_UNITS.map(u=>{const v=d.hermeticidad[k][u]||[false,false],c=(v[0]?1:0)+(v[1]?1:0);return `<span class="mini-status ${c===2?'ok':c===0?'bad':'mid'}">${ico} ${n} · ${u}: ${c}/2 ${c?'✓'.repeat(c):''}</span>`}).join('')).join('');
+    return `<div class="card"><div class="card-hd"><strong>💡 Estado de servicios</strong></div><div class="card-body"><div class="mini-statuses">${serv}</div></div></div>`+
+      `<div class="card"><div class="card-hd"><strong>📐 Planos de obra</strong></div><div class="card-body"><div class="mini-statuses">${plans}</div></div></div>`+
+      `<div class="card"><div class="card-hd"><strong>🧪 Pruebas de hermeticidad</strong></div><div class="card-body"><div class="mini-statuses">${herm}</div></div></div>`;
+  };
+  if(curObra==='__all__'){
+    el.className='all-summary';
+    el.innerHTML=obras.map(o=>`<div class="all-row"><div class="all-row-head"><strong>${esc(obraLabel(o))}</strong><span class="all-note">Resumen</span></div><div class="grid3" style="margin-top:8px">${cards(allData[o.id])}</div></div>`).join('')||'<div class="empty">Sin obras.</div>';
+  }else{
+    el.className='grid3';el.style.marginTop='10px';el.innerHTML=cards(obraData);
+  }
+}
+
+async function setServicioEstado(k,u,val,n){
+  if(curObra==='__all__')return;
+  obraData=normalize(obraData);
+  obraData.servicios[k][u]=val;
+  log(`Servicio ${n} · Unidad ${u}: ${val}`);
+  renderServicios();await persist();
+}
+async function setServicioFecha(k,u,campo,val,n){
+  if(curObra==='__all__')return;
+  obraData=normalize(obraData);
+  obraData.serviciosFechas[k][u][campo]=val||'';
+  log(`Servicio ${n} · Unidad ${u} · ${campo==='inicio'?'inicio':'finalización'}: ${val||'sin fecha'}`);
+  renderServicios();await persist();
+}
+async function setServicioComentario(k,u,val,n){
+  if(curObra==='__all__')return;
+  obraData=normalize(obraData);
+  obraData.serviciosComentarios[k][u]=(val||'').trim();
+  log(`Servicio ${n} · Unidad ${u} · comentario actualizado`);
+  await persist();
+}
+
+function renderServicios(){
+  if(!document.getElementById('serviciosGrid'))return;
+  const items=[['agua','💧','Agua'],['luz','💡','Luz'],['gas','🔥','Gas']];
+  if(curObra==='__all__'){
+    serviciosGrid.className='all-summary';
+    serviciosGrid.innerHTML=obras.map(o=>{
+      const d=normalize(allData[o.id]||emptyData());
+      const statuses=items.map(([k,ico,n])=>CQ_UNITS.map(u=>{const v=d.servicios[k][u],ok=servicioOk(v,k),f=d.serviciosFechas[k][u]||{};return `<span class="mini-status ${miniClass(v,ok)}">${ico} ${n} · ${u}: ${esc(v)} ${ok?'✓':''}${f.inicio?' · '+daysBetween(f.inicio,ok?f.fin:'')+' días':''}</span>`}).join('')).join('');
+      const comments=items.map(([k,ico,n])=>CQ_UNITS.filter(u=>(d.serviciosComentarios?.[k]?.[u]||'').trim()).map(u=>`<div class="cq-summary-comment">${ico} <b>${n} · Unidad ${u}:</b> ${esc(d.serviciosComentarios[k][u])}</div>`).join('')).join('');
+      return `<div class="all-row"><div class="all-row-head"><strong>${esc(obraLabel(o))}</strong><span class="all-note">Servicios</span></div><div class="mini-statuses">${statuses}</div>${comments?`<div class="cq-summary-comments">${comments}</div>`:''}</div>`;
+    }).join('')||'<div class="empty">Sin obras.</div>';
+    return;
+  }
+
+  obraData=normalize(obraData);
+  serviciosGrid.className='grid3';
+  serviciosGrid.innerHTML=items.map(([k,ico,n])=>{
+    const units=CQ_UNITS.map(u=>{
+      const v=obraData.servicios[k][u],ok=servicioOk(v,k),f=obraData.serviciosFechas[k][u]||{inicio:'',fin:''},coment=obraData.serviciosComentarios[k][u]||'';
+      return `<div class="unit-section"><div class="unit-title"><span>Unidad ${u}</span><span class="badge ${ok?'green':''}">${esc(v)}${ok?' ✓':''}</span></div>`+
+        `<div class="fld"><label>Estado</label><select onchange="setServicioEstado('${k}','${u}',this.value,'${n}')">${statusOptionsHtml('servicios',v,k)}</select></div>`+
+        `<div class="row2"><div class="fld"><label>Fecha de inicio</label><input type="date" value="${f.inicio||''}" onchange="setServicioFecha('${k}','${u}','inicio',this.value,'${n}')"></div>`+
+        `<div class="fld"><label>Fecha de finalización</label><input type="date" value="${f.fin||''}" onchange="setServicioFecha('${k}','${u}','fin',this.value,'${n}')"></div></div>`+
+        `<div class="fld cq-card-comment"><label>Comentarios</label><textarea rows="3" placeholder="Agregar comentario de ${n} · Unidad ${u}..." onchange="setServicioComentario('${k}','${u}',this.value,'${n}')">${esc(coment)}</textarea></div>`+
+        `${elapsedBadge(f.inicio,ok?f.fin:'',ok)}</div>`;
+    }).join('');
+    return `<div class="card"><div class="card-hd"><strong>${ico} ${n}</strong><button class="btn btn-light btn-sm" type="button" onclick="openStatusManager('servicios','${k}')">⚙ Estados</button></div><div class="card-body">${units}</div></div>`;
+  }).join('');
+}
+
+function hermeticidadChecks(v){const n=(v?.[0]?1:0)+(v?.[1]?1:0);return n===2?'<span class="done-check double" title="2 pruebas finalizadas">✓✓</span>':n===1?'<span class="done-check" title="1 prueba finalizada">✓</span>':''}
+
+function renderHermeticidad(){
+  const el=document.getElementById('hermeticidadGrid');if(!el)return;
+  const items=[['cloacal','🚽','Cloacal'],['pluvial','🌧️','Pluvial'],['agua','💧','Agua'],['gas','🔥','Gas'],['calefaccion','♨️','Calefacción']];
+  if(curObra==='__all__'){
+    el.className='all-summary';
+    el.innerHTML=obras.map(o=>{
+      const d=normalize(allData[o.id]||emptyData());
+      const statuses=items.map(([k,ico,n])=>CQ_UNITS.map(u=>{const v=d.hermeticidad[k][u]||[false,false],c=(v[0]?1:0)+(v[1]?1:0);return `<span class="mini-status ${c===2?'ok':c===0?'bad':'mid'}">${ico} ${n} · ${u}: ${c}/2 ${c?'✓'.repeat(c):''}</span>`}).join('')).join('');
+      const comments=items.map(([k,ico,n])=>CQ_UNITS.filter(u=>(d.hermeticidadComentarios?.[k]?.[u]||'').trim()).map(u=>`<div class="cq-summary-comment">${ico} <b>${n} · Unidad ${u}:</b> ${esc(d.hermeticidadComentarios[k][u])}</div>`).join('')).join('');
+      return `<div class="all-row"><div class="all-row-head"><strong>${esc(obraLabel(o))}</strong><span class="all-note">Hermeticidad</span></div><div class="mini-statuses">${statuses}</div>${comments?`<div class="cq-summary-comments">${comments}</div>`:''}</div>`;
+    }).join('')||'<div class="empty">Sin obras.</div>';
+    return;
+  }
+
+  obraData=normalize(obraData);
+  el.className='grid2';
+  el.innerHTML=items.map(([k,ico,n])=>{
+    let totalDone=0;CQ_UNITS.forEach(u=>{const v=obraData.hermeticidad[k][u];totalDone+=(v[0]?1:0)+(v[1]?1:0)});
+    const units=CQ_UNITS.map(u=>{
+      const v=obraData.hermeticidad[k][u],f=obraData.hermeticidadFechas[k][u],coment=obraData.hermeticidadComentarios[k][u]||'',c=(v[0]?1:0)+(v[1]?1:0);
+      return `<div class="unit-section"><div class="unit-title"><span>Unidad ${u} ${hermeticidadChecks(v)}</span><span class="badge ${c===2?'green':c===1?'amber':''}">${c}/2</span></div>`+
+        `<div class="herm-row"><label class="herm-label"><input type="checkbox" ${v[0]?'checked':''} onchange="setHermeticidad('${k}','${u}',0,this.checked,'${n}',this)"> Prueba antes de contrapiso</label><input class="herm-date" type="date" value="${esc(f[0])}" onchange="setHermeticidadFecha('${k}','${u}',0,this.value,'${n}')" title="Fecha prueba antes de contrapiso"></div>`+
+        `<div class="herm-row"><label class="herm-label"><input type="checkbox" ${v[1]?'checked':''} onchange="setHermeticidad('${k}','${u}',1,this.checked,'${n}',this)"> Prueba después de contrapiso</label><input class="herm-date" type="date" value="${esc(f[1])}" onchange="setHermeticidadFecha('${k}','${u}',1,this.value,'${n}')" title="Fecha prueba después de contrapiso"></div>`+
+        `<div class="fld cq-card-comment"><label>Comentarios</label><textarea rows="3" placeholder="Agregar comentario de ${n} · Unidad ${u}..." onchange="setHermeticidadComentario('${k}','${u}',this.value,'${n}')">${esc(coment)}</textarea></div></div>`;
+    }).join('');
+    return `<div class="card"><div class="card-hd"><strong>${ico} ${n}</strong><span class="badge ${totalDone===4?'green':totalDone?'amber':''}">${totalDone}/4</span></div><div class="card-body">${units}</div></div>`;
+  }).join('');
+}
+
+async function setHermeticidad(k,u,i,val,n,cb){
+  if(curObra==='__all__')return;
+  obraData=normalize(obraData);
+  if(val&&!obraData.hermeticidadFechas[k][u][i]){
+    if(cb)cb.checked=false;
+    alert('Para marcar esta prueba como realizada primero tenés que ingresar la fecha.');
+    renderHermeticidad();return;
+  }
+  obraData.hermeticidad[k][u][i]=!!val;
+  log(`Hermeticidad ${n} · Unidad ${u} · ${i===0?'antes':'después'} de contrapiso: ${val?'realizada':'pendiente'}`);
+  renderHermeticidad();await persist();
+}
+async function setHermeticidadFecha(k,u,i,val,n){
+  if(curObra==='__all__')return;
+  obraData=normalize(obraData);
+  obraData.hermeticidadFechas[k][u][i]=val||'';
+  log(`Hermeticidad ${n} · Unidad ${u} · fecha ${i===0?'antes':'después'} de contrapiso: ${val||'sin fecha'}`);
+  await persist();
+}
+async function setHermeticidadComentario(k,u,val,n){
+  if(curObra==='__all__')return;
+  obraData=normalize(obraData);
+  obraData.hermeticidadComentarios[k][u]=(val||'').trim();
+  log(`Hermeticidad ${n} · Unidad ${u} · comentario actualizado`);
+  await persist();
+}
+/* ===== FIN UNIDADES A / B ===== */
+
 </script>
 
 <script type="module">
