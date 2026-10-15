@@ -6957,10 +6957,10 @@ document.addEventListener('click',function(e){
   if(e.target!==inp && !dd.contains(e.target)) dd.style.display='none';
 });
 
-// CQ 15/10/2026 — CORTE DEFINITIVO ACOPIO → MATERIALES.
+// CQ 15/10/2026 — CORTE ACOPIO → MATERIALES POR FECHA DEL RETIRO.
 // El esquema con linkeo a Materiales comenzó el 05/08/2026.
-// Un acopio creado antes del corte pertenece al sistema viejo y jamás debe
-// auto-repararse ni sincronizarse con Materiales.
+// IMPORTANTE: el corte aplica al RETIRO, no a la fecha de creación del Acopio.
+// Un Acopio creado antes del 05/08 puede tener retiros posteriores válidos que sí deben linkear.
 var CQ_ACOPIO_MATERIALES_DESDE='2026-08-05';
 
 function cqFechaISOCorteAcopio(v){
@@ -6976,14 +6976,13 @@ function cqFechaISOCorteAcopio(v){
 }
 
 function cqAcopioSistemaViejoSinMateriales(a){
-  var f=cqFechaISOCorteAcopio(a&&a.creado);
-  return !!(f && f<CQ_ACOPIO_MATERIALES_DESDE);
+  // Ya NO se bloquea un Acopio completo por su fecha de creación.
+  // La regla correcta es únicamente la fecha de cada retiro.
+  return false;
 }
 
 function cqRetiroDebeIrAMateriales(r,a){
   if(!r||r.cargarMateriales!==true)return false;
-  a=a||getAcopio();
-  if(cqAcopioSistemaViejoSinMateriales(a))return false;
   var f=cqFechaISOCorteAcopio(r.fecha);
   if(f && f<CQ_ACOPIO_MATERIALES_DESDE)return false;
   return true;
@@ -7214,7 +7213,7 @@ function estadoMaterialesRetiro(retiro){
 
   if(!cqRetiroDebeIrAMateriales(retiro,a)){
     if(cqAcopioSistemaViejoSinMateriales(a)){
-      return {cls:'off',txt:'Acopio del sistema anterior al 05/08/2026 · sin link a Materiales'};
+      return {cls:'off',txt:'Retiro anterior al 05/08/2026 · sin link a Materiales'};
     }
     return retiro.cargarPanol===true
       ?{cls:'off',txt:'Materiales se registra luego al consumir desde Pañol'}

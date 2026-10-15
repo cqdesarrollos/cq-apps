@@ -8562,7 +8562,7 @@ async function cqGuardarMaterialesSeguro(extra){
     var depPostGuardado=cqDepurarCargasAcopioPreviasAlLinkeo();
     localStorage.setItem(DB_KEY,JSON.stringify(state));
     if(depPostGuardado.integraciones.length){
-      cqDesactivarIntegracionesAcopio(depPostGuardado.integraciones,'acopio_anterior_05_08_2026').catch(function(e){console.warn(e);});
+      cqDesactivarIntegracionesAcopio(depPostGuardado.integraciones,'retiro_anterior_05_08_2026').catch(function(e){console.warn(e);});
     }
   }
   return true;
@@ -8613,12 +8613,10 @@ async function initApp(){
 }
 
 
-// CQ 15/10/2026 — CORTE DEFINITIVO ACOPIO → MATERIALES.
+// CQ 15/10/2026 — CORTE ACOPIO → MATERIALES POR FECHA DEL RETIRO.
 // Regla de negocio: el linkeo comenzó el 05/08/2026.
-// Todo Acopio creado antes de esa fecha pertenece al esquema viejo y NUNCA
-// debe generar cargas en Materiales. También se descarta cualquier retiro
-// de Acopio con fecha anterior al corte, aunque haya recibido una integración
-// por una reparación/version posterior.
+// El corte aplica a la FECHA DEL RETIRO, no a la fecha de creación del Acopio.
+// Un Acopio creado antes del 05/08 puede tener retiros posteriores válidos.
 var CQ_ACOPIO_MATERIALES_DESDE='2026-08-05';
 
 function cqFechaISOCorteAcopio(v){
@@ -8660,8 +8658,7 @@ function cqEsRegistroDeAcopio(x){
 
 function cqEsAcopioAnteriorAlLinkeo(x){
   if(!cqEsRegistroDeAcopio(x))return false;
-  var fCont=cqFechaCreacionAcopioDesdeRegistro(x);
-  if(fCont && fCont<CQ_ACOPIO_MATERIALES_DESDE)return true;
+  // La fecha del contenedor NO decide: importa exclusivamente la fecha del retiro.
   var fRet=cqFechaISOCorteAcopio(x&&x.fecha);
   return !!(fRet && fRet<CQ_ACOPIO_MATERIALES_DESDE);
 }
@@ -8837,7 +8834,7 @@ async function loadFromFirebase(){
       migro=depAcopioCorte.cambio||migro;
       localStorage.setItem(DB_KEY,JSON.stringify(state));
       if(depAcopioCorte.integraciones.length){
-        cqDesactivarIntegracionesAcopio(depAcopioCorte.integraciones,'acopio_anterior_05_08_2026').catch(function(e){console.warn(e);});
+        cqDesactivarIntegracionesAcopio(depAcopioCorte.integraciones,'retiro_anterior_05_08_2026').catch(function(e){console.warn(e);});
       }
       if(depAcopioCorte.removidas){
         console.warn('Materiales: eliminadas '+depAcopioCorte.removidas+' carga(s) de Acopio del esquema anterior al 05/08/2026.');
@@ -9101,7 +9098,7 @@ function aplicarIntegracion(ev){
       return !coincide;
     });
     idsViejos.forEach(function(id){try{limpiarMaterialAutomaticoSinUso(id);}catch(_e){}});
-    cqDesactivarIntegracionesAcopio([ev.integrationId],'acopio_anterior_05_08_2026').catch(function(e){console.warn(e);});
+    cqDesactivarIntegracionesAcopio([ev.integrationId],'retiro_anterior_05_08_2026').catch(function(e){console.warn(e);});
     return state.cargas.length!==antesViejos;
   }
 
@@ -9471,7 +9468,7 @@ async function startFirebase(){
             var depAcopioRealtime=cqDepurarCargasAcopioPreviasAlLinkeo();
             migro=depAcopioRealtime.cambio||migro;
             if(depAcopioRealtime.integraciones.length){
-              cqDesactivarIntegracionesAcopio(depAcopioRealtime.integraciones,'acopio_anterior_05_08_2026').catch(function(e){console.warn(e);});
+              cqDesactivarIntegracionesAcopio(depAcopioRealtime.integraciones,'retiro_anterior_05_08_2026').catch(function(e){console.warn(e);});
             }
 
             localStorage.setItem(DB_KEY,JSON.stringify(state));
