@@ -10806,9 +10806,9 @@ function cqReporteObrasArchivadas(){
 }
 function cqReporteObraTile(nombre,idx,seleccionada){
   return '<button type="button" class="cq-report-obra-tile'+(seleccionada?' active':'')+'" '
-    +'style="box-sizing:border-box!important;position:relative!important;min-width:0!important;min-height:62px!important;height:auto!important;padding:8px 26px 8px 8px!important;border-radius:14px!important;font-size:11px!important;line-height:1.18!important;white-space:normal!important;overflow:visible!important;display:flex!important;align-items:center!important;justify-content:center!important;" '
+    +'style="box-sizing:border-box!important;position:relative!important;min-width:0!important;min-height:44px!important;height:44px!important;padding:5px 24px 5px 8px!important;border-radius:12px!important;font-size:10px!important;line-height:1.12!important;white-space:normal!important;overflow:visible!important;display:flex!important;align-items:center!important;justify-content:center!important;" '
     +'onclick="window.toggleCompareObra('+idx+')" title="'+escapeHtml(nombre)+'">'
-    +'<span class="cq-report-obra-name" style="display:block!important;width:100%!important;text-align:center!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:normal!important;word-break:normal!important;hyphens:none!important;line-height:1.18!important;">'+escapeHtml(nombre)+'</span>'
+    +'<span class="cq-report-obra-name" style="display:block!important;width:100%!important;text-align:center!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:normal!important;word-break:normal!important;hyphens:none!important;line-height:1.12!important;">'+escapeHtml(nombre)+'</span>'
     +(seleccionada?'<span class="cq-report-obra-check" style="position:absolute!important;right:5px!important;top:6px!important;transform:none!important;width:22px!important;height:22px!important;display:flex!important;align-items:center!important;justify-content:center!important;pointer-events:none!important;">✓</span>':'')
     +'</button>';
 }
@@ -10916,11 +10916,11 @@ function renderCompareObras(){
       return cqReporteObraTile(x.o,x.i,sel);
     }).join(''):'<div class="cq-report-empty-obras">No hay obras activas en Reporte. Podés restaurarlas desde <b>Archivadas</b>.</div>';
     Array.from(chipsEl.querySelectorAll('.cq-report-obra-tile')).forEach(function(btn){
-      btn.style.setProperty('min-height','62px','important');
-      btn.style.setProperty('height','auto','important');
-      btn.style.setProperty('padding','8px 26px 8px 8px','important');
-      btn.style.setProperty('font-size','11px','important');
-      btn.style.setProperty('line-height','1.18','important');
+      btn.style.setProperty('min-height','44px','important');
+      btn.style.setProperty('height','44px','important');
+      btn.style.setProperty('padding','5px 24px 5px 8px','important');
+      btn.style.setProperty('font-size','10px','important');
+      btn.style.setProperty('line-height','1.12','important');
     });
   }
   var catSel=document.getElementById('obra-cat-filter');
@@ -15896,6 +15896,81 @@ window.abrirGraficoDirecto = function(){
 
 
 
+
+<style id="cq-reporte-obras-tamano-gastos-v8">
+/* Tamaño inspirado en los botones de CQ Gastos: compacto, legible y 4 por fila. */
+#compare-obra-chips.cq-report-obras-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:8px!important;
+  width:100%!important;
+}
+#compare-obra-chips .cq-report-obra-tile{
+  min-height:44px!important;
+  height:44px!important;
+  padding:5px 24px 5px 8px!important;
+  border-radius:12px!important;
+  font-size:10px!important;
+  line-height:1.12!important;
+  font-weight:850!important;
+  white-space:normal!important;
+  overflow:hidden!important;
+}
+#compare-obra-chips .cq-report-obra-name{
+  display:-webkit-box!important;
+  -webkit-box-orient:vertical!important;
+  -webkit-line-clamp:3!important;
+  white-space:normal!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  word-break:normal!important;
+  overflow-wrap:break-word!important;
+  line-height:1.12!important;
+  max-height:34px!important;
+}
+#compare-obra-chips .cq-report-obra-check{
+  right:4px!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  width:18px!important;
+  height:18px!important;
+  font-size:12px!important;
+}
+@media (min-width:621px) and (max-width:1100px){
+  #compare-obra-chips.cq-report-obras-grid{gap:9px!important}
+  #compare-obra-chips .cq-report-obra-tile{
+    min-height:46px!important;
+    height:46px!important;
+    padding:5px 26px 5px 9px!important;
+    font-size:10.5px!important;
+  }
+  #compare-obra-chips .cq-report-obra-name{max-height:36px!important}
+}
+@media(max-width:620px){
+  #compare-obra-chips.cq-report-obras-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:6px!important;
+  }
+  #compare-obra-chips .cq-report-obra-tile{
+    min-height:42px!important;
+    height:42px!important;
+    padding:4px 18px 4px 5px!important;
+    border-radius:10px!important;
+    font-size:8.8px!important;
+    line-height:1.08!important;
+  }
+  #compare-obra-chips .cq-report-obra-name{
+    line-height:1.08!important;
+    max-height:29px!important;
+  }
+  #compare-obra-chips .cq-report-obra-check{
+    right:2px!important;
+    width:16px!important;
+    height:16px!important;
+    font-size:11px!important;
+  }
+}
+</style>
 </body>
 </html>
 
