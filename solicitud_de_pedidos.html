@@ -769,94 +769,48 @@ function showView(id,b){document.querySelectorAll('.view').forEach(x=>x.classLis
 function exportar(){let rows=pedidos.map(p=>`${p.semana} | ${p.obra} | ${p.responsable} | ${p.estado}\n`+p.items.map(x=>`  - ${x.material}: ${x.cantidad}`).join('\n')).join('\n\n');if(navigator.share)navigator.share({title:'Solicitud de Pedidos CQ',text:rows||'Sin pedidos'});else navigator.clipboard.writeText(rows).then(()=>alert('Resumen copiado.'))}
 initCatalog();render();
 </script>
-<script type="module" id="cq-pedidos-obras-materiales">
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-de-obra.firebaseapp.com",projectId:"cq-mano-de-obra",storageBucket:"cq-mano-de-obra.firebasestorage.app",messagingSenderId:"502127540211",appId:"1:502127540211:web:8daefc75bdaafad412c486"};
-const obraTxt=o=>String(typeof o==="string"?o:(o?.obra||o?.nombre||o?.name||o?.label||o?.short||o?.id||"")).trim();
-function extraerObras(d){
- const set=new Set();
- const normalizar=v=>{
-   const t=String(v??"").trim();
-   let m=t.match(/\b(\d+)\s*\/\s*(\d+)\b/);
-   if(m)return Number(m[1])+"/"+Number(m[2]);
-   return "";
- };
- const add=v=>{const o=normalizar(v);if(o)set.add(o)};
-
- const walk=(x,key="",depth=0)=>{
-   if(x==null||depth>9)return;
-   if(typeof x==="string"||typeof x==="number"){
-     if(/obra|lote|manzana|mz/i.test(key))add(x);
-     return;
-   }
-   if(Array.isArray(x)){x.forEach(v=>walk(v,key,depth+1));return}
-   if(typeof x==="object"){
-     // Direct obra fields.
-     ["obra","obraId","obra_id","obraNombre","obra_nombre","loteManzana","lote_manzana"].forEach(k=>{
-       if(x[k]!=null)add(x[k]);
-     });
-     // Separate lote/manzana fields.
-     const lote=x.lote??x.lot??x.numeroLote??x.loteNro;
-     const mz=x.manzana??x.mz??x.numeroManzana??x.manzanaNro;
-     if(lote!=null&&mz!=null)add(String(lote)+"/"+String(mz));
-
-     for(const [k,v] of Object.entries(x)){
-       // Some Materiales structures use the obra itself as an object key.
-       add(k);
-       walk(v,k,depth+1);
-     }
-   }
- };
- walk(d);
- return [...set].sort((a,b)=>a.localeCompare(b,"es",{numeric:true}));
-}
-async function cargarObrasDesdeMateriales(){
- try{
-   const app=getApps().length?getApp():initializeApp(cfg),fs=getFirestore(app);
-   const snap=await getDoc(doc(fs,"materiales","data_planilla_exacta_v4"));
-   if(!snap.exists())throw new Error("No existe Materiales");
-   const obras=extraerObras(snap.data()||{});
-   if(obras.length){
-     window.cqSetCatalogoObrasFiltro?.(obras);
-     window.cqPintarObrasCorrectas?.(obras);
-   }else{
-     console.warn("Materiales no devolvió obras reconocibles; se conserva el catálogo visible actual.");
-   }
-   const sel=document.getElementById("obra");if(sel)sel.dataset.origen="Materiales · Firebase";
- }catch(e){console.warn("No se pudieron leer obras desde Materiales",e)}
-}
-cargarObrasDesdeMateriales();
-window.cargarObrasSolicitudPedidos=cargarObrasDesdeMateriales;
+<script id="cq-pedidos-obras-materiales-desactivado">
+/* CQ 16/10/2026 — Obras de Solicitud de pedidos: única fuente = Gastos/config/app.
+   Se desactiva el cargador legado que leía obras desde Materiales y las reducía a 12/93, 13/93, etc.
+   El catálogo de materiales NO se modifica. */
+window.cargarObrasSolicitudPedidos=function(){
+  return Array.isArray(window.CQ_OBRAS_GASTOS)?window.CQ_OBRAS_GASTOS.slice():[];
+};
 </script>
 
 <script id="cq-pedidos-v13-fixes">
 /* CQ V13: obra = lote/manzana; guardado robusto */
 (function(){
-  const OBRAS_BASE=[];
-
-  function claveObra(v){
-    const raw=String(v||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-    let m=raw.match(/(?:lote|l)?\s*(\d+)\s*(?:\/|[- ]*mz|[- ]*manzana)\s*(\d+)/i);
-    if(m)return Number(m[1])+"/"+Number(m[2]);
-    m=raw.match(/\b(\d+)\s*\/\s*(\d+)\b/);
-    return m?Number(m[1])+"/"+Number(m[2]):"";
+  function nombreObraCompleto(o){
+    if(typeof o==="string")return o.trim();
+    return String(o?.label||o?.short||o?.id||"").trim();
+  }
+  function claveNombreObra(v){
+    return String(v||"").trim().toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
   }
 
+  // CQ 16/10/2026 — conservar exactamente el nombre visible de Gastos.
+  // Ya no se transforma "L12 Mz93 (Nelson)" en "12/93".
   window.cqPintarObrasCorrectas=function(extra){
     const sel=document.getElementById("obra");
     if(!sel)return;
-    let vals=[...OBRAS_BASE];
+    const actual=String(sel.value||"").trim();
+    const vals=[];
+    const seen=new Set();
     (extra||[]).forEach(o=>{
-      const valsObj=typeof o==="string"?[o]:[o&&o.label,o&&o.short,o&&o.id];
-      for(const v of valsObj){ const k=claveObra(v); if(k){vals.push(k);break;} }
+      const nombre=nombreObraCompleto(o);
+      const k=claveNombreObra(nombre);
+      if(!nombre||!k||seen.has(k))return;
+      seen.add(k);
+      vals.push(nombre);
     });
-    vals=[...new Set(vals)];
-    sel.innerHTML='<option value="">Seleccionar obra</option>'+vals.map(v=>'<option value="'+v+'">'+v+'</option>').join('');
+    sel.innerHTML='<option value="">Seleccionar obra</option>'+vals.map(v=>'<option></option>').join('');
+    [...sel.options].slice(1).forEach((op,i)=>{op.value=vals[i];op.textContent=vals[i];});
+    if(vals.includes(actual))sel.value=actual;
   };
 
-  // Immediate correct list for local testing; Firebase loader may later add new lote/manzana works.
-  window.cqPintarObrasCorrectas([]);
+  // La lista definitiva llega desde Gastos/config/app (v69).
+  window.cqPintarObrasCorrectas(Array.isArray(window.CQ_OBRAS_GASTOS)?window.CQ_OBRAS_GASTOS:[]);
 
   // Replace guardar with a self-contained version, avoiding stale references to removed Responsable/Subrubro fields.
   window.guardar=function(){
