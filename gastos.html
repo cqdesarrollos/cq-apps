@@ -14230,3 +14230,213 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   normalizeSelection();
 })();
 </script>
+
+<!-- CQ FINAL · Post obras prorrateadas por año -->
+<style id="cq-post-obras-prorrateadas-style">
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-post-prorrateado th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-post-prorrateado td{font-weight:850!important;}
+#view-reporte-financiero .rep-fin-post-note{margin-top:7px!important;}
+</style>
+<script id="cq-post-obras-prorrateadas-final">
+(function(){
+  /* ================================================================
+     CQ · POST OBRAS PRORRATEADAS
+     Misma lógica anual que OFICINA:
+     gasto de cada año / todas las unidades vendidas ese mismo año.
+     ================================================================ */
+  function normPostObra(o){
+    return `${o?.id||''} ${o?.label||''} ${o?.short||''}`
+      .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function isPostObra(o){
+    const t=normPostObra(o);
+    return t.includes('post obra') || t.includes('postobra');
+  }
+  function postObraConfig(){
+    try{return (config.obras||[]).find(isPostObra)||null;}catch(e){return null;}
+  }
+  function postObraSelected(){
+    try{
+      const post=postObraConfig();
+      const ids=typeof window.getReporteFinObrasSel==='function'?window.getReporteFinObrasSel():null;
+      if(post&&Array.isArray(ids))return ids.includes(post.id);
+    }catch(e){}
+    try{return (repSelectedObras()||[]).some(isPostObra);}catch(e){return false;}
+  }
+  function selectedYears(){
+    try{
+      const p=window.CQ_MULTI_MONTH_V31?.['reporte-financiero'];
+      if(Array.isArray(p)&&p.length)return [...new Set(p.map(v=>String(v).slice(0,4)).filter(y=>/^\d{4}$/.test(y)))].sort();
+    }catch(e){}
+    try{
+      if(typeof availableYears==='function')return availableYears('reporte-financiero').map(String).filter(y=>/^\d{4}$/.test(y)).sort();
+    }catch(e){}
+    return [String(new Date().getFullYear())];
+  }
+  function soldDates(fin){
+    let u={};
+    try{u=typeof cqFinUnits==='function'?cqFinUnits(fin||{}):unidadesFin(fin||{});}catch(e){u={};}
+    return ['A','B'].map(k=>u?.[k]).filter(x=>x&&x.etapa&&/^\d{4}-\d{2}/.test(String(x.fechaVenta||''))).map(x=>String(x.fechaVenta));
+  }
+  function soldCounts(fin,info){
+    const counts={};
+    soldDates(fin).forEach(d=>{const y=d.slice(0,4);if(info?.yearData?.[y])counts[y]=(counts[y]||0)+1;});
+    return counts;
+  }
+  function sourceInfo(sourceObra,enabled){
+    const years=selectedYears(),yearData={};
+    years.forEach(y=>yearData[y]={year:y,total:0,units:0,perUnit:0,byMonth:{}});
+    if(!sourceObra||!enabled)return {total:0,byMonth:{},units:0,perUnit:0,enabled:false,years,yearData};
+
+    const gastos=repGetState(sourceObra.id).gastos||[];
+    gastos.forEach(g=>{
+      const y=String(g.fecha||'').slice(0,4);
+      if(!yearData[y])return;
+      const usd=toUSD(g.monto,g.moneda,g.tc)||0;
+      yearData[y].total+=usd;
+      const ym=String(g.fecha||'').slice(0,7);
+      if(/^\d{4}-\d{2}$/.test(ym))yearData[y].byMonth[ym]=(yearData[y].byMonth[ym]||0)+usd;
+    });
+
+    /* Denominador: todas las unidades vendidas en ESE año. */
+    (config.obras||[]).forEach(o=>{
+      if(isPostObra(o))return;
+      try{if(typeof isObraSimple==='function'&&isObraSimple(o.id))return;}catch(e){}
+      const fin=repGetState(o.id).financiero||{};
+      soldDates(fin).forEach(d=>{const y=d.slice(0,4);if(yearData[y])yearData[y].units++;});
+    });
+
+    Object.values(yearData).forEach(d=>d.perUnit=d.units?d.total/d.units:0);
+    const costYears=Object.values(yearData).filter(d=>Math.abs(d.total)>0.000001);
+    const total=costYears.reduce((a,d)=>a+d.total,0);
+    const units=costYears.reduce((a,d)=>a+d.units,0);
+    const byMonth={};
+    costYears.forEach(d=>Object.entries(d.byMonth).forEach(([ym,v])=>byMonth[ym]=(byMonth[ym]||0)+v));
+    return {total,byMonth,units,perUnit:units?total/units:0,enabled:true,years,yearData};
+  }
+  function allocatedCost(info,counts){
+    let total=0;
+    Object.entries(counts||{}).forEach(([y,n])=>{const yd=info?.yearData?.[y];if(yd&&yd.units)total+=yd.perUnit*n;});
+    return total;
+  }
+  function allocatedEntries(sourceObra,info,counts,prefix,label){
+    const out=[];
+    if(!sourceObra||!info?.enabled)return out;
+    (repGetState(sourceObra.id).gastos||[]).forEach((g,i)=>{
+      const y=String(g.fecha||'').slice(0,4),yd=info.yearData?.[y],own=counts?.[y]||0;
+      if(!yd||!yd.total||!yd.units||!own)return;
+      const share=own/yd.units;
+      const usd=(toUSD(g.monto,g.moneda,g.tc)||0)*share;
+      if(!usd)return;
+      out.push({id:`${prefix}_${y}_${i}`,fecha:g.fecha,cat:'ofi',subrubro:label,moneda:'usd',monto:usd,tc:1,tipoMovimiento:g.tipoMovimiento||'gasto'});
+    });
+    return out;
+  }
+
+  window.cqPostObraProrrateoInfo=function(){return sourceInfo(postObraConfig(),postObraSelected());};
+
+  /* Filas financieras: sumar Post obra al ajuste y excluir la propia solapa como proyecto. */
+  const prevRows=window.repFinRowsData;
+  if(typeof prevRows==='function'){
+    window.repFinRowsData=function(){
+      const base=(prevRows.apply(this,arguments)||[]).filter(r=>!isPostObra(r?.o));
+      const postObra=postObraConfig();
+      const postInfo=sourceInfo(postObra,postObraSelected());
+      let officeInfo={enabled:false,yearData:{}};
+      try{officeInfo=typeof officeFixedCostInfo==='function'?officeFixedCostInfo():officeInfo;}catch(e){}
+      let officeObra=null;
+      try{officeObra=(config.obras||[]).find(o=>String(o.id)==='oficina')||{id:'oficina'};}catch(e){officeObra={id:'oficina'};}
+
+      return base.map(r=>{
+        const postCounts=soldCounts(r.fin||{},postInfo);
+        const postCost=allocatedCost(postInfo,postCounts);
+        const officeCounts=soldCounts(r.fin||{},officeInfo);
+        const fixedEntries=allocatedEntries(officeObra,officeInfo,officeCounts,'fixed_year','Costos fijos prorrateados');
+        const postEntries=allocatedEntries(postObra,postInfo,postCounts,'post_year','Post obras prorrateadas');
+        const adjusted=calcularMetricasFinancieras(r.fin||{},[...(r.s?.gastos||[]),...fixedEntries,...postEntries]);
+        const net=(Number(r.direct?.margen)||0)-(Number(r.fixedCost)||0)-postCost;
+        return {...r,postCost,postCounts,postInfo,adjusted,net};
+      });
+    };
+    try{repFinRowsData=window.repFinRowsData;}catch(e){}
+  }
+
+  /* Métrica/botón superior, colocada justo debajo de Costos fijos en el orden lógico. */
+  const metrics=window.REP_FIN_METRICS||{};
+  if(!metrics.postObras){
+    const ordered={};
+    Object.entries(metrics).forEach(([k,v])=>{
+      ordered[k]=v;
+      if(k==='costosFijos')ordered.postObras={label:'Post obras prorrateadas',type:'usd'};
+    });
+    if(!ordered.postObras)ordered.postObras={label:'Post obras prorrateadas',type:'usd'};
+    window.REP_FIN_METRICS=ordered;
+  }
+  const prevMetricValue=window.repFinMetricValueRow;
+  window.repFinMetricValueRow=function(r,key){
+    if(key==='postObras')return Number(r?.postCost)||0;
+    return typeof prevMetricValue==='function'?prevMetricValue(r,key):0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow;}catch(e){}
+
+  /* Nueva fila debajo de Costos fijos prorrateados. */
+  const prevPivot=window.repFinPivot;
+  if(typeof prevPivot==='function'){
+    window.repFinPivot=function(rows){
+      let html=prevPivot.apply(this,arguments);
+      if(!Array.isArray(rows)||!rows.length)return html;
+      const vals=rows.map(r=>Number(r?.postCost)||0),sum=vals.reduce((a,v)=>a+v,0);
+      const money=v=>fmt(v,'usd');
+      const cells=vals.map(v=>`<td class="${v<0?'bad':v>0?'good':''}">${money(v)}</td>`).join('');
+      const row=`<tr class="rep-row-post-prorrateado"><th>Post obras prorrateadas</th>${cells}<td class="rep-total-col">${money(sum)}</td></tr>`;
+      const re=/(<tr[^>]*>\s*<th>Costos fijos prorrateados<\/th>[\s\S]*?<\/tr>)/i;
+      if(re.test(html))html=html.replace(re,'$1'+row);
+      return html;
+    };
+    try{repFinPivot=window.repFinPivot;}catch(e){}
+  }
+
+  /* Detalle anual y texto explicativo final. */
+  const prevRender=window.renderReporteFinancieroComparativo;
+  if(typeof prevRender==='function'){
+    window.renderReporteFinancieroComparativo=function(){
+      const out=prevRender.apply(this,arguments);
+      try{
+        const el=document.getElementById('reporte-financiero');if(!el)return out;
+        const info=sourceInfo(postObraConfig(),postObraSelected());
+        el.querySelector('.rep-fin-post-note')?.remove();
+        if(info.enabled){
+          const parts=Object.values(info.yearData||{}).filter(d=>Math.abs(d.total)>0.000001).sort((a,b)=>a.year.localeCompare(b.year)).map(d=>`<strong>${d.year}:</strong> ${fmt(d.total,'usd')} ÷ ${d.units} un. = ${d.units?fmt(d.perUnit,'usd'):'U$S 0'} por unidad`);
+          const anchor=el.querySelector('.rep-fin-fixed-note');
+          if(parts.length){
+            const n=document.createElement('div');n.className='rep-fin-fixed-note rep-fin-post-note';n.innerHTML=`<strong>Post obras prorrateadas por año:</strong> ${parts.join(' &nbsp;·&nbsp; ')}. Cada gasto de Post obra se imputa únicamente a unidades vendidas en su mismo año.`;
+            if(anchor)anchor.insertAdjacentElement('afterend',n);else el.prepend(n);
+          }
+        }else{
+          el.querySelectorAll('.rep-fin-pivot tbody tr').forEach(tr=>{
+            const t=(tr.querySelector('th')?.textContent||'').trim().toLowerCase();
+            if(t==='post obras prorrateadas')tr.remove();
+          });
+        }
+        const note=el.querySelector('.rep-mini-note');
+        if(note){
+          const officeOn=(()=>{
+            try{
+              const ids=typeof window.getReporteFinObrasSel==='function'?window.getReporteFinObrasSel():null;
+              if(Array.isArray(ids))return ids.includes('oficina');
+            }catch(e){}
+            try{return (repSelectedObras()||[]).some(o=>String(o?.id)==='oficina');}catch(e){return false;}
+          })();
+          const postOn=info.enabled;
+          if(officeOn&&postOn)note.textContent='Capital máximo, ROE, TIR, Payback y Capital/Costo incluyen costos fijos de Oficina y Post obras prorrateadas. Ganancia proyectos se muestra antes de ambos; Resultado neto descuenta ambos.';
+          else if(postOn)note.textContent='Capital máximo, ROE, TIR, Payback y Capital/Costo incluyen Post obras prorrateadas. Ganancia proyectos se muestra antes de ese prorrateo; Resultado neto lo descuenta.';
+        }
+      }catch(e){console.warn('Post obras prorrateadas:',e);}
+      return out;
+    };
+    try{renderReporteFinancieroComparativo=window.renderReporteFinancieroComparativo;}catch(e){}
+  }
+})();
+
+</script>
