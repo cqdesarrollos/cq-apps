@@ -7924,4 +7924,268 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 })();
 </script>
+
+<style id="cq-v80-project-formula-style">
+/* v80 · fórmula visible y editable en tarjetas de proyectos */
+#projectsHeaderCards .cq-project-formula-box{
+  margin-top:6px;padding-top:5px;border-top:1px dashed rgba(82,105,95,.22);min-width:0;
+}
+#projectsHeaderCards .cq-project-formula-head{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px;
+}
+#projectsHeaderCards .cq-project-formula-head span{
+  font-size:7px;text-transform:uppercase;letter-spacing:.06em;font-weight:850;color:#718078;
+}
+#projectsHeaderCards .cq-project-formula-head em{
+  font-style:normal;font-size:6px;line-height:1;padding:2px 5px;border-radius:999px;font-weight:900;letter-spacing:.04em;
+  background:#f1f4f2;color:#7a8781;border:1px solid #e0e6e3;
+}
+#projectsHeaderCards .cq-project-formula-box.is-auto .cq-project-formula-head em{
+  background:#e5f1eb;color:#3f6d59;border-color:#cfe2d8;
+}
+#projectsHeaderCards .cq-project-formula{
+  width:100%;height:27px;border:1px solid #d9e3de;border-radius:7px;background:rgba(255,255,255,.82);
+  color:#40584e;padding:3px 6px;font:700 9px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;outline:none;
+  min-width:0;
+}
+#projectsHeaderCards .cq-project-formula:focus{
+  background:#fff;border-color:#89aa9a;box-shadow:0 0 0 2px rgba(137,170,154,.14);
+}
+#projectsHeaderCards .cq-head-project-card.new .cq-project-formula{color:#587990}
+#projectsHeaderCards .cq-head-project-card.prev .cq-project-formula{color:#876b47}
+#projectsHeaderCards .cq-head-project-card.extra .cq-project-formula{color:#625f80}
+@media(max-width:600px){
+  #projectsHeaderCards .cq-project-formula-box{margin-top:4px;padding-top:4px}
+  #projectsHeaderCards .cq-project-formula-head{margin-bottom:2px}
+  #projectsHeaderCards .cq-project-formula-head span{font-size:5.5px}
+  #projectsHeaderCards .cq-project-formula-head em{font-size:5px;padding:1px 3px}
+  #projectsHeaderCards .cq-project-formula{height:22px;font-size:7px;padding:2px 4px;border-radius:6px}
+}
+</style>
+
+<script id="cq-v80-project-formulas">
+(function(){
+  /* CQ v80 · Fórmulas visibles/editables en tarjetas de proyectos */
+  function cqV80EscAttr(v){
+    return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function cqV80NormalizeFormula(v){
+    const s=String(v??'').trim();
+    if(!s)return null;
+    return s.startsWith('=')?s:'='+s;
+  }
+  function cqV80EnsureExtras(){
+    if(typeof projectsState==='undefined')return;
+    const n=projectsState.months?.length||0;
+    projectsState.extraProjects=projectsState.extraProjects||[];
+    projectsState.extraProjects.forEach(p=>{
+      p.values=Array.isArray(p.values)?p.values:[];
+      p.formulas=Array.isArray(p.formulas)?p.formulas:[];
+      p.overrides=Array.isArray(p.overrides)?p.overrides:[];
+      while(p.values.length<n)p.values.push(p.values.at(-1)||0);
+      while(p.formulas.length<n)p.formulas.push(null);
+      while(p.overrides.length<n)p.overrides.push(false);
+      if(p.formulas.length>n)p.formulas.length=n;
+      if(p.overrides.length>n)p.overrides.length=n;
+    });
+  }
+  function cqV80Eval(formula,mi){
+    if(!formula || typeof pEvalFormula!=='function')return null;
+    const v=pEvalFormula(formula,mi);
+    return v!==null && Number.isFinite(Number(v))?Number(v):null;
+  }
+  function cqV80RecalcExtras(){
+    cqV80EnsureExtras();
+    if(typeof projectsState==='undefined')return;
+    projectsState.extraProjects.forEach(p=>{
+      for(let mi=0;mi<projectsState.months.length;mi++){
+        const f=p.formulas?.[mi];
+        if(f && !p.overrides?.[mi]){
+          const v=cqV80Eval(f,mi);
+          if(v!==null)p.values[mi]=v;
+        }
+      }
+    });
+  }
+  function cqV80FormulaHtml(kind,index,mi,formula,active){
+    const attr=kind==='row'?`data-v80-row-formula="${index}"`:`data-v80-extra-formula="${index}"`;
+    const status=formula?(active?'AUTO':'MANUAL'):'MANUAL';
+    return `<div class="cq-project-formula-box ${formula&&active?'is-auto':'is-manual'}">
+      <div class="cq-project-formula-head"><span>Fórmula</span><em>${status}</em></div>
+      <input class="cq-project-formula" ${attr} data-v80-mi="${mi}" value="${cqV80EscAttr(formula||'')}" placeholder="Ej. =S12+5000" autocomplete="off" spellcheck="false">
+    </div>`;
+  }
+  function cqV80InjectFormulaFields(){
+    const target=document.getElementById('projectsHeaderCards');
+    if(!target || typeof projectsState==='undefined')return;
+    const activePage=document.querySelector('.page-tab.active')?.dataset.page;
+    if(activePage!=='projectsPage')return;
+    cqV80EnsureExtras();
+    const mi=Math.max(0,Math.min(typeof projectsMonth==='number'?projectsMonth:0,projectsState.months.length-1));
+
+    target.querySelectorAll('[data-v40-row]').forEach(valueInput=>{
+      const row=+valueInput.dataset.v40Row;
+      if(row!==14 && row!==15)return;
+      const card=valueInput.closest('.cq-head-project-card');
+      if(!card || card.querySelector('[data-v80-row-formula]'))return;
+      const obj=projectsState.rows?.[String(row)];
+      if(!obj)return;
+      const formula=obj.formulas?.[mi]||'';
+      const active=!!formula && !obj.overrides?.[mi];
+      const net=card.querySelector('.cq-cost-net');
+      const holder=document.createElement('div');
+      holder.innerHTML=cqV80FormulaHtml('row',row,mi,formula,active);
+      card.insertBefore(holder.firstElementChild,net||null);
+    });
+
+    target.querySelectorAll('[data-v79-extra-value]').forEach(valueInput=>{
+      const pi=+valueInput.dataset.v79ExtraValue;
+      const card=valueInput.closest('.cq-head-project-card');
+      if(!card || card.querySelector('[data-v80-extra-formula]'))return;
+      const p=projectsState.extraProjects?.[pi];
+      if(!p)return;
+      const formula=p.formulas?.[mi]||'';
+      const active=!!formula && !p.overrides?.[mi];
+      const net=card.querySelector('.cq-cost-net');
+      const holder=document.createElement('div');
+      holder.innerHTML=cqV80FormulaHtml('extra',pi,mi,formula,active);
+      card.insertBefore(holder.firstElementChild,net||null);
+
+      /* Si hay fórmula, editar el importe lo convierte en valor manual. */
+      valueInput.onchange=()=>{
+        const project=projectsState.extraProjects?.[pi];
+        if(!project)return;
+        project.values[mi]=pParseInput(valueInput.value,'usd')||0;
+        if(project.formulas?.[mi])project.overrides[mi]=true;
+        pPersist();
+        cqV40RenderProjectCards();
+      };
+    });
+
+    target.querySelectorAll('[data-v80-row-formula]').forEach(inp=>{
+      inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
+      inp.onchange=()=>{
+        const row=+inp.dataset.v80RowFormula;
+        const idx=+inp.dataset.v80Mi;
+        const obj=projectsState.rows?.[String(row)];
+        if(!obj)return;
+        const f=cqV80NormalizeFormula(inp.value);
+        if(f){
+          const test=cqV80Eval(f,idx);
+          if(test===null){
+            alert('No se pudo calcular esa fórmula. Revisá la sintaxis y las referencias.');
+            inp.value=obj.formulas?.[idx]||'';
+            return;
+          }
+          obj.formulas[idx]=f;
+          obj.overrides[idx]=false;
+        }else{
+          obj.formulas[idx]=null;
+          obj.overrides[idx]=true;
+        }
+        if(typeof pRecalc==='function')pRecalc();
+        pPersist();
+        if(typeof projectsRender==='function')projectsRender();
+        cqV40RenderProjectCards();
+      };
+    });
+
+    target.querySelectorAll('[data-v80-extra-formula]').forEach(inp=>{
+      inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
+      inp.onchange=()=>{
+        const pi=+inp.dataset.v80ExtraFormula;
+        const idx=+inp.dataset.v80Mi;
+        const p=projectsState.extraProjects?.[pi];
+        if(!p)return;
+        const f=cqV80NormalizeFormula(inp.value);
+        if(f){
+          const test=cqV80Eval(f,idx);
+          if(test===null){
+            alert('No se pudo calcular esa fórmula. Revisá la sintaxis y las referencias.');
+            inp.value=p.formulas?.[idx]||'';
+            return;
+          }
+          p.formulas[idx]=f;
+          p.overrides[idx]=false;
+          p.values[idx]=test;
+        }else{
+          p.formulas[idx]=null;
+          p.overrides[idx]=true;
+        }
+        pPersist();
+        cqV40RenderProjectCards();
+      };
+    });
+  }
+
+  /* Extender las fórmulas de proyectos agregados cuando se agregan/eliminan meses. */
+  if(typeof pAddMonth==='function' && !pAddMonth.__cqV80Wrapped){
+    const oldAddMonth=pAddMonth;
+    const wrappedAddMonth=function(){
+      cqV80EnsureExtras();
+      const src=typeof projectsMonth==='number'?projectsMonth:0;
+      const before=projectsState.months.length;
+      const srcFormulas=(projectsState.extraProjects||[]).map(p=>p.formulas?.[src]||null);
+      oldAddMonth.apply(this,arguments);
+      if(projectsState.months.length>before){
+        const newMi=projectsState.months.length-1;
+        cqV80EnsureExtras();
+        (projectsState.extraProjects||[]).forEach((p,pi)=>{
+          const sf=srcFormulas[pi];
+          p.formulas[newMi]=sf && typeof pTranslateFormula==='function'?pTranslateFormula(sf,src,newMi):sf;
+          p.overrides[newMi]=false;
+          if(p.formulas[newMi]){
+            const v=cqV80Eval(p.formulas[newMi],newMi);
+            if(v!==null)p.values[newMi]=v;
+          }
+        });
+        pPersist();
+        if(typeof projectsRender==='function')projectsRender();
+      }
+    };
+    wrappedAddMonth.__cqV80Wrapped=true;
+    pAddMonth=wrappedAddMonth;
+  }
+
+  if(typeof pDeleteMonth==='function' && !pDeleteMonth.__cqV80Wrapped){
+    const oldDeleteMonth=pDeleteMonth;
+    const wrappedDeleteMonth=function(){
+      cqV80EnsureExtras();
+      const idx=typeof projectsMonth==='number'?projectsMonth:0;
+      const before=projectsState.months.length;
+      oldDeleteMonth.apply(this,arguments);
+      if(projectsState.months.length<before){
+        (projectsState.extraProjects||[]).forEach(p=>{
+          if(Array.isArray(p.formulas))p.formulas.splice(idx,1);
+          if(Array.isArray(p.overrides))p.overrides.splice(idx,1);
+        });
+        cqV80EnsureExtras();
+        pPersist();
+        if(typeof projectsRender==='function')projectsRender();
+      }
+    };
+    wrappedDeleteMonth.__cqV80Wrapped=true;
+    pDeleteMonth=wrappedDeleteMonth;
+  }
+
+  /* Mantener fórmulas de extras recalculadas y agregar la UI después de cada render. */
+  if(typeof cqV40RenderProjectCards==='function' && !cqV40RenderProjectCards.__cqV80Wrapped){
+    const oldCards=cqV40RenderProjectCards;
+    const wrappedCards=function(){
+      cqV80RecalcExtras();
+      const r=oldCards.apply(this,arguments);
+      cqV80InjectFormulaFields();
+      return r;
+    };
+    wrappedCards.__cqV80Wrapped=true;
+    cqV40RenderProjectCards=wrappedCards;
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{
+    cqV80RecalcExtras();
+    if(typeof cqV40RenderProjectCards==='function')cqV40RenderProjectCards();
+  },80));
+})();
+
+</script>
 </body></html>
