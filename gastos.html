@@ -14440,3 +14440,86 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
 })();
 
 </script>
+
+
+<!-- CQ FINAL · Ingreso neto + Rentabilidad en Reporte financiero -->
+<style id="cq-final-ingreso-neto-rentabilidad-style">
+#view-reporte-financiero .rep-fin-metric-btn.metric-ingresoNeto{background:#EEF8F7!important;border-color:#B8DDD8!important;color:#2C756E!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-rentabilidad{background:#F5F1FA!important;border-color:#D7C6E6!important;color:#73578A!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-ingresoNeto.active{background:linear-gradient(135deg,#2F7F77,#55A79D)!important;border-color:#2F7F77!important;color:#fff!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-rentabilidad.active{background:linear-gradient(135deg,#73578A,#9877AE)!important;border-color:#73578A!important;color:#fff!important;}
+#view-reporte-financiero .rep-fin-chart-shell.metric-ingresoNeto .rep-fin-fill{background:linear-gradient(90deg,#62B8AE,#2F7F77)!important;}
+#view-reporte-financiero .rep-fin-chart-shell.metric-rentabilidad .rep-fin-fill{background:linear-gradient(90deg,#A98AC0,#73578A)!important;}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-ingreso-neto th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-ingreso-neto td{font-weight:850!important;color:#2C756E!important;}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-rentabilidad th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-rentabilidad td{font-weight:900!important;color:#73578A!important;}
+</style>
+<script id="cq-final-ingreso-neto-rentabilidad-js">
+(function(){
+  /* Botones del comparativo: Ingreso neto después de Comisión y Rentabilidad después de Margen %. */
+  const metrics=window.REP_FIN_METRICS||{};
+  const ordered={};
+  let ingresoInserted=false, rentInserted=false;
+  Object.entries(metrics).forEach(([k,v])=>{
+    if(k==='ingresoNeto'||k==='rentabilidad')return;
+    ordered[k]=v;
+    if(k==='comision'){
+      ordered.ingresoNeto={label:'Ingreso neto',type:'usd'};
+      ingresoInserted=true;
+    }
+    if(k==='margenPct'){
+      ordered.rentabilidad={label:'Rentabilidad',type:'pct'};
+      rentInserted=true;
+    }
+  });
+  if(!ingresoInserted)ordered.ingresoNeto={label:'Ingreso neto',type:'usd'};
+  if(!rentInserted)ordered.rentabilidad={label:'Rentabilidad',type:'pct'};
+  window.REP_FIN_METRICS=ordered;
+
+  const prevMetricValue=window.repFinMetricValueRow;
+  window.repFinMetricValueRow=function(r,key){
+    const direct=r?.direct||{};
+    if(key==='ingresoNeto')return (Number(direct.totalIngresos)||0)-(Number(direct.comision)||0);
+    if(key==='rentabilidad'){
+      const costo=Number(direct.costoTotal)||0;
+      return costo>0?(Number(direct.margen)||0)/costo:NaN;
+    }
+    return typeof prevMetricValue==='function'?prevMetricValue(r,key):0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow;}catch(e){}
+
+  /* Filas de la tabla principal. */
+  const prevPivot=window.repFinPivot;
+  if(typeof prevPivot==='function'){
+    window.repFinPivot=function(rows){
+      let html=prevPivot.apply(this,arguments);
+      if(!Array.isArray(rows)||!rows.length)return html;
+
+      const money=v=>fmt(v,'usd');
+      const pct=v=>fmtPctFin(v);
+      const ingresoNeto=rows.map(r=>(Number(r?.direct?.totalIngresos)||0)-(Number(r?.direct?.comision)||0));
+      const rentabilidad=rows.map(r=>{
+        const costo=Number(r?.direct?.costoTotal)||0;
+        return costo>0?(Number(r?.direct?.margen)||0)/costo:NaN;
+      });
+      const sum=a=>a.reduce((acc,v)=>acc+(Number(v)||0),0);
+      const avg=a=>{
+        const vals=a.filter(v=>Number.isFinite(Number(v))).map(Number);
+        return vals.length?vals.reduce((x,v)=>x+v,0)/vals.length:NaN;
+      };
+      const moneyCells=ingresoNeto.map(v=>`<td class="${v<0?'bad':v>0?'good':''}">${money(v)}</td>`).join('');
+      const rentCells=rentabilidad.map(v=>`<td class="${Number.isFinite(v)?(v<0?'bad':v>0?'good':''):''}">${pct(v)}</td>`).join('');
+      const ingresoRow=`<tr class="rep-row-ingreso-neto"><th>Ingreso neto</th>${moneyCells}<td class="rep-total-col">${money(sum(ingresoNeto))}</td></tr>`;
+      const rentRow=`<tr class="rep-row-rentabilidad"><th>Rentabilidad</th>${rentCells}<td class="rep-total-col avg">${pct(avg(rentabilidad))}</td></tr>`;
+
+      const reCom=/(<tr[^>]*>\s*<th>Comisión total<\/th>[\s\S]*?<\/tr>)/i;
+      const reMarg=/(<tr[^>]*>\s*<th>Margen %<\/th>[\s\S]*?<\/tr>)/i;
+      if(reCom.test(html))html=html.replace(reCom,'$1'+ingresoRow);
+      if(reMarg.test(html))html=html.replace(reMarg,'$1'+rentRow);
+      return html;
+    };
+    try{repFinPivot=window.repFinPivot;}catch(e){}
+  }
+})();
+</script>
