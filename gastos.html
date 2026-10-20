@@ -14523,3 +14523,115 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   }
 })();
 </script>
+
+<!-- CQ FINAL · Margen % + Rentabilidad después de Resultado neto -->
+<script id="cq-final-margen-rentabilidad-netos-js">
+(function(){
+  /*
+    Margen % y Rentabilidad pasan a ser métricas posteriores al Resultado neto.
+    - Margen % = Resultado neto / Ingreso total.
+    - Rentabilidad = Resultado neto / (Costo total + Costos fijos + Post obras).
+  */
+  function neto(r){
+    return Number(r?.net)||0;
+  }
+  function ingresoTotal(r){
+    return Number(r?.direct?.totalIngresos)||0;
+  }
+  function costoTotalAjustado(r){
+    return (Number(r?.direct?.costoTotal)||0)
+      + (Number(r?.fixedCost)||0)
+      + (Number(r?.postCost)||0);
+  }
+  function margenNetoPct(r){
+    const ingreso=ingresoTotal(r);
+    return ingreso>0 ? neto(r)/ingreso : NaN;
+  }
+  function rentabilidadNeta(r){
+    const costo=costoTotalAjustado(r);
+    return costo>0 ? neto(r)/costo : NaN;
+  }
+
+  /* Orden de botones: Resultado neto → Margen % → Rentabilidad. */
+  const metrics=window.REP_FIN_METRICS||{};
+  const ordered={};
+  let inserted=false;
+  Object.entries(metrics).forEach(([k,v])=>{
+    if(k==='margenPct'||k==='rentabilidad')return;
+    ordered[k]=v;
+    if(k==='resultadoNeto'){
+      ordered.margenPct={label:'Margen %',type:'pct'};
+      ordered.rentabilidad={label:'Rentabilidad',type:'pct'};
+      inserted=true;
+    }
+  });
+  if(!inserted){
+    ordered.margenPct={label:'Margen %',type:'pct'};
+    ordered.rentabilidad={label:'Rentabilidad',type:'pct'};
+  }
+  window.REP_FIN_METRICS=ordered;
+
+  /* Gráficos/botones: usar las fórmulas netas nuevas. */
+  const prevMetricValue=window.repFinMetricValueRow;
+  window.repFinMetricValueRow=function(r,key){
+    if(key==='margenPct')return margenNetoPct(r);
+    if(key==='rentabilidad')return rentabilidadNeta(r);
+    return typeof prevMetricValue==='function'?prevMetricValue(r,key):0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow;}catch(e){}
+
+  /* Tabla: quitar Margen % y Rentabilidad de su posición anterior y ponerlas
+     inmediatamente después de Resultado neto. */
+  const prevPivot=window.repFinPivot;
+  if(typeof prevPivot==='function'){
+    window.repFinPivot=function(rows){
+      let html=prevPivot.apply(this,arguments);
+      if(!Array.isArray(rows)||!rows.length)return html;
+
+      /* Quitar las filas anteriores para evitar duplicados y posición vieja. */
+      html=html.replace(/<tr[^>]*>\s*<th>Margen %<\/th>[\s\S]*?<\/tr>/ig,'');
+      html=html.replace(/<tr[^>]*>\s*<th>Rentabilidad<\/th>[\s\S]*?<\/tr>/ig,'');
+
+      const pct=v=>fmtPctFin(v);
+      const marginVals=rows.map(margenNetoPct);
+      const rentVals=rows.map(rentabilidadNeta);
+      const cell=v=>`<td class="${Number.isFinite(v)?(v<0?'bad':v>0?'good':''):''}">${pct(v)}</td>`;
+      const marginCells=marginVals.map(cell).join('');
+      const rentCells=rentVals.map(cell).join('');
+
+      const totalNeto=rows.reduce((a,r)=>a+neto(r),0);
+      const totalIngreso=rows.reduce((a,r)=>a+ingresoTotal(r),0);
+      const totalCosto=rows.reduce((a,r)=>a+costoTotalAjustado(r),0);
+      const totalMargen=totalIngreso>0?totalNeto/totalIngreso:NaN;
+      const totalRent=totalCosto>0?totalNeto/totalCosto:NaN;
+
+      const marginRow=`<tr class="rep-row-soft-margen rep-row-margen-neto"><th>Margen %</th>${marginCells}<td class="rep-total-col avg">${pct(totalMargen)}</td></tr>`;
+      const rentRow=`<tr class="rep-row-rentabilidad rep-row-rentabilidad-neta"><th>Rentabilidad</th>${rentCells}<td class="rep-total-col avg">${pct(totalRent)}</td></tr>`;
+
+      const reNeto=/(<tr[^>]*>\s*<th>Resultado neto<\/th>[\s\S]*?<\/tr>)/i;
+      if(reNeto.test(html))html=html.replace(reNeto,'$1'+marginRow+rentRow);
+      return html;
+    };
+    try{repFinPivot=window.repFinPivot;}catch(e){}
+  }
+
+  /* Aclaración de lectura del reporte. */
+  const prevRender=window.renderReporteFinancieroComparativo;
+  if(typeof prevRender==='function'){
+    window.renderReporteFinancieroComparativo=function(){
+      const out=prevRender.apply(this,arguments);
+      try{
+        const el=document.getElementById('reporte-financiero');
+        const note=el?.querySelector('.rep-mini-note');
+        if(note){
+          const base=note.textContent||'';
+          const extra=' Margen % y Rentabilidad se calculan sobre el Resultado neto, por lo que incluyen el impacto de Costos fijos y Post obras prorrateadas cuando están seleccionados.';
+          if(!base.includes('Margen % y Rentabilidad se calculan'))note.textContent=base+extra;
+        }
+      }catch(e){}
+      return out;
+    };
+    try{renderReporteFinancieroComparativo=window.renderReporteFinancieroComparativo;}catch(e){}
+  }
+})();
+</script>
