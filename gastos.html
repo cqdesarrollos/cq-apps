@@ -14529,14 +14529,14 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
 (function(){
   /*
     Margen % y Rentabilidad pasan a ser métricas posteriores al Resultado neto.
-    - Margen % = Resultado neto / Ingreso total.
+    - Margen % = Resultado neto / Ingreso neto (Ingreso total - Comisión).
     - Rentabilidad = Resultado neto / (Costo total + Costos fijos + Post obras).
   */
   function neto(r){
     return Number(r?.net)||0;
   }
-  function ingresoTotal(r){
-    return Number(r?.direct?.totalIngresos)||0;
+  function ingresoNeto(r){
+    return (Number(r?.direct?.totalIngresos)||0) - (Number(r?.direct?.comision)||0);
   }
   function costoTotalAjustado(r){
     return (Number(r?.direct?.costoTotal)||0)
@@ -14544,7 +14544,7 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
       + (Number(r?.postCost)||0);
   }
   function margenNetoPct(r){
-    const ingreso=ingresoTotal(r);
+    const ingreso=ingresoNeto(r);
     return ingreso>0 ? neto(r)/ingreso : NaN;
   }
   function rentabilidadNeta(r){
@@ -14600,7 +14600,7 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
       const rentCells=rentVals.map(cell).join('');
 
       const totalNeto=rows.reduce((a,r)=>a+neto(r),0);
-      const totalIngreso=rows.reduce((a,r)=>a+ingresoTotal(r),0);
+      const totalIngreso=rows.reduce((a,r)=>a+ingresoNeto(r),0);
       const totalCosto=rows.reduce((a,r)=>a+costoTotalAjustado(r),0);
       const totalMargen=totalIngreso>0?totalNeto/totalIngreso:NaN;
       const totalRent=totalCosto>0?totalNeto/totalCosto:NaN;
@@ -14633,5 +14633,152 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
     };
     try{renderReporteFinancieroComparativo=window.renderReporteFinancieroComparativo;}catch(e){}
   }
+})();
+</script>
+
+<!-- CQ FINAL · Reporte financiero: gráfico de líneas por obra -->
+<style id="cq-fin-line-chart-final-style">
+#view-reporte-financiero .cq-fin-line-card{
+  background:#fff;
+  border:1px solid #DDE6EA;
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 3px 14px rgba(6,30,85,.07);
+}
+#view-reporte-financiero .cq-fin-line-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  padding:13px 15px 8px;
+}
+#view-reporte-financiero .cq-fin-line-title{
+  font-size:12px;
+  font-weight:950;
+  color:#102033;
+  letter-spacing:-.01em;
+}
+#view-reporte-financiero .cq-fin-line-sub{
+  margin-top:2px;
+  font-size:10px;
+  font-weight:700;
+  color:#81909D;
+}
+#view-reporte-financiero .cq-fin-line-scroll{
+  width:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  padding:0 6px 8px;
+}
+#view-reporte-financiero .cq-fin-line-svg{
+  display:block;
+  width:100%;
+  min-width:760px;
+  height:auto;
+  overflow:visible;
+}
+#view-reporte-financiero .cq-fin-line-grid{stroke:#DDE6EA;stroke-width:1;stroke-dasharray:4 5;}
+#view-reporte-financiero .cq-fin-line-zero{stroke:#81909D;stroke-width:1.35;}
+#view-reporte-financiero .cq-fin-line-axis{fill:#718190;font-size:11px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+#view-reporte-financiero .cq-fin-line-xlbl{fill:#425466;font-size:11px;font-weight:850;font-family:'Space Grotesk',sans-serif;}
+#view-reporte-financiero .cq-fin-line-path{fill:none;stroke:#169466;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;}
+#view-reporte-financiero .cq-fin-line-area{fill:url(#cqFinLineArea);opacity:.16;}
+#view-reporte-financiero .cq-fin-line-point{fill:#169466;stroke:#fff;stroke-width:2.6;}
+#view-reporte-financiero .cq-fin-line-point.neg{fill:#D64C4C;}
+#view-reporte-financiero .cq-fin-line-value{fill:#167A59;font-size:10.5px;font-weight:950;font-family:'JetBrains Mono',monospace;paint-order:stroke;stroke:#fff;stroke-width:3.5px;stroke-linejoin:round;}
+#view-reporte-financiero .cq-fin-line-value.neg{fill:#C53E3E;}
+#view-reporte-financiero .cq-fin-line-empty{padding:28px;text-align:center;color:#81909D;font-size:12px;font-weight:700;}
+#view-reporte-financiero .cq-fin-line-axis-title{fill:#617485;font-size:10px;font-weight:850;font-family:'Space Grotesk',sans-serif;letter-spacing:.02em;}
+@media(max-width:650px){
+  #view-reporte-financiero .cq-fin-line-head{padding:11px 12px 6px;}
+  #view-reporte-financiero .cq-fin-line-svg{min-width:680px;}
+}
+</style>
+<script id="cq-fin-line-chart-final-js">
+(function(){
+  function esc(v){
+    return String(v??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]});
+  }
+  function metricOrder(){return Object.keys(window.REP_FIN_METRICS||{});}
+  function selectedMetrics(){
+    const order=metricOrder();
+    let sel=Array.isArray(window.repFinMetricKeys)?window.repFinMetricKeys.filter(k=>order.includes(k)):[];
+    if(!sel.length){
+      const k=order.includes(window.repFinMetricKey)?window.repFinMetricKey:(order.includes('resultadoNeto')?'resultadoNeto':order[0]);
+      if(k)sel=[k];
+    }
+    return order.filter(k=>sel.includes(k));
+  }
+  function axisLabel(v,key){
+    const type=window.REP_FIN_METRICS?.[key]?.type;
+    if(!Number.isFinite(Number(v)))return '';
+    if(type==='pct')return (Number(v)*100).toLocaleString('es-AR',{maximumFractionDigits:1})+'%';
+    if(type==='payback')return Number(v).toLocaleString('es-AR',{maximumFractionDigits:1});
+    return Number(v).toLocaleString('es-AR',{maximumFractionDigits:0});
+  }
+  function lineChart(rows,key){
+    const meta=window.REP_FIN_METRICS?.[key]||{};
+    const raw=rows.map(r=>Number(window.repFinMetricValueRow(r,key)));
+    const valid=raw.filter(Number.isFinite);
+    if(!valid.length){
+      return `<div class="cq-fin-line-card metric-${esc(key)}"><div class="cq-fin-line-head"><div><div class="cq-fin-line-title">Comparativo · ${esc(meta.label||key)}</div><div class="cq-fin-line-sub">Obras seleccionadas</div></div></div><div class="cq-fin-line-empty">No hay datos para graficar.</div></div>`;
+    }
+
+    const W=Math.max(820,rows.length*132+115),H=360;
+    const L=86,R=30,T=48,B=72;
+    const PW=W-L-R,PH=H-T-B;
+    let min=Math.min(...valid,0),max=Math.max(...valid,0);
+    if(min===max){const bump=Math.max(Math.abs(min)*.15,1);min-=bump;max+=bump;}
+    const range=max-min||1;
+    const pad=range*.10;
+    min-=pad; max+=pad;
+    if(valid.every(v=>v>=0))min=0;
+    if(valid.every(v=>v<=0))max=0;
+    const yr=max-min||1;
+    const y=v=>T+(max-v)/yr*PH;
+    const step=rows.length>1?PW/(rows.length-1):0;
+    const x=i=>rows.length>1?L+i*step:L+PW/2;
+    const zeroY=y(0);
+
+    const ticks=5;
+    let grid='',yt='';
+    for(let i=0;i<=ticks;i++){
+      const val=max-(yr/ticks)*i;
+      const yy=T+(PH/ticks)*i;
+      grid+=`<line class="cq-fin-line-grid" x1="${L}" y1="${yy.toFixed(2)}" x2="${W-R}" y2="${yy.toFixed(2)}"/>`;
+      yt+=`<text class="cq-fin-line-axis" x="${L-12}" y="${(yy+4).toFixed(2)}" text-anchor="end">${esc(axisLabel(val,key))}</text>`;
+    }
+
+    const points=raw.map((v,i)=>Number.isFinite(v)?[x(i),y(v),v,i]:null).filter(Boolean);
+    const path=points.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
+    let area='';
+    if(points.length>1){
+      const first=points[0],last=points[points.length-1];
+      const base=Math.min(Math.max(zeroY,T),T+PH);
+      area=`M ${first[0].toFixed(2)} ${base.toFixed(2)} L ${points.map(p=>p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' L ')} L ${last[0].toFixed(2)} ${base.toFixed(2)} Z`;
+    }
+
+    const xlabels=rows.map((r,i)=>`<text class="cq-fin-line-xlbl" x="${x(i).toFixed(2)}" y="${H-34}" text-anchor="middle">${esc(r.o.short||r.o.label)}</text>`).join('');
+    const dots=points.map(p=>{
+      const [xx,yy,v]=p,neg=v<0;
+      const labelY=yy < T+24 ? yy+24 : yy-13;
+      return `<circle class="cq-fin-line-point ${neg?'neg':''}" cx="${xx.toFixed(2)}" cy="${yy.toFixed(2)}" r="5.7"><title>${esc(rows[p[3]].o.short||rows[p[3]].o.label)} · ${esc(window.repFinMetricTextRow(v,key))}</title></circle><text class="cq-fin-line-value ${neg?'neg':''}" x="${xx.toFixed(2)}" y="${labelY.toFixed(2)}" text-anchor="middle">${esc(window.repFinMetricTextRow(v,key))}</text>`;
+    }).join('');
+
+    return `<div class="cq-fin-line-card metric-${esc(key)} cq-fin-metric-panel"><div class="cq-fin-line-head"><div><div class="cq-fin-line-title">Comparativo · ${esc(meta.label||key)}</div><div class="cq-fin-line-sub">Obras seleccionadas · eje horizontal por obra</div></div></div><div class="cq-fin-line-scroll"><svg class="cq-fin-line-svg" viewBox="0 0 ${W} ${H}" style="min-width:${W}px" role="img" aria-label="${esc(meta.label||key)} por obra"><defs><linearGradient id="cqFinLineArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#169466" stop-opacity=".9"/><stop offset="100%" stop-color="#169466" stop-opacity=".08"/></linearGradient></defs>${grid}${zeroY>=T&&zeroY<=T+PH?`<line class="cq-fin-line-zero" x1="${L}" y1="${zeroY.toFixed(2)}" x2="${W-R}" y2="${zeroY.toFixed(2)}"/>`:''}${yt}${area?`<path class="cq-fin-line-area" d="${area}"/>`:''}${path?`<path class="cq-fin-line-path" d="${path}"/>`:''}${dots}${xlabels}<text class="cq-fin-line-axis-title" x="${(L+PW/2).toFixed(2)}" y="${H-8}" text-anchor="middle">OBRAS</text></svg></div></div>`;
+  }
+
+  window.renderRepFinChart=function(rows){
+    const metrics=window.REP_FIN_METRICS||{};
+    const selected=selectedMetrics();
+    const tabs=Object.entries(metrics).map(([k,info])=>{
+      const active=selected.includes(k);
+      return `<button type="button" class="rep-fin-metric-btn metric-${esc(k)} ${active?'active':''}" aria-pressed="${active?'true':'false'}" onclick="setReporteFinMetric('${esc(k)}')">${esc(info.label)}</button>`;
+    }).join('');
+    const charts=selected.map(k=>lineChart(rows,k)).join('');
+    return `<div class="cq-fin-multi-shell"><div class="rep-fin-metric-tabs">${tabs}</div><div class="cq-fin-selected-charts">${charts}</div></div>`;
+  };
+  try{renderRepFinChart=window.renderRepFinChart;}catch(e){}
 })();
 </script>
