@@ -8259,7 +8259,7 @@ document.addEventListener('DOMContentLoaded',function(){
 
   const FLOW_TYPES=['works','others','incomes'];
   const monthColorClass=(idx)=>'sheet-month-col-'+(idx%8);
-  let cqSheetState={selected:null, coordMap:new Map(), months:[], rows:[], actualToCoord:new Map(), lastDisplayInput:''};
+  let cqSheetState={selected:null, rangeStart:null, rangeEnd:null, coordMap:new Map(), months:[], rows:[], actualToCoord:new Map(), lastDisplayInput:'', draggingRange:false};
 
   function ensureFlowExtras(){
     if(!window.flowState)return;
@@ -8465,33 +8465,100 @@ document.addEventListener('DOMContentLoaded',function(){
     });
   }
 
+  function coordForActualKey(key){ return cqSheetState.actualToCoord.get(String(key||''))||''; }
+
+  function selectedRangeKeys(){
+    const startKey=cqSheetState.rangeStart||cqSheetState.selected;
+    const endKey=cqSheetState.rangeEnd||startKey;
+    const a=parseCoord(coordForActualKey(startKey)), b=parseCoord(coordForActualKey(endKey));
+    if(!a||!b)return startKey?[startKey]:[];
+    const c1=Math.min(a.col,b.col), c2=Math.max(a.col,b.col), r1=Math.min(a.row,b.row), r2=Math.max(a.row,b.row);
+    const keys=[];
+    for(let r=r1;r<=r2;r++)for(let c=c1;c<=c2;c++){
+      const info=cqSheetState.coordMap.get(coordLabel(c,r));
+      if(info?.kind==='cell')keys.push(info.key);
+    }
+    return keys;
+  }
+
+  function selectedRangeStats(){
+    const keys=selectedRangeKeys();
+    const vals=keys.map(k=>evaluateActualKey(k,new Set())).filter(v=>Number.isFinite(Number(v))).map(Number);
+    const sum=vals.reduce((a,b)=>a+b,0);
+    return {keys,count:keys.length,sum,avg:vals.length?sum/vals.length:0};
+  }
+
+  function formatSelectionNumber(n){
+    const v=roundSheet(Number(n)||0);
+    return new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(v);
+  }
+
+  function updateSelectionStatus(){
+    const status=document.getElementById('flowSheetFormulaStatus');
+    if(!status)return;
+    const stats=selectedRangeStats();
+    if(stats.count>1){
+      status.textContent=`${stats.count} celdas · Suma ${formatSelectionNumber(stats.sum)} · Prom. ${formatSelectionNumber(stats.avg)}`;
+      status.classList.add('range-summary');
+    }else{
+      status.classList.remove('range-summary');
+      const actualKey=cqSheetState.selected;
+      if(!actualKey){status.textContent='Seleccioná una celda';return;}
+      const {type,ri,mi}=parseActualKey(actualKey), row=flowState?.[type]?.[ri], entry=getFormulaEntry(row,mi);
+      status.textContent=entry?.display ? 'Fórmula guardada · se recalcula automáticamente' : 'Valor directo';
+    }
+  }
+
   function updateSheetSelectionVisual(){
     const selected=cqSheetState.selected;
-    const coord=selected ? (cqSheetState.actualToCoord.get(selected)||'') : '';
-    const parsed=coord ? parseCoord(coord) : null;
-    document.querySelectorAll('#flowSheetBody [data-sheet-ui-cell]').forEach(td=>td.classList.toggle('sheet-selected', selected && td.dataset.sheetUiCell===selected));
+    const activeCoord=selected ? coordForActualKey(selected) : '';
+    const parsed=activeCoord ? parseCoord(activeCoord) : null;
+    const rangeKeys=new Set(selectedRangeKeys());
+    document.querySelectorAll('#flowSheetBody [data-sheet-ui-cell]').forEach(td=>{
+      const key=td.dataset.sheetUiCell;
+      td.classList.toggle('sheet-selected', selected && key===selected);
+      td.classList.toggle('sheet-range-selected', rangeKeys.has(key));
+      td.classList.toggle('sheet-range-anchor', key===(cqSheetState.rangeStart||selected));
+      td.classList.toggle('sheet-range-end', key===(cqSheetState.rangeEnd||selected));
+    });
     document.querySelectorAll('#flowSheetHead .sheet-col-letter').forEach((th,idx)=>{ if(idx===0)return; th.classList.toggle('active', !!(parsed && parsed.col===idx)); });
     document.querySelectorAll('#flowSheetBody .sheet-row-num').forEach(th=>{
       const rn=Number(th.textContent)||0;
       th.classList.toggle('active', !!(parsed && parsed.row===rn));
     });
+    updateSelectionStatus();
   }
 
-  function setSelectedActualKey(actualKey){
+  function setSelectedActualKey(actualKey,keepRange=false){
     cqSheetState.selected=actualKey||null;
+    if(!keepRange){
+      cqSheetState.rangeStart=actualKey||null;
+      cqSheetState.rangeEnd=actualKey||null;
+    }
     const ref=document.getElementById('flowSheetCellRef');
     const input=document.getElementById('flowSheetFormulaInput');
-    const status=document.getElementById('flowSheetFormulaStatus');
     if(!ref||!input)return;
-    if(!actualKey){ ref.textContent='—'; input.value=''; if(status)status.textContent='Seleccioná una celda'; return; }
-    const coord=cqSheetState.actualToCoord.get(actualKey)||'—';
-    ref.textContent=coord;
+    if(!actualKey){ ref.textContent='—'; input.value=''; updateSheetSelectionVisual(); return; }
+    const coord=coordForActualKey(actualKey)||'—';
+    const rangeCount=selectedRangeKeys().length;
+    ref.textContent=rangeCount>1 ? `${coord} · ${rangeCount}` : coord;
     const {type,ri,mi}=parseActualKey(actualKey);
     const row=flowState[type][ri];
     const entry=getFormulaEntry(row,mi);
     input.value=entry?.display || displayNumber(row.months[mi]);
     cqSheetState.lastDisplayInput=input.value;
-    if(status)status.textContent=entry?.display ? 'Fórmula guardada · se recalcula automáticamente' : 'Valor directo';
+    updateSheetSelectionVisual();
+  }
+
+  function setRangeEndActualKey(actualKey){
+    if(!actualKey)return;
+    if(!cqSheetState.rangeStart)cqSheetState.rangeStart=cqSheetState.selected||actualKey;
+    cqSheetState.rangeEnd=actualKey;
+    const ref=document.getElementById('flowSheetCellRef');
+    if(ref){
+      const a=coordForActualKey(cqSheetState.rangeStart), b=coordForActualKey(cqSheetState.rangeEnd);
+      ref.textContent=a===b?a:`${a}:${b}`;
+    }
     updateSheetSelectionVisual();
   }
 
@@ -8581,19 +8648,78 @@ document.addEventListener('DOMContentLoaded',function(){
     tbody.innerHTML=body;
 
     tbody.querySelectorAll('[data-sheet-ui-cell]').forEach(td=>{
-      td.addEventListener('click',()=>{ setSelectedActualKey(td.dataset.sheetUiCell); });
+      td.addEventListener('click',e=>{
+        if(cqSheetState.draggingRange)return;
+        const key=td.dataset.sheetUiCell;
+        setSelectedActualKey(key);
+      });
     });
+
+    document.getElementById('flowSheetRangeHandle')?.remove();
+    const handle=document.createElement('div');
+    handle.id='flowSheetRangeHandle';
+    handle.className='sheet-range-handle';
+    document.getElementById('flowSheetModal')?.appendChild(handle);
+
+    function placeRangeHandle(){
+      const key=cqSheetState.rangeEnd||cqSheetState.selected;
+      const td=key?tbody.querySelector(`[data-sheet-ui-cell="${CSS.escape(key)}"]`):null;
+      const modal=document.getElementById('flowSheetModal');
+      if(!td||!modal||!modal.classList.contains('open')){handle.style.display='none';return;}
+      const r=td.getBoundingClientRect();
+      handle.style.display='block';
+      handle.style.left=(r.right-10)+'px';
+      handle.style.top=(r.bottom-10)+'px';
+    }
+    requestAnimationFrame(placeRangeHandle);
+    const wrap=document.querySelector('#flowSheetModal .flow-sheet-wrap');
+    if(wrap && !wrap.__cqRangeScrollBound){
+      wrap.__cqRangeScrollBound=true;
+      wrap.addEventListener('scroll',()=>requestAnimationFrame(placeRangeHandle),{passive:true});
+    }
+
+    let rangePointerId=null;
+    handle.onpointerdown=e=>{
+      e.preventDefault(); e.stopPropagation();
+      cqSheetState.draggingRange=true;
+      rangePointerId=e.pointerId;
+      cqSheetState.rangeStart=cqSheetState.rangeStart||cqSheetState.selected;
+      cqSheetState.rangeEnd=cqSheetState.rangeEnd||cqSheetState.selected;
+      try{handle.setPointerCapture(e.pointerId)}catch(_e){}
+    };
+    handle.onpointermove=e=>{
+      if(!cqSheetState.draggingRange || e.pointerId!==rangePointerId)return;
+      e.preventDefault();
+      handle.style.pointerEvents='none';
+      const el=document.elementFromPoint(e.clientX,e.clientY);
+      handle.style.pointerEvents='';
+      const td=el?.closest?.('[data-sheet-ui-cell]');
+      if(td){setRangeEndActualKey(td.dataset.sheetUiCell);requestAnimationFrame(placeRangeHandle);}
+    };
+    const finishRange=e=>{
+      if(!cqSheetState.draggingRange)return;
+      cqSheetState.draggingRange=false;
+      try{handle.releasePointerCapture(rangePointerId)}catch(_e){}
+      rangePointerId=null;
+      updateSheetSelectionVisual();
+      requestAnimationFrame(placeRangeHandle);
+      setTimeout(()=>{cqSheetState.draggingRange=false},0);
+    };
+    handle.onpointerup=finishRange;
+    handle.onpointercancel=finishRange;
+
     tbody.querySelectorAll('[data-sheet-edit]').forEach(inp=>{
-      inp.addEventListener('focus',()=>{ setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select()); });
-      inp.addEventListener('click',e=>{ e.stopPropagation(); setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select()); });
+      inp.addEventListener('focus',()=>{ if(!cqSheetState.draggingRange){setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select());} });
+      inp.addEventListener('click',e=>{ e.stopPropagation(); if(!cqSheetState.draggingRange){setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select());} });
       inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); applySelectedCellValue(inp.value); } });
       inp.addEventListener('change',()=>applySelectedCellValue(inp.value));
       inp.addEventListener('blur',()=>{
         const key=inp.dataset.sheetEdit;
         if(key===cqSheetState.selected){
-          const entry=getFormulaEntry(flowState[parseActualKey(key).type][parseActualKey(key).ri],parseActualKey(key).mi);
-          const wanted=entry?.display || displayNumber(flowState[parseActualKey(key).type][parseActualKey(key).ri].months[parseActualKey(key).mi]);
-          inp.value=displayNumber(flowState[parseActualKey(key).type][parseActualKey(key).ri].months[parseActualKey(key).mi]);
+          const parsedKey=parseActualKey(key), row=flowState[parsedKey.type][parsedKey.ri];
+          const entry=getFormulaEntry(row,parsedKey.mi);
+          const wanted=entry?.display || displayNumber(row.months[parsedKey.mi]);
+          inp.value=displayNumber(row.months[parsedKey.mi]);
           const formulaInput=document.getElementById('flowSheetFormulaInput');
           if(formulaInput)formulaInput.value=wanted;
         }
@@ -8736,5 +8862,90 @@ document.addEventListener('DOMContentLoaded',function(){
   if(document.readyState!=='loading'){ ensureFlowExtras(); recalcAllStoredFormulas(); setTimeout(()=>{ setupSheetButtons(); try{flowPersist(); if(typeof flowRender==='function')flowRender();}catch(e){} },40); }
 })();
 </script>
+
+
+<style id="cq-flow-sheet-phone-fix-v2">
+/* Ajuste fino SOLO teléfono: planilla más compacta y estética */
+@media (max-width: 520px){
+  #flowSheetModal.flow-sheet-backdrop{padding:2px!important}
+  #flowSheetModal .flow-sheet-panel{height:98vh!important;border-radius:12px!important}
+  #flowSheetModal .flow-sheet-head{padding:9px 10px!important}
+  #flowSheetModal .flow-sheet-head strong{font-size:14px!important}
+  #flowSheetModal .flow-sheet-head span{font-size:8px!important;margin-top:1px!important}
+  #flowSheetModal .flow-sheet-close{width:34px!important;height:34px!important;border-radius:10px!important}
+  #flowSheetModal .flow-sheet-filters{padding:7px 8px!important;gap:6px!important}
+  #flowSheetModal .flow-sheet-filter-row{grid-template-columns:42px minmax(0,1fr)!important;gap:6px!important}
+  #flowSheetModal .flow-sheet-filter-row>b{font-size:8px!important;padding-top:5px!important}
+  #flowSheetModal .flow-sheet-chips{gap:4px!important}
+  #flowSheetModal .flow-sheet-chip{padding:4px 7px!important;font-size:8px!important;border-radius:8px!important}
+
+  #flowSheetModal .flow-sheet-toolbar{grid-template-columns:72px 28px minmax(0,1fr) 34px 34px!important;gap:5px!important;padding:6px!important}
+  #flowSheetModal .flow-sheet-cellref,
+  #flowSheetModal .flow-sheet-toolbar button,
+  #flowSheetModal .flow-sheet-formula{height:30px!important;border-radius:8px!important}
+  #flowSheetModal .flow-sheet-cellref{padding:0 8px!important;font-size:11px!important}
+  #flowSheetModal .flow-sheet-cellref:after{font-size:8px!important}
+  #flowSheetModal .flow-sheet-fx{font-size:16px!important}
+  #flowSheetModal .flow-sheet-formula{padding:0 8px!important;font-size:11px!important}
+  #flowSheetModal .flow-sheet-toolbar button{font-size:14px!important}
+
+  #flowSheetModal .flow-sheet-table{font-size:11px!important}
+  #flowSheetModal .flow-sheet-table th,
+  #flowSheetModal .flow-sheet-table td{height:32px!important}
+  #flowSheetModal .flow-sheet-table .sheet-corner,
+  #flowSheetModal .flow-sheet-table .sheet-row-num{min-width:34px!important;font-size:10px!important}
+  #flowSheetModal .flow-sheet-table .sheet-col-letter{min-width:86px!important;font-size:10px!important}
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{min-width:120px!important;max-width:120px!important;padding:0 6px!important;font-size:10px!important;line-height:1.05!important}
+  #flowSheetModal .flow-sheet-table .sheet-month-head{font-size:10px!important;padding:0 4px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{min-width:86px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{height:32px!important;padding:0 6px!important;font-size:11px!important}
+  #flowSheetModal .flow-sheet-table td.sheet-selected{box-shadow:inset 0 0 0 2px #2ea56c!important}
+  #flowSheetModal .flow-sheet-table td.sheet-selected::after{width:8px!important;height:8px!important}
+  #flowSheetModal .flow-sheet-table tr.sheet-total-row td{font-size:10.5px!important}
+
+  #flowSheetModal .flow-sheet-foot{padding:7px 8px!important;gap:6px!important;align-items:flex-end!important}
+  #flowSheetModal .flow-sheet-foot span{font-size:7.5px!important;line-height:1.15!important}
+  #flowSheetModal .flow-sheet-foot .sheet-formula-status{font-size:7.5px!important}
+  #flowSheetModal .flow-sheet-foot button{padding:7px 12px!important;font-size:10px!important;border-radius:10px!important}
+}
+</style>
+
+
+<style id="cq-flow-sheet-range-formula-v3">
+/* v82 · alineación numérica + rango de selección estilo Excel */
+#flowSheetModal .flow-sheet-table .sheet-cell-wrap{
+  display:flex!important;align-items:center!important;justify-content:flex-end!important;height:100%!important;width:100%!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-cell-input{
+  display:block!important;width:100%!important;height:100%!important;margin:0!important;
+  text-align:right!important;vertical-align:middle!important;line-height:normal!important;
+  font-variant-numeric:tabular-nums!important;font-feature-settings:"tnum" 1!important;
+  box-sizing:border-box!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-range-selected{
+  position:relative!important;
+  background-color:rgba(65,150,105,.10)!important;
+  box-shadow:inset 0 0 0 1px rgba(46,165,108,.38)!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-selected{
+  box-shadow:inset 0 0 0 2px #2ea56c!important;
+  z-index:3!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-selected::after{display:none!important}
+#flowSheetModal .sheet-range-handle{
+  position:fixed;display:none;width:20px;height:20px;border-radius:50%;background:#2ea56c;
+  border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.25);z-index:10050;touch-action:none;cursor:nwse-resize;
+}
+#flowSheetModal .flow-sheet-foot .sheet-formula-status.range-summary{
+  color:#245541!important;font-weight:850!important;background:#e5f2eb;border:1px solid #c8dfd3;border-radius:8px;padding:4px 7px;
+}
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{padding:0 7px!important;font-size:10.5px!important;line-height:32px!important}
+  #flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:31px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{height:31px!important}
+  #flowSheetModal .sheet-range-handle{width:22px;height:22px;border-width:3px}
+  #flowSheetModal .flow-sheet-foot .sheet-formula-status.range-summary{font-size:7.8px!important;padding:3px 5px!important}
+}
+</style>
 
 </body></html>
