@@ -2942,24 +2942,60 @@ function getSemanas() {
     .filter(s => !hidden.includes(s.num))
     .map(s => ({ ...s, ...(overrides[s.num] || {}) }));
   const custom = (state.customWeeks || []);
-  return [...base, ...custom].sort((a,b)=>a.num-b.num);
+  const raw = [...base, ...custom];
+
+  // El ID interno de cada semana no cambia nunca. El orden visible se guarda
+  // aparte para poder mover/renumerar semanas sin romper avances/certificados.
+  const ids = raw.map(s=>Number(s.num));
+  let order = Array.isArray(state.weekOrder) ? state.weekOrder.map(Number).filter(id=>ids.includes(id)) : [];
+  ids.forEach(id=>{ if(!order.includes(id)) order.push(id); });
+  state.weekOrder = order;
+  const pos = new Map(order.map((id,i)=>[id,i]));
+  return raw
+    .sort((a,b)=>(pos.get(Number(a.num))??9999)-(pos.get(Number(b.num))??9999))
+    .map((s,i)=>({ ...s, displayNum:i+1 }));
 }
 function getSemanaByNum(snum) {
-  return getSemanas().find(x => x.num === snum);
+  return getSemanas().find(x => Number(x.num) === Number(snum));
+}
+function getDisplayWeekNum(snum) {
+  const s = getSemanaByNum(snum);
+  return s ? (s.displayNum || snum) : snum;
+}
+function moveSemanaToPosition(snum, targetPos) {
+  const semanas = getSemanas();
+  const ids = semanas.map(s=>Number(s.num));
+  const id = Number(snum);
+  const from = ids.indexOf(id);
+  if(from < 0) return;
+  const max = ids.length;
+  const to = Math.max(0, Math.min(max-1, Number(targetPos)-1));
+  ids.splice(from,1);
+  ids.splice(to,0,id);
+  state.weekOrder = ids;
 }
 function editSemana(snum) {
   const s = getSemanaByNum(snum);
   if (!s) return;
-  const nuevoNombre = prompt('Editar título de la semana S' + snum + ':', s.etapa || '');
+  const actual = s.displayNum || getDisplayWeekNum(snum);
+  const posRaw = prompt('Número / posición de la semana (1 a ' + getSemanas().length + '):', actual);
+  if (posRaw === null) return;
+  const nuevaPos = parseInt(posRaw,10);
+  if (!Number.isFinite(nuevaPos) || nuevaPos < 1 || nuevaPos > getSemanas().length) {
+    alert('Ingresá un número de semana válido.'); return;
+  }
+  const nuevoNombre = prompt('Editar título de la semana S' + nuevaPos + ':', s.etapa || '');
   if (nuevoNombre === null) return;
   const etapa = nuevoNombre.trim();
   if (!etapa) { alert('Ingresá un título válido.'); return; }
+
   if (s.customWeek) {
-    state.customWeeks = (state.customWeeks || []).map(w => w.num === snum ? { ...w, etapa } : w);
+    state.customWeeks = (state.customWeeks || []).map(w => Number(w.num) === Number(snum) ? { ...w, etapa } : w);
   } else {
     if (!state.weekOverrides) state.weekOverrides = {};
     state.weekOverrides[snum] = { ...(state.weekOverrides[snum] || {}), etapa };
   }
+  moveSemanaToPosition(snum, nuevaPos);
   persist();
   renderSemanas();
   renderKPIs();
@@ -2983,10 +3019,10 @@ function deleteSemana(snum) {
   const s = getSemanaByNum(snum);
   if (!s) return;
   if (semanaTieneCertificacion(snum)) {
-    alert('La semana S' + snum + ' tiene avances ya certificados. Para evitar inconsistencias, eliminá primero el/los certificados relacionados y luego eliminá la semana.');
+    alert('La semana S' + getDisplayWeekNum(snum) + ' tiene avances ya certificados. Para evitar inconsistencias, eliminá primero el/los certificados relacionados y luego eliminá la semana.');
     return;
   }
-  const ok = confirm('¿Eliminar la semana S' + snum + ' · "' + s.etapa + '" completa?\n\nSe quitarán sus tareas, avances e importes de esta obra.');
+  const ok = confirm('¿Eliminar la semana S' + getDisplayWeekNum(snum) + ' · "' + s.etapa + '" completa?\n\nSe quitarán sus tareas, avances e importes de esta obra. Las semanas siguientes se renumerarán automáticamente.');
   if (!ok) return;
   if (s.customWeek) {
     state.customWeeks = (state.customWeeks || []).filter(w => w.num !== snum);
@@ -2995,6 +3031,7 @@ function deleteSemana(snum) {
     if (!state.hiddenWeeks) state.hiddenWeeks = [];
     if (!state.hiddenWeeks.includes(snum)) state.hiddenWeeks.push(snum);
   }
+  if (Array.isArray(state.weekOrder)) state.weekOrder = state.weekOrder.map(Number).filter(id=>id!==Number(snum));
   if (state.weekOverrides) delete state.weekOverrides[snum];
   if (state.customTasks) delete state.customTasks[snum];
   Object.keys(state.items || {}).forEach(k => { if (String(k).startsWith(snum + '-')) delete state.items[k]; });
@@ -3150,6 +3187,8 @@ function addSemana() {
 if (!state.weekOverrides) state.weekOverrides = {};
 if (!state.hiddenWeeks) state.hiddenWeeks = [];
   state.customWeeks.push({ num:snum, etapa:nombre, pagoMax:0, pctObra:0, items:[], customWeek:true });
+  if (!Array.isArray(state.weekOrder)) state.weekOrder = getSemanas().map(s=>Number(s.num));
+  if (!state.weekOrder.includes(Number(snum))) state.weekOrder.push(Number(snum));
   if (!state.customTasks) state.customTasks = {};
   state.customTasks[snum] = [];
   persist();
@@ -3255,8 +3294,14 @@ function findCristianObra(){
 }
 function findLatestObraByTipo(tipo){
   tipo=Number(tipo)===2?2:1;
-  let candidatas=obrasConfig.filter(o=>Number(o.tipoPlantas)===tipo);
-  if(!candidatas.length && tipo===1){ const o=obrasConfig.find(isL29M77); if(o) candidatas=[o]; }
+  let candidatas=obrasConfig.filter(o=>{
+    if(Number(o.tipoPlantas)!==tipo) return false;
+    if(tipo===1){
+      const st=estadosObras[o.id];
+      return (st?.plantillaVersion || o.plantillaVersion) === '1p_detallada_v1';
+    }
+    return true;
+  });
   if(!candidatas.length && tipo===2){ const o=findCristianObra(); if(o) candidatas=[o]; }
   return candidatas.length ? candidatas[candidatas.length-1] : null;
 }
@@ -3264,6 +3309,7 @@ function cloneStateAsNewProject(plantilla,newMeta,tipo){
   if(!plantilla) return createDefaultState({...newMeta,tipoPlantas:tipo});
   const nuevo=deepClone(plantilla);
   nuevo.tipoPlantas=tipo;
+  nuevo.plantillaVersion = tipo===2 ? (plantilla.plantillaVersion||'2p_v1') : '1p_detallada_v1';
   nuevo.constructor=newMeta.constructor||'Constructor';
   nuevo.obraNum=newMeta.obraNum||'';
   nuevo.items={};
@@ -3280,9 +3326,24 @@ function cloneStateAsNewProject(plantilla,newMeta,tipo){
 }
 function createStateFromLatestTemplate(newMeta,tipo){
   tipo=Number(tipo)===2?2:1;
+  const metaConVersion = {...newMeta, plantillaVersion: tipo===2 ? '2p_v1' : '1p_detallada_v1'};
   const plantillaMeta=findLatestObraByTipo(tipo);
   const plantilla=plantillaMeta ? estadosObras[plantillaMeta.id] : null;
-  return cloneStateAsNewProject(plantilla,newMeta,tipo);
+  if(plantilla) return cloneStateAsNewProject(plantilla,metaConVersion,tipo);
+
+  const nuevo=createDefaultState(metaConVersion);
+  // Primera obra con la nueva plantilla de 1 planta: toma de 29.77 solo los
+  // parámetros generales, sin arrastrar el esquema incompleto anterior.
+  if(tipo===1){
+    const ref=obrasConfig.find(isL29M77);
+    const old=ref?estadosObras[ref.id]:null;
+    if(old){
+      nuevo.acuerdo=Number(old.acuerdo)>0?Number(old.acuerdo):nuevo.acuerdo;
+      nuevo.acuerdoComentario=old.acuerdoComentario||'';
+      nuevo.itemsCQ=deepClone(old.itemsCQ||nuevo.itemsCQ);
+    }
+  }
+  return normalizeState(nuevo,metaConVersion);
 }
 function updatePlantTemplateHint(setAgreement=false){
   const tipo=Number(document.getElementById('eo-tipo')?.value||1)===2?2:1;
@@ -3290,11 +3351,14 @@ function updatePlantTemplateHint(setAgreement=false){
   const hint=document.getElementById('eo-template-hint');
   if(hint){
     hint.innerHTML=meta
-      ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas e importes.`
-      : `<strong>Modelo:</strong> plantilla base de ${tipo} planta${tipo===2?'s':''}.`;
+      ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
+      : (tipo===1
+          ? `<strong>Modelo inicial:</strong> nueva plantilla detallada de 1 planta. Después, cada obra nueva copiará la última de 1 planta con tus modificaciones.`
+          : `<strong>Modelo:</strong> plantilla base de 2 plantas.`);
   }
   if(setAgreement){
-    const st=meta?estadosObras[meta.id]:null;
+    let st=meta?estadosObras[meta.id]:null;
+    if(!st && tipo===1){ const ref=obrasConfig.find(isL29M77); st=ref?estadosObras[ref.id]:null; }
     const inp=document.getElementById('eo-acuerdo');
     if(inp) inp.value=Number(st?.acuerdo)>0?Number(st.acuerdo):OBRA_ACORDADA_DEFAULT;
   }
@@ -3303,6 +3367,7 @@ function buildCristianTwoStoryState(meta,old){
   old=old||createDefaultState(meta);
   const nuevo=createDefaultState({...meta,tipoPlantas:2});
   nuevo.tipoPlantas=2;
+  nuevo.plantillaVersion='2p_v1';
   nuevo.constructor=old.constructor||meta.constructor||'Cristian';
   nuevo.obraNum=old.obraNum||meta.obraNum||'';
   nuevo.acuerdo=Number(old.acuerdo)>0?Number(old.acuerdo):OBRA_ACORDADA_DEFAULT;
@@ -3315,7 +3380,7 @@ function buildCristianTwoStoryState(meta,old){
   nuevo._backupAntesDosPlantas={
     fecha:new Date().toISOString(), items:deepClone(old.items||{}), montos:deepClone(old.montos||{}),
     customTasks:deepClone(old.customTasks||{}), taskOverrides:deepClone(old.taskOverrides||{}),
-    customWeeks:deepClone(old.customWeeks||[]), weekOverrides:deepClone(old.weekOverrides||{}), hiddenWeeks:deepClone(old.hiddenWeeks||[]), certLocks:deepClone(old.certLocks||{})
+    customWeeks:deepClone(old.customWeeks||[]), weekOverrides:deepClone(old.weekOverrides||{}), hiddenWeeks:deepClone(old.hiddenWeeks||[]), weekOrder:deepClone(old.weekOrder||[]), certLocks:deepClone(old.certLocks||{})
   };
   nuevo._migracionDosPlantas=1;
   return normalizeState(nuevo,{...meta,tipoPlantas:2});
@@ -3354,7 +3419,7 @@ function saveEditObra() {
   const finalLabel = label || (n ? 'L' + n.replace('/', ' Mz') : c || 'Nueva obra');
   if (obraModalMode === 'new') {
     const tipoPlantas = Number(document.getElementById('eo-tipo')?.value || 1) === 2 ? 2 : 1;
-    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, createdAt:new Date().toISOString() };
+    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, plantillaVersion: tipoPlantas===2?'2p_v1':'1p_detallada_v1', createdAt:new Date().toISOString() };
     obrasConfig.push(newMeta);
     estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
     estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
@@ -3405,7 +3470,7 @@ function deleteCurrentObra() {
 }
 
 // ─── DATOS ────────────────────────────────────────────────────────────────
-const SEMANAS = [
+const SEMANAS_UNA_PLANTA_LEGACY = [
   {num:1, etapa:"Replanteo / Excavacion", pagoMax:1200000, pctObra:0.03158,
    items:[
      {desc:"Replanteo", avance:0, monto:300000},
@@ -3511,6 +3576,98 @@ const SEMANAS = [
    items:[{desc:"Conforme de obra", avance:0, monto:3260000}]},
 ];
 
+
+
+// ─── PLANTILLA BASE DETALLADA: 1 PLANTA / 2 DORMITORIOS / 2 BAÑOS ──────
+// Se usa para las obras NUEVAS de 1 planta. Las obras antiguas conservan
+// su esquema anterior. Una vez creada la primera obra con esta versión,
+// las siguientes copian la última obra detallada de 1 planta y sus cambios.
+const SEMANAS = [
+  {num:1, etapa:"Replanteo / Excavación", items:[
+    {desc:"Replanteo",avance:0,monto:0},{desc:"Cerramiento",avance:0,monto:0},{desc:"Pilar luz y gas",avance:0,monto:0},{desc:"Excavación 50%",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Cavado y fundaciones", items:[
+    {desc:"Excavación 100%",avance:0,monto:0},{desc:"Fundaciones armadas y presentadas",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Llenado de fundaciones", items:[
+    {desc:"Llenado de fundaciones",avance:0,monto:0},{desc:"Arranques de columnas",avance:0,monto:0},{desc:"Control de niveles",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Nivelación / Capa", items:[
+    {desc:"Nivelación",avance:0,monto:0},{desc:"Capa aisladora",avance:0,monto:0},{desc:"Replanteo de mampostería",avance:0,monto:0}
+  ]},
+  {num:5, etapa:"Mampostería 1,20 m", items:[
+    {desc:"Mampostería exterior",avance:0,monto:0},{desc:"Mampostería interior",avance:0,monto:0},{desc:"Mampostería a 1,20 m",avance:0,monto:0}
+  ]},
+  {num:6, etapa:"Mampostería / Columnas", items:[
+    {desc:"Mampostería hasta 2 m",avance:0,monto:0},{desc:"Llenado de columnas 50%",avance:0,monto:0}
+  ]},
+  {num:7, etapa:"Mampostería / Columnas / Encadenados", items:[
+    {desc:"Mampostería 100%",avance:0,monto:0},{desc:"Columnas 100%",avance:0,monto:0},{desc:"Armado de encadenados",avance:0,monto:0},{desc:"Dinteles",avance:0,monto:0}
+  ]},
+  {num:8, etapa:"Losa de techo - Armado", items:[
+    {desc:"Puntalamiento",avance:0,monto:0},{desc:"Encofrado",avance:0,monto:0},{desc:"Armado de hierro",avance:0,monto:0},{desc:"Pases de instalaciones",avance:0,monto:0}
+  ]},
+  {num:9, etapa:"Losa de techo - Llenado", items:[
+    {desc:"Llenado de losa",avance:0,monto:0},{desc:"Nivelación",avance:0,monto:0},{desc:"Curado / desencofrado",avance:0,monto:0}
+  ]},
+  {num:10, etapa:"Tanques / Parapetos", items:[
+    {desc:"Base y sector tanques",avance:0,monto:0},{desc:"Construcción / apoyo de tanques",avance:0,monto:0},{desc:"Parapetos",avance:0,monto:0}
+  ]},
+  {num:11, etapa:"Techo / Pendientes / Impermeabilización", items:[
+    {desc:"Carga",avance:0,monto:0},{desc:"Formación de pendientes",avance:0,monto:0},{desc:"Lechinado",avance:0,monto:0},{desc:"Impermeabilización",avance:0,monto:0}
+  ]},
+  {num:12, etapa:"Revoque exterior", items:[
+    {desc:"Revoque exterior 50%",avance:0,monto:0},{desc:"Fretachado exterior 50%",avance:0,monto:0}
+  ]},
+  {num:13, etapa:"Revoque exterior / Frente", items:[
+    {desc:"Revoque exterior 100%",avance:0,monto:0},{desc:"Fretachado exterior 100%",avance:0,monto:0},{desc:"Frente",avance:0,monto:0}
+  ]},
+  {num:14, etapa:"Revoque interior / Nichos", items:[
+    {desc:"Revoque interior 50%",avance:0,monto:0},{desc:"Nicho placard dormitorio 1",avance:0,monto:0},{desc:"Nicho placard dormitorio 2",avance:0,monto:0}
+  ]},
+  {num:15, etapa:"Revoque interior / Premarcos", items:[
+    {desc:"Revoque interior 100%",avance:0,monto:0},{desc:"Colocación de premarcos",avance:0,monto:0},{desc:"Terminaciones de vanos",avance:0,monto:0}
+  ]},
+  {num:16, etapa:"Medianeras / Asador", items:[
+    {desc:"Excavación medianeras",avance:0,monto:0},{desc:"Fundaciones medianeras",avance:0,monto:0},{desc:"Mampostería medianeras",avance:0,monto:0},{desc:"Tapa medianeras",avance:0,monto:0},{desc:"Asador",avance:0,monto:0}
+  ]},
+  {num:17, etapa:"Contrapiso / Carpetas", items:[
+    {desc:"Contrapisos interiores",avance:0,monto:0},{desc:"Carpetas interiores",avance:0,monto:0},{desc:"Contrapiso galería / patio",avance:0,monto:0}
+  ]},
+  {num:18, etapa:"Baños / Impermeabilización", items:[
+    {desc:"Impermeabilización baño 1",avance:0,monto:0},{desc:"Impermeabilización baño 2",avance:0,monto:0},{desc:"Carpetas con pendiente en duchas",avance:0,monto:0},{desc:"Pruebas de estanqueidad",avance:0,monto:0}
+  ]},
+  {num:19, etapa:"Yeso - Primera etapa", items:[
+    {desc:"Yeso dormitorios",avance:0,monto:0},{desc:"Yeso estar / cocina",avance:0,monto:0},{desc:"Yeso circulaciones",avance:0,monto:0}
+  ]},
+  {num:20, etapa:"Yeso - Terminación", items:[
+    {desc:"Terminación yeso general",avance:0,monto:0},{desc:"Detalles de encuentros",avance:0,monto:0},{desc:"Repaso de yeso",avance:0,monto:0}
+  ]},
+  {num:21, etapa:"Pisos interiores", items:[
+    {desc:"Pisos dormitorios",avance:0,monto:0},{desc:"Pisos estar / cocina",avance:0,monto:0},{desc:"Pisos baños",avance:0,monto:0}
+  ]},
+  {num:22, etapa:"Revestimientos", items:[
+    {desc:"Revestimiento baño 1",avance:0,monto:0},{desc:"Revestimiento baño 2",avance:0,monto:0},{desc:"Revestimiento cocina",avance:0,monto:0}
+  ]},
+  {num:23, etapa:"Zócalos / Banquinas", items:[
+    {desc:"Zócalos interiores",avance:0,monto:0},{desc:"Banquinas interiores",avance:0,monto:0},{desc:"Terminaciones de pisos y encuentros",avance:0,monto:0}
+  ]},
+  {num:24, etapa:"Frente / Ingreso / Exteriores", items:[
+    {desc:"Contrapiso ingreso",avance:0,monto:0},{desc:"Huellas ingreso de autos",avance:0,monto:0},{desc:"Perimetrales",avance:0,monto:0},{desc:"Pilar / frente",avance:0,monto:0}
+  ]},
+  {num:25, etapa:"Galería / Pérgola", items:[
+    {desc:"Terminaciones de galería",avance:0,monto:0},{desc:"Colocación de caños / estructura de pérgola",avance:0,monto:0},{desc:"Terminaciones sector asador",avance:0,monto:0}
+  ]},
+  {num:26, etapa:"Aberturas / Terminaciones de albañilería", items:[
+    {desc:"Colocación / ajuste puertas de ingreso",avance:0,monto:0},{desc:"Repaso de premarcos y vanos",avance:0,monto:0},{desc:"Sellados y terminaciones de albañilería",avance:0,monto:0}
+  ]},
+  {num:27, etapa:"Revisión final / Correcciones", items:[
+    {desc:"Repaso general",avance:0,monto:0},{desc:"Correcciones de albañilería",avance:0,monto:0},{desc:"Correcciones de terminaciones",avance:0,monto:0}
+  ]},
+  {num:28, etapa:"Entrega / Limpieza", items:[
+    {desc:"Limpieza final",avance:0,monto:0},{desc:"Retiro de sobrantes",avance:0,monto:0},{desc:"Conforme de obra",avance:0,monto:0}
+  ]}
+];
 
 // ─── PLANTILLA BASE: 2 PLANTAS / 3 DORMITORIOS / 3 BAÑOS ────────────────
 // Los importes arrancan en 0. La primera referencia real será la obra de Cristian;
@@ -3627,7 +3784,9 @@ function getTipoPlantas(st=state, meta=(typeof currentObra==='function'?currentO
   return Number(st?.tipoPlantas || meta?.tipoPlantas || 1) === 2 ? 2 : 1;
 }
 function getBaseSemanas(st=state, meta=(typeof currentObra==='function'?currentObra():null)){
-  return getTipoPlantas(st, meta) === 2 ? SEMANAS_DOS_PLANTAS : SEMANAS;
+  if(getTipoPlantas(st, meta) === 2) return SEMANAS_DOS_PLANTAS;
+  const version = st?.plantillaVersion || meta?.plantillaVersion || '';
+  return version === '1p_detallada_v1' ? SEMANAS : SEMANAS_UNA_PLANTA_LEGACY;
 }
 
 const OBRA_ACORDADA_DEFAULT = 38000000;
@@ -3645,16 +3804,18 @@ const DEFAULT_OBRAS = [
 function cloneDefaultCQ(){ return ITEMS_CQ_DEFAULT.map(x=>({...x})); }
 function createDefaultState(meta={}) {
   const tipoPlantas = Number(meta.tipoPlantas) === 2 ? 2 : 1;
-  const s = { items:{}, pagosFuera:[], acuerdo:OBRA_ACORDADA_DEFAULT, acuerdoComentario:'', itemsCQ:cloneDefaultCQ(), constructor:meta.constructor||'Constructor', obraNum:meta.obraNum||'', tipoPlantas, montos:{}, customTasks:{}, taskOverrides:{}, customWeeks:[], weekOverrides:{}, hiddenWeeks:[] };
-  const baseSemanas = tipoPlantas === 2 ? SEMANAS_DOS_PLANTAS : SEMANAS;
+  const plantillaVersion = meta.plantillaVersion || (tipoPlantas===2 ? '2p_v1' : '1p_detallada_v1');
+  const s = { items:{}, pagosFuera:[], acuerdo:OBRA_ACORDADA_DEFAULT, acuerdoComentario:'', itemsCQ:cloneDefaultCQ(), constructor:meta.constructor||'Constructor', obraNum:meta.obraNum||'', tipoPlantas, plantillaVersion, montos:{}, customTasks:{}, taskOverrides:{}, customWeeks:[], weekOverrides:{}, hiddenWeeks:[], weekOrder:[] };
+  const baseSemanas = tipoPlantas === 2 ? SEMANAS_DOS_PLANTAS : (plantillaVersion==='1p_detallada_v1' ? SEMANAS : SEMANAS_UNA_PLANTA_LEGACY);
   baseSemanas.forEach(sem => (sem.items||[]).forEach((it,i) => { s.items[`${sem.num}-${i}`] = it.avance || 0; }));
   return s;
 }
 function normalizeState(s, meta={}) {
   s = s && typeof s === 'object' ? s : createDefaultState(meta);
   if(!s.tipoPlantas) s.tipoPlantas = Number(meta.tipoPlantas) === 2 ? 2 : 1;
+  if(Number(s.tipoPlantas)===2 && !s.plantillaVersion) s.plantillaVersion='2p_v1';
   if(!s.items) s.items = {};
-  const baseSemanas = Number(s.tipoPlantas) === 2 ? SEMANAS_DOS_PLANTAS : SEMANAS;
+  const baseSemanas = Number(s.tipoPlantas) === 2 ? SEMANAS_DOS_PLANTAS : ((s.plantillaVersion||meta.plantillaVersion)==='1p_detallada_v1' ? SEMANAS : SEMANAS_UNA_PLANTA_LEGACY);
   baseSemanas.forEach(sem => (sem.items||[]).forEach((it,i) => { const k=`${sem.num}-${i}`; if(s.items[k] == null) s.items[k] = it.avance || 0; }));
   if(!s.pagosFuera) s.pagosFuera = [];
   if(!s.constructor) s.constructor = meta.constructor || 'Constructor';
@@ -3678,6 +3839,7 @@ function normalizeState(s, meta={}) {
   if(!s.customWeeks) s.customWeeks = [];
   if(!s.weekOverrides) s.weekOverrides = {};
   if(!s.hiddenWeeks) s.hiddenWeeks = [];
+  if(!Array.isArray(s.weekOrder)) s.weekOrder = [];
   if(!s.acuerdo || s.acuerdo === 53000000) s.acuerdo = OBRA_ACORDADA_DEFAULT;
   if(typeof s.acuerdoComentario !== 'string') s.acuerdoComentario = '';
   if(!s.itemsCQ) s.itemsCQ = cloneDefaultCQ();
@@ -4157,7 +4319,7 @@ function calcDetalleCertificacion(){
 }
 function detalleCertTexto(items){
   if(!items || !items.length) return 'Sin avances nuevos.';
-  return items.map(it=>`• S${it.snum} · ${it.desc}\n  ${Math.round((it.from||0)*100)}% → ${Math.round((it.to||0)*100)}% · ${fmt(it.importe||0)}`).join('\n\n');
+  return items.map(it=>`• S${getDisplayWeekNum(it.snum)} · ${it.desc}\n  ${Math.round((it.from||0)*100)}% → ${Math.round((it.to||0)*100)}% · ${fmt(it.importe||0)}`).join('\n\n');
 }
 function calcCertificacion(){
   const c=calcTotal(), certificado=sumCertificados(), det=calcDetalleCertificacion();
@@ -4465,14 +4627,14 @@ function renderSemanas(){
     const {totalMonto,devengado,pctSem}=calcSemana(s);
     const st=semStatus(pctSem);
     const hasPendingCert=semanaTienePendiente(s.num);
-    return `<div class="semana-block ${st.cls} ${grpClass(s.num)} ${hasPendingCert?'pending-cert-week':''}" id="sb-${s.num}">
+    return `<div class="semana-block ${st.cls} ${grpClass(s.displayNum||s.num)} ${hasPendingCert?'pending-cert-week':''}" id="sb-${s.num}">
       <div class="semana-header" onclick="toggleSemana(${s.num})">
-        <span class="semana-num">S${s.num}</span>
+        <span class="semana-num">S${s.displayNum||s.num}</span>
         <span class="semana-title-wrap">
           <span class="semana-etapa">${escHtml(s.etapa || '')}</span>
           <span class="week-title-actions">
-            <button class="week-action-btn edit" title="Editar título de la semana" aria-label="Editar título de la semana S${s.num}" onclick="event.stopPropagation();editSemana(${s.num})">✏</button>
-            <button class="week-action-btn delete" title="Eliminar semana" aria-label="Eliminar semana S${s.num}" onclick="event.stopPropagation();deleteSemana(${s.num})">🗑</button>
+            <button class="week-action-btn edit" title="Editar semana (número y título)" aria-label="Editar semana S${s.displayNum||s.num}" onclick="event.stopPropagation();editSemana(${s.num})">✏</button>
+            <button class="week-action-btn delete" title="Eliminar semana" aria-label="Eliminar semana S${s.displayNum||s.num}" onclick="event.stopPropagation();deleteSemana(${s.num})">🗑</button>
           </span>
         </span>
         ${hasPendingCert?'<span class="week-pending-badge">⏳ Para certificar</span>':''}
@@ -4886,7 +5048,7 @@ function renderFinanzas(){
     totalSaldoSemanas += saldo;
     const done=pctSem>=0.99;
     return `<tr>
-      <td class="mono" style="color:#A8BFA8">S${s.num}</td>
+      <td class="mono" style="color:#A8BFA8">S${s.displayNum||s.num}</td>
       <td style="font-size:11px;color:#4A6A50">${s.etapa}</td>
       <td class="r mono">${fmt(pagoMax)}</td>
       <td class="r mono" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(devengado)}</td>
@@ -5254,7 +5416,7 @@ function calcReporteConstructor(){
   const rows=[];
   let total=0, certificado=0, pendiente=0, contrato=0, pendienteHasta23=0;
   const semanasObra=getSemanas();
-  const semanaLimite = semanasObra.length ? Math.max(...semanasObra.map(s=>s.num)) : 0;
+  const semanaLimite = semanasObra.length;
   semanasObra.forEach(s=>{
     getItems(s.num).forEach((it,i)=>{
       const monto=getMonto(s.num,i);
@@ -5264,7 +5426,8 @@ function calcReporteConstructor(){
       const cert=monto*Math.min(lock,1);
       const totalAvance=monto*av;
       const pendAvance=Math.max(totalAvance-cert,0);
-      const pendHasta = s.num<=semanaLimite ? Math.max(monto-cert,0) : 0;
+      const dispNum=s.displayNum||getDisplayWeekNum(s.num);
+      const pendHasta = dispNum<=semanaLimite ? Math.max(monto-cert,0) : 0;
 
       contrato += monto;
       total += totalAvance;
@@ -5272,9 +5435,9 @@ function calcReporteConstructor(){
       pendiente += pendAvance;
       pendienteHasta23 += pendHasta;
 
-      if(s.num<=semanaLimite || totalAvance>0 || cert>0 || pendAvance>0){
+      if(dispNum<=semanaLimite || totalAvance>0 || cert>0 || pendAvance>0){
         rows.push({
-          sem:s.num,
+          sem:s.displayNum||getDisplayWeekNum(s.num),
           etapa:s.etapa||'',
           desc:it.desc||'',
           monto,
@@ -5283,7 +5446,7 @@ function calcReporteConstructor(){
           pendiente:pendAvance,
           pendienteHasta23:pendHasta,
           total:totalAvance,
-          incluidoHasta23:s.num<=semanaLimite
+          incluidoHasta23:(s.displayNum||getDisplayWeekNum(s.num))<=semanaLimite
         });
       }
     });
@@ -5956,7 +6119,7 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
   "use strict";
   var MODULO="Avances";
   var QUEUE_KEY="cq_audit_queue_v1_"+MODULO.replace(/\s+/g,"_").toLowerCase();
-  var WRAPS=[{"fn": "editSemana", "accion": "modificar", "detalle": "Modificó el título de una semana"}, {"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
+  var WRAPS=[{"fn": "editSemana", "accion": "modificar", "detalle": "Modificó número/orden o título de una semana"}, {"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
   WRAPS=WRAPS.filter(function(x){return x.accion!=="agregar";});
   var flushing=false;
 
