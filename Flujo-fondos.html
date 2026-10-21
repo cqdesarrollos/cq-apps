@@ -8616,7 +8616,7 @@ document.addEventListener('DOMContentLoaded',function(){
     const key=buildActualKey(item.type,item.ri,mi);
     const isSelected=cqSheetState.selected===key;
     const value=displayNumber(item.row.months[mi]);
-    return `<td class="${monthColorClass(ci)} ${isSelected?'sheet-selected':''}" data-sheet-ui-cell="${key}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" data-sheet-edit="${key}" value="${fesc(value)}" placeholder="0"></div></td>`;
+    return `<td class="${monthColorClass(ci)} ${isSelected?'sheet-selected':''}" data-sheet-ui-cell="${key}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" data-sheet-edit="${key}" value="${fesc(value)}" placeholder="0"><span class="sheet-drag-handle" data-sheet-handle="${key}" aria-hidden="true"></span></div></td>`;
   }
 
   function renderSheetTable(months,rows){
@@ -8650,11 +8650,10 @@ document.addEventListener('DOMContentLoaded',function(){
 
     const modal=document.getElementById('flowSheetModal');
     const wrap=document.querySelector('#flowSheetModal .flow-sheet-wrap');
-    let activeDragPointer=null;
 
     function beginRangeDrag(key,pointerId){
       cqSheetState.draggingRange=true;
-      activeDragPointer=pointerId;
+      cqSheetState.activeDragPointer=pointerId;
       cqSheetState.rangeStart=key||cqSheetState.selected;
       cqSheetState.rangeEnd=key||cqSheetState.selected;
       updateSheetSelectionVisual();
@@ -8671,7 +8670,7 @@ document.addEventListener('DOMContentLoaded',function(){
     function finishRangeDrag(){
       if(!cqSheetState.draggingRange)return;
       cqSheetState.draggingRange=false;
-      activeDragPointer=null;
+      cqSheetState.activeDragPointer=null;
       if(wrap)wrap.classList.remove('range-dragging');
       updateSheetSelectionVisual();
     }
@@ -8680,15 +8679,15 @@ document.addEventListener('DOMContentLoaded',function(){
       window.__cqFlowSheetDocDragBound=true;
       document.addEventListener('pointermove',e=>{
         if(!cqSheetState.draggingRange)return;
-        if(activeDragPointer!==null && e.pointerId!==activeDragPointer)return;
+        if(cqSheetState.activeDragPointer!==null && cqSheetState.activeDragPointer!==undefined && e.pointerId!==cqSheetState.activeDragPointer)return;
         updateRangeFromPoint(e.clientX,e.clientY);
       },{passive:true});
       document.addEventListener('pointerup',e=>{
-        if(activeDragPointer!==null && e.pointerId!==activeDragPointer)return;
+        if(cqSheetState.activeDragPointer!==null && cqSheetState.activeDragPointer!==undefined && e.pointerId!==cqSheetState.activeDragPointer)return;
         finishRangeDrag();
       },{passive:true});
       document.addEventListener('pointercancel',e=>{
-        if(activeDragPointer!==null && e.pointerId!==activeDragPointer)return;
+        if(cqSheetState.activeDragPointer!==null && cqSheetState.activeDragPointer!==undefined && e.pointerId!==cqSheetState.activeDragPointer)return;
         finishRangeDrag();
       },{passive:true});
     }
@@ -8708,6 +8707,17 @@ document.addEventListener('DOMContentLoaded',function(){
           e.stopPropagation();
           beginRangeDrag(key,e.pointerId);
         }
+      });
+    });
+
+    tbody.querySelectorAll('[data-sheet-handle]').forEach(handle=>{
+      handle.addEventListener('pointerdown',e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const key=handle.dataset.sheetHandle;
+        if(key!==cqSheetState.selected)setSelectedActualKey(key);
+        beginRangeDrag(key,e.pointerId);
+        try{handle.setPointerCapture(e.pointerId)}catch(_e){}
       });
     });
 
@@ -9203,5 +9213,148 @@ document.addEventListener('DOMContentLoaded',function(){
   if(document.readyState!=='loading') setTimeout(()=>ensureFlowOrderModal(),50);
 })();
 </script>
+
+
+<style id="cq-flow-sheet-responsive-fix-v6">
+/* v86 · viewport móvil real + planilla compacta + selección sin superposición */
+#flowSheetModal.flow-sheet-backdrop{
+  box-sizing:border-box!important;
+}
+#flowSheetModal .flow-sheet-panel{
+  grid-template-rows:auto auto auto minmax(0,1fr) auto!important;
+  min-height:0!important;
+}
+#flowSheetModal .flow-sheet-wrap{min-height:0!important;overscroll-behavior:contain}
+#flowSheetModal .flow-sheet-foot{position:relative;z-index:20;flex:0 0 auto}
+
+/* La columna Concepto siempre queda por encima de una celda seleccionada al hacer scroll horizontal. */
+#flowSheetModal .flow-sheet-table .sheet-label-cell{
+  position:sticky!important;left:0!important;z-index:7!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-months-row .sheet-label-cell{z-index:12!important}
+#flowSheetModal .flow-sheet-table td.sheet-selected{
+  z-index:1!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-range-selected{z-index:0!important}
+
+/* Tirador real estilo Excel: vive dentro de la celda, no flota sobre la pantalla. */
+#flowSheetModal .flow-sheet-table td.sheet-selected::after{display:none!important}
+#flowSheetModal .sheet-drag-handle{
+  display:none;position:absolute;right:2px;bottom:2px;width:11px;height:11px;
+  background:#2ea56c;border:2px solid #fff;border-radius:2px;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:5;touch-action:none;cursor:crosshair;
+}
+#flowSheetModal td.sheet-selected .sheet-drag-handle{display:block}
+#flowSheetModal .flow-sheet-wrap.range-dragging,
+#flowSheetModal .flow-sheet-wrap.range-dragging *{user-select:none!important;-webkit-user-select:none!important}
+
+/* TELÉFONO VERTICAL */
+@media (max-width:520px) and (orientation:portrait){
+  #flowSheetModal.flow-sheet-backdrop{
+    padding:2px!important;align-items:stretch!important;justify-content:stretch!important;
+    height:100dvh!important;max-height:100dvh!important;
+  }
+  #flowSheetModal .flow-sheet-panel{
+    width:100%!important;height:calc(100dvh - 4px)!important;max-height:calc(100dvh - 4px)!important;
+    border-radius:10px!important;
+  }
+  #flowSheetModal .flow-sheet-head{padding:6px 8px!important;min-height:0!important}
+  #flowSheetModal .flow-sheet-head strong{font-size:12px!important;line-height:1.05!important}
+  #flowSheetModal .flow-sheet-head span{font-size:7px!important;line-height:1.05!important;margin-top:1px!important}
+  #flowSheetModal .flow-sheet-close{width:28px!important;height:28px!important;font-size:17px!important}
+
+  /* Años y meses en una sola línea desplazable para recuperar altura. */
+  #flowSheetModal .flow-sheet-filters{padding:4px 6px!important;gap:3px!important}
+  #flowSheetModal .flow-sheet-filter-row{grid-template-columns:34px minmax(0,1fr)!important;gap:4px!important;align-items:center!important}
+  #flowSheetModal .flow-sheet-filter-row>b{font-size:6.5px!important;padding-top:0!important}
+  #flowSheetModal .flow-sheet-chips{
+    flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;gap:3px!important;
+    scrollbar-width:none!important;-webkit-overflow-scrolling:touch;
+  }
+  #flowSheetModal .flow-sheet-chips::-webkit-scrollbar{display:none!important}
+  #flowSheetModal .flow-sheet-chip{flex:0 0 auto!important;font-size:7.2px!important;padding:3px 6px!important;border-radius:7px!important}
+
+  #flowSheetModal .flow-sheet-toolbar{grid-template-columns:55px 22px minmax(0,1fr) 29px 29px!important;gap:3px!important;padding:4px 5px!important}
+  #flowSheetModal .flow-sheet-cellref,#flowSheetModal .flow-sheet-toolbar button,#flowSheetModal .flow-sheet-formula{height:27px!important;border-radius:7px!important}
+  #flowSheetModal .flow-sheet-cellref{padding:0 5px!important;font-size:9px!important}
+  #flowSheetModal .flow-sheet-fx{font-size:14px!important}
+  #flowSheetModal .flow-sheet-formula{font-size:9.5px!important;padding:0 6px!important}
+  #flowSheetModal .flow-sheet-toolbar button{font-size:12px!important}
+
+  /* Más columnas visibles: concepto compacto + meses de 61 px. */
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{
+    width:116px!important;min-width:116px!important;max-width:116px!important;
+    padding:0 6px!important;font-size:9.2px!important;line-height:1.05!important;
+  }
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{
+    width:61px!important;min-width:61px!important;max-width:61px!important;
+  }
+  #flowSheetModal .flow-sheet-table td:not(:first-child),
+  #flowSheetModal .flow-sheet-table .sheet-month-head{
+    width:61px!important;min-width:61px!important;max-width:61px!important;
+  }
+  #flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:28px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{height:28px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{height:28px!important;font-size:9.4px!important;padding:0 4px!important;line-height:28px!important}
+  #flowSheetModal .flow-sheet-table .sheet-month-head{font-size:8.7px!important;padding:0 2px!important}
+  #flowSheetModal .flow-sheet-table .sheet-section-row td{top:28px!important;font-size:8.3px!important;padding:4px 6px!important;height:25px!important}
+  #flowSheetModal .sheet-drag-handle{width:10px;height:10px;right:1px;bottom:1px}
+
+  #flowSheetModal .flow-sheet-foot{padding:5px 7px!important;gap:5px!important;min-height:35px!important}
+  #flowSheetModal .flow-sheet-foot>span:first-child{display:none!important}
+  #flowSheetModal .flow-sheet-foot .sheet-formula-status{font-size:7px!important;line-height:1.1!important;max-width:72%!important}
+  #flowSheetModal .flow-sheet-foot button{padding:6px 11px!important;font-size:9.5px!important;border-radius:8px!important}
+}
+
+/* TELÉFONO HORIZONTAL: antes tomaba estilos de tablet; ahora tiene su propio layout. */
+@media (orientation:landscape) and (max-height:520px) and (max-width:950px){
+  #flowSheetModal.flow-sheet-backdrop{
+    padding:2px!important;align-items:stretch!important;justify-content:stretch!important;
+    height:100dvh!important;max-height:100dvh!important;
+  }
+  #flowSheetModal .flow-sheet-panel{
+    width:100%!important;height:calc(100dvh - 4px)!important;max-height:calc(100dvh - 4px)!important;
+    border-radius:9px!important;
+  }
+  #flowSheetModal .flow-sheet-head{padding:4px 7px!important}
+  #flowSheetModal .flow-sheet-head strong{font-size:11px!important;line-height:1!important}
+  #flowSheetModal .flow-sheet-head span{display:none!important}
+  #flowSheetModal .flow-sheet-close{width:25px!important;height:25px!important;font-size:15px!important}
+  #flowSheetModal .flow-sheet-filters{padding:3px 5px!important;gap:2px!important}
+  #flowSheetModal .flow-sheet-filter-row{grid-template-columns:30px minmax(0,1fr)!important;gap:3px!important;align-items:center!important}
+  #flowSheetModal .flow-sheet-filter-row>b{font-size:6px!important;padding:0!important}
+  #flowSheetModal .flow-sheet-chips{flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;gap:3px!important;scrollbar-width:none!important}
+  #flowSheetModal .flow-sheet-chips::-webkit-scrollbar{display:none!important}
+  #flowSheetModal .flow-sheet-chip{flex:0 0 auto!important;font-size:6.6px!important;padding:2px 5px!important}
+  #flowSheetModal .flow-sheet-toolbar{grid-template-columns:50px 20px minmax(0,1fr) 26px 26px!important;gap:3px!important;padding:3px 5px!important}
+  #flowSheetModal .flow-sheet-cellref,#flowSheetModal .flow-sheet-toolbar button,#flowSheetModal .flow-sheet-formula{height:24px!important;border-radius:6px!important}
+  #flowSheetModal .flow-sheet-cellref{font-size:8px!important;padding:0 4px!important}
+  #flowSheetModal .flow-sheet-fx{font-size:12px!important}
+  #flowSheetModal .flow-sheet-formula{font-size:8.5px!important;padding:0 5px!important}
+  #flowSheetModal .flow-sheet-toolbar button{font-size:11px!important}
+
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{width:126px!important;min-width:126px!important;max-width:126px!important;font-size:8.8px!important;padding:0 6px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap,
+  #flowSheetModal .flow-sheet-table td:not(:first-child),
+  #flowSheetModal .flow-sheet-table .sheet-month-head{width:68px!important;min-width:68px!important;max-width:68px!important}
+  #flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:25px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{height:25px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{height:25px!important;font-size:8.8px!important;padding:0 4px!important;line-height:25px!important}
+  #flowSheetModal .flow-sheet-table .sheet-month-head{font-size:8px!important;padding:0 2px!important}
+  #flowSheetModal .flow-sheet-table .sheet-section-row td{top:25px!important;height:22px!important;font-size:7.7px!important;padding:3px 6px!important}
+  #flowSheetModal .flow-sheet-foot{padding:3px 6px!important;min-height:30px!important}
+  #flowSheetModal .flow-sheet-foot>span:first-child{display:none!important}
+  #flowSheetModal .flow-sheet-foot .sheet-formula-status{font-size:6.8px!important}
+  #flowSheetModal .flow-sheet-foot button{padding:5px 10px!important;font-size:8.5px!important}
+  #flowSheetModal .sheet-drag-handle{width:9px;height:9px;right:1px;bottom:1px}
+}
+
+/* TABLET: conservar tamaños actuales, solo corregir superposición del seleccionado. */
+@media (min-width:521px){
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{z-index:8!important}
+  #flowSheetModal .flow-sheet-table .sheet-months-row .sheet-label-cell{z-index:14!important}
+  #flowSheetModal .flow-sheet-table td.sheet-selected{z-index:1!important}
+}
+</style>
 
 </body></html>
