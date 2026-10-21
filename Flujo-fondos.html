@@ -9633,4 +9633,186 @@ document.addEventListener('DOMContentLoaded',function(){
 })();
 </script>
 
+
+<style id="cq-flow-range-persist-summary-v9">
+/* v89 · selección persistente + sumatoria visible en teléfono/tablet */
+#flowSheetModal .flow-sheet-toolbar{
+  position:relative!important;
+}
+#flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary{
+  grid-column:1/-1!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+  margin:0!important;
+  min-height:30px!important;
+  padding:5px 9px!important;
+  border:1px solid #bcd9cb!important;
+  border-radius:8px!important;
+  background:#e4f2eb!important;
+  color:#294f40!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:10px!important;
+  z-index:30!important;
+  box-shadow:0 2px 6px rgba(49,87,74,.08)!important;
+}
+#flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary.show{
+  display:flex!important;
+}
+#flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary b{
+  font-size:12px!important;
+  font-weight:950!important;
+  color:#20533e!important;
+  white-space:nowrap!important;
+}
+#flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary span{
+  font-size:9px!important;
+  font-weight:800!important;
+  color:#536e62!important;
+  white-space:nowrap!important;
+}
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary{
+    min-height:25px!important;
+    padding:3px 6px!important;
+    gap:7px!important;
+    border-radius:7px!important;
+  }
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary b{font-size:10px!important}
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary span{font-size:7.5px!important}
+}
+@media(orientation:landscape) and (max-height:520px) and (max-width:950px){
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary{
+    min-height:22px!important;padding:2px 5px!important;gap:6px!important;
+  }
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary b{font-size:9px!important}
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary span{font-size:7px!important}
+}
+</style>
+<script id="cq-flow-range-persist-summary-v9">
+(function(){
+  if(window.__cqFlowRangePersistV9)return;
+  window.__cqFlowRangePersistV9=true;
+  let suppressUntil=0;
+  let raf=0;
+
+  function parseNum(v){
+    let s=String(v??'').trim();
+    if(!s)return 0;
+    // inputs type=number usan punto decimal; no eliminarlo como separador de miles.
+    const n=Number(s.replace(',','.'));
+    return Number.isFinite(n)?n:0;
+  }
+  function fmt(n){
+    return new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(Number(n)||0);
+  }
+  function ensureBar(){
+    const toolbar=document.getElementById('flowSheetToolbar');
+    if(!toolbar)return null;
+    let bar=document.getElementById('flowSheetRangeSummary');
+    if(!bar){
+      bar=document.createElement('div');
+      bar.id='flowSheetRangeSummary';
+      bar.className='flow-sheet-range-summary';
+    }
+    if(bar.parentElement!==toolbar)toolbar.appendChild(bar);
+    return bar;
+  }
+  function selectedCells(){
+    return [...document.querySelectorAll('#flowSheetBody td.sheet-range-selected[data-sheet-ui-cell]')];
+  }
+  function refresh(){
+    raf=0;
+    const bar=ensureBar();
+    if(!bar)return;
+    const cells=selectedCells();
+    if(cells.length>1){
+      let sum=0;
+      cells.forEach(td=>{sum+=parseNum(td.querySelector('.sheet-cell-input')?.value||0)});
+      const avg=sum/cells.length;
+      bar.innerHTML=`<b>Σ ${fmt(sum)}</b><span>${cells.length} celdas · Prom. ${fmt(avg)}</span>`;
+      bar.classList.add('show');
+    }else{
+      bar.classList.remove('show');
+      bar.innerHTML='';
+    }
+  }
+  function schedule(){
+    if(raf)return;
+    raf=requestAnimationFrame(refresh);
+  }
+
+  // En tablet, el click sintético posterior al drag volvía a dejar una sola celda.
+  // Guardamos una ventana muy corta tras soltar si había rango múltiple y bloqueamos ese click.
+  document.addEventListener('pointerup',()=>{
+    const count=selectedCells().length;
+    if(count>1)suppressUntil=performance.now()+550;
+    schedule();
+    setTimeout(schedule,20);
+    setTimeout(schedule,90);
+  },true);
+  document.addEventListener('touchend',()=>{
+    const count=selectedCells().length;
+    if(count>1)suppressUntil=performance.now()+650;
+    schedule();
+    setTimeout(schedule,60);
+  },true);
+  document.addEventListener('click',e=>{
+    if(performance.now()>suppressUntil)return;
+    const cell=e.target?.closest?.('#flowSheetBody [data-sheet-ui-cell]');
+    if(!cell)return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(typeof e.stopImmediatePropagation==='function')e.stopImmediatePropagation();
+    schedule();
+  },true);
+
+  document.addEventListener('pointermove',()=>{
+    if(document.getElementById('flowSheetModal')?.classList.contains('open'))schedule();
+  },{passive:true});
+  document.addEventListener('touchmove',()=>{
+    if(document.getElementById('flowSheetModal')?.classList.contains('open'))schedule();
+  },{passive:true});
+
+  const obs=new MutationObserver(schedule);
+  function bind(){
+    ensureBar();
+    const body=document.getElementById('flowSheetBody');
+    if(body && !body.__cqRangeV9Observed){
+      body.__cqRangeV9Observed=true;
+      obs.observe(body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
+    }
+    schedule();
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(bind,40));
+  if(document.readyState!=='loading')setTimeout(bind,40);
+
+  // La planilla puede reconstruirse; mantener barra y observer vinculados.
+  const mo=new MutationObserver(()=>{
+    if(document.getElementById('flowSheetModal')?.classList.contains('open'))bind();
+  });
+  document.addEventListener('DOMContentLoaded',()=>{
+    const modal=document.getElementById('flowSheetModal');
+    if(modal)mo.observe(modal,{subtree:true,childList:true});
+  });
+})();
+</script>
+
+
+<style id="cq-flow-sheet-section-not-sticky-v10">
+/* Solo la fila de meses queda inmovilizada. Los títulos Obras / Otros egresos / Ingresos se desplazan con la planilla. */
+#flowSheetModal .flow-sheet-table .sheet-section-row td{
+  position:static!important;
+  top:auto!important;
+  z-index:auto!important;
+}
+@media (max-width:520px), (orientation:landscape) and (max-height:520px) and (max-width:950px){
+  #flowSheetModal .flow-sheet-table .sheet-section-row td{
+    position:static!important;
+    top:auto!important;
+    z-index:auto!important;
+  }
+}
+</style>
+
 </body></html>
