@@ -3250,6 +3250,7 @@ function openEditObra() {
   document.getElementById('eo-acuerdo').value = state.acuerdo || '';
   document.getElementById('eo-color').value = meta?.color || '#E8A838';
   const tipoWrap=document.getElementById('eo-tipo-wrap'); if(tipoWrap) tipoWrap.style.display='none';
+  const cimWrap=document.getElementById('eo-cimentacion-wrap'); if(cimWrap) cimWrap.style.display='none';
   renderConstructorSelect(meta?.constructorId || currentConstructor()?.id);
 }
 
@@ -3264,6 +3265,8 @@ function openNuevaObra() {
   document.getElementById('eo-color').value = defaultObraColor(obrasConfig.length);
   const tipoWrap=document.getElementById('eo-tipo-wrap'); if(tipoWrap) tipoWrap.style.display='block';
   const tipoSel=document.getElementById('eo-tipo'); if(tipoSel) tipoSel.value='1';
+  const cimSel=document.getElementById('eo-cimentacion'); if(cimSel) cimSel.value='pilotes';
+  updateFoundationSelectorVisibility();
   renderConstructorSelect(currentConstructorId || constructoresConfig[0]?.id);
   const selC=constructoresConfig.find(c=>c.id===(currentConstructorId || constructoresConfig[0]?.id));
   document.getElementById('eo-constructor').value = selC?.nombre || '';
@@ -3292,29 +3295,49 @@ function findCristianObra(){
   const arr=obrasConfig.filter(isCristianObra);
   return [...arr].reverse().find(o=>!o.terminado) || arr[arr.length-1] || null;
 }
-function findLatestObraByTipo(tipo){
+function normalizeCimentacion2P(v){
+  const k=normKey(v||'');
+  if(k.includes('pilote')) return 'pilotes';
+  if(k.includes('platea')) return 'platea';
+  return '';
+}
+function getObraCimentacion(o){
+  const st=o ? estadosObras[o.id] : null;
+  return normalizeCimentacion2P(st?.tipoCimentacion || o?.tipoCimentacion || '');
+}
+function findLatestObraByTipo(tipo,cimentacion=''){
   tipo=Number(tipo)===2?2:1;
+  const cim=tipo===2 ? normalizeCimentacion2P(cimentacion) : '';
   let candidatas=obrasConfig.filter(o=>{
+    if(!estadosObras[o.id]) return false; // excluye la obra nueva todavía sin estado
     if(Number(o.tipoPlantas)!==tipo) return false;
     if(tipo===1){
       const st=estadosObras[o.id];
       return (st?.plantillaVersion || o.plantillaVersion) === '1p_detallada_v1';
     }
+    if(cim) return getObraCimentacion(o)===cim;
     return true;
   });
-  if(!candidatas.length && tipo===2){ const o=findCristianObra(); if(o) candidatas=[o]; }
+  if(!candidatas.length && tipo===2 && !cim){ const o=findCristianObra(); if(o) candidatas=[o]; }
   return candidatas.length ? candidatas[candidatas.length-1] : null;
+}
+function findLatestTwoStoryAny(){
+  const candidatas=obrasConfig.filter(o=>Number(o.tipoPlantas)===2 && !!estadosObras[o.id]);
+  if(candidatas.length) return candidatas[candidatas.length-1];
+  return findCristianObra();
 }
 function cloneStateAsNewProject(plantilla,newMeta,tipo){
   if(!plantilla) return createDefaultState({...newMeta,tipoPlantas:tipo});
   const nuevo=deepClone(plantilla);
   nuevo.tipoPlantas=tipo;
   nuevo.plantillaVersion = tipo===2 ? (plantilla.plantillaVersion||'2p_v1') : '1p_detallada_v1';
+  if(tipo===2) nuevo.tipoCimentacion=normalizeCimentacion2P(newMeta.tipoCimentacion || plantilla.tipoCimentacion || '');
+  else delete nuevo.tipoCimentacion;
   nuevo.constructor=newMeta.constructor||'Constructor';
   nuevo.obraNum=newMeta.obraNum||'';
   nuevo.items={};
   Object.keys(plantilla.items||{}).forEach(k=>{ nuevo.items[k]=0; });
-  const base=tipo===2?SEMANAS_DOS_PLANTAS:SEMANAS;
+  const base=getBaseSemanasForProject(nuevo,newMeta);
   base.forEach(sem=>(sem.items||[]).forEach((it,i)=>{ nuevo.items[`${sem.num}-${i}`]=0; }));
   if(nuevo.customTasks){ Object.keys(nuevo.customTasks).forEach(sem=>{ nuevo.customTasks[sem]=(nuevo.customTasks[sem]||[]).map(t=>({...t,avance:0})); }); }
   nuevo.pagosFuera=[];
@@ -3324,9 +3347,45 @@ function cloneStateAsNewProject(plantilla,newMeta,tipo){
   delete nuevo._migracionDosPlantas;
   return normalizeState(nuevo,{...newMeta,tipoPlantas:tipo});
 }
+function resetFoundationWeeksForNewTwoStory(st,cimentacion){
+  const cim=normalizeCimentacion2P(cimentacion);
+  if(!st || !cim) return st;
+  st.tipoCimentacion=cim;
+  [1,2,3,4].forEach(n=>{
+    if(st.weekOverrides) delete st.weekOverrides[n];
+    if(st.customTasks) delete st.customTasks[n];
+    if(st.hiddenWeeks) st.hiddenWeeks=st.hiddenWeeks.filter(x=>Number(x)!==n);
+    Object.keys(st.taskOverrides||{}).forEach(k=>{ if(String(k).startsWith(n+'-')) delete st.taskOverrides[k]; });
+    Object.keys(st.items||{}).forEach(k=>{ if(String(k).startsWith(n+'-')) delete st.items[k]; });
+    Object.keys(st.montos||{}).forEach(k=>{ if(String(k).startsWith(n+'-')) delete st.montos[k]; });
+  });
+  const foundation = cim==='pilotes' ? SEMANAS_2P_PILOTES_INICIO : SEMANAS_2P_PLATEA_INICIO;
+  foundation.forEach(sem=>(sem.items||[]).forEach((it,i)=>{ st.items[`${sem.num}-${i}`]=0; }));
+  return st;
+}
 function createStateFromLatestTemplate(newMeta,tipo){
   tipo=Number(tipo)===2?2:1;
-  const metaConVersion = {...newMeta, plantillaVersion: tipo===2 ? '2p_v1' : '1p_detallada_v1'};
+  const cim=tipo===2 ? normalizeCimentacion2P(newMeta.tipoCimentacion) : '';
+  const metaConVersion = {...newMeta, plantillaVersion: tipo===2 ? '2p_v1' : '1p_detallada_v1', ...(tipo===2?{tipoCimentacion:cim}:{})};
+
+  // Para 2 plantas, primero busca la última obra del MISMO sistema de fundación.
+  if(tipo===2 && cim){
+    const exactMeta=findLatestObraByTipo(2,cim);
+    const exact=exactMeta ? estadosObras[exactMeta.id] : null;
+    if(exact) return cloneStateAsNewProject(exact,metaConVersion,2);
+
+    // Si todavía no existe una obra de ese sistema, toma la última de 2 plantas
+    // como referencia para las semanas comunes y reemplaza S1-S4 por Pilotes/Platea.
+    const commonMeta=findLatestTwoStoryAny();
+    const common=commonMeta ? estadosObras[commonMeta.id] : null;
+    if(common){
+      const nuevo=cloneStateAsNewProject(common,metaConVersion,2);
+      resetFoundationWeeksForNewTwoStory(nuevo,cim);
+      return normalizeState(nuevo,metaConVersion);
+    }
+    return normalizeState(createDefaultState(metaConVersion),metaConVersion);
+  }
+
   const plantillaMeta=findLatestObraByTipo(tipo);
   const plantilla=plantillaMeta ? estadosObras[plantillaMeta.id] : null;
   if(plantilla) return cloneStateAsNewProject(plantilla,metaConVersion,tipo);
@@ -3345,19 +3404,32 @@ function createStateFromLatestTemplate(newMeta,tipo){
   }
   return normalizeState(nuevo,metaConVersion);
 }
+function updateFoundationSelectorVisibility(){
+  const tipo=Number(document.getElementById('eo-tipo')?.value||1)===2?2:1;
+  const wrap=document.getElementById('eo-cimentacion-wrap');
+  if(wrap) wrap.style.display=(obraModalMode==='new' && tipo===2)?'block':'none';
+}
 function updatePlantTemplateHint(setAgreement=false){
   const tipo=Number(document.getElementById('eo-tipo')?.value||1)===2?2:1;
-  const meta=findLatestObraByTipo(tipo);
+  updateFoundationSelectorVisibility();
+  const cim=tipo===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value||'pilotes') : '';
+  const meta=tipo===2 ? findLatestObraByTipo(2,cim) : findLatestObraByTipo(1);
   const hint=document.getElementById('eo-template-hint');
   if(hint){
-    hint.innerHTML=meta
-      ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
-      : (tipo===1
-          ? `<strong>Modelo inicial:</strong> nueva plantilla detallada de 1 planta. Después, cada obra nueva copiará la última de 1 planta con tus modificaciones.`
-          : `<strong>Modelo:</strong> plantilla base de 2 plantas.`);
+    if(tipo===1){
+      hint.innerHTML=meta
+        ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
+        : `<strong>Modelo inicial:</strong> plantilla detallada de 1 planta con zapata corrida.`;
+    }else if(meta){
+      hint.innerHTML=`<strong>Modelo ${cim==='pilotes'?'Pilotes':'Platea'}:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia las últimas modificaciones de ese mismo sistema.`;
+    }else{
+      const common=findLatestTwoStoryAny();
+      hint.innerHTML=`<strong>Primer proyecto 2 plantas · ${cim==='pilotes'?'Pilotes':'Platea'}:</strong> S1–S4 se crean con este sistema de fundación${common ? ` y desde S5 toma como referencia ${escHtml(common.label||common.obraNum||common.id)}.` : '.'}`;
+    }
   }
   if(setAgreement){
     let st=meta?estadosObras[meta.id]:null;
+    if(!st && tipo===2){ const common=findLatestTwoStoryAny(); st=common?estadosObras[common.id]:null; }
     if(!st && tipo===1){ const ref=obrasConfig.find(isL29M77); st=ref?estadosObras[ref.id]:null; }
     const inp=document.getElementById('eo-acuerdo');
     if(inp) inp.value=Number(st?.acuerdo)>0?Number(st.acuerdo):OBRA_ACORDADA_DEFAULT;
@@ -3419,7 +3491,8 @@ function saveEditObra() {
   const finalLabel = label || (n ? 'L' + n.replace('/', ' Mz') : c || 'Nueva obra');
   if (obraModalMode === 'new') {
     const tipoPlantas = Number(document.getElementById('eo-tipo')?.value || 1) === 2 ? 2 : 1;
-    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, plantillaVersion: tipoPlantas===2?'2p_v1':'1p_detallada_v1', createdAt:new Date().toISOString() };
+    const tipoCimentacion = tipoPlantas===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value || 'pilotes') : '';
+    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, ...(tipoPlantas===2?{tipoCimentacion}:{}), plantillaVersion: tipoPlantas===2?'2p_v1':'1p_detallada_v1', createdAt:new Date().toISOString() };
     obrasConfig.push(newMeta);
     estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
     estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
@@ -3780,13 +3853,56 @@ const SEMANAS_DOS_PLANTAS = [
   ]}
 ];
 
+
+// ─── FUNDACIONES ESPECÍFICAS PARA PROYECTOS DE 2 PLANTAS ────────────────
+// S1 a S4 cambian según el sistema elegido. Desde S5 continúa la misma
+// estructura de 2 plantas, por lo que no se altera la numeración restante.
+const SEMANAS_2P_PILOTES_INICIO = [
+  {num:1, etapa:"Pilotes - Replanteo / Preparación", items:[
+    {desc:"Replanteo general y ejes",avance:0,monto:0},{desc:"Cerramiento",avance:0,monto:0},{desc:"Pilar luz y gas",avance:0,monto:0},{desc:"Marcación de centros de pilotes y niveles",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Pilotes - Perforación / Armaduras", items:[
+    {desc:"Perforación de pilotes",avance:0,monto:0},{desc:"Control de profundidad y limpieza",avance:0,monto:0},{desc:"Armado y colocación de armaduras de pilotes",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Pilotes - Hormigonado", items:[
+    {desc:"Hormigonado de pilotes",avance:0,monto:0},{desc:"Arranques / esperas de columnas",avance:0,monto:0},{desc:"Descabezado y control de cotas",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Vigas de fundación / Nivelación", items:[
+    {desc:"Excavación y preparación de vigas de fundación",avance:0,monto:0},{desc:"Armado / encofrado de vigas de fundación",avance:0,monto:0},{desc:"Hormigonado de vigas de fundación",avance:0,monto:0},{desc:"Nivelación / capa aisladora / replanteo mampostería PB",avance:0,monto:0}
+  ]}
+];
+const SEMANAS_2P_PLATEA_INICIO = [
+  {num:1, etapa:"Platea - Replanteo / Excavación", items:[
+    {desc:"Replanteo general y niveles",avance:0,monto:0},{desc:"Cerramiento",avance:0,monto:0},{desc:"Pilar luz y gas",avance:0,monto:0},{desc:"Excavación / retiro de suelo",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Platea - Suelo / Base / Instalaciones", items:[
+    {desc:"Nivelación de subrasante",avance:0,monto:0},{desc:"Relleno y compactación de base",avance:0,monto:0},{desc:"Instalaciones y pases bajo platea",avance:0,monto:0},{desc:"Control de niveles y compactación",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Platea - Armado", items:[
+    {desc:"Membrana / barrera aislante",avance:0,monto:0},{desc:"Armado de mallas y hierros de platea",avance:0,monto:0},{desc:"Refuerzos y vigas integradas",avance:0,monto:0},{desc:"Arranques / esperas de columnas",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Platea - Hormigonado / Curado", items:[
+    {desc:"Hormigonado de platea",avance:0,monto:0},{desc:"Nivelación y terminación superficial",avance:0,monto:0},{desc:"Curado de platea",avance:0,monto:0},{desc:"Replanteo de mampostería PB",avance:0,monto:0}
+  ]}
+];
+function getBaseSemanasForProject(st,meta){
+  const tipo=Number(st?.tipoPlantas || meta?.tipoPlantas || 1)===2?2:1;
+  if(tipo===2){
+    const cim=normalizeCimentacion2P(st?.tipoCimentacion || meta?.tipoCimentacion || '');
+    if(cim){
+      const inicio=cim==='pilotes'?SEMANAS_2P_PILOTES_INICIO:SEMANAS_2P_PLATEA_INICIO;
+      return [...inicio, ...SEMANAS_DOS_PLANTAS.filter(x=>Number(x.num)>4)];
+    }
+    return SEMANAS_DOS_PLANTAS;
+  }
+  const version = st?.plantillaVersion || meta?.plantillaVersion || '';
+  return version === '1p_detallada_v1' ? SEMANAS : SEMANAS_UNA_PLANTA_LEGACY;
+}
 function getTipoPlantas(st=state, meta=(typeof currentObra==='function'?currentObra():null)){
   return Number(st?.tipoPlantas || meta?.tipoPlantas || 1) === 2 ? 2 : 1;
 }
 function getBaseSemanas(st=state, meta=(typeof currentObra==='function'?currentObra():null)){
-  if(getTipoPlantas(st, meta) === 2) return SEMANAS_DOS_PLANTAS;
-  const version = st?.plantillaVersion || meta?.plantillaVersion || '';
-  return version === '1p_detallada_v1' ? SEMANAS : SEMANAS_UNA_PLANTA_LEGACY;
+  return getBaseSemanasForProject(st,meta);
 }
 
 const OBRA_ACORDADA_DEFAULT = 38000000;
@@ -3805,8 +3921,9 @@ function cloneDefaultCQ(){ return ITEMS_CQ_DEFAULT.map(x=>({...x})); }
 function createDefaultState(meta={}) {
   const tipoPlantas = Number(meta.tipoPlantas) === 2 ? 2 : 1;
   const plantillaVersion = meta.plantillaVersion || (tipoPlantas===2 ? '2p_v1' : '1p_detallada_v1');
-  const s = { items:{}, pagosFuera:[], acuerdo:OBRA_ACORDADA_DEFAULT, acuerdoComentario:'', itemsCQ:cloneDefaultCQ(), constructor:meta.constructor||'Constructor', obraNum:meta.obraNum||'', tipoPlantas, plantillaVersion, montos:{}, customTasks:{}, taskOverrides:{}, customWeeks:[], weekOverrides:{}, hiddenWeeks:[], weekOrder:[] };
-  const baseSemanas = tipoPlantas === 2 ? SEMANAS_DOS_PLANTAS : (plantillaVersion==='1p_detallada_v1' ? SEMANAS : SEMANAS_UNA_PLANTA_LEGACY);
+  const tipoCimentacion = tipoPlantas===2 ? normalizeCimentacion2P(meta.tipoCimentacion||'') : '';
+  const s = { items:{}, pagosFuera:[], acuerdo:OBRA_ACORDADA_DEFAULT, acuerdoComentario:'', itemsCQ:cloneDefaultCQ(), constructor:meta.constructor||'Constructor', obraNum:meta.obraNum||'', tipoPlantas, plantillaVersion, ...(tipoCimentacion?{tipoCimentacion}:{}), montos:{}, customTasks:{}, taskOverrides:{}, customWeeks:[], weekOverrides:{}, hiddenWeeks:[], weekOrder:[] };
+  const baseSemanas = getBaseSemanasForProject(s,meta);
   baseSemanas.forEach(sem => (sem.items||[]).forEach((it,i) => { s.items[`${sem.num}-${i}`] = it.avance || 0; }));
   return s;
 }
@@ -3814,8 +3931,12 @@ function normalizeState(s, meta={}) {
   s = s && typeof s === 'object' ? s : createDefaultState(meta);
   if(!s.tipoPlantas) s.tipoPlantas = Number(meta.tipoPlantas) === 2 ? 2 : 1;
   if(Number(s.tipoPlantas)===2 && !s.plantillaVersion) s.plantillaVersion='2p_v1';
+  if(Number(s.tipoPlantas)===2){
+    const cim=normalizeCimentacion2P(s.tipoCimentacion || meta.tipoCimentacion || '');
+    if(cim) s.tipoCimentacion=cim;
+  }else if(s.tipoCimentacion){ delete s.tipoCimentacion; }
   if(!s.items) s.items = {};
-  const baseSemanas = Number(s.tipoPlantas) === 2 ? SEMANAS_DOS_PLANTAS : ((s.plantillaVersion||meta.plantillaVersion)==='1p_detallada_v1' ? SEMANAS : SEMANAS_UNA_PLANTA_LEGACY);
+  const baseSemanas = getBaseSemanasForProject(s,meta);
   baseSemanas.forEach(sem => (sem.items||[]).forEach((it,i) => { const k=`${sem.num}-${i}`; if(s.items[k] == null) s.items[k] = it.avance || 0; }));
   if(!s.pagosFuera) s.pagosFuera = [];
   if(!s.constructor) s.constructor = meta.constructor || 'Constructor';
@@ -6025,7 +6146,7 @@ setTimeout(() => {
       <div class="field"><label>Constructor</label><input type="text" id="eo-constructor" placeholder="Nombre del constructor"></div>
       <div class="field"><label>Asignar a constructor</label><select id="eo-constructor-id"></select></div>
       <div class="field"><label>Número de obra</label><input type="text" id="eo-num" placeholder="Ej: 2/99"></div>
-      <div class="field" id="eo-tipo-wrap" style="display:none"><label>Tipo de proyecto</label><select id="eo-tipo" onchange="updatePlantTemplateHint(true)"><option value="1">1 planta</option><option value="2">2 plantas</option></select><div class="hint" id="eo-template-hint" style="margin-top:6px;padding:7px 9px"></div></div>
+      <div class="field" id="eo-tipo-wrap" style="display:none"><label>Tipo de proyecto</label><select id="eo-tipo" onchange="updatePlantTemplateHint(true)"><option value="1">1 planta</option><option value="2">2 plantas</option></select><div class="field" id="eo-cimentacion-wrap" style="display:none;margin-top:10px"><label>Sistema de fundación</label><select id="eo-cimentacion" onchange="updatePlantTemplateHint(true)"><option value="pilotes">Pilotes</option><option value="platea">Platea</option></select></div><div class="hint" id="eo-template-hint" style="margin-top:6px;padding:7px 9px"></div></div>
       <div class="field"><label>Monto total acordado ($)</label><input type="number" id="eo-acuerdo" min="0" step="100000" placeholder="38000000"></div>
       <div class="field"><label>Color del botón</label><input type="color" id="eo-color" value="#E8A838"></div>
     </div>
