@@ -8188,4 +8188,553 @@ document.addEventListener('DOMContentLoaded',function(){
 })();
 
 </script>
+
+<style id="cq-flow-main-and-sheet-excel-v1">
+/* v81 · Flujo: check verde en obras/egresos + orden + planilla estilo Excel */
+.flow-entry.has-check .flow-entry-name{display:flex;align-items:center;gap:6px}
+.flow-entry.cell-checked{background:#f3f9f6;border-radius:8px;padding-left:5px}
+.flow-entry.cell-checked .flow-entry-name{color:#3e6857}
+.flow-check-cell{display:grid;grid-template-columns:minmax(0,1fr) 27px;gap:5px;align-items:center}
+.flow-check-btn{width:25px;height:25px;border:1px solid #cfdcd6;border-radius:7px;background:#fff;display:grid;place-items:center;cursor:pointer;color:transparent;font-size:14px;font-weight:900;padding:0;transition:.15s}
+.flow-check-btn:hover{background:#f4f8f6;border-color:#b9cdc3}
+.flow-check-btn.checked{background:#dcece4;border-color:#a9c9b9;color:#35634f;box-shadow:0 2px 6px rgba(53,99,79,.08)}
+.flow-check-btn.checked::before{content:'✓'}
+.flow-entry-actions .move-up,.flow-entry-actions .move-down{font-size:10px}
+.flow-entry-actions .move-up{background:#f5f8f7}
+.flow-entry-actions .move-down{background:#f5f8f7}
+@media(max-width:600px){.flow-check-cell{grid-template-columns:minmax(0,1fr) 25px;gap:3px}.flow-check-btn{width:23px;height:23px;font-size:13px}}
+
+#flowSheetModal .flow-sheet-toolbar{display:grid;grid-template-columns:140px 52px minmax(0,1fr) 58px 58px;gap:8px;padding:10px 12px;background:#f7faf8;border-bottom:1px solid #d6e2dd}
+#flowSheetModal .flow-sheet-cellref,#flowSheetModal .flow-sheet-toolbar button,#flowSheetModal .flow-sheet-formula{height:36px;border:1px solid #d2ddd8;border-radius:10px;background:#fff}
+#flowSheetModal .flow-sheet-cellref{display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-weight:800;color:#40594f}
+#flowSheetModal .flow-sheet-cellref:after{content:'▼';font-size:10px;color:#6a7e74}
+#flowSheetModal .flow-sheet-fx{display:flex;align-items:center;justify-content:center;font-style:italic;font-size:20px;font-weight:900;color:#2d4f42}
+#flowSheetModal .flow-sheet-formula{width:100%;padding:0 12px;font-size:14px;outline:none}
+#flowSheetModal .flow-sheet-toolbar button{font-size:18px;font-weight:900;cursor:pointer;color:#335246}
+#flowSheetModal .flow-sheet-toolbar button:hover{background:#f3f7f5}
+#flowSheetModal .flow-sheet-wrap{background:#eef3f0!important;padding:0!important}
+#flowSheetModal .flow-sheet-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:14px!important;background:#fff!important}
+#flowSheetModal .flow-sheet-table th,#flowSheetModal .flow-sheet-table td{border-right:1px solid #d7dfdc;border-bottom:1px solid #d7dfdc;height:44px;padding:0!important;background:#fff!important}
+#flowSheetModal .flow-sheet-table thead th{position:sticky;top:0;z-index:2}
+#flowSheetModal .flow-sheet-table .sheet-corner{min-width:56px;background:#f1f5f3!important;color:#6c7c75;text-align:center;font-weight:800}
+#flowSheetModal .flow-sheet-table .sheet-col-letter{min-width:128px;background:#f3f6f5!important;color:#455c52;font-weight:800;text-align:center}
+#flowSheetModal .flow-sheet-table .sheet-col-letter.active{background:#d9ede3!important;color:#2e5d48}
+#flowSheetModal .flow-sheet-table .sheet-row-num{min-width:56px;background:#f7faf8!important;color:#4e625a;text-align:center;font-weight:800}
+#flowSheetModal .flow-sheet-table .sheet-row-num.active{background:#dff0e7!important;color:#2e5d48}
+#flowSheetModal .flow-sheet-table .sheet-label-cell{min-width:230px;max-width:270px;padding:0 12px!important;background:#fbfcfc!important;color:#2e473d;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#flowSheetModal .flow-sheet-table .sheet-header-label{font-weight:900;background:#f5f8f7!important}
+#flowSheetModal .flow-sheet-table .sheet-month-head{font-weight:900;text-align:center;background:#f6faf8!important;color:#304d42}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-0,#flowSheetModal .flow-sheet-table th.sheet-month-col-0{background:#eef7f3!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-1,#flowSheetModal .flow-sheet-table th.sheet-month-col-1{background:#eef4fa!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-2,#flowSheetModal .flow-sheet-table th.sheet-month-col-2{background:#fbf5e9!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-3,#flowSheetModal .flow-sheet-table th.sheet-month-col-3{background:#f8f0f6!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-4,#flowSheetModal .flow-sheet-table th.sheet-month-col-4{background:#f1f7ec!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-5,#flowSheetModal .flow-sheet-table th.sheet-month-col-5{background:#f2f0fa!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-6,#flowSheetModal .flow-sheet-table th.sheet-month-col-6{background:#fbf0ed!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-7,#flowSheetModal .flow-sheet-table th.sheet-month-col-7{background:#edf7f7!important}
+#flowSheetModal .flow-sheet-table .sheet-cell-wrap{position:relative;min-width:128px}
+#flowSheetModal .flow-sheet-table .sheet-cell-input{width:100%;height:44px;border:0;background:transparent;padding:0 12px;text-align:right;font-size:16px;font-weight:850;color:#1d3e32;outline:none}
+#flowSheetModal .flow-sheet-table .sheet-cell-input::placeholder{color:#adbab4}
+#flowSheetModal .flow-sheet-table td.sheet-selected{box-shadow:inset 0 0 0 3px #2ea56c;position:relative;z-index:1}
+#flowSheetModal .flow-sheet-table td.sheet-selected::after{content:'';position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;background:#2ea56c;border:2px solid #fff}
+#flowSheetModal .flow-sheet-table tr.sheet-total-row td{background:#eef4f1!important;font-weight:900;color:#294d3e}
+#flowSheetModal .flow-sheet-table tr.sheet-total-row td:first-of-type{background:#e5efea!important}
+#flowSheetModal .flow-sheet-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#flowSheetModal .flow-sheet-foot .sheet-formula-status{font-size:10px;color:#6f8079}
+@media(max-width:720px){
+  #flowSheetModal .flow-sheet-toolbar{grid-template-columns:110px 42px minmax(0,1fr) 46px 46px;padding:8px}
+  #flowSheetModal .flow-sheet-cellref,#flowSheetModal .flow-sheet-toolbar button,#flowSheetModal .flow-sheet-formula{height:34px}
+  #flowSheetModal .flow-sheet-formula{font-size:13px}
+  #flowSheetModal .flow-sheet-table .sheet-row-num{min-width:40px}
+  #flowSheetModal .flow-sheet-table .sheet-col-letter{min-width:110px}
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{min-width:155px;max-width:165px;padding:0 8px!important;font-size:12px}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{min-width:110px}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{font-size:14px;padding:0 8px}
+}
+</style>
+<script id="cq-flow-sheet-excel-logic-v1">
+(function(){
+  if(window.__cqFlowExcelV1)return;
+  window.__cqFlowExcelV1=true;
+
+  const FLOW_TYPES=['works','others','incomes'];
+  const monthColorClass=(idx)=>'sheet-month-col-'+(idx%8);
+  let cqSheetState={selected:null, coordMap:new Map(), months:[], rows:[], actualToCoord:new Map(), lastDisplayInput:''};
+
+  function ensureFlowExtras(){
+    if(!window.flowState)return;
+    FLOW_TYPES.forEach(type=>{
+      if(!Array.isArray(flowState[type]))flowState[type]=[];
+      flowState[type].forEach(row=>{
+        if(!Array.isArray(row.months))row.months=[];
+        while(row.months.length<flowState.months.length)row.months.push(0);
+        if(type==='incomes'){
+          if(!Array.isArray(row.received))row.received=Array(flowState.months.length).fill(false);
+          while(row.received.length<flowState.months.length)row.received.push(false);
+        }else{
+          if(!Array.isArray(row.checked))row.checked=Array(flowState.months.length).fill(false);
+          while(row.checked.length<flowState.months.length)row.checked.push(false);
+        }
+        if(!row.formulas || typeof row.formulas!=='object' || Array.isArray(row.formulas))row.formulas={};
+      });
+    });
+  }
+
+  function normalizeFormulaEntry(entry){
+    if(!entry)return null;
+    if(typeof entry==='string')return {display:entry,compiled:entry};
+    return {
+      display:String(entry.display||entry.formula||entry.text||entry.compiled||''),
+      compiled:String(entry.compiled||entry.internal||entry.display||entry.formula||'')
+    };
+  }
+  function setFormulaEntry(row,mi,display,compiled){
+    if(!row.formulas || typeof row.formulas!=='object' || Array.isArray(row.formulas))row.formulas={};
+    row.formulas[String(mi)]={display,compiled};
+  }
+  function clearFormulaEntry(row,mi){ if(row && row.formulas) delete row.formulas[String(mi)]; }
+  function getFormulaEntry(row,mi){ return normalizeFormulaEntry(row?.formulas?.[String(mi)]); }
+  function roundSheet(n){ n=Number(n)||0; return Math.round(n*1000000)/1000000; }
+  function displayNumber(n){
+    const num=Number(n)||0;
+    if(Math.abs(num)<0.0000005)return '';
+    const rounded=roundSheet(num);
+    return Number.isInteger(rounded)?String(rounded):String(rounded).replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1');
+  }
+  function safeNum(v){ const n=Number(String(v).replace(',','.')); return Number.isFinite(n)?n:0; }
+  function colLetters(idx){ let n=idx, s=''; while(n>=0){ s=String.fromCharCode(65+(n%26))+s; n=Math.floor(n/26)-1; } return s; }
+  function parseCoord(ref){
+    const m=String(ref||'').trim().toUpperCase().match(/^\$?([A-Z]+)\$?(\d+)$/); if(!m)return null;
+    let col=0; for(const ch of m[1]) col=col*26+(ch.charCodeAt(0)-64); col-=1;
+    return {col,row:Number(m[2]),coord:m[1]+m[2]};
+  }
+  function coordLabel(col,row){ return colLetters(col)+row; }
+
+  function rowVisibleForMonths(row,months){
+    return !Number.isInteger(row.hiddenFrom) || months.some(mi=>mi<row.hiddenFrom);
+  }
+  function buildVisibleRows(months){
+    const rows=[];
+    FLOW_TYPES.forEach(type=>{
+      (flowState[type]||[]).forEach((row,ri)=>{
+        if(rowVisibleForMonths(row,months))rows.push({type,ri,row,name:row.name||''});
+      });
+    });
+    return rows;
+  }
+
+  function buildActualKey(type,ri,mi){ return type+':'+ri+':'+mi; }
+  function parseActualKey(key){ const [type,ri,mi]=String(key).split(':'); return {type,ri:+ri,mi:+mi}; }
+
+  function buildCoordMaps(months,rows){
+    const coordMap=new Map(), actualToCoord=new Map();
+    // Row 1 headers
+    coordMap.set('A1',{kind:'label'});
+    months.forEach((mi,idx)=>coordMap.set(coordLabel(idx+1,1),{kind:'header',monthIndex:mi}));
+    rows.forEach((item,idx)=>{
+      const rowNum=idx+2;
+      coordMap.set('A'+rowNum,{kind:'label',type:item.type,ri:item.ri});
+      months.forEach((mi,ci)=>{
+        const coord=coordLabel(ci+1,rowNum);
+        const key=buildActualKey(item.type,item.ri,mi);
+        coordMap.set(coord,{kind:'cell',key,type:item.type,ri:item.ri,mi,rowNum,col:ci+1});
+        actualToCoord.set(key,coord);
+      });
+    });
+    return {coordMap,actualToCoord};
+  }
+
+  function expandRangeToActualKeys(rangeText,coordMap){
+    const parts=String(rangeText).split(':'); if(parts.length!==2)return [];
+    const a=parseCoord(parts[0]), b=parseCoord(parts[1]); if(!a||!b)return [];
+    const c1=Math.min(a.col,b.col), c2=Math.max(a.col,b.col), r1=Math.min(a.row,b.row), r2=Math.max(a.row,b.row);
+    const keys=[];
+    for(let r=r1;r<=r2;r++){
+      for(let c=c1;c<=c2;c++){
+        const info=coordMap.get(coordLabel(c,r));
+        if(info && info.kind==='cell')keys.push(info.key);
+      }
+    }
+    return keys;
+  }
+
+  function compileFormula(display,coordMap){
+    let txt=String(display||'').trim();
+    if(!txt.startsWith('='))return null;
+    txt=txt.replace(/\r?\n/g,' ');
+    txt=txt.replace(/\$?[A-Z]+\$?\d+\s*:\s*\$?[A-Z]+\$?\d+/gi,m=>{
+      const keys=expandRangeToActualKeys(m.replace(/\s+/g,''),coordMap);
+      return `__LIST__(${keys.join(',')})`;
+    });
+    txt=txt.replace(/\$?[A-Z]+\$?\d+/gi,m=>{
+      const info=coordMap.get((parseCoord(m)||{}).coord||'');
+      return info && info.kind==='cell' ? `__CELL__(${info.key})` : '0';
+    });
+    return txt;
+  }
+
+  function splitFormulaArgs(s){
+    const args=[]; let cur='', depth=0;
+    for(let i=0;i<s.length;i++){
+      const ch=s[i];
+      if(ch==='(')depth++;
+      if(ch===')')depth--;
+      if((ch===','||ch===';') && depth===0){ args.push(cur); cur=''; continue; }
+      cur+=ch;
+    }
+    if(cur.trim())args.push(cur);
+    return args;
+  }
+
+  function evaluateCompiledFormula(expr,stack){
+    let raw=String(expr||'').trim();
+    if(!raw)return 0;
+    if(!raw.startsWith('='))return safeNum(raw);
+    let body=raw.slice(1);
+
+    function resolveCellToken(token){
+      const m=String(token).match(/^__CELL__\(([^)]+)\)$/); if(!m)return 0;
+      return evaluateActualKey(m[1],stack);
+    }
+    function resolveListToken(token){
+      const m=String(token).match(/^__LIST__\((.*)\)$/); if(!m)return [];
+      return m[1].split(',').map(x=>x.trim()).filter(Boolean).map(key=>evaluateActualKey(key,stack));
+    }
+    function evalExpr(fragment){
+      let exp=String(fragment||'').trim();
+      if(!exp)return 0;
+      let prev;
+      const fnRe=/(SUM|AVERAGE|PROMEDIO|MIN|MAX)\(([^()]*)\)/i;
+      do{
+        prev=exp;
+        exp=exp.replace(fnRe,(match,fn,args)=>{
+          let vals=[];
+          splitFormulaArgs(args).forEach(arg=>{
+            const a=arg.trim();
+            if(!a)return;
+            if(/^__LIST__\(/.test(a)) vals=vals.concat(resolveListToken(a));
+            else vals.push(evalExpr(a));
+          });
+          if(!vals.length) return '0';
+          const key=fn.toUpperCase();
+          if(key==='SUM')return String(vals.reduce((acc,v)=>acc+(Number(v)||0),0));
+          if(key==='AVERAGE' || key==='PROMEDIO')return String(vals.reduce((acc,v)=>acc+(Number(v)||0),0)/vals.length);
+          if(key==='MIN')return String(Math.min(...vals.map(v=>Number(v)||0)));
+          if(key==='MAX')return String(Math.max(...vals.map(v=>Number(v)||0)));
+          return '0';
+        });
+      }while(exp!==prev && fnRe.test(exp));
+
+      exp=exp.replace(/__CELL__\(([^)]+)\)/g,(_,key)=>String(evaluateActualKey(key,stack)));
+      exp=exp.replace(/__LIST__\(([^)]*)\)/g,(_,keys)=>String(keys.split(',').map(k=>evaluateActualKey(k.trim(),stack)).reduce((acc,v)=>acc+(Number(v)||0),0)));
+      exp=exp.replace(/,/g,'.');
+      if(/[^0-9+\-*/().\s]/.test(exp))return 0;
+      try{
+        const out=Function('"use strict"; return ('+exp+');')();
+        return Number.isFinite(out)?out:0;
+      }catch(e){ return 0; }
+    }
+    return roundSheet(evalExpr(body));
+  }
+
+  function evaluateActualKey(key,stack){
+    const k=String(key||'');
+    if(stack.has(k))return 0;
+    const {type,ri,mi}=parseActualKey(k);
+    const row=flowState?.[type]?.[ri];
+    if(!row)return 0;
+    const entry=getFormulaEntry(row,mi);
+    if(!entry)return safeNum(row.months?.[mi]);
+    stack.add(k);
+    const val=evaluateCompiledFormula(entry.compiled||entry.display||'',stack);
+    stack.delete(k);
+    return val;
+  }
+
+  function recalcAllStoredFormulas(){
+    ensureFlowExtras();
+    FLOW_TYPES.forEach(type=>{
+      (flowState[type]||[]).forEach((row)=>{
+        if(!row.formulas || typeof row.formulas!=='object')return;
+        Object.keys(row.formulas).forEach(miKey=>{
+          const mi=+miKey, entry=getFormulaEntry(row,mi);
+          if(!entry)return;
+          row.months[mi]=evaluateCompiledFormula(entry.compiled||entry.display||'',new Set());
+        });
+      });
+    });
+  }
+
+  function updateSheetSelectionVisual(){
+    const selected=cqSheetState.selected;
+    const coord=selected ? (cqSheetState.actualToCoord.get(selected)||'') : '';
+    const parsed=coord ? parseCoord(coord) : null;
+    document.querySelectorAll('#flowSheetBody [data-sheet-ui-cell]').forEach(td=>td.classList.toggle('sheet-selected', selected && td.dataset.sheetUiCell===selected));
+    document.querySelectorAll('#flowSheetHead .sheet-col-letter').forEach((th,idx)=>{ if(idx===0)return; th.classList.toggle('active', !!(parsed && parsed.col===idx)); });
+    document.querySelectorAll('#flowSheetBody .sheet-row-num').forEach(th=>{
+      const rn=Number(th.textContent)||0;
+      th.classList.toggle('active', !!(parsed && parsed.row===rn));
+    });
+  }
+
+  function setSelectedActualKey(actualKey){
+    cqSheetState.selected=actualKey||null;
+    const ref=document.getElementById('flowSheetCellRef');
+    const input=document.getElementById('flowSheetFormulaInput');
+    const status=document.getElementById('flowSheetFormulaStatus');
+    if(!ref||!input)return;
+    if(!actualKey){ ref.textContent='—'; input.value=''; if(status)status.textContent='Seleccioná una celda'; return; }
+    const coord=cqSheetState.actualToCoord.get(actualKey)||'—';
+    ref.textContent=coord;
+    const {type,ri,mi}=parseActualKey(actualKey);
+    const row=flowState[type][ri];
+    const entry=getFormulaEntry(row,mi);
+    input.value=entry?.display || displayNumber(row.months[mi]);
+    cqSheetState.lastDisplayInput=input.value;
+    if(status)status.textContent=entry?.display ? 'Fórmula guardada · se recalcula automáticamente' : 'Valor directo';
+    updateSheetSelectionVisual();
+  }
+
+  function applySelectedCellValue(raw){
+    const actualKey=cqSheetState.selected; if(!actualKey)return;
+    const {type,ri,mi}=parseActualKey(actualKey);
+    const row=flowState[type][ri]; if(!row)return;
+    const txt=String(raw??'').trim();
+    if(txt.startsWith('=')){
+      const compiled=compileFormula(txt,cqSheetState.coordMap);
+      setFormulaEntry(row,mi,txt,compiled||txt);
+      row.months[mi]=evaluateCompiledFormula(compiled||txt,new Set());
+    }else{
+      clearFormulaEntry(row,mi);
+      row.months[mi]=safeNum(txt);
+    }
+    recalcAllStoredFormulas();
+    flowPersist();
+    if(document.getElementById('dashboardPage'))dashboardRender();
+    updateHeaderForActivePage();
+    cqFlowSheetRender();
+    setSelectedActualKey(actualKey);
+  }
+
+  function ensureSheetToolbar(){
+    const modal=document.getElementById('flowSheetModal'); if(!modal)return;
+    if(document.getElementById('flowSheetToolbar'))return;
+    const filters=modal.querySelector('.flow-sheet-filters');
+    if(!filters)return;
+    const bar=document.createElement('div');
+    bar.id='flowSheetToolbar';
+    bar.className='flow-sheet-toolbar';
+    bar.innerHTML=''
+      +'<div class="flow-sheet-cellref" id="flowSheetCellRef">—</div>'
+      +'<div class="flow-sheet-fx">fx</div>'
+      +'<input id="flowSheetFormulaInput" class="flow-sheet-formula" type="text" placeholder="Escribí un valor o una fórmula, por ejemplo =SUM(B2:B5)">'
+      +'<button type="button" id="flowSheetApply" aria-label="Aplicar">✓</button>'
+      +'<button type="button" id="flowSheetCancelFormula" aria-label="Cancelar">×</button>';
+    filters.insertAdjacentElement('afterend',bar);
+    const foot=modal.querySelector('.flow-sheet-foot');
+    if(foot && !document.getElementById('flowSheetFormulaStatus')){
+      const status=document.createElement('span');
+      status.id='flowSheetFormulaStatus';
+      status.className='sheet-formula-status';
+      status.textContent='Seleccioná una celda';
+      foot.insertBefore(status,foot.firstChild.nextSibling);
+    }
+    const formulaInput=document.getElementById('flowSheetFormulaInput');
+    document.getElementById('flowSheetApply').onclick=()=>applySelectedCellValue(formulaInput.value);
+    document.getElementById('flowSheetCancelFormula').onclick=()=>setSelectedActualKey(cqSheetState.selected);
+    formulaInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); applySelectedCellValue(formulaInput.value); }});
+  }
+
+  function sheetCellHtml(item,mi,ci,rowNum){
+    const key=buildActualKey(item.type,item.ri,mi);
+    const isSelected=cqSheetState.selected===key;
+    const value=displayNumber(item.row.months[mi]);
+    return `<td class="${monthColorClass(ci)} ${isSelected?'sheet-selected':''}" data-sheet-ui-cell="${key}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" data-sheet-edit="${key}" value="${fesc(value)}" placeholder="0"></div></td>`;
+  }
+
+  function renderSheetTable(months,rows){
+    const thead=document.getElementById('flowSheetHead');
+    const tbody=document.getElementById('flowSheetBody');
+    if(!thead||!tbody)return;
+    let head='<tr><th class="sheet-corner"></th><th class="sheet-col-letter">A</th>';
+    months.forEach((mi,ci)=>{
+      const coord=coordLabel(ci+1+0,1).replace(/1$/,'');
+      const letter=colLetters(ci+1);
+      const isActive=cqSheetState.selected && parseActualKey(cqSheetState.selected).mi===mi;
+      head+=`<th class="sheet-col-letter ${monthColorClass(ci)} ${isActive?'active':''}">${letter}</th>`;
+    });
+    head+='</tr>';
+    thead.innerHTML=head;
+
+    let body='';
+    const headerActiveCoord=cqSheetState.selected ? cqSheetState.actualToCoord.get(cqSheetState.selected) : '';
+    body+=`<tr><th class="sheet-row-num ${headerActiveCoord&&headerActiveCoord.endsWith('1')?'active':''}">1</th><td class="sheet-label-cell sheet-header-label">Concepto</td>${months.map((mi,ci)=>`<td class="sheet-month-head ${monthColorClass(ci)}">${fesc(flowState.months[mi])}</td>`).join('')}</tr>`;
+    rows.forEach((item,idx)=>{
+      const rowNum=idx+2;
+      const selectedCoord=cqSheetState.selected ? cqSheetState.actualToCoord.get(cqSheetState.selected) : '';
+      const rowActive=selectedCoord && parseInt(selectedCoord.replace(/^[A-Z]+/,''),10)===rowNum;
+      body+=`<tr><th class="sheet-row-num ${rowActive?'active':''}">${rowNum}</th><td class="sheet-label-cell" title="${fesc(item.name)}">${fesc(item.name)}</td>${months.map((mi,ci)=>sheetCellHtml(item,mi,ci,rowNum)).join('')}</tr>`;
+    });
+    const c=flowCalc();
+    body+=`<tr class="sheet-total-row"><th class="sheet-row-num">${rows.length+2}</th><td class="sheet-label-cell">Flujo neto</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.net[mi]))}" readonly></div></td>`).join('')}</tr>`;
+    body+=`<tr class="sheet-total-row"><th class="sheet-row-num">${rows.length+3}</th><td class="sheet-label-cell">Saldo acumulado</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.balance[mi]))}" readonly></div></td>`).join('')}</tr>`;
+    tbody.innerHTML=body;
+
+    tbody.querySelectorAll('[data-sheet-ui-cell]').forEach(td=>{
+      td.addEventListener('click',()=>{ setSelectedActualKey(td.dataset.sheetUiCell); });
+    });
+    tbody.querySelectorAll('[data-sheet-edit]').forEach(inp=>{
+      inp.addEventListener('focus',()=>{ setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select()); });
+      inp.addEventListener('click',e=>{ e.stopPropagation(); setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select()); });
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); applySelectedCellValue(inp.value); } });
+      inp.addEventListener('change',()=>applySelectedCellValue(inp.value));
+      inp.addEventListener('blur',()=>{
+        const key=inp.dataset.sheetEdit;
+        if(key===cqSheetState.selected){
+          const entry=getFormulaEntry(flowState[parseActualKey(key).type][parseActualKey(key).ri],parseActualKey(key).mi);
+          const wanted=entry?.display || displayNumber(flowState[parseActualKey(key).type][parseActualKey(key).ri].months[parseActualKey(key).mi]);
+          inp.value=displayNumber(flowState[parseActualKey(key).type][parseActualKey(key).ri].months[parseActualKey(key).mi]);
+          const formulaInput=document.getElementById('flowSheetFormulaInput');
+          if(formulaInput)formulaInput.value=wanted;
+        }
+      });
+    });
+  }
+
+  window.cqFlowSheetRender=function(){
+    ensureFlowExtras();
+    ensureSheetToolbar();
+    cqFlowSheetRenderFilters();
+    const months=(typeof cqFlowSheetVisibleMonths==='function'?cqFlowSheetVisibleMonths():[]);
+    cqSheetState.months=months;
+    const rows=buildVisibleRows(months);
+    cqSheetState.rows=rows;
+    const maps=buildCoordMaps(months,rows);
+    cqSheetState.coordMap=maps.coordMap;
+    cqSheetState.actualToCoord=maps.actualToCoord;
+    if((!cqSheetState.selected || !cqSheetState.actualToCoord.has(cqSheetState.selected)) && rows.length && months.length){
+      cqSheetState.selected=buildActualKey(rows[0].type,rows[0].ri,months[0]);
+    }
+    renderSheetTable(months,rows);
+    setSelectedActualKey(cqSheetState.selected);
+  };
+
+  const oldFlowCatRows=window.flowCatRows;
+  window.flowCatRows=function(type,mi){
+    ensureFlowExtras();
+    const rows=flowState[type]||[];
+    const html=rows.map((r,ri)=>{
+      if(Number.isInteger(r.hiddenFrom) && mi>=r.hiddenFrom)return '';
+      const keyPrefix=type+':'+ri+':'+mi;
+      const input=`<input class="${type==='works'?'flow-work-value':''}" type="number" step="1" inputmode="decimal" data-flow-cell="${type}:${ri}:${mi}" value="${fnum(r.months[mi])||''}" placeholder="0">`;
+      const checked = type==='incomes' ? (Array.isArray(r.received)&&!!r.received[mi]) : (Array.isArray(r.checked)&&!!r.checked[mi]);
+      const valueCell=`<div class="flow-check-cell">${input}<button type="button" class="flow-check-btn ${checked?'checked':''}" data-flow-mark="${type}:${ri}:${mi}" title="${checked?'Marcado':'Marcar'}" aria-label="${checked?'Marcado':'Marcar'}"></button></div>`;
+      const moveBtns=`<button type="button" class="flow-entry-action move-up" data-flow-move="${type}:${ri}:-1" title="Subir">↑</button><button type="button" class="flow-entry-action move-down" data-flow-move="${type}:${ri}:1" title="Bajar">↓</button>`;
+      const editBtn=type==='works'?`<button type="button" class="flow-entry-action edit-work" data-work-ri="${ri}" title="Modificar obra">✎</button>`:type==='others'?`<button type="button" class="flow-entry-action edit-other" data-other-ri="${ri}" title="Modificar nombre">✎</button>`:`<button type="button" class="flow-entry-action edit-income" data-income-ri="${ri}" title="Modificar nombre">✎</button>`;
+      const delBtn=type==='works'?`<button type="button" class="flow-entry-action delete del-work-forward" data-work-ri="${ri}" data-work-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:type==='others'?`<button type="button" class="flow-entry-action delete del-other-forward" data-other-ri="${ri}" data-other-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:`<button type="button" class="flow-entry-action delete del-income-forward" data-income-ri="${ri}" data-income-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`;
+      return `<div class="flow-entry has-check ${type==='works'&&r.autoCost?'new-work':''} ${checked?'cell-checked':''}"><div class="flow-entry-name" title="${fesc(r.name)}">${fesc(r.name)}${type==='works'&&r.autoCost?'<span class="flow-new-tag">Nueva</span>':''}</div>${valueCell}<div class="flow-entry-actions">${moveBtns}${editBtn}${delBtn}</div></div>`;
+    }).join('');
+    return html||'<div class="flow-empty">Sin conceptos</div>';
+  };
+
+  const oldFlowRenderPanels=window.flowRenderPanels;
+  window.flowRenderPanels=function(){
+    ensureFlowExtras();
+    const c=flowCalc(),open=(flowOpenMonths[flowYear]||[]).filter(i=>flowState.months[i]);
+    const panels=document.getElementById('flowMonthPanels');
+    if(!panels)return;
+    panels.classList.toggle('multi-month',open.length>1);
+    panels.dataset.openMonths=String(open.length);
+    panels.innerHTML=open.length?open.map(mi=>`<section class="flow-month-panel"><div class="flow-month-title"><h2>${flowState.months[mi]}</h2><div class="flow-month-mini"><span>Egresos <b>${fusd(c.expenses[mi])}</b></span><span>Ingresos <b>${fusd(c.incomes[mi])}</b></span><span>Flujo neto <b class="${c.net[mi]>=0?'pos':'neg'}">${fusd(c.net[mi])}</b></span><span class="balance-chip">Saldo acumulado <b class="${c.balance[mi]>=0?'pos':'neg'}">${fusd(c.balance[mi])}</b></span></div></div>${flowCat('works','Obras','Todas las obras',mi,c.works[mi])}${flowCat('others','Otros egresos','Acopios · Gastos generales · Retiro socios · Impuestos',mi,c.others[mi])}${flowCat('incomes','Ingresos','Obras y otros ingresos',mi,c.incomes[mi])}</section>`).join(''):'<div class="flow-empty" style="background:#fff;border:1px solid var(--line);border-radius:12px">Elegí uno o varios meses para comenzar.</div>';
+
+    document.querySelectorAll('[data-flow-cat]').forEach(b=>b.onclick=()=>{
+      const k=b.dataset.flowCat;
+      const parts=k.split(':'); const type=parts[1];
+      const shouldOpen=!flowOpenCats.has(k);
+      if(open.length>1){ open.forEach(mi=>{ const key=mi+':'+type; shouldOpen?flowOpenCats.add(key):flowOpenCats.delete(key); }); }
+      else{ shouldOpen?flowOpenCats.add(k):flowOpenCats.delete(k); }
+      flowRenderPanels();
+    });
+
+    document.querySelectorAll('[data-flow-cell]').forEach(inp=>{
+      inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
+      inp.onclick=()=>requestAnimationFrame(()=>inp.select());
+      inp.onchange=e=>{
+        let [type,ri,mi]=inp.dataset.flowCell.split(':'); ri=+ri; mi=+mi;
+        const row=flowState[type][ri];
+        row.months[mi]=fnum(e.target.value);
+        clearFormulaEntry(row,mi);
+        recalcAllStoredFormulas();
+        flowPersist();
+        flowRenderPanels();
+        if(document.getElementById('dashboardPage'))dashboardRender();
+        updateHeaderForActivePage();
+        if(document.getElementById('flowSheetModal')?.classList.contains('open')) cqFlowSheetRender();
+      };
+    });
+    document.querySelectorAll('[data-flow-mark]').forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      let [type,ri,mi]=btn.dataset.flowMark.split(':'); ri=+ri; mi=+mi;
+      const row=flowState[type][ri];
+      if(type==='incomes'){ if(!Array.isArray(row.received))row.received=Array(flowState.months.length).fill(false); row.received[mi]=!row.received[mi]; }
+      else{ if(!Array.isArray(row.checked))row.checked=Array(flowState.months.length).fill(false); row.checked[mi]=!row.checked[mi]; }
+      flowPersist(); flowRenderPanels();
+    });
+    document.querySelectorAll('[data-flow-move]').forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      let [type,ri,dir]=btn.dataset.flowMove.split(':'); ri=+ri; dir=+dir;
+      const arr=flowState[type]||[]; const ni=ri+dir;
+      if(ni<0 || ni>=arr.length)return;
+      [arr[ri],arr[ni]]=[arr[ni],arr[ri]];
+      flowPersist();
+      flowRenderPanels();
+      if(document.getElementById('flowSheetModal')?.classList.contains('open')) cqFlowSheetRender();
+      toast('Orden actualizado');
+    });
+    document.querySelectorAll('.add-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddManualWork(+b.dataset.workMonth)});
+    document.querySelectorAll('.new-auto-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowOpenNewWorkModal(+b.dataset.workMonth)});
+    document.querySelectorAll('.add-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddOther(+b.dataset.otherMonth)});
+    document.querySelectorAll('.add-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddIncome(+b.dataset.incomeMonth)});
+    document.querySelectorAll('.edit-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameWork(+b.dataset.workRi)});
+    document.querySelectorAll('.edit-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameOther(+b.dataset.otherRi)});
+    document.querySelectorAll('.edit-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameIncome(+b.dataset.incomeRi)});
+    document.querySelectorAll('.del-work-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteWorkForward(+b.dataset.workRi,+b.dataset.workMi)});
+    document.querySelectorAll('.del-other-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteOtherForward(+b.dataset.otherRi,+b.dataset.otherMi)});
+    document.querySelectorAll('.del-income-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteIncomeForward(+b.dataset.incomeRi,+b.dataset.incomeMi)});
+  };
+
+  const oldSheetOpen=window.cqFlowSheetOpen;
+  window.cqFlowSheetOpen=function(){
+    ensureFlowExtras();
+    recalcAllStoredFormulas();
+    if(typeof cqFlowSheetInitSelection==='function')cqFlowSheetInitSelection();
+    cqFlowSheetRender();
+    const modal=document.getElementById('flowSheetModal');
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden','false');
+  };
+
+  window.cqFlowSheetClose=function(){
+    const modal=document.getElementById('flowSheetModal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden','true');
+  };
+
+  function setupSheetButtons(){
+    ensureSheetToolbar();
+    const open=document.getElementById('flowSheetOpen');
+    const close=document.getElementById('flowSheetClose');
+    const done=document.getElementById('flowSheetDone');
+    const modal=document.getElementById('flowSheetModal');
+    if(open)open.onclick=window.cqFlowSheetOpen;
+    if(close)close.onclick=window.cqFlowSheetClose;
+    if(done)done.onclick=()=>{ window.cqFlowSheetClose(); flowRender(); };
+    if(modal)modal.onclick=e=>{ if(e.target===modal)window.cqFlowSheetClose(); };
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>{ ensureFlowExtras(); recalcAllStoredFormulas(); flowPersist(); setupSheetButtons(); if(typeof flowRender==='function')flowRender(); });
+  if(document.readyState!=='loading'){ ensureFlowExtras(); recalcAllStoredFormulas(); setTimeout(()=>{ setupSheetButtons(); try{flowPersist(); if(typeof flowRender==='function')flowRender();}catch(e){} },40); }
+})();
+</script>
+
 </body></html>
