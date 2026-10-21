@@ -209,6 +209,21 @@ html,body{min-height:100%;background:#F7F6F3;color:#1C2B22;font-family:'Space Gr
 .task-mini:hover{background:#E8F4EE;border-color:#9ACFB4}
 .task-mini.del{border-color:#E4AAAA;background:transparent;color:#C0392B}
 .task-mini.del:hover{background:#FAE8E8}
+
+/* Gestión del título de cada semana: visible también en celular */
+.semana-title-wrap{display:flex;align-items:center;gap:7px;min-width:0;flex:1}
+.semana-title-wrap .semana-etapa{min-width:0;flex:1}
+.week-title-actions{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto}
+.week-action-btn{width:25px;height:25px;min-width:25px;border:1px solid #CFE0D2;border-radius:7px;background:#F7FAF7;color:#315B45;display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer;font-size:12px;line-height:1}
+.week-action-btn:hover{background:#E8F4EE;border-color:#9ACFB4}
+.week-action-btn.delete{border-color:#E8BDBD;color:#B42318;background:#FFF9F9}
+.week-action-btn.delete:hover{background:#FAE8E8;border-color:#D99898}
+@media(max-width:700px){
+  .semana-title-wrap{gap:4px!important;overflow:hidden!important}
+  .semana-title-wrap .semana-etapa{font-size:10px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+  .week-title-actions{gap:2px!important}
+  .week-action-btn{display:inline-flex!important;width:20px!important;height:20px!important;min-width:20px!important;border-radius:6px!important;font-size:10px!important}
+}
 .add-task-row{padding:10px 16px;background:#F8FBF8;border-top:1px solid #EEF4EE;display:flex;justify-content:flex-end}
 
 .hint{background:#E8F4EE;border:1px solid #9ACFB4;border-radius:7px;padding:10px 13px;font-size:12px;color:#3D5A42;margin-bottom:13px;line-height:1.5}
@@ -2935,10 +2950,10 @@ function getSemanaByNum(snum) {
 function editSemana(snum) {
   const s = getSemanaByNum(snum);
   if (!s) return;
-  const nuevoNombre = prompt('Editar nombre del rubro/semana:', s.etapa || '');
+  const nuevoNombre = prompt('Editar título de la semana S' + snum + ':', s.etapa || '');
   if (nuevoNombre === null) return;
   const etapa = nuevoNombre.trim();
-  if (!etapa) { alert('Ingresá un nombre válido.'); return; }
+  if (!etapa) { alert('Ingresá un título válido.'); return; }
   if (s.customWeek) {
     state.customWeeks = (state.customWeeks || []).map(w => w.num === snum ? { ...w, etapa } : w);
   } else {
@@ -2953,10 +2968,25 @@ function editSemana(snum) {
   if(currentScreen==='constructor' && currentConstructorId) openConstructor(currentConstructorId);
 }
 
+function semanaTieneCertificacion(snum) {
+  try {
+    const certs = (typeof getCertificados === 'function') ? getCertificados() : (state.certificados || []);
+    if ((certs || []).some(c => (c.detalleItems || []).some(it => Number(it.snum) === Number(snum)))) return true;
+    const locks = state.certLocks || {};
+    return Object.keys(locks).some(k => String(k).startsWith(String(snum) + '-') && Number(locks[k]) > 0);
+  } catch(e) {
+    return false;
+  }
+}
+
 function deleteSemana(snum) {
   const s = getSemanaByNum(snum);
   if (!s) return;
-  const ok = confirm('¿Eliminar el rubro/semana "' + s.etapa + '" completo?\n\nSe ocultará del avance y no sumará más al total.');
+  if (semanaTieneCertificacion(snum)) {
+    alert('La semana S' + snum + ' tiene avances ya certificados. Para evitar inconsistencias, eliminá primero el/los certificados relacionados y luego eliminá la semana.');
+    return;
+  }
+  const ok = confirm('¿Eliminar la semana S' + snum + ' · "' + s.etapa + '" completa?\n\nSe quitarán sus tareas, avances e importes de esta obra.');
   if (!ok) return;
   if (s.customWeek) {
     state.customWeeks = (state.customWeeks || []).filter(w => w.num !== snum);
@@ -4239,12 +4269,16 @@ function renderSemanas(){
     return `<div class="semana-block ${st.cls} ${grpClass(s.num)} ${hasPendingCert?'pending-cert-week':''}" id="sb-${s.num}">
       <div class="semana-header" onclick="toggleSemana(${s.num})">
         <span class="semana-num">S${s.num}</span>
-        <span class="semana-etapa">${s.etapa}</span>
+        <span class="semana-title-wrap">
+          <span class="semana-etapa">${escHtml(s.etapa || '')}</span>
+          <span class="week-title-actions">
+            <button class="week-action-btn edit" title="Editar título de la semana" aria-label="Editar título de la semana S${s.num}" onclick="event.stopPropagation();editSemana(${s.num})">✏</button>
+            <button class="week-action-btn delete" title="Eliminar semana" aria-label="Eliminar semana S${s.num}" onclick="event.stopPropagation();deleteSemana(${s.num})">🗑</button>
+          </span>
+        </span>
         ${hasPendingCert?'<span class="week-pending-badge">⏳ Para certificar</span>':''}
         <span class="semana-badge ${st.badgeCls}">${st.label}</span>
         <span class="semana-monto">${fmt(devengado)} / ${fmt(totalMonto)}</span>
-        <button class="task-mini" onclick="event.stopPropagation();editSemana(${s.num})">✏ Rubro</button>
-        <button class="task-mini del" onclick="event.stopPropagation();deleteSemana(${s.num})">✕ Rubro</button>
         <button class="task-mini" onclick="event.stopPropagation();marcarSemana(${s.num},1)">✓ Semana</button>
         <button class="task-mini del" onclick="event.stopPropagation();marcarSemana(${s.num},0)">↺</button>
         <span class="chevron" id="chev-${s.num}">▼</span>
@@ -5720,7 +5754,7 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
   "use strict";
   var MODULO="Avances";
   var QUEUE_KEY="cq_audit_queue_v1_"+MODULO.replace(/\s+/g,"_").toLowerCase();
-  var WRAPS=[{"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
+  var WRAPS=[{"fn": "editSemana", "accion": "modificar", "detalle": "Modificó el título de una semana"}, {"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
   WRAPS=WRAPS.filter(function(x){return x.accion!=="agregar";});
   var flushing=false;
 
