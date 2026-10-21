@@ -8623,28 +8623,29 @@ document.addEventListener('DOMContentLoaded',function(){
     const thead=document.getElementById('flowSheetHead');
     const tbody=document.getElementById('flowSheetBody');
     if(!thead||!tbody)return;
-    let head='<tr><th class="sheet-corner"></th><th class="sheet-col-letter">A</th>';
-    months.forEach((mi,ci)=>{
-      const coord=coordLabel(ci+1+0,1).replace(/1$/,'');
-      const letter=colLetters(ci+1);
-      const isActive=cqSheetState.selected && parseActualKey(cqSheetState.selected).mi===mi;
-      head+=`<th class="sheet-col-letter ${monthColorClass(ci)} ${isActive?'active':''}">${letter}</th>`;
-    });
-    head+='</tr>';
-    thead.innerHTML=head;
+    thead.innerHTML='';
+
+    const grouped=[
+      {type:'works',title:'Obras'},
+      {type:'others',title:'Otros egresos'},
+      {type:'incomes',title:'Ingresos'}
+    ];
 
     let body='';
-    const headerActiveCoord=cqSheetState.selected ? cqSheetState.actualToCoord.get(cqSheetState.selected) : '';
-    body+=`<tr><th class="sheet-row-num ${headerActiveCoord&&headerActiveCoord.endsWith('1')?'active':''}">1</th><td class="sheet-label-cell sheet-header-label">Concepto</td>${months.map((mi,ci)=>`<td class="sheet-month-head ${monthColorClass(ci)}">${fesc(flowState.months[mi])}</td>`).join('')}</tr>`;
-    rows.forEach((item,idx)=>{
-      const rowNum=idx+2;
-      const selectedCoord=cqSheetState.selected ? cqSheetState.actualToCoord.get(cqSheetState.selected) : '';
-      const rowActive=selectedCoord && parseInt(selectedCoord.replace(/^[A-Z]+/,''),10)===rowNum;
-      body+=`<tr><th class="sheet-row-num ${rowActive?'active':''}">${rowNum}</th><td class="sheet-label-cell" title="${fesc(item.name)}">${fesc(item.name)}</td>${months.map((mi,ci)=>sheetCellHtml(item,mi,ci,rowNum)).join('')}</tr>`;
+    body+=`<tr class="sheet-months-row"><td class="sheet-label-cell sheet-header-label">Concepto</td>${months.map((mi,ci)=>`<td class="sheet-month-head ${monthColorClass(ci)}">${fesc(flowState.months[mi])}</td>`).join('')}</tr>`;
+
+    grouped.forEach(group=>{
+      const groupRows=rows.filter(item=>item.type===group.type);
+      if(!groupRows.length)return;
+      body+=`<tr class="sheet-section-row"><td class="sheet-section-cell" colspan="${months.length+1}">${group.title}</td></tr>`;
+      groupRows.forEach((item)=>{
+        body+=`<tr><td class="sheet-label-cell" title="${fesc(item.name)}">${fesc(item.name)}</td>${months.map((mi,ci)=>sheetCellHtml(item,mi,ci)).join('')}</tr>`;
+      });
     });
+
     const c=flowCalc();
-    body+=`<tr class="sheet-total-row"><th class="sheet-row-num">${rows.length+2}</th><td class="sheet-label-cell">Flujo neto</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.net[mi]))}" readonly></div></td>`).join('')}</tr>`;
-    body+=`<tr class="sheet-total-row"><th class="sheet-row-num">${rows.length+3}</th><td class="sheet-label-cell">Saldo acumulado</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.balance[mi]))}" readonly></div></td>`).join('')}</tr>`;
+    body+=`<tr class="sheet-total-row"><td class="sheet-label-cell">Flujo neto</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.net[mi]))}" readonly></div></td>`).join('')}</tr>`;
+    body+=`<tr class="sheet-total-row"><td class="sheet-label-cell">Saldo acumulado</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.balance[mi]))}" readonly></div></td>`).join('')}</tr>`;
     tbody.innerHTML=body;
 
     tbody.querySelectorAll('[data-sheet-ui-cell]').forEach(td=>{
@@ -8945,6 +8946,73 @@ document.addEventListener('DOMContentLoaded',function(){
   #flowSheetModal .flow-sheet-table .sheet-cell-wrap{height:31px!important}
   #flowSheetModal .sheet-range-handle{width:22px;height:22px;border-width:3px}
   #flowSheetModal .flow-sheet-foot .sheet-formula-status.range-summary{font-size:7.8px!important;padding:3px 5px!important}
+}
+</style>
+
+
+<style id="cq-flow-sheet-restore-groups-v4">
+/* v84 · restaurar títulos de grupos + limpiar grilla */
+#flowSheetModal .flow-sheet-head span{display:block}
+#flowSheetModal .flow-sheet-wrap{overflow:auto!important}
+#flowSheetModal .flow-sheet-table thead{display:none!important}
+#flowSheetModal .flow-sheet-table{min-width:max-content!important}
+#flowSheetModal .flow-sheet-table .sheet-label-cell{
+  min-width:260px!important;max-width:260px!important;
+  background:#fbfcfc!important;color:#2e473d;font-weight:850;
+}
+#flowSheetModal .flow-sheet-table .sheet-header-label{font-weight:900!important;background:#f5f8f7!important}
+#flowSheetModal .flow-sheet-table .sheet-months-row td{
+  position:sticky!important;top:0!important;z-index:4!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-month-head{
+  font-weight:900!important;text-align:center!important;background:#f6faf8!important;color:#304d42!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-section-row td{
+  position:sticky;top:39px;z-index:3;background:#eef3f0!important;color:#446156!important;
+  font-size:11px;font-weight:900;letter-spacing:.02em;text-transform:none;
+  border-top:1px solid #d7dfdc!important;border-bottom:1px solid #d7dfdc!important;
+  padding:7px 10px!important;text-align:left!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-cell-wrap{min-width:118px!important}
+#flowSheetModal .flow-sheet-table .sheet-cell-input{font-size:15px!important;padding:0 10px!important}
+#flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:39px!important}
+#flowSheetModal .flow-sheet-table tr.sheet-total-row td:first-child{background:#e5efea!important}
+#flowSheetModal .flow-sheet-table td.sheet-range-selected{background-color:rgba(65,150,105,.08)!important}
+
+/* Mantener colores anteriores por columna */
+#flowSheetModal .flow-sheet-table td.sheet-month-col-0,#flowSheetModal .flow-sheet-table th.sheet-month-col-0{background:#eef7f3!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-1,#flowSheetModal .flow-sheet-table th.sheet-month-col-1{background:#eef4fa!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-2,#flowSheetModal .flow-sheet-table th.sheet-month-col-2{background:#fbf5e9!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-3,#flowSheetModal .flow-sheet-table th.sheet-month-col-3{background:#f8f0f6!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-4,#flowSheetModal .flow-sheet-table th.sheet-month-col-4{background:#f1f7ec!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-5,#flowSheetModal .flow-sheet-table th.sheet-month-col-5{background:#f2f0fa!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-6,#flowSheetModal .flow-sheet-table th.sheet-month-col-6{background:#fbf0ed!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-7,#flowSheetModal .flow-sheet-table th.sheet-month-col-7{background:#edf7f7!important}
+
+/* Teléfono: más prolijo y compacto */
+@media (max-width: 520px){
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{min-width:150px!important;max-width:150px!important;font-size:10px!important;padding:0 8px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{min-width:78px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{font-size:10.5px!important;padding:0 6px!important;line-height:30px!important}
+  #flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:30px!important}
+  #flowSheetModal .flow-sheet-table .sheet-months-row td{top:0!important}
+  #flowSheetModal .flow-sheet-table .sheet-section-row td{top:30px!important;font-size:9px!important;padding:5px 8px!important}
+}
+
+/* Flujo en teléfono: más espacio para nombres de ingresos */
+@media (max-width:700px){
+  #flowPage .flow-month-panels.multi-month{grid-auto-columns:minmax(320px,92vw)!important;padding-right:10vw!important}
+  #flowPage .flow-month-panels.multi-month .flow-entry{grid-template-columns:minmax(0,1fr) 86px auto!important;gap:4px!important}
+  #flowPage .flow-month-panels.multi-month .flow-entry-name,
+  #flowPage .flow-entry-name{
+    white-space:normal!important;overflow:hidden!important;text-overflow:ellipsis!important;
+    display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;
+    line-height:1.08!important;min-height:2.15em!important;
+  }
+  #flowPage .flow-check-cell{grid-template-columns:minmax(0,1fr) 21px!important;gap:2px!important}
+  #flowPage .flow-check-btn{width:21px!important;height:21px!important;font-size:11px!important}
+  #flowPage .flow-entry input{padding:4px 6px!important}
+  #flowPage .flow-entry-action{width:21px!important;height:21px!important;font-size:10px!important}
 }
 </style>
 
