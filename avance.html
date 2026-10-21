@@ -2620,14 +2620,19 @@ window.cqRevealInitialScreen=function(){
         <button class="btn-sm btn-danger-sm obra-icon-btn uncheck" onclick="marcarTodo(0)" title="Restaurar sin borrar certificados" aria-label="Restaurar sin borrar certificados">⊘</button>
       </span>
     </div>
-    <div class="all-weeks-value-bar" onclick="event.stopPropagation()">
-      <div class="all-weeks-value-copy">
-        <span class="all-weeks-value-label">Valor para todas las semanas</span>
-        <span class="all-weeks-value-help">Asigna el mismo total a cada semana y lo divide por igual entre sus tareas. Después podés modificar cualquier tarea a mano.</span>
-      </div>
-      <div class="all-weeks-value-controls">
-        <div class="all-weeks-value-input-wrap"><span>$</span><input id="all-weeks-total" class="all-weeks-value-input" type="number" inputmode="numeric" min="0" step="1" placeholder="1350000" onfocus="this.select()" onkeydown="onAllWeeksTotalKeydown(event)"></div>
-        <button type="button" class="all-weeks-value-apply" onclick="event.stopPropagation();aplicarValorTodasSemanas()">Aplicar a todas</button>
+    <div class="all-weeks-value-bar collapsed" id="all-weeks-value-bar" onclick="event.stopPropagation()">
+      <button type="button" class="all-weeks-value-toggle" id="all-weeks-value-toggle" onclick="event.stopPropagation();toggleAllWeeksValuePanel()" aria-expanded="false" aria-controls="all-weeks-value-body">
+        <span class="all-weeks-toggle-left"><span class="all-weeks-toggle-icon">$</span><span>Valor para todas las semanas</span></span>
+        <span class="all-weeks-toggle-chevron" id="all-weeks-value-chevron">▼</span>
+      </button>
+      <div class="all-weeks-value-body" id="all-weeks-value-body">
+        <div class="all-weeks-value-copy">
+          <span class="all-weeks-value-help">Asigna el mismo total a cada semana y lo divide por igual entre sus tareas. Después podés modificar cualquier tarea a mano.</span>
+        </div>
+        <div class="all-weeks-value-controls">
+          <div class="all-weeks-value-input-wrap"><span>$</span><input id="all-weeks-total" class="all-weeks-value-input" type="number" inputmode="numeric" min="0" step="1" placeholder="1350000" onfocus="this.select()" onkeydown="onAllWeeksTotalKeydown(event)"></div>
+          <button type="button" class="all-weeks-value-apply" onclick="event.stopPropagation();aplicarValorTodasSemanas()">Aplicar a todas</button>
+        </div>
       </div>
     </div>
     <div id="semanas-container"></div>
@@ -3228,6 +3233,19 @@ function aplicarValorTodasSemanas(){
   renderSemanas();
   renderKPIs();
   if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
+  toggleAllWeeksValuePanel(false);
+}
+function toggleAllWeeksValuePanel(forceOpen){
+  const bar=document.getElementById('all-weeks-value-bar');
+  const btn=document.getElementById('all-weeks-value-toggle');
+  if(!bar) return;
+  const isOpen=!bar.classList.contains('collapsed');
+  const shouldOpen=(typeof forceOpen==='boolean') ? forceOpen : !isOpen;
+  bar.classList.toggle('collapsed', !shouldOpen);
+  if(btn) btn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+  if(shouldOpen){
+    setTimeout(()=>{ const input=document.getElementById('all-weeks-total'); if(input) input.focus(); },20);
+  }
 }
 function onAllWeeksTotalKeydown(ev){
   if(ev.key==='Enter'){ ev.preventDefault(); aplicarValorTodasSemanas(); }
@@ -4688,79 +4706,107 @@ function calcPagosFuera(){
 }
 
 function calcConformeObra(){
-  // Buscar "Conforme de obra" por su nombre real y no por una posición fija.
-  // Así evitamos que un monto histórico guardado en una clave como 23-m-0
-  // termine asociado por error a otro rubro.
+  // Buscar "Conforme de obra" por nombre para que funcione aunque cambie de semana.
   const normalizar = v => String(v || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toLowerCase().trim();
 
   let encontrado = null;
-
   for (const sem of getSemanas()){
     const items = getItems(sem.num);
     for (let i=0;i<items.length;i++){
-      const it = items[i];
-      const nombre = normalizar(it && it.desc);
+      const nombre = normalizar(items[i] && items[i].desc);
       if(nombre === 'conforme de obra' || nombre.includes('conforme de obra')){
-        encontrado = { semNum:sem.num, idx:i, item:it };
+        encontrado = { semNum:sem.num, idx:i, item:items[i] };
         break;
       }
     }
     if(encontrado) break;
   }
 
-  // Fallback compatible con obras viejas cuyo nombre pudiera haber sido editado.
+  // Fallback para obras históricas.
   if(!encontrado){
     const sem23 = getSemanaByNum(23);
     const items23 = sem23 ? getItems(23) : [];
-    if(items23.length){
-      const idxConforme = items23.findIndex(it =>
-        normalizar(it && it.desc).includes('conforme')
-      );
-      if(idxConforme >= 0){
-        encontrado = {
-          semNum:23,
-          idx:idxConforme,
-          item:items23[idxConforme]
-        };
-      }
-    }
+    const idxConforme = items23.findIndex(it => normalizar(it && it.desc).includes('conforme'));
+    if(idxConforme >= 0) encontrado = { semNum:23, idx:idxConforme, item:items23[idxConforme] };
   }
 
   let montoConforme = 0;
-  let avConforme = 0;
-
-  if(encontrado && encontrado.item){
-    // Usar el monto del rubro encontrado y no un monto posicional histórico.
-    montoConforme = Number(encontrado.item.monto) || 0;
-
-    // Usar la clave estable del ítem para el avance cuando esté disponible.
-    const key = String(encontrado.item.key || '');
-    if(key && state.items && state.items[key] != null){
-      avConforme = Number(state.items[key]) || 0;
-    }else{
-      avConforme = getAv(encontrado.semNum, encontrado.idx);
-    }
+  let avManual = 0;
+  if(encontrado){
+    // IMPORTANTE: tomar el monto REAL vigente (manual / valor de semana), no el monto base de plantilla.
+    montoConforme = Number(getMonto(encontrado.semNum, encontrado.idx)) || 0;
+    avManual = Number(getAv(encontrado.semNum, encontrado.idx)) || 0;
   }
+  avManual = Math.max(0, Math.min(1, avManual));
 
-  avConforme = Math.max(0, Math.min(1, avConforme));
-
-  const saldoConforme = Math.round(montoConforme * (1 - avConforme));
   const pf = calcPagosFuera();
-
-  // pf.neto > 0 = en contra (se descuenta del conforme)
-  // pf.neto < 0 = a favor (se suma al conforme)
-  const saldoAjustado = saldoConforme - pf.neto;
+  // neto > 0 = en contra del constructor: reduce Conforme.
+  // neto < 0 = a favor del constructor: aumenta Conforme.
+  const ajustePagos = Number(pf.neto) || 0;
+  const devManual = montoConforme * avManual;
+  const devAjustado = devManual + ajustePagos;
+  const saldoConforme = montoConforme - devManual;
+  const saldoAjustado = saldoConforme - ajustePagos;
+  const avEfectivo = montoConforme > 0 ? (devAjustado / montoConforme) : avManual;
 
   return {
     montoConforme,
-    avConforme,
+    avConforme: avManual,
+    avManual,
+    avEfectivo,
+    ajustePagos,
+    devManual,
+    devAjustado,
     saldoConforme,
     saldoAjustado,
     semNum: encontrado ? encontrado.semNum : null,
+    idx: encontrado ? encontrado.idx : null,
     itemKey: encontrado && encontrado.item ? (encontrado.item.key || '') : ''
   };
+}
+
+function isConformeTask(snum, idx){
+  const co = calcConformeObra();
+  return co.semNum === snum && co.idx === idx;
+}
+
+function taskDisplayMetrics(snum, idx){
+  const monto = Number(getMonto(snum, idx)) || 0;
+  const avManual = Number(getAv(snum, idx)) || 0;
+  if(!isConformeTask(snum, idx)){
+    return { monto, avManual, avDisplay:avManual, dev:monto*avManual, saldo:monto*(1-avManual), ajuste:0, conforme:false };
+  }
+  const co = calcConformeObra();
+  return {
+    monto,
+    avManual,
+    avDisplay:co.avEfectivo,
+    dev:co.devAjustado,
+    saldo:co.saldoAjustado,
+    ajuste:co.ajustePagos,
+    conforme:true
+  };
+}
+
+function setConformeEffectiveAv(snum, idx, effectiveAv){
+  const m = Number(getMonto(snum, idx)) || 0;
+  if(m <= 0){ setAv(snum, idx, 0); return 0; }
+  const ajustePct = (Number(calcPagosFuera().neto) || 0) / m;
+  const locked = getLockedAv ? getLockedAv(snum, idx) : 0;
+  let manual = Number(effectiveAv) - ajustePct;
+  manual = Math.max(locked, Math.min(1, manual));
+  setAv(snum, idx, manual);
+  return manual + ajustePct;
+}
+
+function refreshConformeTaskUI(){
+  const co = calcConformeObra();
+  if(co.semNum == null || co.idx == null) return;
+  updateItemRowUI(co.semNum, co.idx, getAv(co.semNum, co.idx));
+  const block=document.getElementById('sb-'+co.semNum);
+  if(block) refreshSemana(co.semNum);
 }
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────
@@ -4861,9 +4907,13 @@ function renderSemanas(){
           </div>
         </div>
         ${getItems(s.num).map((it,i)=>{
-          const av=getAv(s.num,i); const done=av>=1;
+          const manualAv=getAv(s.num,i);
+          const dm=taskDisplayMetrics(s.num,i);
+          const av=dm.avDisplay;
+          const done=av>=0.999999;
           const locked=getLockedAv(s.num,i);
-          const pendingCert=av>locked+0.000001;
+          const pendingCert=manualAv>locked+0.000001;
+          const sliderVal=Math.max(0,Math.min(100,av*100));
           return `<div class="item-row ${pendingCert?'pending-cert':''}">
             <div class="item-row-top">
               <div class="item-check ${done?'on':av>0?'partial':''}" onclick="toggleCheck(${s.num},${i})">${done?'✓':av>0?'':''}</div>
@@ -4872,10 +4922,10 @@ function renderSemanas(){
             </div>
             <div class="item-row-bottom">
               <div class="item-avance">
-                <input type="range" id="av-sld-${s.num}-${i}" class="avance-slider ${getLockedAv(s.num,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(av*100)}"
+                <input type="range" id="av-sld-${s.num}-${i}" class="avance-slider ${getLockedAv(s.num,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(sliderVal)}"
                   oninput="onSlider(${s.num},${i},this.value)" onchange="onSlider(${s.num},${i},this.value)">
                 <div class="avance-input-wrap">
-                  <input type="number" id="av-inp-${s.num}-${i}" class="avance-input ${getLockedAv(s.num,i)>0?'locked-input':''}" min="0" max="100" step="0.01"
+                  <input type="number" id="av-inp-${s.num}-${i}" class="avance-input ${getLockedAv(s.num,i)>0?'locked-input':''}" min="${dm.conforme?'-999':'0'}" max="${dm.conforme?'999':'100'}" step="0.01"
                     value="${Math.round(av*10000)/100}" onfocus="this.select()" onchange="onAvanceInput(${s.num},${i},this.value)">
                   <span class="avance-pct-sign">%</span>
                 </div>
@@ -4883,10 +4933,10 @@ function renderSemanas(){
               <div class="item-montos">
                 <span class="item-monto-total" onclick="editMonto(${s.num},${i})">${fmt(getMonto(s.num,i))} ✏</span>
                 <div class="item-monto-detail">
-                  <span class="item-devengado" id="dev-${s.num}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(getMonto(s.num,i)*av)}</span>
+                  <span class="item-devengado" id="dev-${s.num}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(dm.dev)}</span>
                   <span class="item-saldo-sep">·</span>
                   <span class="item-saldo-lbl">saldo</span>
-                  <span class="item-saldo-val" id="saldo-${s.num}-${i}" style="color:${done?'#A8BFA8':'#C0392B'}">${fmt(getMonto(s.num,i)*(1-av))}</span>
+                  <span class="item-saldo-val" id="saldo-${s.num}-${i}" style="color:${done?'#A8BFA8':'#C0392B'}">${fmt(dm.saldo)}</span>
                 </div>
               </div>
             </div>
@@ -4904,63 +4954,88 @@ function toggleSemana(num){
 }
 function toggleCheck(snum,idx){
   const min=getLockedAv ? getLockedAv(snum,idx) : 0;
-  const cur=getAv(snum,idx);
-  const next=cur>=1?0:1;
-  if(next < min){
-    alert('Esta tarea ya fue certificada. Para destildarla o bajarla, eliminá primero el certificado.');
-    setAv(snum,idx,min);
+  if(isConformeTask(snum,idx)){
+    const dm=taskDisplayMetrics(snum,idx);
+    if(dm.avDisplay>=0.999999){
+      setAv(snum,idx,min); // al destildar, conserva lo ya certificado; el ajuste por pagos sigue visible
+    }else{
+      setConformeEffectiveAv(snum,idx,1);
+    }
   }else{
-    setAv(snum,idx,next);
+    const cur=getAv(snum,idx);
+    const next=cur>=1?0:1;
+    if(next < min){
+      alert('Esta tarea ya fue certificada. Para destildarla o bajarla, eliminá primero el certificado.');
+      setAv(snum,idx,min);
+    }else{
+      setAv(snum,idx,next);
+    }
   }
   refreshAll();
 }
 function updateItemRowUI(snum, idx, av){
+  const dm=taskDisplayMetrics(snum,idx);
+  const displayAv=dm.avDisplay;
+  const sliderDisplay=Math.max(0,Math.min(1,displayAv));
   const slider=document.getElementById(`av-sld-${snum}-${idx}`);
-  if(slider) slider.value=Math.round(av*100);
+  if(slider) slider.value=Math.round(sliderDisplay*100);
   const input=document.getElementById(`av-inp-${snum}-${idx}`);
-  if(input) input.value=Math.round(av*10000)/100;
+  if(input) input.value=Math.round(displayAv*10000)/100;
   const row=slider ? slider.closest('.item-row') : (input ? input.closest('.item-row') : null);
   if(row){
     const chk=row.querySelector('.item-check');
     const dsc=row.querySelector('.item-desc');
-    if(chk){ chk.className='item-check'+(av>=1?' on':av>0?' partial':''); chk.textContent=av>=1?'✓':''; }
-    if(dsc) dsc.className='item-desc'+(av>=1?' done':'');
+    if(chk){ chk.className='item-check'+(displayAv>=1?' on':displayAv>0?' partial':''); chk.textContent=displayAv>=1?'✓':''; }
+    if(dsc) dsc.className='item-desc'+(displayAv>=1?' done':'');
   }
-  const done=av>=1;
+  const done=displayAv>=1;
   const devEl=document.getElementById(`dev-${snum}-${idx}`);
   const saldoEl=document.getElementById(`saldo-${snum}-${idx}`);
-  if(devEl){ devEl.textContent=fmt(getMonto(snum,idx)*av); devEl.style.color=done?'#0A6E3A':'#2E7D5E'; }
-  if(saldoEl){ saldoEl.textContent=fmt(getMonto(snum,idx)*(1-av)); saldoEl.style.color=done?'#A8BFA8':'#C0392B'; }
+  if(devEl){ devEl.textContent=fmt(dm.dev); devEl.style.color=done?'#0A6E3A':'#2E7D5E'; }
+  if(saldoEl){ saldoEl.textContent=fmt(dm.saldo); saldoEl.style.color=done?'#A8BFA8':'#C0392B'; }
 }
 function onSlider(snum,idx,val){
-  const min=getLockedAv ? getLockedAv(snum,idx) : 0;
-  let av=parseInt(val)/100;
-  if(av < min){
-    av=min;
-    alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
+  if(isConformeTask(snum,idx)){
+    const target=Math.max(0,Math.min(100,parseFloat(val)||0))/100;
+    setConformeEffectiveAv(snum,idx,target);
+    updateItemRowUI(snum,idx,getAv(snum,idx));
+  }else{
+    const min=getLockedAv ? getLockedAv(snum,idx) : 0;
+    let av=parseInt(val)/100;
+    if(av < min){
+      av=min;
+      alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
+    }
+    setAv(snum,idx,av);
+    updateItemRowUI(snum,idx,av);
   }
-  setAv(snum,idx,av);
-  updateItemRowUI(snum,idx,av);
   refreshSemana(snum);
   renderKPIs();
   if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
 }
 function onAvanceInput(snum,idx,val){
-  const min=getLockedAv ? getLockedAv(snum,idx) : 0;
   let n=parseFloat(String(val).replace(',', '.'));
   if(isNaN(n)) n=0;
-  n=Math.max(0,Math.min(100,n));
-  let av=Math.round(n*100)/10000;
-  if(av < min){
-    av=min;
-    alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
+  if(isConformeTask(snum,idx)){
+    n=Math.max(-999,Math.min(999,n));
+    setConformeEffectiveAv(snum,idx,n/100);
+    updateItemRowUI(snum,idx,getAv(snum,idx));
+  }else{
+    const min=getLockedAv ? getLockedAv(snum,idx) : 0;
+    n=Math.max(0,Math.min(100,n));
+    let av=Math.round(n*100)/10000;
+    if(av < min){
+      av=min;
+      alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
+    }
+    setAv(snum,idx,av);
+    updateItemRowUI(snum,idx,av);
   }
-  setAv(snum,idx,av);
-  updateItemRowUI(snum,idx,av);
   refreshSemana(snum);
   renderKPIs();
   if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
 }
+
 function refreshSemana(snum){
   const s=getSemanaByNum(snum);
   const {totalMonto,devengado,pctSem}=calcSemana(s);
@@ -4995,9 +5070,13 @@ function refreshAll(){
     const snum=parseInt(el.id.replace('si-',''));
     const s=getSemanaByNum(snum);
     el.innerHTML=getItems(snum).map((it,i)=>{
-      const av=getAv(snum,i); const done=av>=1;
+      const manualAv=getAv(snum,i);
+      const dm=taskDisplayMetrics(snum,i);
+      const av=dm.avDisplay;
+      const done=av>=0.999999;
       const locked=getLockedAv(snum,i);
-      const pendingCert=av>locked+0.000001;
+      const pendingCert=manualAv>locked+0.000001;
+      const sliderVal=Math.max(0,Math.min(100,av*100));
       return `<div class="item-row ${pendingCert?'pending-cert':''}">
         <div class="item-row-top">
           <div class="item-check ${done?'on':av>0?'partial':''}" onclick="toggleCheck(${snum},${i})">${done?'✓':av>0?'':''}</div>
@@ -5006,10 +5085,10 @@ function refreshAll(){
         </div>
         <div class="item-row-bottom">
           <div class="item-avance">
-            <input type="range" id="av-sld-${snum}-${i}" class="avance-slider ${getLockedAv(snum,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(av*100)}"
+            <input type="range" id="av-sld-${snum}-${i}" class="avance-slider ${getLockedAv(snum,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(sliderVal)}"
               oninput="onSlider(${snum},${i},this.value)" onchange="onSlider(${snum},${i},this.value)">
             <div class="avance-input-wrap">
-              <input type="number" id="av-inp-${snum}-${i}" class="avance-input ${getLockedAv(snum,i)>0?'locked-input':''}" min="0" max="100" step="0.01"
+              <input type="number" id="av-inp-${snum}-${i}" class="avance-input ${getLockedAv(snum,i)>0?'locked-input':''}" min="${dm.conforme?'-999':'0'}" max="${dm.conforme?'999':'100'}" step="0.01"
                 value="${Math.round(av*10000)/100}" onfocus="this.select()" onchange="onAvanceInput(${snum},${i},this.value)">
               <span class="avance-pct-sign">%</span>
             </div>
@@ -5017,10 +5096,10 @@ function refreshAll(){
           <div class="item-montos">
             <span class="item-monto-total" onclick="editMonto(${snum},${i})">${fmt(getMonto(snum,i))} ✏</span>
             <div class="item-monto-detail">
-              <span class="item-devengado" id="dev-${snum}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(getMonto(snum,i)*av)}</span>
+              <span class="item-devengado" id="dev-${snum}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(dm.dev)}</span>
               <span class="item-saldo-sep">·</span>
               <span class="item-saldo-lbl">saldo</span>
-              <span class="item-saldo-val" id="saldo-${snum}-${i}" style="color:${done?'#A8BFA8':'#C0392B'}">${fmt(getMonto(snum,i)*(1-av))}</span>
+              <span class="item-saldo-val" id="saldo-${snum}-${i}" style="color:${done?'#A8BFA8':'#C0392B'}">${fmt(dm.saldo)}</span>
             </div>
           </div>
         </div>
@@ -5181,6 +5260,7 @@ function savePagoFuera(){
   closeModal();
   renderFinanzas();
   renderKPIs();
+  refreshConformeTaskUI();
 }
 function editPagoFuera(id){
   const p = state.pagosFuera.find(x => x.id === id);
@@ -5204,6 +5284,7 @@ function deletePagoFuera(id){
   persist();
   renderFinanzas();
   renderKPIs();
+  refreshConformeTaskUI();
 }
 
 // ─── FINANZAS ─────────────────────────────────────────────────────────────
@@ -9903,19 +9984,30 @@ body.cq-constructor-mode #tab-reporte{
 <style id="cq-week-value-style">
 
 .all-weeks-value-bar{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:10px 12px;margin:0 0 10px;border:1px solid #DDE8DE;border-radius:10px;background:#F7FAF7;
+  margin:0 0 10px;border:1px solid #CFE0D2;border-radius:12px;background:#F8FBF8;overflow:hidden;
 }
-.all-weeks-value-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
-.all-weeks-value-label{font-size:11px;font-weight:900;color:#163D35}
+.all-weeks-value-toggle{
+  width:100%;min-height:42px;border:0;background:transparent;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;color:#163D35;font:inherit;text-align:left;
+}
+.all-weeks-toggle-left{display:flex;align-items:center;gap:7px;min-width:0;font-size:11px;font-weight:900}
+.all-weeks-toggle-icon{width:24px;height:24px;border-radius:7px;background:#EAF6EE;color:#2E7D5E;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:1000;flex:0 0 auto}
+.all-weeks-toggle-chevron{font-size:10px;color:#7A9E82;transition:transform .18s ease;flex:0 0 auto}
+.all-weeks-value-bar:not(.collapsed) .all-weeks-toggle-chevron{transform:rotate(180deg)}
+.all-weeks-value-body{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 10px 10px;border-top:1px solid #E6EFE7}
+.all-weeks-value-bar.collapsed .all-weeks-value-body{display:none}
+.all-weeks-value-copy{display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:9px}
 .all-weeks-value-help{font-size:8px;font-weight:700;color:#7A9E82;line-height:1.25}
-.all-weeks-value-controls{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.all-weeks-value-controls{display:flex;align-items:center;gap:7px;flex:0 0 auto;padding-top:9px}
 .all-weeks-value-input-wrap{display:flex;align-items:center;gap:4px;height:32px;padding:0 7px;border:1px solid #CFE0D2;border-radius:8px;background:#fff;color:#2E7D5E;font-weight:900}
 .all-weeks-value-input{width:115px;border:0;outline:0;background:transparent;font-size:12px;font-weight:900;color:#163D35;text-align:right}
 .all-weeks-value-apply{height:32px;border:0;border-radius:8px;padding:0 11px;background:#2E7D5E;color:#fff;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap}
+
 @media(max-width:700px){
-  .all-weeks-value-bar{align-items:stretch;flex-direction:column;gap:7px;padding:8px}
-  .all-weeks-value-controls{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .all-weeks-value-toggle{min-height:40px;padding:7px 9px}
+  .all-weeks-toggle-left{font-size:10px}
+  .all-weeks-value-body{align-items:stretch;flex-direction:column;gap:7px;padding:0 8px 8px}
+  .all-weeks-value-copy{padding-top:7px}
+  .all-weeks-value-controls{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;padding-top:0}
   .all-weeks-value-input-wrap{min-width:0}
   .all-weeks-value-input{width:100%;min-width:0;font-size:16px}
   .all-weeks-value-apply{height:36px;padding:0 10px}
