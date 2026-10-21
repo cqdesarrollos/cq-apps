@@ -8276,6 +8276,8 @@ document.addEventListener('DOMContentLoaded',function(){
           while(row.checked.length<flowState.months.length)row.checked.push(false);
         }
         if(!row.formulas || typeof row.formulas!=='object' || Array.isArray(row.formulas))row.formulas={};
+        if(!Array.isArray(row.comments))row.comments=Array(flowState.months.length).fill('');
+        while(row.comments.length<flowState.months.length)row.comments.push('');
       });
     });
   }
@@ -8495,17 +8497,21 @@ document.addEventListener('DOMContentLoaded',function(){
 
   function updateSelectionStatus(){
     const status=document.getElementById('flowSheetFormulaStatus');
-    if(!status)return;
+    const topSummary=document.getElementById('flowSheetRangeSummary');
     const stats=selectedRangeStats();
     if(stats.count>1){
-      status.textContent=`${stats.count} celdas · Suma ${formatSelectionNumber(stats.sum)} · Prom. ${formatSelectionNumber(stats.avg)}`;
-      status.classList.add('range-summary');
+      const msg=`${stats.count} celdas · Suma ${formatSelectionNumber(stats.sum)} · Prom. ${formatSelectionNumber(stats.avg)}`;
+      if(status){status.textContent=msg;status.classList.add('range-summary');}
+      if(topSummary){topSummary.innerHTML=`<b>Σ ${formatSelectionNumber(stats.sum)}</b><span>${stats.count} celdas · Prom. ${formatSelectionNumber(stats.avg)}</span>`;topSummary.classList.add('show');}
     }else{
-      status.classList.remove('range-summary');
-      const actualKey=cqSheetState.selected;
-      if(!actualKey){status.textContent='Seleccioná una celda';return;}
-      const {type,ri,mi}=parseActualKey(actualKey), row=flowState?.[type]?.[ri], entry=getFormulaEntry(row,mi);
-      status.textContent=entry?.display ? 'Fórmula guardada · se recalcula automáticamente' : 'Valor directo';
+      if(topSummary){topSummary.classList.remove('show');topSummary.innerHTML='';}
+      if(status){
+        status.classList.remove('range-summary');
+        const actualKey=cqSheetState.selected;
+        if(!actualKey){status.textContent='Seleccioná una celda';return;}
+        const {type,ri,mi}=parseActualKey(actualKey), row=flowState?.[type]?.[ri], entry=getFormulaEntry(row,mi);
+        status.textContent=entry?.display ? 'Fórmula guardada · se recalcula automáticamente' : 'Valor directo';
+      }
     }
   }
 
@@ -8598,6 +8604,12 @@ document.addEventListener('DOMContentLoaded',function(){
       +'<button type="button" id="flowSheetApply" aria-label="Aplicar">✓</button>'
       +'<button type="button" id="flowSheetCancelFormula" aria-label="Cancelar">×</button>';
     filters.insertAdjacentElement('afterend',bar);
+    if(!document.getElementById('flowSheetRangeSummary')){
+      const sumBar=document.createElement('div');
+      sumBar.id='flowSheetRangeSummary';
+      sumBar.className='flow-sheet-range-summary';
+      bar.insertAdjacentElement('afterend',sumBar);
+    }
     const foot=modal.querySelector('.flow-sheet-foot');
     if(foot && !document.getElementById('flowSheetFormulaStatus')){
       const status=document.createElement('span');
@@ -8616,7 +8628,8 @@ document.addEventListener('DOMContentLoaded',function(){
     const key=buildActualKey(item.type,item.ri,mi);
     const isSelected=cqSheetState.selected===key;
     const value=displayNumber(item.row.months[mi]);
-    return `<td class="${monthColorClass(ci)} ${isSelected?'sheet-selected':''}" data-sheet-ui-cell="${key}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" data-sheet-edit="${key}" value="${fesc(value)}" placeholder="0"><span class="sheet-drag-handle" data-sheet-handle="${key}" aria-hidden="true"></span></div></td>`;
+    const comment=String(item.row.comments?.[mi]||'').trim();
+    return `<td class="${monthColorClass(ci)} ${isSelected?'sheet-selected':''} ${comment?'has-sheet-comment':''}" data-sheet-ui-cell="${key}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" type="number" inputmode="decimal" step="any" data-sheet-edit="${key}" value="${fesc(value)}" placeholder="0"><button type="button" class="sheet-comment-btn ${comment?'has-comment':''}" data-sheet-comment="${key}" title="${comment?fesc(comment):'Agregar comentario'}" aria-label="Comentario">✎</button><span class="sheet-drag-handle" data-sheet-handle="${key}" aria-hidden="true"></span></div></td>`;
   }
 
   function renderSheetTable(months,rows){
@@ -8707,6 +8720,17 @@ document.addEventListener('DOMContentLoaded',function(){
           e.stopPropagation();
           beginRangeDrag(key,e.pointerId);
         }
+      });
+    });
+
+    tbody.querySelectorAll('[data-sheet-comment]').forEach(btn=>{
+      btn.addEventListener('pointerdown',e=>{e.stopPropagation();});
+      btn.addEventListener('click',e=>{
+        e.preventDefault();e.stopPropagation();
+        const key=btn.dataset.sheetComment;
+        setSelectedActualKey(key);
+        const {type,ri,mi}=parseActualKey(key);
+        if(typeof window.cqOpenFlowComment==='function')window.cqOpenFlowComment(type,ri,mi);
       });
     });
 
@@ -9137,7 +9161,8 @@ document.addEventListener('DOMContentLoaded',function(){
       if(Number.isInteger(r.hiddenFrom) && mi>=r.hiddenFrom)return '';
       const input=`<input class="${type==='works'?'flow-work-value':''}" type="number" step="1" inputmode="decimal" data-flow-cell="${type}:${ri}:${mi}" value="${fnum(r.months[mi])||''}" placeholder="0">`;
       const checked = type==='incomes' ? (Array.isArray(r.received)&&!!r.received[mi]) : (Array.isArray(r.checked)&&!!r.checked[mi]);
-      const valueCell=`<div class="flow-check-cell">${input}<button type="button" class="flow-check-btn ${checked?'checked':''}" data-flow-mark="${type}:${ri}:${mi}" title="${checked?'Marcado':'Marcar'}" aria-label="${checked?'Marcado':'Marcar'}"></button></div>`;
+      const comment=String(r.comments?.[mi]||'').trim();
+      const valueCell=`<div class="flow-check-cell"><div class="flow-value-with-comment">${input}<button type="button" class="flow-comment-btn ${comment?'has-comment':''}" data-flow-comment="${type}:${ri}:${mi}" title="${comment?fesc(comment):'Agregar comentario'}" aria-label="Comentario">✎</button></div><button type="button" class="flow-check-btn ${checked?'checked':''}" data-flow-mark="${type}:${ri}:${mi}" title="${checked?'Marcado':'Marcar'}" aria-label="${checked?'Marcado':'Marcar'}"></button></div>`;
       const editBtn=type==='works'?`<button type="button" class="flow-entry-action edit-work" data-work-ri="${ri}" title="Modificar obra">✎</button>`:type==='others'?`<button type="button" class="flow-entry-action edit-other" data-other-ri="${ri}" title="Modificar nombre">✎</button>`:`<button type="button" class="flow-entry-action edit-income" data-income-ri="${ri}" title="Modificar nombre">✎</button>`;
       const delBtn=type==='works'?`<button type="button" class="flow-entry-action delete del-work-forward" data-work-ri="${ri}" data-work-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:type==='others'?`<button type="button" class="flow-entry-action delete del-other-forward" data-other-ri="${ri}" data-other-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:`<button type="button" class="flow-entry-action delete del-income-forward" data-income-ri="${ri}" data-income-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`;
       return `<div class="flow-entry has-check ${type==='works'&&r.autoCost?'new-work':''} ${checked?'cell-checked':''}"><div class="flow-entry-name" title="${fesc(r.name)}">${fesc(r.name)}${type==='works'&&r.autoCost?'<span class="flow-new-tag">Nueva</span>':''}</div>${valueCell}<div class="flow-entry-actions">${editBtn}${delBtn}</div></div>`;
@@ -9173,6 +9198,11 @@ document.addEventListener('DOMContentLoaded',function(){
       flowRenderPanels();
     });
     document.querySelectorAll('[data-flow-config]').forEach(btn=>btn.onclick=e=>{ e.stopPropagation(); openFlowOrderModal(btn.dataset.flowConfig); });
+    document.querySelectorAll('[data-flow-comment]').forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      const [type,ri,mi]=btn.dataset.flowComment.split(':');
+      if(typeof window.cqOpenFlowComment==='function')window.cqOpenFlowComment(type,+ri,+mi);
+    });
 
     document.querySelectorAll('[data-flow-cell]').forEach(inp=>{
       inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
@@ -9356,5 +9386,112 @@ document.addEventListener('DOMContentLoaded',function(){
   #flowSheetModal .flow-sheet-table td.sheet-selected{z-index:1!important}
 }
 </style>
+
+
+<style id="cq-flow-comments-and-summary-v7">
+/* v87 · suma visible + teclado numérico + comentarios por celda */
+#flowSheetModal .flow-sheet-range-summary{
+  display:none;align-items:center;gap:10px;padding:5px 10px;background:#e5f2eb;border-bottom:1px solid #c8dfd3;
+  color:#315b4b;font-size:10px;line-height:1.1;flex:0 0 auto;
+}
+#flowSheetModal .flow-sheet-range-summary.show{display:flex}
+#flowSheetModal .flow-sheet-range-summary b{font-size:12px;color:#23513f}
+#flowSheetModal .flow-sheet-range-summary span{color:#5d756b;font-weight:700}
+
+.flow-value-with-comment{position:relative;min-width:0}
+.flow-value-with-comment>input{width:100%;padding-left:24px!important}
+.flow-comment-btn{
+  position:absolute;left:4px;top:50%;transform:translateY(-50%);width:17px;height:17px;border:0;border-radius:5px;
+  background:transparent;color:#a2afa9;font-size:10px;line-height:1;display:grid;place-items:center;cursor:pointer;padding:0;z-index:2;
+}
+.flow-comment-btn:hover{background:#eef5f1;color:#557466}
+.flow-comment-btn.has-comment{background:#e8f2ed;color:#3d705b;box-shadow:inset 0 0 0 1px #c3dbcf}
+
+#flowSheetModal .sheet-cell-wrap{position:relative!important}
+#flowSheetModal .sheet-comment-btn{
+  display:none;position:absolute;left:2px;top:2px;width:16px;height:16px;border:0;border-radius:4px;padding:0;
+  background:rgba(255,255,255,.72);color:#789087;font-size:9px;line-height:1;place-items:center;cursor:pointer;z-index:4;
+}
+#flowSheetModal td.sheet-selected .sheet-comment-btn,
+#flowSheetModal .sheet-comment-btn.has-comment{display:grid}
+#flowSheetModal .sheet-comment-btn.has-comment{background:#e8f2ed;color:#35634f;box-shadow:inset 0 0 0 1px #bcd7c9}
+#flowSheetModal td.has-sheet-comment:before{
+  content:'';position:absolute;left:0;top:0;width:0;height:0;border-top:7px solid #6f9b87;border-right:7px solid transparent;z-index:3;
+}
+#flowSheetModal td.has-sheet-comment{position:relative}
+
+.cq-flow-comment-backdrop{position:fixed;inset:0;background:rgba(23,38,32,.34);display:none;align-items:center;justify-content:center;padding:14px;z-index:10150}
+.cq-flow-comment-backdrop.open{display:flex}
+.cq-flow-comment-panel{width:min(470px,100%);background:#fff;border:1px solid #d9e4df;border-radius:16px;box-shadow:0 20px 60px rgba(15,31,24,.22);overflow:hidden}
+.cq-flow-comment-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 14px;background:#f2f7f4;border-bottom:1px solid #dfe9e4}
+.cq-flow-comment-head strong{display:block;font-size:14px;color:#315b4b}.cq-flow-comment-head span{display:block;margin-top:2px;font-size:10px;color:#74817c}
+.cq-flow-comment-close{width:32px;height:32px;border:1px solid #d4e0da;background:#fff;border-radius:9px;color:#61746b;font-size:18px;cursor:pointer}
+.cq-flow-comment-body{padding:12px 14px}
+.cq-flow-comment-body textarea{width:100%;min-height:105px;resize:vertical;border:1px solid #d5e1db;border-radius:11px;padding:10px 11px;font:inherit;font-size:13px;line-height:1.4;color:#2d433a;outline:none;background:#fbfdfc}
+.cq-flow-comment-body textarea:focus{border-color:#8cb19f;box-shadow:0 0 0 3px #edf5f1}
+.cq-flow-comment-actions{display:flex;justify-content:space-between;gap:8px;padding:0 14px 13px}
+.cq-flow-comment-actions button{border:1px solid #d7e2dd;border-radius:9px;padding:8px 12px;background:#fff;color:#64766e;font-weight:800;cursor:pointer}
+.cq-flow-comment-actions .save{background:#356c57;border-color:#356c57;color:#fff}
+.cq-flow-comment-actions .delete{color:#995b60;background:#fff7f7;border-color:#ead7d8}
+
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-range-summary{padding:3px 6px;gap:7px;font-size:7px}
+  #flowSheetModal .flow-sheet-range-summary b{font-size:9px}
+  #flowSheetModal .sheet-comment-btn{width:13px;height:13px;font-size:7px;left:1px;top:1px}
+  .flow-comment-btn{width:15px;height:15px;left:3px;font-size:9px}.flow-value-with-comment>input{padding-left:20px!important}
+  .cq-flow-comment-panel{border-radius:13px}.cq-flow-comment-body textarea{min-height:90px}
+}
+</style>
+<script id="cq-flow-comments-v7">
+(function(){
+  if(window.__cqFlowCommentsV7)return;
+  window.__cqFlowCommentsV7=true;
+  let current=null;
+
+  function ensureRowComments(row){
+    if(!row)return;
+    if(!Array.isArray(row.comments))row.comments=Array(flowState?.months?.length||0).fill('');
+    while(row.comments.length<(flowState?.months?.length||0))row.comments.push('');
+  }
+  function ensureModal(){
+    if(document.getElementById('cqFlowCommentModal'))return;
+    const bg=document.createElement('div');
+    bg.id='cqFlowCommentModal';bg.className='cq-flow-comment-backdrop';
+    bg.innerHTML=`<div class="cq-flow-comment-panel" role="dialog" aria-modal="true"><div class="cq-flow-comment-head"><div><strong>Comentario</strong><span id="cqFlowCommentContext"></span></div><button type="button" class="cq-flow-comment-close" id="cqFlowCommentClose">×</button></div><div class="cq-flow-comment-body"><textarea id="cqFlowCommentText" placeholder="Escribí un comentario para esta celda..."></textarea></div><div class="cq-flow-comment-actions"><button type="button" class="delete" id="cqFlowCommentDelete">Borrar</button><div><button type="button" id="cqFlowCommentCancel">Cancelar</button> <button type="button" class="save" id="cqFlowCommentSave">Guardar</button></div></div></div>`;
+    document.body.appendChild(bg);
+    document.getElementById('cqFlowCommentClose').onclick=close;
+    document.getElementById('cqFlowCommentCancel').onclick=close;
+    document.getElementById('cqFlowCommentSave').onclick=save;
+    document.getElementById('cqFlowCommentDelete').onclick=()=>{const ta=document.getElementById('cqFlowCommentText');if(ta)ta.value='';save();};
+    bg.onclick=e=>{if(e.target===bg)close()};
+  }
+  function refreshViews(){
+    try{flowPersist()}catch(e){}
+    try{if(typeof flowRenderPanels==='function')flowRenderPanels()}catch(e){}
+    try{if(document.getElementById('flowSheetModal')?.classList.contains('open') && typeof cqFlowSheetRender==='function')cqFlowSheetRender()}catch(e){}
+  }
+  function close(){document.getElementById('cqFlowCommentModal')?.classList.remove('open');current=null;}
+  function save(){
+    if(!current)return close();
+    const row=flowState?.[current.type]?.[current.ri];if(!row)return close();
+    ensureRowComments(row);
+    row.comments[current.mi]=String(document.getElementById('cqFlowCommentText')?.value||'').trim();
+    refreshViews();close();
+  }
+  window.cqOpenFlowComment=function(type,ri,mi){
+    ensureModal();
+    const row=flowState?.[type]?.[ri];if(!row)return;
+    ensureRowComments(row);current={type,ri:+ri,mi:+mi};
+    const ctx=document.getElementById('cqFlowCommentContext');
+    const month=flowState?.months?.[mi]||'';
+    if(ctx)ctx.textContent=`${row.name||''}${month?' · '+month:''}`;
+    const ta=document.getElementById('cqFlowCommentText');if(ta)ta.value=row.comments[mi]||'';
+    document.getElementById('cqFlowCommentModal')?.classList.add('open');
+    setTimeout(()=>ta?.focus(),30);
+  };
+  document.addEventListener('DOMContentLoaded',ensureModal);
+  if(document.readyState!=='loading')setTimeout(ensureModal,40);
+})();
+</script>
 
 </body></html>
