@@ -2938,7 +2938,7 @@ async function loadAllForBackup(){
 function getSemanas() {
   const hidden = state.hiddenWeeks || [];
   const overrides = state.weekOverrides || {};
-  const base = SEMANAS
+  const base = getBaseSemanas(state, currentObra())
     .filter(s => !hidden.includes(s.num))
     .map(s => ({ ...s, ...(overrides[s.num] || {}) }));
   const custom = (state.customWeeks || []);
@@ -3210,6 +3210,7 @@ function openEditObra() {
   document.getElementById('eo-num').value = state.obraNum || meta?.obraNum || '';
   document.getElementById('eo-acuerdo').value = state.acuerdo || '';
   document.getElementById('eo-color').value = meta?.color || '#E8A838';
+  const tipoWrap=document.getElementById('eo-tipo-wrap'); if(tipoWrap) tipoWrap.style.display='none';
   renderConstructorSelect(meta?.constructorId || currentConstructor()?.id);
 }
 
@@ -3222,9 +3223,12 @@ function openNuevaObra() {
   document.getElementById('eo-num').value = '';
   document.getElementById('eo-acuerdo').value = OBRA_ACORDADA_DEFAULT;
   document.getElementById('eo-color').value = defaultObraColor(obrasConfig.length);
+  const tipoWrap=document.getElementById('eo-tipo-wrap'); if(tipoWrap) tipoWrap.style.display='block';
+  const tipoSel=document.getElementById('eo-tipo'); if(tipoSel) tipoSel.value='1';
   renderConstructorSelect(currentConstructorId || constructoresConfig[0]?.id);
   const selC=constructoresConfig.find(c=>c.id===(currentConstructorId || constructoresConfig[0]?.id));
   document.getElementById('eo-constructor').value = selC?.nombre || '';
+  updatePlantTemplateHint(true);
   setTimeout(()=>document.getElementById('eo-label').focus(), 30);
 }
 function closeEditObra() { document.getElementById('modal-obra').classList.remove('open'); }
@@ -3235,39 +3239,107 @@ function makeObraId(label) {
   while (obrasConfig.some(o => o.id === id)) id = base + '_' + (++i);
   return id;
 }
-function findObraPlantillaL29M77() {
+function isL29M77(o){
   const norm = v => (v || '').toString().toLowerCase().replace(/\s+/g,'').replace(/manzana|mz/g,'m').replace(/lote|lt/g,'l');
-  return obrasConfig.find(o => {
-    const label = norm(o.label);
-    const num = (o.obraNum || '').toString().replace(/\s+/g,'');
-    return num === '29/77' || label.includes('l29m77');
-  });
+  const label=norm(o?.label); const num=(o?.obraNum||'').toString().replace(/\s+/g,'');
+  return num==='29/77' || label.includes('l29m77');
 }
-function createStateFromL29M77(newMeta) {
-  const plantillaMeta = findObraPlantillaL29M77();
-  const plantilla = plantillaMeta ? estadosObras[plantillaMeta.id] : null;
-  if (!plantilla) return createDefaultState(newMeta);
-
-  const nuevo = createDefaultState(newMeta);
-  nuevo.acuerdo = Number(plantilla.acuerdo) > 0 ? Number(plantilla.acuerdo) : OBRA_ACORDADA_DEFAULT;
-  nuevo.itemsCQ = deepClone(plantilla.itemsCQ || cloneDefaultCQ());
-  nuevo.montos = deepClone(plantilla.montos || {});
-  nuevo.taskOverrides = deepClone(plantilla.taskOverrides || {});
-  nuevo.customWeeks = deepClone(plantilla.customWeeks || []);
-  nuevo.weekOverrides = deepClone(plantilla.weekOverrides || {});
-  nuevo.hiddenWeeks = deepClone(plantilla.hiddenWeeks || []);
-  nuevo.customTasks = deepClone(plantilla.customTasks || {});
-
-  Object.keys(nuevo.customTasks).forEach(sem => {
-    nuevo.customTasks[sem] = (nuevo.customTasks[sem] || []).map(t => ({...t, avance:0}));
-  });
-  Object.keys(nuevo.items).forEach(k => { nuevo.items[k] = 0; });
-  nuevo.pagosFuera = [];
-  nuevo.certificados = [];
-  nuevo.certLocks = {};
-  nuevo.constructor = newMeta.constructor || 'Constructor';
-  nuevo.obraNum = newMeta.obraNum || '';
-  return normalizeState(nuevo, newMeta);
+function obraConstructorNombre(o){
+  const cons=constructoresConfig.find(c=>c.id===o?.constructorId);
+  return (cons?.nombre || o?.constructor || '').trim();
+}
+function isCristianObra(o){ return normKey(obraConstructorNombre(o)).includes('cristian'); }
+function findCristianObra(){
+  const arr=obrasConfig.filter(isCristianObra);
+  return [...arr].reverse().find(o=>!o.terminado) || arr[arr.length-1] || null;
+}
+function findLatestObraByTipo(tipo){
+  tipo=Number(tipo)===2?2:1;
+  let candidatas=obrasConfig.filter(o=>Number(o.tipoPlantas)===tipo);
+  if(!candidatas.length && tipo===1){ const o=obrasConfig.find(isL29M77); if(o) candidatas=[o]; }
+  if(!candidatas.length && tipo===2){ const o=findCristianObra(); if(o) candidatas=[o]; }
+  return candidatas.length ? candidatas[candidatas.length-1] : null;
+}
+function cloneStateAsNewProject(plantilla,newMeta,tipo){
+  if(!plantilla) return createDefaultState({...newMeta,tipoPlantas:tipo});
+  const nuevo=deepClone(plantilla);
+  nuevo.tipoPlantas=tipo;
+  nuevo.constructor=newMeta.constructor||'Constructor';
+  nuevo.obraNum=newMeta.obraNum||'';
+  nuevo.items={};
+  Object.keys(plantilla.items||{}).forEach(k=>{ nuevo.items[k]=0; });
+  const base=tipo===2?SEMANAS_DOS_PLANTAS:SEMANAS;
+  base.forEach(sem=>(sem.items||[]).forEach((it,i)=>{ nuevo.items[`${sem.num}-${i}`]=0; }));
+  if(nuevo.customTasks){ Object.keys(nuevo.customTasks).forEach(sem=>{ nuevo.customTasks[sem]=(nuevo.customTasks[sem]||[]).map(t=>({...t,avance:0})); }); }
+  nuevo.pagosFuera=[];
+  nuevo.certificados=[];
+  nuevo.certLocks={};
+  delete nuevo._backupAntesDosPlantas;
+  delete nuevo._migracionDosPlantas;
+  return normalizeState(nuevo,{...newMeta,tipoPlantas:tipo});
+}
+function createStateFromLatestTemplate(newMeta,tipo){
+  tipo=Number(tipo)===2?2:1;
+  const plantillaMeta=findLatestObraByTipo(tipo);
+  const plantilla=plantillaMeta ? estadosObras[plantillaMeta.id] : null;
+  return cloneStateAsNewProject(plantilla,newMeta,tipo);
+}
+function updatePlantTemplateHint(setAgreement=false){
+  const tipo=Number(document.getElementById('eo-tipo')?.value||1)===2?2:1;
+  const meta=findLatestObraByTipo(tipo);
+  const hint=document.getElementById('eo-template-hint');
+  if(hint){
+    hint.innerHTML=meta
+      ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas e importes.`
+      : `<strong>Modelo:</strong> plantilla base de ${tipo} planta${tipo===2?'s':''}.`;
+  }
+  if(setAgreement){
+    const st=meta?estadosObras[meta.id]:null;
+    const inp=document.getElementById('eo-acuerdo');
+    if(inp) inp.value=Number(st?.acuerdo)>0?Number(st.acuerdo):OBRA_ACORDADA_DEFAULT;
+  }
+}
+function buildCristianTwoStoryState(meta,old){
+  old=old||createDefaultState(meta);
+  const nuevo=createDefaultState({...meta,tipoPlantas:2});
+  nuevo.tipoPlantas=2;
+  nuevo.constructor=old.constructor||meta.constructor||'Cristian';
+  nuevo.obraNum=old.obraNum||meta.obraNum||'';
+  nuevo.acuerdo=Number(old.acuerdo)>0?Number(old.acuerdo):OBRA_ACORDADA_DEFAULT;
+  nuevo.acuerdoComentario=old.acuerdoComentario||'';
+  nuevo.itemsCQ=deepClone(old.itemsCQ||cloneDefaultCQ());
+  nuevo.pagosFuera=deepClone(old.pagosFuera||[]);
+  // Conserva el historial financiero de certificados, pero reinicia los locks porque cambió el esquema.
+  nuevo.certificados=deepClone(old.certificados||[]);
+  nuevo.certLocks={};
+  nuevo._backupAntesDosPlantas={
+    fecha:new Date().toISOString(), items:deepClone(old.items||{}), montos:deepClone(old.montos||{}),
+    customTasks:deepClone(old.customTasks||{}), taskOverrides:deepClone(old.taskOverrides||{}),
+    customWeeks:deepClone(old.customWeeks||[]), weekOverrides:deepClone(old.weekOverrides||{}), hiddenWeeks:deepClone(old.hiddenWeeks||[]), certLocks:deepClone(old.certLocks||{})
+  };
+  nuevo._migracionDosPlantas=1;
+  return normalizeState(nuevo,{...meta,tipoPlantas:2});
+}
+async function ensureProjectTypeTemplates(writeRemote=false){
+  let configChanged=false; const changedStates=[];
+  const one=obrasConfig.find(isL29M77);
+  if(one){
+    if(Number(one.tipoPlantas)!==1){ one.tipoPlantas=1; configChanged=true; }
+    const st=estadosObras[one.id]; if(st && Number(st.tipoPlantas)!==1){ st.tipoPlantas=1; estadosObras[one.id]=normalizeState(st,one); changedStates.push(one.id); }
+  }
+  const cristian=findCristianObra();
+  if(cristian){
+    if(Number(cristian.tipoPlantas)!==2){ cristian.tipoPlantas=2; configChanged=true; }
+    const st=estadosObras[cristian.id]||normalizeState(null,cristian);
+    if(Number(st.tipoPlantas)!==2 || !st._migracionDosPlantas){ estadosObras[cristian.id]=buildCristianTwoStoryState(cristian,st); changedStates.push(cristian.id); }
+  }
+  if(configChanged){ normalizeObrasConfig(); localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig)); }
+  changedStates.forEach(id=>localStorage.setItem('mano_obra_'+id,JSON.stringify(estadosObras[id])));
+  if(writeRemote && isFirebaseEnabled() && window._dbReady){
+    if(configChanged) await window._setDoc(window._doc(window._db,'config','mano_obra_multiobra'),JSON.parse(JSON.stringify({obras:obrasConfig,constructores:constructoresConfig})));
+    for(const id of [...new Set(changedStates)]) await window._setDoc(window._doc(window._db,'obras',id),JSON.parse(JSON.stringify(estadosObras[id])));
+  }
+  if(estadosObras[curObraId]) state=estadosObras[curObraId];
 }
 
 function saveEditObra() {
@@ -3281,9 +3353,10 @@ function saveEditObra() {
   const constructorNombre = c || consObj?.nombre || 'Constructor';
   const finalLabel = label || (n ? 'L' + n.replace('/', ' Mz') : c || 'Nueva obra');
   if (obraModalMode === 'new') {
-    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color };
+    const tipoPlantas = Number(document.getElementById('eo-tipo')?.value || 1) === 2 ? 2 : 1;
+    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, createdAt:new Date().toISOString() };
     obrasConfig.push(newMeta);
-    estadosObras[newMeta.id] = createStateFromL29M77(newMeta);
+    estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
     estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
     curObraId = newMeta.id;
     state = estadosObras[curObraId];
@@ -3438,6 +3511,125 @@ const SEMANAS = [
    items:[{desc:"Conforme de obra", avance:0, monto:3260000}]},
 ];
 
+
+// ─── PLANTILLA BASE: 2 PLANTAS / 3 DORMITORIOS / 3 BAÑOS ────────────────
+// Los importes arrancan en 0. La primera referencia real será la obra de Cristian;
+// las siguientes obras de 2 plantas copiarán sus importes y modificaciones vigentes.
+const SEMANAS_DOS_PLANTAS = [
+  {num:1, etapa:"Replanteo / Excavación", items:[
+    {desc:"Replanteo",avance:0,monto:0},{desc:"Cerramiento",avance:0,monto:0},{desc:"Pilar luz y gas",avance:0,monto:0},{desc:"Excavación 50%",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Cavado y fundaciones", items:[
+    {desc:"Excavación 100%",avance:0,monto:0},{desc:"Fundaciones armadas y presentadas",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Llenado de fundaciones", items:[
+    {desc:"Llenado de fundaciones",avance:0,monto:0},{desc:"Arranques de columnas",avance:0,monto:0},{desc:"Control de niveles",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Nivelación / Capa", items:[
+    {desc:"Nivelación",avance:0,monto:0},{desc:"Capa aisladora",avance:0,monto:0},{desc:"Replanteo mampostería PB",avance:0,monto:0}
+  ]},
+  {num:5, etapa:"Mampostería PB 1,20 m", items:[
+    {desc:"Mampostería exterior PB",avance:0,monto:0},{desc:"Mampostería interior PB",avance:0,monto:0},{desc:"Mampostería PB a 1,20 m",avance:0,monto:0}
+  ]},
+  {num:6, etapa:"Mampostería PB / Columnas", items:[
+    {desc:"Mampostería PB hasta 2 m",avance:0,monto:0},{desc:"Llenado columnas PB 50%",avance:0,monto:0}
+  ]},
+  {num:7, etapa:"Mampostería PB / Columnas / Encadenados", items:[
+    {desc:"Mampostería PB 100%",avance:0,monto:0},{desc:"Columnas PB 100%",avance:0,monto:0},{desc:"Armado de encadenados PB",avance:0,monto:0}
+  ]},
+  {num:8, etapa:"Losa entrepiso - Armado", items:[
+    {desc:"Puntalamiento",avance:0,monto:0},{desc:"Encofrado",avance:0,monto:0},{desc:"Armado de hierro",avance:0,monto:0},{desc:"Pases de instalaciones",avance:0,monto:0}
+  ]},
+  {num:9, etapa:"Losa entrepiso - Llenado", items:[
+    {desc:"Llenado de losa",avance:0,monto:0},{desc:"Nivelación",avance:0,monto:0},{desc:"Curado / desencofrado",avance:0,monto:0}
+  ]},
+  {num:10, etapa:"Planta alta - Replanteo / Mampostería", items:[
+    {desc:"Replanteo PA",avance:0,monto:0},{desc:"Arranque columnas PA",avance:0,monto:0},{desc:"Mampostería PA a 1,20 m",avance:0,monto:0}
+  ]},
+  {num:11, etapa:"Mampostería PA / Columnas", items:[
+    {desc:"Mampostería PA hasta 2 m",avance:0,monto:0},{desc:"Columnas PA 50%",avance:0,monto:0}
+  ]},
+  {num:12, etapa:"Mampostería PA / Columnas", items:[
+    {desc:"Mampostería PA 100%",avance:0,monto:0},{desc:"Columnas PA 100%",avance:0,monto:0}
+  ]},
+  {num:13, etapa:"Encadenados PA", items:[
+    {desc:"Armado de encadenados PA",avance:0,monto:0},{desc:"Llenado de encadenados PA",avance:0,monto:0},{desc:"Dinteles",avance:0,monto:0}
+  ]},
+  {num:14, etapa:"Escalera", items:[
+    {desc:"Armado de hierro",avance:0,monto:0},{desc:"Encofrado",avance:0,monto:0},{desc:"Llenado de escalera",avance:0,monto:0},{desc:"Desencofrado",avance:0,monto:0}
+  ]},
+  {num:15, etapa:"Losa techo - Armado", items:[
+    {desc:"Puntalamiento",avance:0,monto:0},{desc:"Encofrado",avance:0,monto:0},{desc:"Armado de hierro",avance:0,monto:0},{desc:"Pases de instalaciones",avance:0,monto:0}
+  ]},
+  {num:16, etapa:"Losa techo - Llenado", items:[
+    {desc:"Llenado de losa",avance:0,monto:0},{desc:"Nivelación",avance:0,monto:0},{desc:"Curado / desencofrado",avance:0,monto:0}
+  ]},
+  {num:17, etapa:"Tanques / Parapetos", items:[
+    {desc:"Base y sector tanques",avance:0,monto:0},{desc:"Parapetos",avance:0,monto:0},{desc:"Terminaciones de mampostería de azotea",avance:0,monto:0}
+  ]},
+  {num:18, etapa:"Techo / Pendientes / Impermeabilización", items:[
+    {desc:"Carga",avance:0,monto:0},{desc:"Formación de pendientes",avance:0,monto:0},{desc:"Lechinado",avance:0,monto:0},{desc:"Impermeabilización",avance:0,monto:0}
+  ]},
+  {num:19, etapa:"Revoque exterior PB", items:[
+    {desc:"Revoque PB 50%",avance:0,monto:0},{desc:"Revoque PB 100%",avance:0,monto:0},{desc:"Fretachado PB",avance:0,monto:0}
+  ]},
+  {num:20, etapa:"Revoque exterior PA / Frente", items:[
+    {desc:"Revoque PA",avance:0,monto:0},{desc:"Fretachado PA",avance:0,monto:0},{desc:"Frente",avance:0,monto:0}
+  ]},
+  {num:21, etapa:"Revoque interior PB", items:[
+    {desc:"Revoque PB 50%",avance:0,monto:0},{desc:"Nichos / placares PB",avance:0,monto:0}
+  ]},
+  {num:22, etapa:"Revoque interior PB / Premarcos", items:[
+    {desc:"Revoque PB 100%",avance:0,monto:0},{desc:"Colocación premarcos PB",avance:0,monto:0}
+  ]},
+  {num:23, etapa:"Revoque interior PA", items:[
+    {desc:"Revoque PA 50%",avance:0,monto:0},{desc:"Nichos placares dormitorios",avance:0,monto:0}
+  ]},
+  {num:24, etapa:"Revoque interior PA / Premarcos", items:[
+    {desc:"Revoque PA 100%",avance:0,monto:0},{desc:"Colocación premarcos PA",avance:0,monto:0}
+  ]},
+  {num:25, etapa:"Medianeras / Asador", items:[
+    {desc:"Excavación medianeras",avance:0,monto:0},{desc:"Fundaciones medianeras",avance:0,monto:0},{desc:"Mampostería medianeras",avance:0,monto:0},{desc:"Tapa medianeras",avance:0,monto:0},{desc:"Asador",avance:0,monto:0}
+  ]},
+  {num:26, etapa:"Contrapiso / Carpetas PB", items:[
+    {desc:"Contrapisos interiores PB",avance:0,monto:0},{desc:"Carpetas PB",avance:0,monto:0},{desc:"Contrapiso galería",avance:0,monto:0}
+  ]},
+  {num:27, etapa:"Carpetas PA / Escalera", items:[
+    {desc:"Carpetas PA",avance:0,monto:0},{desc:"Terminación gruesa escalera",avance:0,monto:0},{desc:"Carpetas baños PA",avance:0,monto:0}
+  ]},
+  {num:28, etapa:"Baños / Impermeabilización", items:[
+    {desc:"Impermeabilización baño 1",avance:0,monto:0},{desc:"Impermeabilización baño 2",avance:0,monto:0},{desc:"Impermeabilización baño 3",avance:0,monto:0},{desc:"Pruebas de estanqueidad",avance:0,monto:0}
+  ]},
+  {num:29, etapa:"Yeso PB", items:[
+    {desc:"Yeso dormitorios / ambientes PB",avance:0,monto:0},{desc:"Yeso circulaciones PB",avance:0,monto:0},{desc:"Detalles PB",avance:0,monto:0}
+  ]},
+  {num:30, etapa:"Yeso PA", items:[
+    {desc:"Yeso dormitorios PA",avance:0,monto:0},{desc:"Yeso circulaciones PA",avance:0,monto:0},{desc:"Terminación yeso general",avance:0,monto:0}
+  ]},
+  {num:31, etapa:"Pisos PB", items:[
+    {desc:"Pisos PB",avance:0,monto:0},{desc:"Piso cocina",avance:0,monto:0},{desc:"Piso baño PB",avance:0,monto:0}
+  ]},
+  {num:32, etapa:"Pisos PA / Escalera", items:[
+    {desc:"Pisos dormitorios PA",avance:0,monto:0},{desc:"Pisos baños PA",avance:0,monto:0},{desc:"Revestimiento escalera",avance:0,monto:0}
+  ]},
+  {num:33, etapa:"Revestimientos", items:[
+    {desc:"Revestimiento baño 1",avance:0,monto:0},{desc:"Revestimiento baño 2",avance:0,monto:0},{desc:"Revestimiento baño 3",avance:0,monto:0},{desc:"Revestimiento cocina",avance:0,monto:0}
+  ]},
+  {num:34, etapa:"Zócalos / Frente / Exteriores", items:[
+    {desc:"Zócalos",avance:0,monto:0},{desc:"Banquinas",avance:0,monto:0},{desc:"Huellas ingreso",avance:0,monto:0},{desc:"Perimetrales",avance:0,monto:0},{desc:"Pilar / frente",avance:0,monto:0}
+  ]},
+  {num:35, etapa:"Revisión final / Entrega / Limpieza", items:[
+    {desc:"Repaso general",avance:0,monto:0},{desc:"Correcciones",avance:0,monto:0},{desc:"Limpieza final",avance:0,monto:0},{desc:"Conforme de obra",avance:0,monto:0}
+  ]}
+];
+
+function getTipoPlantas(st=state, meta=(typeof currentObra==='function'?currentObra():null)){
+  return Number(st?.tipoPlantas || meta?.tipoPlantas || 1) === 2 ? 2 : 1;
+}
+function getBaseSemanas(st=state, meta=(typeof currentObra==='function'?currentObra():null)){
+  return getTipoPlantas(st, meta) === 2 ? SEMANAS_DOS_PLANTAS : SEMANAS;
+}
+
 const OBRA_ACORDADA_DEFAULT = 38000000;
 const ITEMS_CQ_DEFAULT = [
   { id:'elec', concepto:'Electricidad', monto:3000000 },
@@ -3452,14 +3644,18 @@ const DEFAULT_OBRAS = [
 ];
 function cloneDefaultCQ(){ return ITEMS_CQ_DEFAULT.map(x=>({...x})); }
 function createDefaultState(meta={}) {
-  const s = { items:{}, pagosFuera:[], acuerdo:OBRA_ACORDADA_DEFAULT, acuerdoComentario:'', itemsCQ:cloneDefaultCQ(), constructor:meta.constructor||'Constructor', obraNum:meta.obraNum||'', montos:{}, customTasks:{}, taskOverrides:{}, customWeeks:[], weekOverrides:{}, hiddenWeeks:[] };
-  SEMANAS.forEach(sem => (sem.items||[]).forEach((it,i) => { s.items[`${sem.num}-${i}`] = it.avance || 0; }));
+  const tipoPlantas = Number(meta.tipoPlantas) === 2 ? 2 : 1;
+  const s = { items:{}, pagosFuera:[], acuerdo:OBRA_ACORDADA_DEFAULT, acuerdoComentario:'', itemsCQ:cloneDefaultCQ(), constructor:meta.constructor||'Constructor', obraNum:meta.obraNum||'', tipoPlantas, montos:{}, customTasks:{}, taskOverrides:{}, customWeeks:[], weekOverrides:{}, hiddenWeeks:[] };
+  const baseSemanas = tipoPlantas === 2 ? SEMANAS_DOS_PLANTAS : SEMANAS;
+  baseSemanas.forEach(sem => (sem.items||[]).forEach((it,i) => { s.items[`${sem.num}-${i}`] = it.avance || 0; }));
   return s;
 }
 function normalizeState(s, meta={}) {
   s = s && typeof s === 'object' ? s : createDefaultState(meta);
+  if(!s.tipoPlantas) s.tipoPlantas = Number(meta.tipoPlantas) === 2 ? 2 : 1;
   if(!s.items) s.items = {};
-  SEMANAS.forEach(sem => (sem.items||[]).forEach((it,i) => { const k=`${sem.num}-${i}`; if(s.items[k] == null) s.items[k] = it.avance || 0; }));
+  const baseSemanas = Number(s.tipoPlantas) === 2 ? SEMANAS_DOS_PLANTAS : SEMANAS;
+  baseSemanas.forEach(sem => (sem.items||[]).forEach((it,i) => { const k=`${sem.num}-${i}`; if(s.items[k] == null) s.items[k] = it.avance || 0; }));
   if(!s.pagosFuera) s.pagosFuera = [];
   if(!s.constructor) s.constructor = meta.constructor || 'Constructor';
   if(!s.obraNum) s.obraNum = meta.obraNum || '';
@@ -3505,6 +3701,9 @@ obrasConfig.forEach((o,idx)=>{
   estadosObras[o.id] = normalizeState(saved, o);
 });
 let state = estadosObras[curObraId];
+// Etiqueta las referencias iniciales y prepara la obra de Cristian como primer modelo de 2 plantas.
+ensureProjectTypeTemplates(false);
+state = estadosObras[curObraId] || state;
 async function asegurarBanquinasInterioresNelson(){
   const afectadas = obrasConfig.filter(o=>{
     const ref=String(o.obraNum||o.label||'').toLowerCase()
@@ -5591,6 +5790,8 @@ async function initApp() {
         renderObraSwitch(); renderKPIs(); renderSemanas();
       }
       await Promise.all(obrasConfig.map((o,i)=> i===currentIdx ? Promise.resolve() : readOneObra(o,i)));
+      await ensureProjectTypeTemplates(true);
+      state = estadosObras[curObraId] || normalizeState(null,currentObra());
       markSaved();
     } catch(e) {
       if(String(e && e.message || '').includes('restauración local')) { console.info(e.message); markSaved(); }
@@ -5661,6 +5862,7 @@ setTimeout(() => {
       <div class="field"><label>Constructor</label><input type="text" id="eo-constructor" placeholder="Nombre del constructor"></div>
       <div class="field"><label>Asignar a constructor</label><select id="eo-constructor-id"></select></div>
       <div class="field"><label>Número de obra</label><input type="text" id="eo-num" placeholder="Ej: 2/99"></div>
+      <div class="field" id="eo-tipo-wrap" style="display:none"><label>Tipo de proyecto</label><select id="eo-tipo" onchange="updatePlantTemplateHint(true)"><option value="1">1 planta</option><option value="2">2 plantas</option></select><div class="hint" id="eo-template-hint" style="margin-top:6px;padding:7px 9px"></div></div>
       <div class="field"><label>Monto total acordado ($)</label><input type="number" id="eo-acuerdo" min="0" step="100000" placeholder="38000000"></div>
       <div class="field"><label>Color del botón</label><input type="color" id="eo-color" value="#E8A838"></div>
     </div>
