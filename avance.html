@@ -3127,7 +3127,74 @@ function editTarea(snum, idx) {
   renderKPIs();
   if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
 }
-function editMonto(snum, idx) { editTarea(snum, idx); }
+function parseMontoFlexible(val) {
+  let s = String(val == null ? '' : val).trim().replace(/\s/g,'').replace(/\$/g,'');
+  if (!s) return NaN;
+  // Admite 1500000, 1.500.000, 1,500,000 y decimales simples.
+  if (s.includes(',') && s.includes('.')) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g,'').replace(',', '.');
+    else s = s.replace(/,/g,'');
+  } else if ((s.match(/\./g)||[]).length > 1) {
+    s = s.replace(/\./g,'');
+  } else if ((s.match(/,/g)||[]).length > 1) {
+    s = s.replace(/,/g,'');
+  } else if (s.includes(',')) {
+    const p=s.split(',');
+    s = (p[1] && p[1].length===3) ? p.join('') : p[0]+'.'+(p[1]||'');
+  } else if (s.includes('.')) {
+    const p=s.split('.');
+    if (p[1] && p[1].length===3) s=p.join('');
+  }
+  return Number(s.replace(/[^0-9.-]/g,''));
+}
+function editMonto(snum, idx) {
+  const it = getTask(snum, idx);
+  if (!it) return;
+  const val = prompt('Importe de la tarea "' + (it.desc || '') + '":', Math.round(getMonto(snum, idx)).toString());
+  if (val === null) return;
+  const monto = parseMontoFlexible(val);
+  if (!Number.isFinite(monto) || monto < 0) { alert('Ingresá un importe válido.'); return; }
+  if (!state.montos) state.montos = {};
+  state.montos[snum + '-m-' + idx] = Math.round(monto);
+  recalcSemanaTotal(snum);
+  persist();
+  renderSemanas();
+  setTimeout(() => { const el=document.getElementById('si-'+snum); if(el && !el.classList.contains('open')) toggleSemana(snum); }, 30);
+  renderKPIs();
+  if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
+}
+function aplicarValorSemana(snum) {
+  const items = getItems(snum);
+  if (!items.length) { alert('Esta semana no tiene tareas para distribuir.'); return; }
+  const input = document.getElementById('week-total-' + snum);
+  if (!input) return;
+  const parsed = parseMontoFlexible(input.value);
+  if (!Number.isFinite(parsed) || parsed < 0) { alert('Ingresá un valor de semana válido.'); input.focus(); return; }
+
+  // Se trabaja en pesos enteros para que la suma visible de las tareas coincida exactamente con la semana.
+  const total = Math.round(parsed);
+  const hayCertificado = items.some((it,i) => getLockedAv(snum,i) > 0);
+  const aviso = '¿Dividir ' + fmt(total) + ' entre ' + items.length + ' tarea' + (items.length===1?'':'s') + '?\n\nEsto reemplazará los importes actuales de las tareas de esta semana.' + (hayCertificado ? '\n\n⚠ Esta semana tiene avance certificado.' : '');
+  if (!confirm(aviso)) return;
+  const base = Math.floor(total / items.length);
+  let resto = total - (base * items.length);
+  if (!state.montos) state.montos = {};
+  items.forEach((it, i) => {
+    state.montos[snum + '-m-' + i] = base + (i < resto ? 1 : 0);
+  });
+  recalcSemanaTotal(snum);
+  persist();
+  renderSemanas();
+  setTimeout(() => { const el=document.getElementById('si-'+snum); if(el && !el.classList.contains('open')) toggleSemana(snum); }, 30);
+  renderKPIs();
+  if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
+}
+function onWeekTotalKeydown(ev, snum){
+  if(ev.key==='Enter'){
+    ev.preventDefault();
+    aplicarValorSemana(snum);
+  }
+}
 function addTarea(snum) {
   const desc = prompt('Nombre de la nueva tarea/rubro:\nEj: Pintura a cargo del constructor');
   if (desc === null) return;
@@ -4767,6 +4834,16 @@ function renderSemanas(){
       </div>
       <div class="semana-progbar"><div class="semana-progfill ${pctSem>=0.99?'completa':''}" style="width:${(pctSem*100).toFixed(0)}%"></div></div>
       <div class="semana-items" id="si-${s.num}">
+        <div class="week-value-row" onclick="event.stopPropagation()">
+          <div class="week-value-copy">
+            <span class="week-value-label">Valor de la semana</span>
+            <span class="week-value-help">Se divide por igual entre ${getItems(s.num).length} tarea${getItems(s.num).length===1?'':'s'}. Luego podés modificar cada importe.</span>
+          </div>
+          <div class="week-value-controls">
+            <div class="week-value-input-wrap"><span>$</span><input id="week-total-${s.num}" class="week-value-input" type="number" inputmode="numeric" min="0" step="1" value="${Math.round(totalMonto)}" onfocus="this.select()" onkeydown="onWeekTotalKeydown(event,${s.num})"></div>
+            <button type="button" class="week-value-apply" onclick="event.stopPropagation();aplicarValorSemana(${s.num})">Dividir en tareas</button>
+          </div>
+        </div>
         ${getItems(s.num).map((it,i)=>{
           const av=getAv(s.num,i); const done=av>=1;
           const locked=getLockedAv(s.num,i);
@@ -6240,7 +6317,7 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
   "use strict";
   var MODULO="Avances";
   var QUEUE_KEY="cq_audit_queue_v1_"+MODULO.replace(/\s+/g,"_").toLowerCase();
-  var WRAPS=[{"fn": "editSemana", "accion": "modificar", "detalle": "Modificó número/orden o título de una semana"}, {"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
+  var WRAPS=[{"fn": "aplicarValorSemana", "accion": "modificar", "detalle": "Distribuyó un valor total entre las tareas de una semana"}, {"fn": "editSemana", "accion": "modificar", "detalle": "Modificó número/orden o título de una semana"}, {"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
   WRAPS=WRAPS.filter(function(x){return x.accion!=="agregar";});
   var flushing=false;
 
@@ -9803,6 +9880,32 @@ body.cq-constructor-mode #tab-reporte{
   }
   #view-constructor .nueva-obra-premium{min-height:44px!important;height:44px!important;font-size:14px!important;padding:5px 16px 5px 7px!important;}
   #view-constructor .nueva-obra-plus{width:31px!important;height:31px!important;flex-basis:31px!important;font-size:20px!important;}
+}
+</style>
+
+
+<style id="cq-week-value-style">
+.week-value-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 12px;margin:0;border-bottom:1px solid #E8EFE9;background:#F8FBF8;
+}
+.week-value-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.week-value-label{font-size:11px;font-weight:900;color:#163D35;letter-spacing:.01em}
+.week-value-help{font-size:9px;font-weight:600;color:#789184;line-height:1.25}
+.week-value-controls{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex:0 0 auto}
+.week-value-input-wrap{display:flex;align-items:center;gap:4px;height:34px;padding:0 8px;border:1px solid #CFE0D2;border-radius:8px;background:#fff;color:#527362;font-weight:900}
+.week-value-input{width:118px;border:0;outline:0;background:transparent;color:#163D35;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;text-align:right;padding:0}
+.week-value-input::-webkit-outer-spin-button,.week-value-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.week-value-input[type=number]{-moz-appearance:textfield}
+.week-value-apply{height:34px;border:0;border-radius:8px;padding:0 11px;background:#163D35;color:#fff;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap}
+.week-value-apply:active{transform:translateY(1px)}
+@media(max-width:700px){
+  .week-value-row{align-items:stretch;flex-direction:column;gap:7px;padding:8px}
+  .week-value-controls{width:100%;justify-content:stretch}
+  .week-value-input-wrap{flex:1;min-width:0}
+  .week-value-input{width:100%;min-width:0;font-size:11px}
+  .week-value-apply{flex:0 0 auto;padding:0 10px;font-size:9px}
+  .week-value-label{font-size:10px}.week-value-help{font-size:8px}
 }
 </style>
 
