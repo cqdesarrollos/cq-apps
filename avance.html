@@ -2620,6 +2620,16 @@ window.cqRevealInitialScreen=function(){
         <button class="btn-sm btn-danger-sm obra-icon-btn uncheck" onclick="marcarTodo(0)" title="Restaurar sin borrar certificados" aria-label="Restaurar sin borrar certificados">⊘</button>
       </span>
     </div>
+    <div class="all-weeks-value-bar" onclick="event.stopPropagation()">
+      <div class="all-weeks-value-copy">
+        <span class="all-weeks-value-label">Valor para todas las semanas</span>
+        <span class="all-weeks-value-help">Asigna el mismo total a cada semana y lo divide por igual entre sus tareas. Después podés modificar cualquier tarea a mano.</span>
+      </div>
+      <div class="all-weeks-value-controls">
+        <div class="all-weeks-value-input-wrap"><span>$</span><input id="all-weeks-total" class="all-weeks-value-input" type="number" inputmode="numeric" min="0" step="1" placeholder="1350000" onfocus="this.select()" onkeydown="onAllWeeksTotalKeydown(event)"></div>
+        <button type="button" class="all-weeks-value-apply" onclick="event.stopPropagation();aplicarValorTodasSemanas()">Aplicar a todas</button>
+      </div>
+    </div>
     <div id="semanas-container"></div>
   </div>
 </div>
@@ -3194,6 +3204,33 @@ function onWeekTotalKeydown(ev, snum){
     ev.preventDefault();
     aplicarValorSemana(snum);
   }
+}
+function aplicarValorTodasSemanas(){
+  const input=document.getElementById('all-weeks-total');
+  if(!input) return;
+  const parsed=parseMontoFlexible(input.value);
+  if(!Number.isFinite(parsed) || parsed < 0){ alert('Ingresá un valor válido para todas las semanas.'); input.focus(); return; }
+  const total=Math.round(parsed);
+  const semanas=getSemanas().filter(s=>getItems(s.num).length>0);
+  if(!semanas.length){ alert('No hay semanas con tareas para distribuir.'); return; }
+  const hayCertificado=semanas.some(s=>getItems(s.num).some((it,i)=>getLockedAv(s.num,i)>0));
+  const aviso='¿Asignar ' + fmt(total) + ' a cada una de las ' + semanas.length + ' semanas activas?\n\nEn cada semana el importe se dividirá por igual entre sus tareas. Esto reemplazará los importes actuales de todas las tareas.' + (hayCertificado ? '\n\n⚠ Hay semanas con avance certificado.' : '');
+  if(!confirm(aviso)) return;
+  if(!state.montos) state.montos={};
+  semanas.forEach(sem=>{
+    const items=getItems(sem.num);
+    const base=Math.floor(total/items.length);
+    let resto=total-(base*items.length);
+    items.forEach((it,i)=>{ state.montos[sem.num+'-m-'+i]=base+(i<resto?1:0); });
+    recalcSemanaTotal(sem.num);
+  });
+  persist();
+  renderSemanas();
+  renderKPIs();
+  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
+}
+function onAllWeeksTotalKeydown(ev){
+  if(ev.key==='Enter'){ ev.preventDefault(); aplicarValorTodasSemanas(); }
 }
 function addTarea(snum) {
   const desc = prompt('Nombre de la nueva tarea/rubro:\nEj: Pintura a cargo del constructor');
@@ -3777,20 +3814,8 @@ const SEMANAS = [
   {num:18, etapa:"Baños / Impermeabilización", items:[
     {desc:"Impermeabilización baño 1",avance:0,monto:0},{desc:"Impermeabilización baño 2",avance:0,monto:0},{desc:"Carpetas con pendiente en duchas",avance:0,monto:0},{desc:"Pruebas de estanqueidad",avance:0,monto:0}
   ]},
-  {num:19, etapa:"Yeso - Primera etapa", items:[
-    {desc:"Yeso dormitorios",avance:0,monto:0},{desc:"Yeso estar / cocina",avance:0,monto:0},{desc:"Yeso circulaciones",avance:0,monto:0}
-  ]},
-  {num:20, etapa:"Yeso - Terminación", items:[
-    {desc:"Terminación yeso general",avance:0,monto:0},{desc:"Detalles de encuentros",avance:0,monto:0},{desc:"Repaso de yeso",avance:0,monto:0}
-  ]},
-  {num:21, etapa:"Pisos interiores", items:[
-    {desc:"Pisos dormitorios",avance:0,monto:0},{desc:"Pisos estar / cocina",avance:0,monto:0},{desc:"Pisos baños",avance:0,monto:0}
-  ]},
-  {num:22, etapa:"Revestimientos", items:[
-    {desc:"Revestimiento baño 1",avance:0,monto:0},{desc:"Revestimiento baño 2",avance:0,monto:0},{desc:"Revestimiento cocina",avance:0,monto:0}
-  ]},
-  {num:23, etapa:"Zócalos / Banquinas", items:[
-    {desc:"Zócalos interiores",avance:0,monto:0},{desc:"Banquinas interiores",avance:0,monto:0},{desc:"Terminaciones de pisos y encuentros",avance:0,monto:0}
+  {num:23, etapa:"Banquinas", items:[
+    {desc:"Banquinas interiores",avance:0,monto:0}
   ]},
   {num:24, etapa:"Frente / Ingreso / Exteriores", items:[
     {desc:"Contrapiso ingreso",avance:0,monto:0},{desc:"Huellas ingreso de autos",avance:0,monto:0},{desc:"Perimetrales",avance:0,monto:0},{desc:"Pilar / frente",avance:0,monto:0}
@@ -3897,23 +3922,8 @@ const SEMANAS_DOS_PLANTAS = [
   {num:28, etapa:"Baños / Impermeabilización", items:[
     {desc:"Impermeabilización baño 1",avance:0,monto:0},{desc:"Impermeabilización baño 2",avance:0,monto:0},{desc:"Impermeabilización baño 3",avance:0,monto:0},{desc:"Pruebas de estanqueidad",avance:0,monto:0}
   ]},
-  {num:29, etapa:"Yeso PB", items:[
-    {desc:"Yeso dormitorios / ambientes PB",avance:0,monto:0},{desc:"Yeso circulaciones PB",avance:0,monto:0},{desc:"Detalles PB",avance:0,monto:0}
-  ]},
-  {num:30, etapa:"Yeso PA", items:[
-    {desc:"Yeso dormitorios PA",avance:0,monto:0},{desc:"Yeso circulaciones PA",avance:0,monto:0},{desc:"Terminación yeso general",avance:0,monto:0}
-  ]},
-  {num:31, etapa:"Pisos PB", items:[
-    {desc:"Pisos PB",avance:0,monto:0},{desc:"Piso cocina",avance:0,monto:0},{desc:"Piso baño PB",avance:0,monto:0}
-  ]},
-  {num:32, etapa:"Pisos PA / Escalera", items:[
-    {desc:"Pisos dormitorios PA",avance:0,monto:0},{desc:"Pisos baños PA",avance:0,monto:0},{desc:"Revestimiento escalera",avance:0,monto:0}
-  ]},
-  {num:33, etapa:"Revestimientos", items:[
-    {desc:"Revestimiento baño 1",avance:0,monto:0},{desc:"Revestimiento baño 2",avance:0,monto:0},{desc:"Revestimiento baño 3",avance:0,monto:0},{desc:"Revestimiento cocina",avance:0,monto:0}
-  ]},
-  {num:34, etapa:"Zócalos / Frente / Exteriores", items:[
-    {desc:"Zócalos",avance:0,monto:0},{desc:"Banquinas",avance:0,monto:0},{desc:"Huellas ingreso",avance:0,monto:0},{desc:"Perimetrales",avance:0,monto:0},{desc:"Pilar / frente",avance:0,monto:0}
+  {num:34, etapa:"Frente / Exteriores", items:[
+    {desc:"Banquinas",avance:0,monto:0},{desc:"Huellas ingreso",avance:0,monto:0},{desc:"Perimetrales",avance:0,monto:0},{desc:"Pilar / frente",avance:0,monto:0}
   ]},
   {num:35, etapa:"Revisión final / Entrega / Limpieza", items:[
     {desc:"Repaso general",avance:0,monto:0},{desc:"Correcciones",avance:0,monto:0},{desc:"Limpieza final",avance:0,monto:0},{desc:"Conforme de obra",avance:0,monto:0}
@@ -4811,7 +4821,13 @@ function semanaTienePendiente(snum){
 
 function renderSemanas(){
   const cont=document.getElementById('semanas-container');
-  cont.innerHTML=getSemanas().map(s=>{
+  const semanasActuales=getSemanas();
+  const globalInput=document.getElementById('all-weeks-total');
+  if(globalInput){
+    const totales=semanasActuales.filter(s=>getItems(s.num).length>0).map(s=>Math.round(calcSemana(s).totalMonto));
+    globalInput.value=(totales.length && totales.every(v=>v===totales[0])) ? String(totales[0]) : '';
+  }
+  cont.innerHTML=semanasActuales.map(s=>{
     const {totalMonto,devengado,pctSem}=calcSemana(s);
     const st=semStatus(pctSem);
     const hasPendingCert=semanaTienePendiente(s.num);
@@ -9885,6 +9901,26 @@ body.cq-constructor-mode #tab-reporte{
 
 
 <style id="cq-week-value-style">
+
+.all-weeks-value-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 12px;margin:0 0 10px;border:1px solid #DDE8DE;border-radius:10px;background:#F7FAF7;
+}
+.all-weeks-value-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.all-weeks-value-label{font-size:11px;font-weight:900;color:#163D35}
+.all-weeks-value-help{font-size:8px;font-weight:700;color:#7A9E82;line-height:1.25}
+.all-weeks-value-controls{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.all-weeks-value-input-wrap{display:flex;align-items:center;gap:4px;height:32px;padding:0 7px;border:1px solid #CFE0D2;border-radius:8px;background:#fff;color:#2E7D5E;font-weight:900}
+.all-weeks-value-input{width:115px;border:0;outline:0;background:transparent;font-size:12px;font-weight:900;color:#163D35;text-align:right}
+.all-weeks-value-apply{height:32px;border:0;border-radius:8px;padding:0 11px;background:#2E7D5E;color:#fff;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap}
+@media(max-width:700px){
+  .all-weeks-value-bar{align-items:stretch;flex-direction:column;gap:7px;padding:8px}
+  .all-weeks-value-controls{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .all-weeks-value-input-wrap{min-width:0}
+  .all-weeks-value-input{width:100%;min-width:0;font-size:16px}
+  .all-weeks-value-apply{height:36px;padding:0 10px}
+}
+
 .week-value-row{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px 12px;margin:0;border-bottom:1px solid #E8EFE9;background:#F8FBF8;
