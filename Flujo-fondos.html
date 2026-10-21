@@ -8648,70 +8648,84 @@ document.addEventListener('DOMContentLoaded',function(){
     body+=`<tr class="sheet-total-row"><td class="sheet-label-cell">Saldo acumulado</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.balance[mi]))}" readonly></div></td>`).join('')}</tr>`;
     tbody.innerHTML=body;
 
+    const modal=document.getElementById('flowSheetModal');
+    const wrap=document.querySelector('#flowSheetModal .flow-sheet-wrap');
+    let activeDragPointer=null;
+
+    function beginRangeDrag(key,pointerId){
+      cqSheetState.draggingRange=true;
+      activeDragPointer=pointerId;
+      cqSheetState.rangeStart=key||cqSheetState.selected;
+      cqSheetState.rangeEnd=key||cqSheetState.selected;
+      updateSheetSelectionVisual();
+      if(wrap)wrap.classList.add('range-dragging');
+    }
+    function updateRangeFromPoint(clientX,clientY){
+      const prevPE=modal ? modal.style.pointerEvents : '';
+      if(modal)modal.style.pointerEvents='auto';
+      const el=document.elementFromPoint(clientX,clientY);
+      if(modal)modal.style.pointerEvents=prevPE;
+      const td=el?.closest?.('[data-sheet-ui-cell]');
+      if(td)setRangeEndActualKey(td.dataset.sheetUiCell);
+    }
+    function finishRangeDrag(){
+      if(!cqSheetState.draggingRange)return;
+      cqSheetState.draggingRange=false;
+      activeDragPointer=null;
+      if(wrap)wrap.classList.remove('range-dragging');
+      updateSheetSelectionVisual();
+    }
+
+    if(!window.__cqFlowSheetDocDragBound){
+      window.__cqFlowSheetDocDragBound=true;
+      document.addEventListener('pointermove',e=>{
+        if(!cqSheetState.draggingRange)return;
+        if(activeDragPointer!==null && e.pointerId!==activeDragPointer)return;
+        updateRangeFromPoint(e.clientX,e.clientY);
+      },{passive:true});
+      document.addEventListener('pointerup',e=>{
+        if(activeDragPointer!==null && e.pointerId!==activeDragPointer)return;
+        finishRangeDrag();
+      },{passive:true});
+      document.addEventListener('pointercancel',e=>{
+        if(activeDragPointer!==null && e.pointerId!==activeDragPointer)return;
+        finishRangeDrag();
+      },{passive:true});
+    }
+
     tbody.querySelectorAll('[data-sheet-ui-cell]').forEach(td=>{
       td.addEventListener('click',e=>{
         if(cqSheetState.draggingRange)return;
         const key=td.dataset.sheetUiCell;
         setSelectedActualKey(key);
       });
+      td.addEventListener('pointerdown',e=>{
+        const key=td.dataset.sheetUiCell;
+        const rect=td.getBoundingClientRect();
+        const nearCorner=(e.clientX>=rect.right-20 && e.clientY>=rect.bottom-20);
+        if(key===cqSheetState.selected && nearCorner){
+          e.preventDefault();
+          e.stopPropagation();
+          beginRangeDrag(key,e.pointerId);
+        }
+      });
     });
-
-    document.getElementById('flowSheetRangeHandle')?.remove();
-    const handle=document.createElement('div');
-    handle.id='flowSheetRangeHandle';
-    handle.className='sheet-range-handle';
-    document.getElementById('flowSheetModal')?.appendChild(handle);
-
-    function placeRangeHandle(){
-      const key=cqSheetState.rangeEnd||cqSheetState.selected;
-      const td=key?tbody.querySelector(`[data-sheet-ui-cell="${CSS.escape(key)}"]`):null;
-      const modal=document.getElementById('flowSheetModal');
-      if(!td||!modal||!modal.classList.contains('open')){handle.style.display='none';return;}
-      const r=td.getBoundingClientRect();
-      handle.style.display='block';
-      handle.style.left=(r.right-10)+'px';
-      handle.style.top=(r.bottom-10)+'px';
-    }
-    requestAnimationFrame(placeRangeHandle);
-    const wrap=document.querySelector('#flowSheetModal .flow-sheet-wrap');
-    if(wrap && !wrap.__cqRangeScrollBound){
-      wrap.__cqRangeScrollBound=true;
-      wrap.addEventListener('scroll',()=>requestAnimationFrame(placeRangeHandle),{passive:true});
-    }
-
-    let rangePointerId=null;
-    handle.onpointerdown=e=>{
-      e.preventDefault(); e.stopPropagation();
-      cqSheetState.draggingRange=true;
-      rangePointerId=e.pointerId;
-      cqSheetState.rangeStart=cqSheetState.rangeStart||cqSheetState.selected;
-      cqSheetState.rangeEnd=cqSheetState.rangeEnd||cqSheetState.selected;
-      try{handle.setPointerCapture(e.pointerId)}catch(_e){}
-    };
-    handle.onpointermove=e=>{
-      if(!cqSheetState.draggingRange || e.pointerId!==rangePointerId)return;
-      e.preventDefault();
-      handle.style.pointerEvents='none';
-      const el=document.elementFromPoint(e.clientX,e.clientY);
-      handle.style.pointerEvents='';
-      const td=el?.closest?.('[data-sheet-ui-cell]');
-      if(td){setRangeEndActualKey(td.dataset.sheetUiCell);requestAnimationFrame(placeRangeHandle);}
-    };
-    const finishRange=e=>{
-      if(!cqSheetState.draggingRange)return;
-      cqSheetState.draggingRange=false;
-      try{handle.releasePointerCapture(rangePointerId)}catch(_e){}
-      rangePointerId=null;
-      updateSheetSelectionVisual();
-      requestAnimationFrame(placeRangeHandle);
-      setTimeout(()=>{cqSheetState.draggingRange=false},0);
-    };
-    handle.onpointerup=finishRange;
-    handle.onpointercancel=finishRange;
 
     tbody.querySelectorAll('[data-sheet-edit]').forEach(inp=>{
       inp.addEventListener('focus',()=>{ if(!cqSheetState.draggingRange){setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select());} });
       inp.addEventListener('click',e=>{ e.stopPropagation(); if(!cqSheetState.draggingRange){setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select());} });
+      inp.addEventListener('pointerdown',e=>{
+        const td=inp.closest('[data-sheet-ui-cell]');
+        if(!td)return;
+        const key=td.dataset.sheetUiCell;
+        const rect=td.getBoundingClientRect();
+        const nearCorner=(e.clientX>=rect.right-20 && e.clientY>=rect.bottom-20);
+        if(key===cqSheetState.selected && nearCorner){
+          e.preventDefault();
+          e.stopPropagation();
+          beginRangeDrag(key,e.pointerId);
+        }
+      });
       inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); applySelectedCellValue(inp.value); } });
       inp.addEventListener('change',()=>applySelectedCellValue(inp.value));
       inp.addEventListener('blur',()=>{
@@ -9015,5 +9029,179 @@ document.addEventListener('DOMContentLoaded',function(){
   #flowPage .flow-entry-action{width:21px!important;height:21px!important;font-size:10px!important}
 }
 </style>
+
+
+<style id="cq-flow-ordering-and-sheet-drag-v5">
+/* Ordenar: sacar flechas de filas y pasar a config por categoría */
+.flow-cat-name-wrap{display:flex;align-items:center;gap:6px;min-width:0}
+.flow-cat-labels{min-width:0;flex:1}
+.flow-cat-config{width:24px;height:24px;border:1px solid #d8e3de;border-radius:8px;background:#fff;color:#5f746a;display:grid;place-items:center;cursor:pointer;font-size:13px;padding:0;flex:0 0 auto}
+.flow-cat-config:hover{background:#f3f7f5;border-color:#c6d6cf}
+@media(max-width:600px){.flow-cat-config{width:22px;height:22px;font-size:12px}}
+
+.flow-order-backdrop{position:fixed;inset:0;background:rgba(28,43,36,.26);display:none;align-items:center;justify-content:center;z-index:10060;padding:16px}
+.flow-order-backdrop.open{display:flex}
+.flow-order-panel{width:min(540px,100%);max-height:85vh;overflow:auto;background:#fff;border:1px solid #dce5e0;border-radius:16px;box-shadow:0 18px 42px rgba(16,29,24,.16)}
+.flow-order-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #e7eeea;background:#f7faf8}
+.flow-order-head strong{font-size:15px;color:#2f4e42}
+.flow-order-head span{display:block;font-size:11px;color:#72817b;margin-top:2px}
+.flow-order-close{width:34px;height:34px;border:1px solid #d7e2dd;border-radius:10px;background:#fff;color:#66766f;font-size:20px;cursor:pointer}
+.flow-order-list{padding:10px}
+.flow-order-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border:1px solid #e8efeb;border-radius:12px;background:#fff;margin-bottom:8px}
+.flow-order-row-name{font-size:13px;font-weight:700;color:#39594d;line-height:1.18}
+.flow-order-actions{display:flex;gap:6px}
+.flow-order-btn{width:34px;height:34px;border:1px solid #d9e3de;border-radius:10px;background:#fff;display:grid;place-items:center;color:#647771;cursor:pointer;font-size:14px}
+.flow-order-btn:hover{background:#f4f8f6}
+.flow-order-foot{display:flex;justify-content:flex-end;padding:0 12px 12px}
+.flow-order-done{padding:9px 14px;border:0;border-radius:12px;background:#356c57;color:#fff;font-weight:800;cursor:pointer}
+@media(max-width:600px){.flow-order-panel{width:100%}.flow-order-row{padding:8px}.flow-order-row-name{font-size:12px}.flow-order-btn{width:32px;height:32px}}
+
+/* Planilla: handle integrado a la celda, sin punto flotante */
+#flowSheetModal .sheet-range-handle{display:none!important}
+#flowSheetModal .flow-sheet-wrap.range-dragging{cursor:crosshair}
+#flowSheetModal .flow-sheet-table td.sheet-selected::after{
+  content:''!important;display:block!important;position:absolute!important;right:4px!important;bottom:4px!important;
+  width:12px!important;height:12px!important;border-radius:50%!important;background:#2ea56c!important;border:2px solid #fff!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.18)!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-range-selected::after{display:none!important}
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-table td.sheet-selected::after{width:11px!important;height:11px!important;right:3px!important;bottom:3px!important}
+}
+</style>
+<script id="cq-flow-ordering-and-sheet-drag-v5">
+(function(){
+  if(window.__cqFlowOrderV5)return;
+  window.__cqFlowOrderV5=true;
+
+  function ensureFlowOrderModal(){
+    if(document.getElementById('flowOrderModal'))return;
+    const wrap=document.createElement('div');
+    wrap.id='flowOrderModal';
+    wrap.className='flow-order-backdrop';
+    wrap.innerHTML=''
+      +'<div class="flow-order-panel" role="dialog" aria-modal="true">'
+      +  '<div class="flow-order-head"><div><strong id="flowOrderTitle">Ordenar</strong><span>Reordená los conceptos sin ocupar lugar en la vista principal.</span></div><button type="button" class="flow-order-close" id="flowOrderClose">×</button></div>'
+      +  '<div class="flow-order-list" id="flowOrderList"></div>'
+      +  '<div class="flow-order-foot"><button type="button" class="flow-order-done" id="flowOrderDone">Listo</button></div>'
+      +'</div>';
+    document.body.appendChild(wrap);
+    wrap.addEventListener('click',e=>{ if(e.target===wrap) closeFlowOrderModal(); });
+    document.getElementById('flowOrderClose').onclick=closeFlowOrderModal;
+    document.getElementById('flowOrderDone').onclick=closeFlowOrderModal;
+  }
+
+  let currentOrderType='works';
+  const FLOW_TITLES={works:'Obras', others:'Otros egresos', incomes:'Ingresos'};
+
+  function renderFlowOrderModal(){
+    ensureFlowOrderModal();
+    const title=document.getElementById('flowOrderTitle');
+    const list=document.getElementById('flowOrderList');
+    if(title)title.textContent='Ordenar · '+(FLOW_TITLES[currentOrderType]||'Conceptos');
+    const arr=flowState?.[currentOrderType]||[];
+    list.innerHTML=arr.length?arr.map((r,i)=>`<div class="flow-order-row"><div class="flow-order-row-name">${fesc(r.name||'Sin nombre')}</div><div class="flow-order-actions"><button type="button" class="flow-order-btn" data-order-move="${currentOrderType}:${i}:-1" title="Subir">↑</button><button type="button" class="flow-order-btn" data-order-move="${currentOrderType}:${i}:1" title="Bajar">↓</button></div></div>`).join(''):'<div class="flow-empty">Sin conceptos</div>';
+    list.querySelectorAll('[data-order-move]').forEach(btn=>btn.onclick=()=>{
+      const [type,idx,dir]=btn.dataset.orderMove.split(':');
+      const arr=flowState[type]||[]; const i=+idx, ni=i+(+dir);
+      if(ni<0||ni>=arr.length)return;
+      [arr[i],arr[ni]]=[arr[ni],arr[i]];
+      flowPersist();
+      renderFlowOrderModal();
+      if(typeof flowRender==='function')flowRender();
+      if(document.getElementById('flowSheetModal')?.classList.contains('open') && typeof cqFlowSheetRender==='function')cqFlowSheetRender();
+    });
+  }
+
+  window.openFlowOrderModal=function(type){
+    currentOrderType=type;
+    renderFlowOrderModal();
+    document.getElementById('flowOrderModal')?.classList.add('open');
+  };
+  window.closeFlowOrderModal=function(){ document.getElementById('flowOrderModal')?.classList.remove('open'); };
+
+  const prevFlowCatRows=window.flowCatRows;
+  window.flowCatRows=function(type,mi){
+    const rows=flowState[type]||[];
+    const html=rows.map((r,ri)=>{
+      if(Number.isInteger(r.hiddenFrom) && mi>=r.hiddenFrom)return '';
+      const input=`<input class="${type==='works'?'flow-work-value':''}" type="number" step="1" inputmode="decimal" data-flow-cell="${type}:${ri}:${mi}" value="${fnum(r.months[mi])||''}" placeholder="0">`;
+      const checked = type==='incomes' ? (Array.isArray(r.received)&&!!r.received[mi]) : (Array.isArray(r.checked)&&!!r.checked[mi]);
+      const valueCell=`<div class="flow-check-cell">${input}<button type="button" class="flow-check-btn ${checked?'checked':''}" data-flow-mark="${type}:${ri}:${mi}" title="${checked?'Marcado':'Marcar'}" aria-label="${checked?'Marcado':'Marcar'}"></button></div>`;
+      const editBtn=type==='works'?`<button type="button" class="flow-entry-action edit-work" data-work-ri="${ri}" title="Modificar obra">✎</button>`:type==='others'?`<button type="button" class="flow-entry-action edit-other" data-other-ri="${ri}" title="Modificar nombre">✎</button>`:`<button type="button" class="flow-entry-action edit-income" data-income-ri="${ri}" title="Modificar nombre">✎</button>`;
+      const delBtn=type==='works'?`<button type="button" class="flow-entry-action delete del-work-forward" data-work-ri="${ri}" data-work-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:type==='others'?`<button type="button" class="flow-entry-action delete del-other-forward" data-other-ri="${ri}" data-other-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:`<button type="button" class="flow-entry-action delete del-income-forward" data-income-ri="${ri}" data-income-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`;
+      return `<div class="flow-entry has-check ${type==='works'&&r.autoCost?'new-work':''} ${checked?'cell-checked':''}"><div class="flow-entry-name" title="${fesc(r.name)}">${fesc(r.name)}${type==='works'&&r.autoCost?'<span class="flow-new-tag">Nueva</span>':''}</div>${valueCell}<div class="flow-entry-actions">${editBtn}${delBtn}</div></div>`;
+    }).join('');
+    return html||'<div class="flow-empty">Sin conceptos</div>';
+  };
+
+  window.flowCat=function(type,title,sub,mi,total){
+    let key=mi+':'+type,open=flowOpenCats.has(key),tools='';
+    const configBtn=`<button type="button" class="flow-cat-config" data-flow-config="${type}" title="Ordenar ${title}">⚙</button>`;
+    if(type==='works')tools=`<div class="flow-cat-body-tools"><button type="button" class="flow-mini-btn add-work" data-work-month="${mi}">+ Obra</button><button type="button" class="flow-mini-btn new new-auto-work" data-work-month="${mi}">Nueva</button></div>`;
+    else if(type==='others')tools=`<div class="flow-cat-body-tools"><button type="button" class="flow-mini-btn add-other" data-other-month="${mi}">+ Egreso</button></div>`;
+    else if(type==='incomes')tools=`<div class="flow-cat-body-tools"><button type="button" class="flow-mini-btn add-income" data-income-month="${mi}">+ Ingreso</button></div>`;
+    return `<div class="flow-cat ${open?'open':''}"><div class="flow-cat-head" data-flow-cat="${key}"><div class="flow-cat-name-wrap"><div class="flow-cat-labels"><span class="flow-cat-name">${title}</span><span class="flow-cat-sub">${sub}</span></div>${configBtn}</div><span class="flow-cat-total">${fusd(total)}</span><span class="flow-cat-chev">⌄</span></div><div class="flow-cat-body">${tools}${flowCatRows(type,mi)}</div></div>`;
+  };
+
+  window.flowRenderPanels=function(){
+    ensureFlowOrderModal();
+    const c=flowCalc(),open=(flowOpenMonths[flowYear]||[]).filter(i=>flowState.months[i]);
+    const panels=document.getElementById('flowMonthPanels');
+    if(!panels)return;
+    panels.classList.toggle('multi-month',open.length>1);
+    panels.dataset.openMonths=String(open.length);
+    panels.innerHTML=open.length?open.map(mi=>`<section class="flow-month-panel"><div class="flow-month-title"><h2>${flowState.months[mi]}</h2><div class="flow-month-mini"><span>Egresos <b>${fusd(c.expenses[mi])}</b></span><span>Ingresos <b>${fusd(c.incomes[mi])}</b></span><span>Flujo neto <b class="${c.net[mi]>=0?'pos':'neg'}">${fusd(c.net[mi])}</b></span><span class="balance-chip">Saldo acumulado <b class="${c.balance[mi]>=0?'pos':'neg'}">${fusd(c.balance[mi])}</b></span></div></div>${flowCat('works','Obras','Todas las obras',mi,c.works[mi])}${flowCat('others','Otros egresos','Acopios · Gastos generales · Retiro socios · Impuestos',mi,c.others[mi])}${flowCat('incomes','Ingresos','Obras y otros ingresos',mi,c.incomes[mi])}</section>`).join(''):'<div class="flow-empty" style="background:#fff;border:1px solid var(--line);border-radius:12px">Elegí uno o varios meses para comenzar.</div>';
+
+    document.querySelectorAll('[data-flow-cat]').forEach(b=>b.onclick=e=>{
+      if(e.target.closest('.flow-cat-config'))return;
+      const k=b.dataset.flowCat;
+      const parts=k.split(':'); const type=parts[1];
+      const shouldOpen=!flowOpenCats.has(k);
+      if(open.length>1){ open.forEach(mi=>{ const key=mi+':'+type; shouldOpen?flowOpenCats.add(key):flowOpenCats.delete(key); }); }
+      else{ shouldOpen?flowOpenCats.add(k):flowOpenCats.delete(k); }
+      flowRenderPanels();
+    });
+    document.querySelectorAll('[data-flow-config]').forEach(btn=>btn.onclick=e=>{ e.stopPropagation(); openFlowOrderModal(btn.dataset.flowConfig); });
+
+    document.querySelectorAll('[data-flow-cell]').forEach(inp=>{
+      inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
+      inp.onclick=()=>requestAnimationFrame(()=>inp.select());
+      inp.onchange=e=>{
+        let [type,ri,mi]=inp.dataset.flowCell.split(':'); ri=+ri; mi=+mi;
+        const row=flowState[type][ri];
+        row.months[mi]=fnum(e.target.value);
+        if(row.formulas && typeof row.formulas==='object') delete row.formulas[String(mi)];
+        flowPersist();
+        flowRenderPanels();
+        if(document.getElementById('dashboardPage'))dashboardRender();
+        updateHeaderForActivePage();
+        if(document.getElementById('flowSheetModal')?.classList.contains('open') && typeof cqFlowSheetRender==='function') cqFlowSheetRender();
+      };
+    });
+    document.querySelectorAll('[data-flow-mark]').forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      let [type,ri,mi]=btn.dataset.flowMark.split(':'); ri=+ri; mi=+mi;
+      const row=flowState[type][ri];
+      if(type==='incomes'){ if(!Array.isArray(row.received))row.received=Array(flowState.months.length).fill(false); row.received[mi]=!row.received[mi]; }
+      else{ if(!Array.isArray(row.checked))row.checked=Array(flowState.months.length).fill(false); row.checked[mi]=!row.checked[mi]; }
+      flowPersist(); flowRenderPanels();
+    });
+    document.querySelectorAll('.add-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddManualWork(+b.dataset.workMonth)});
+    document.querySelectorAll('.new-auto-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowOpenNewWorkModal(+b.dataset.workMonth)});
+    document.querySelectorAll('.add-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddOther(+b.dataset.otherMonth)});
+    document.querySelectorAll('.add-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddIncome(+b.dataset.incomeMonth)});
+    document.querySelectorAll('.edit-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameWork(+b.dataset.workRi)});
+    document.querySelectorAll('.edit-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameOther(+b.dataset.otherRi)});
+    document.querySelectorAll('.edit-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameIncome(+b.dataset.incomeRi)});
+    document.querySelectorAll('.del-work-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteWorkForward(+b.dataset.workRi,+b.dataset.workMi)});
+    document.querySelectorAll('.del-other-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteOtherForward(+b.dataset.otherRi,+b.dataset.otherMi)});
+    document.querySelectorAll('.del-income-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteIncomeForward(+b.dataset.incomeRi,+b.dataset.incomeMi)});
+  };
+
+  document.addEventListener('DOMContentLoaded',()=>{ ensureFlowOrderModal(); });
+  if(document.readyState!=='loading') setTimeout(()=>ensureFlowOrderModal(),50);
+})();
+</script>
 
 </body></html>
