@@ -8591,7 +8591,24 @@ document.addEventListener('DOMContentLoaded',function(){
 
   function ensureSheetToolbar(){
     const modal=document.getElementById('flowSheetModal'); if(!modal)return;
-    if(document.getElementById('flowSheetToolbar'))return;
+    const existingBar=document.getElementById('flowSheetToolbar');
+    if(existingBar){
+      if(!document.getElementById('flowSheetRangeSummary')){
+        const sumBar=document.createElement('div');
+        sumBar.id='flowSheetRangeSummary';
+        sumBar.className='flow-sheet-range-summary';
+        existingBar.insertAdjacentElement('afterend',sumBar);
+      }
+      const existingFoot=modal.querySelector('.flow-sheet-foot');
+      if(existingFoot && !document.getElementById('flowSheetFormulaStatus')){
+        const status=document.createElement('span');
+        status.id='flowSheetFormulaStatus';
+        status.className='sheet-formula-status';
+        status.textContent='Seleccioná una celda';
+        existingFoot.insertBefore(status,existingFoot.firstChild.nextSibling);
+      }
+      return;
+    }
     const filters=modal.querySelector('.flow-sheet-filters');
     if(!filters)return;
     const bar=document.createElement('div');
@@ -9491,6 +9508,128 @@ document.addEventListener('DOMContentLoaded',function(){
   };
   document.addEventListener('DOMContentLoaded',ensureModal);
   if(document.readyState!=='loading')setTimeout(ensureModal,40);
+})();
+</script>
+
+
+<style id="cq-flow-summary-comment-hotfix-v8">
+/* v88 · sumatoria siempre visible + comentario rojo suave */
+#flowSheetModal .flow-sheet-range-summary{
+  display:none!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:12px!important;
+  min-height:36px!important;
+  padding:6px 12px!important;
+  background:#e2f1e9!important;
+  border-top:1px solid #c8dfd3!important;
+  border-bottom:1px solid #b9d7c8!important;
+  color:#294f40!important;
+  font-size:11px!important;
+  line-height:1.1!important;
+  flex:0 0 auto!important;
+  box-shadow:inset 0 -1px 0 rgba(49,87,74,.04)!important;
+}
+#flowSheetModal .flow-sheet-range-summary.show{display:flex!important}
+#flowSheetModal .flow-sheet-range-summary b{
+  font-size:14px!important;
+  color:#20533e!important;
+  font-weight:950!important;
+  white-space:nowrap!important;
+}
+#flowSheetModal .flow-sheet-range-summary span{
+  color:#526e62!important;
+  font-weight:800!important;
+  white-space:nowrap!important;
+}
+
+/* Comentario cargado: rojo suave, no verde */
+.flow-comment-btn.has-comment{
+  background:#f8e9e9!important;
+  color:#a45f63!important;
+  box-shadow:inset 0 0 0 1px #e9cdd0!important;
+}
+#flowSheetModal .sheet-comment-btn.has-comment{
+  background:#f8e9e9!important;
+  color:#a45f63!important;
+  box-shadow:inset 0 0 0 1px #e9cdd0!important;
+}
+#flowSheetModal td.has-sheet-comment:before{
+  border-top-color:#c77b80!important;
+}
+
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-range-summary{
+    min-height:32px!important;
+    padding:5px 8px!important;
+    gap:8px!important;
+    font-size:9px!important;
+  }
+  #flowSheetModal .flow-sheet-range-summary b{font-size:12px!important}
+  #flowSheetModal .flow-sheet-range-summary span{font-size:8.5px!important}
+}
+</style>
+<script id="cq-flow-summary-hotfix-v8">
+(function(){
+  if(window.__cqFlowSummaryHotfixV8)return;
+  window.__cqFlowSummaryHotfixV8=true;
+
+  function ensureSummaryBar(){
+    const modal=document.getElementById('flowSheetModal');
+    const toolbar=document.getElementById('flowSheetToolbar');
+    if(!modal||!toolbar)return null;
+    let bar=document.getElementById('flowSheetRangeSummary');
+    if(!bar){
+      bar=document.createElement('div');
+      bar.id='flowSheetRangeSummary';
+      bar.className='flow-sheet-range-summary';
+      toolbar.insertAdjacentElement('afterend',bar);
+    }
+    return bar;
+  }
+
+  function parseVisibleNumber(v){
+    let s=String(v??'').trim();
+    if(!s)return 0;
+    s=s.replace(/\s/g,'').replace(/\./g,'').replace(',','.');
+    const n=Number(s); return Number.isFinite(n)?n:0;
+  }
+  function fmt(n){return new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(Number(n)||0)}
+
+  function refreshFromSelection(){
+    const bar=ensureSummaryBar(); if(!bar)return;
+    const selected=[...document.querySelectorAll('#flowSheetBody td.sheet-range-selected[data-sheet-ui-cell]')];
+    if(selected.length>1){
+      let sum=0;
+      selected.forEach(td=>{
+        const inp=td.querySelector('.sheet-cell-input');
+        sum+=parseVisibleNumber(inp?.value||0);
+      });
+      const avg=selected.length?sum/selected.length:0;
+      bar.innerHTML=`<b>Σ Suma ${fmt(sum)}</b><span>${selected.length} celdas · Prom. ${fmt(avg)}</span>`;
+      bar.classList.add('show');
+    }else{
+      bar.classList.remove('show');
+      bar.innerHTML='';
+    }
+  }
+
+  const observer=new MutationObserver(()=>refreshFromSelection());
+  document.addEventListener('DOMContentLoaded',()=>{
+    ensureSummaryBar();
+    const body=document.getElementById('flowSheetBody');
+    if(body)observer.observe(body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
+  });
+  if(document.readyState!=='loading'){
+    setTimeout(()=>{
+      ensureSummaryBar();
+      const body=document.getElementById('flowSheetBody');
+      if(body)observer.observe(body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
+      refreshFromSelection();
+    },80);
+  }
+  document.addEventListener('pointermove',()=>{ if(document.getElementById('flowSheetModal')?.classList.contains('open')) refreshFromSelection(); },{passive:true});
+  document.addEventListener('pointerup',()=>setTimeout(refreshFromSelection,0),{passive:true});
 })();
 </script>
 
