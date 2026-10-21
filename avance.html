@@ -3100,25 +3100,74 @@ function getItems(snum) {
   return [...base, ...extra];
 }
 function getTask(snum, idx) { return getItems(snum)[idx]; }
+function normalizarNombreTarea(v){
+  return String(v || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().trim();
+}
+function esNombreConforme(v){
+  const n=normalizarNombreTarea(v);
+  return n === 'conforme de obra' || n.includes('conforme de obra') || n.includes('conforme a obra');
+}
+function findConformeTaskRef(){
+  for(const sem of getSemanas()){
+    const items=getItems(sem.num);
+    for(let i=0;i<items.length;i++){
+      if(esNombreConforme(items[i] && items[i].desc)) return {semNum:sem.num,idx:i,item:items[i]};
+    }
+  }
+  // Fallback histórico para obras viejas.
+  const sem23=getSemanaByNum(23);
+  const items23=sem23 ? getItems(23) : [];
+  const idx=items23.findIndex(it=>normalizarNombreTarea(it && it.desc).includes('conforme'));
+  return idx>=0 ? {semNum:23,idx,item:items23[idx]} : null;
+}
+function getMontoRaw(snum, idx) {
+  const key = snum + '-m-' + idx;
+  if (state.montos && state.montos[key] != null) return Number(state.montos[key]) || 0;
+  const it = getTask(snum, idx);
+  return it ? (Number(it.monto) || 0) : 0;
+}
+function calcConformeBase(){
+  const ref=findConformeTaskRef();
+  const acuerdo=Number(state && state.acuerdo) || 0;
+  let asignado=0;
+  getSemanas().forEach(sem=>{
+    getItems(sem.num).forEach((it,i)=>{
+      if(ref && ref.semNum===sem.num && ref.idx===i) return;
+      asignado += getMontoRaw(sem.num,i);
+    });
+  });
+  return { ref, acuerdo, asignado, montoConforme: acuerdo - asignado };
+}
 function recalcSemanaTotal(snum) {
   if (!state.montos) state.montos = {};
   state.montos[snum + '-pagoMax'] = getItems(snum).reduce((sum, it, i) => sum + getMonto(snum, i), 0);
 }
 function getMonto(snum, idx) {
-  const key = snum + '-m-' + idx;
-  if (state.montos && state.montos[key] != null) return state.montos[key];
-  const it = getTask(snum, idx);
-  return it ? (it.monto || 0) : 0;
+  const base=calcConformeBase();
+  if(base.ref && base.ref.semNum===snum && base.ref.idx===idx) return base.montoConforme;
+  return getMontoRaw(snum, idx);
+}
+function getMontoSemanaAsignable(snum){
+  return getItems(snum).reduce((sum,it,i)=>sum+(isConformeTask(snum,i)?0:getMontoRaw(snum,i)),0);
+}
+function getTareasAsignables(snum){
+  return getItems(snum).map((it,i)=>({it,i})).filter(x=>!isConformeTask(snum,x.i));
 }
 function editTarea(snum, idx) {
   const it = getTask(snum, idx);
   if (!it) return;
   const desc = prompt('Nombre de la tarea/rubro:', it.desc || '');
   if (desc === null) return;
-  const val = prompt('Importe para "' + desc.trim() + '":', getMonto(snum, idx));
-  if (val === null) return;
-  const monto = parseFloat(String(val).replace(/[^0-9.]/g, ''));
-  if (!desc.trim() || isNaN(monto) || monto < 0) { alert('Completá nombre e importe válido.'); return; }
+  const esConforme = isConformeTask(snum, idx);
+  let monto = getMonto(snum, idx);
+  if(!esConforme){
+    const val = prompt('Importe para "' + desc.trim() + '":', getMonto(snum, idx));
+    if (val === null) return;
+    monto = parseFloat(String(val).replace(/[^0-9.]/g, ''));
+  }
+  if (!desc.trim() || isNaN(monto) || (!esConforme && monto < 0)) { alert('Completá nombre e importe válido.'); return; }
   let comentario = it.comentario || '';
   if (!it.base) {
     const c = prompt('Comentario del extra (opcional):', comentario);
@@ -3127,7 +3176,7 @@ function editTarea(snum, idx) {
   }
   if (it.base) {
     if (!state.taskOverrides) state.taskOverrides = {};
-    state.taskOverrides[it.key] = { ...(state.taskOverrides[it.key] || {}), desc: desc.trim(), monto };
+    state.taskOverrides[it.key] = { ...(state.taskOverrides[it.key] || {}), desc: desc.trim(), ...(!esConforme?{monto}:{}) };
   } else {
     if (!state.customTasks) state.customTasks = {};
     const arr = state.customTasks[snum] || [];
@@ -3165,6 +3214,10 @@ function parseMontoFlexible(val) {
 function editMonto(snum, idx) {
   const it = getTask(snum, idx);
   if (!it) return;
+  if(isConformeTask(snum,idx)){
+    alert('El importe de Conforme de obra se calcula automáticamente como saldo del acuerdo total menos todas las demás tareas. Modificá los importes de las otras semanas/tareas o el acuerdo total para cambiarlo.');
+    return;
+  }
   const val = prompt('Importe de la tarea "' + (it.desc || '') + '":', Math.round(getMonto(snum, idx)).toString());
   if (val === null) return;
   const monto = parseMontoFlexible(val);
@@ -3179,8 +3232,8 @@ function editMonto(snum, idx) {
   if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
 }
 function aplicarValorSemana(snum) {
-  const items = getItems(snum);
-  if (!items.length) { alert('Esta semana no tiene tareas para distribuir.'); return; }
+  const asignables = getTareasAsignables(snum);
+  if (!asignables.length) { alert('Esta semana no tiene tareas normales para distribuir. Conforme de obra se calcula automáticamente como saldo.'); return; }
   const input = document.getElementById('week-total-' + snum);
   if (!input) return;
   const parsed = parseMontoFlexible(input.value);
@@ -3188,14 +3241,14 @@ function aplicarValorSemana(snum) {
 
   // Se trabaja en pesos enteros para que la suma visible de las tareas coincida exactamente con la semana.
   const total = Math.round(parsed);
-  const hayCertificado = items.some((it,i) => getLockedAv(snum,i) > 0);
-  const aviso = '¿Dividir ' + fmt(total) + ' entre ' + items.length + ' tarea' + (items.length===1?'':'s') + '?\n\nEsto reemplazará los importes actuales de las tareas de esta semana.' + (hayCertificado ? '\n\n⚠ Esta semana tiene avance certificado.' : '');
+  const hayCertificado = asignables.some(x => getLockedAv(snum,x.i) > 0);
+  const aviso = '¿Dividir ' + fmt(total) + ' entre ' + asignables.length + ' tarea' + (asignables.length===1?'':'s') + '?\n\nEsto reemplazará los importes actuales de las tareas de esta semana.' + (hayCertificado ? '\n\n⚠ Esta semana tiene avance certificado.' : '');
   if (!confirm(aviso)) return;
-  const base = Math.floor(total / items.length);
-  let resto = total - (base * items.length);
+  const base = Math.floor(total / asignables.length);
+  let resto = total - (base * asignables.length);
   if (!state.montos) state.montos = {};
-  items.forEach((it, i) => {
-    state.montos[snum + '-m-' + i] = base + (i < resto ? 1 : 0);
+  asignables.forEach((x, pos) => {
+    state.montos[snum + '-m-' + x.i] = base + (pos < resto ? 1 : 0);
   });
   recalcSemanaTotal(snum);
   persist();
@@ -3216,17 +3269,17 @@ function aplicarValorTodasSemanas(){
   const parsed=parseMontoFlexible(input.value);
   if(!Number.isFinite(parsed) || parsed < 0){ alert('Ingresá un valor válido para todas las semanas.'); input.focus(); return; }
   const total=Math.round(parsed);
-  const semanas=getSemanas().filter(s=>getItems(s.num).length>0);
-  if(!semanas.length){ alert('No hay semanas con tareas para distribuir.'); return; }
-  const hayCertificado=semanas.some(s=>getItems(s.num).some((it,i)=>getLockedAv(s.num,i)>0));
-  const aviso='¿Asignar ' + fmt(total) + ' a cada una de las ' + semanas.length + ' semanas activas?\n\nEn cada semana el importe se dividirá por igual entre sus tareas. Esto reemplazará los importes actuales de todas las tareas.' + (hayCertificado ? '\n\n⚠ Hay semanas con avance certificado.' : '');
+  const semanas=getSemanas().filter(s=>getTareasAsignables(s.num).length>0);
+  if(!semanas.length){ alert('No hay semanas con tareas normales para distribuir.'); return; }
+  const hayCertificado=semanas.some(s=>getTareasAsignables(s.num).some(x=>getLockedAv(s.num,x.i)>0));
+  const aviso='¿Asignar ' + fmt(total) + ' a cada una de las ' + semanas.length + ' semanas activas?\n\nEn cada semana el importe se dividirá por igual entre sus tareas normales. Conforme de obra queda fuera del reparto y se recalcula automáticamente como saldo del acuerdo.' + (hayCertificado ? '\n\n⚠ Hay semanas con avance certificado.' : '');
   if(!confirm(aviso)) return;
   if(!state.montos) state.montos={};
   semanas.forEach(sem=>{
-    const items=getItems(sem.num);
-    const base=Math.floor(total/items.length);
-    let resto=total-(base*items.length);
-    items.forEach((it,i)=>{ state.montos[sem.num+'-m-'+i]=base+(i<resto?1:0); });
+    const asignables=getTareasAsignables(sem.num);
+    const base=Math.floor(total/asignables.length);
+    let resto=total-(base*asignables.length);
+    asignables.forEach((x,pos)=>{ state.montos[sem.num+'-m-'+x.i]=base+(pos<resto?1:0); });
     recalcSemanaTotal(sem.num);
   });
   persist();
@@ -4706,39 +4759,11 @@ function calcPagosFuera(){
 }
 
 function calcConformeObra(){
-  // Buscar "Conforme de obra" por nombre para que funcione aunque cambie de semana.
-  const normalizar = v => String(v || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .toLowerCase().trim();
-
-  let encontrado = null;
-  for (const sem of getSemanas()){
-    const items = getItems(sem.num);
-    for (let i=0;i<items.length;i++){
-      const nombre = normalizar(items[i] && items[i].desc);
-      if(nombre === 'conforme de obra' || nombre.includes('conforme de obra')){
-        encontrado = { semNum:sem.num, idx:i, item:items[i] };
-        break;
-      }
-    }
-    if(encontrado) break;
-  }
-
-  // Fallback para obras históricas.
-  if(!encontrado){
-    const sem23 = getSemanaByNum(23);
-    const items23 = sem23 ? getItems(23) : [];
-    const idxConforme = items23.findIndex(it => normalizar(it && it.desc).includes('conforme'));
-    if(idxConforme >= 0) encontrado = { semNum:23, idx:idxConforme, item:items23[idxConforme] };
-  }
-
-  let montoConforme = 0;
+  const base = calcConformeBase();
+  const encontrado = base.ref;
+  let montoConforme = Number(base.montoConforme) || 0;
   let avManual = 0;
-  if(encontrado){
-    // IMPORTANTE: tomar el monto REAL vigente (manual / valor de semana), no el monto base de plantilla.
-    montoConforme = Number(getMonto(encontrado.semNum, encontrado.idx)) || 0;
-    avManual = Number(getAv(encontrado.semNum, encontrado.idx)) || 0;
-  }
+  if(encontrado) avManual = Number(getAv(encontrado.semNum, encontrado.idx)) || 0;
   avManual = Math.max(0, Math.min(1, avManual));
 
   const pf = calcPagosFuera();
@@ -4753,6 +4778,9 @@ function calcConformeObra(){
 
   return {
     montoConforme,
+    montoBaseAutomatico:montoConforme,
+    acuerdo:base.acuerdo,
+    asignadoOtrasTareas:base.asignado,
     avConforme: avManual,
     avManual,
     avEfectivo,
@@ -4768,8 +4796,8 @@ function calcConformeObra(){
 }
 
 function isConformeTask(snum, idx){
-  const co = calcConformeObra();
-  return co.semNum === snum && co.idx === idx;
+  const ref = findConformeTaskRef();
+  return !!(ref && ref.semNum === snum && ref.idx === idx);
 }
 
 function taskDisplayMetrics(snum, idx){
@@ -4870,7 +4898,7 @@ function renderSemanas(){
   const semanasActuales=getSemanas();
   const globalInput=document.getElementById('all-weeks-total');
   if(globalInput){
-    const totales=semanasActuales.filter(s=>getItems(s.num).length>0).map(s=>Math.round(calcSemana(s).totalMonto));
+    const totales=semanasActuales.filter(s=>getTareasAsignables(s.num).length>0).map(s=>Math.round(getMontoSemanaAsignable(s.num)));
     globalInput.value=(totales.length && totales.every(v=>v===totales[0])) ? String(totales[0]) : '';
   }
   cont.innerHTML=semanasActuales.map(s=>{
@@ -4899,10 +4927,10 @@ function renderSemanas(){
         <div class="week-value-row" onclick="event.stopPropagation()">
           <div class="week-value-copy">
             <span class="week-value-label">Valor de la semana</span>
-            <span class="week-value-help">Se divide por igual entre ${getItems(s.num).length} tarea${getItems(s.num).length===1?'':'s'}. Luego podés modificar cada importe.</span>
+            <span class="week-value-help">Se divide por igual entre ${getTareasAsignables(s.num).length} tarea${getTareasAsignables(s.num).length===1?'':'s'} normal${getTareasAsignables(s.num).length===1?'':'es'}. Conforme de obra se calcula aparte como saldo.</span>
           </div>
           <div class="week-value-controls">
-            <div class="week-value-input-wrap"><span>$</span><input id="week-total-${s.num}" class="week-value-input" type="number" inputmode="numeric" min="0" step="1" value="${Math.round(totalMonto)}" onfocus="this.select()" onkeydown="onWeekTotalKeydown(event,${s.num})"></div>
+            <div class="week-value-input-wrap"><span>$</span><input id="week-total-${s.num}" class="week-value-input" type="number" inputmode="numeric" min="0" step="1" value="${Math.round(getMontoSemanaAsignable(s.num))}" onfocus="this.select()" onkeydown="onWeekTotalKeydown(event,${s.num})"></div>
             <button type="button" class="week-value-apply" onclick="event.stopPropagation();aplicarValorSemana(${s.num})">Dividir en tareas</button>
           </div>
         </div>
@@ -4931,7 +4959,7 @@ function renderSemanas(){
                 </div>
               </div>
               <div class="item-montos">
-                <span class="item-monto-total" onclick="editMonto(${s.num},${i})">${fmt(getMonto(s.num,i))} ✏</span>
+                <span class="item-monto-total" onclick="editMonto(${s.num},${i})">${fmt(getMonto(s.num,i))}${dm.conforme?' · saldo automático':' ✏'}</span>
                 <div class="item-monto-detail">
                   <span class="item-devengado" id="dev-${s.num}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(dm.dev)}</span>
                   <span class="item-saldo-sep">·</span>
@@ -5094,7 +5122,7 @@ function refreshAll(){
             </div>
           </div>
           <div class="item-montos">
-            <span class="item-monto-total" onclick="editMonto(${snum},${i})">${fmt(getMonto(snum,i))} ✏</span>
+            <span class="item-monto-total" onclick="editMonto(${snum},${i})">${fmt(getMonto(snum,i))}${dm.conforme?' · saldo automático':' ✏'}</span>
             <div class="item-monto-detail">
               <span class="item-devengado" id="dev-${snum}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(dm.dev)}</span>
               <span class="item-saldo-sep">·</span>
