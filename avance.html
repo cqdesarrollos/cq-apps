@@ -2448,6 +2448,40 @@ window.cqRevealInitialScreen=function(){
   document.documentElement.classList.remove('cq-app-booting');
 };
 </script>
+
+<style id="cq-fix-conforme-auto-centrado-v1">
+/* Conforme: importe centrado como los demás y leyenda secundaria debajo. */
+#view-avances .semana-items.open .item-monto-total.conforme-auto{
+  position:relative!important;
+  justify-content:center!important;
+  padding-bottom:15px!important;
+}
+#view-avances .semana-items.open .item-monto-total.conforme-auto::after{
+  content:none!important;
+  display:none!important;
+}
+#view-avances .semana-items.open .item-monto-total.conforme-auto .conforme-auto-label{
+  position:absolute!important;
+  left:50%!important;
+  bottom:3px!important;
+  transform:translateX(-50%)!important;
+  width:max-content!important;
+  max-width:95%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  font-family:'Space Grotesk',sans-serif!important;
+  font-size:7px!important;
+  line-height:1!important;
+  font-weight:600!important;
+  color:#8A9B91!important;
+  letter-spacing:.01em!important;
+  white-space:nowrap!important;
+}
+@media(min-width:761px){
+  #view-avances .semana-items.open .item-monto-total.conforme-auto{padding-bottom:18px!important;}
+  #view-avances .semana-items.open .item-monto-total.conforme-auto .conforme-auto-label{font-size:9px!important;bottom:4px!important;}
+}
+</style>
 </head>
 <body>
 
@@ -3333,6 +3367,14 @@ function deleteTarea(snum, idx) {
     : '¿Eliminar esta tarea/rubro?';
   if (!confirm(aviso)) return;
 
+  // Conservar exactamente la vista actual: semanas abiertas y posición de la semana editada.
+  const semanasAbiertas = Array.from(document.querySelectorAll('.semana-items.open'))
+    .map(el => parseInt(String(el.id || '').replace('si-','')))
+    .filter(Number.isFinite);
+  const bloqueAntes = document.getElementById('sb-' + snum);
+  const topAntes = bloqueAntes ? bloqueAntes.getBoundingClientRect().top : null;
+  const scrollAntes = window.scrollY || window.pageYOffset || 0;
+
   if (it.base) {
     if (!state.taskOverrides) state.taskOverrides = {};
     state.taskOverrides[it.key] = { ...(state.taskOverrides[it.key] || {}), deleted:true };
@@ -3350,6 +3392,23 @@ function deleteTarea(snum, idx) {
   renderSemanas();
   renderKPIs();
   if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
+
+  requestAnimationFrame(() => {
+    semanasAbiertas.forEach(num => {
+      const items = document.getElementById('si-' + num);
+      const chev = document.getElementById('chev-' + num);
+      if (items) items.classList.add('open');
+      if (chev) chev.classList.add('open');
+    });
+
+    const bloqueDespues = document.getElementById('sb-' + snum);
+    if (bloqueDespues && topAntes !== null) {
+      const delta = bloqueDespues.getBoundingClientRect().top - topAntes;
+      if (Math.abs(delta) > 0.5) window.scrollBy(0, delta);
+    } else {
+      window.scrollTo(0, scrollAntes);
+    }
+  });
 }
 
 function addSemana() {
@@ -4959,7 +5018,7 @@ function renderSemanas(){
                 </div>
               </div>
               <div class="item-montos">
-                <span class="item-monto-total" onclick="editMonto(${s.num},${i})">${fmt(getMonto(s.num,i))}${dm.conforme?' · saldo automático':' ✏'}</span>
+                <span class="item-monto-total${dm.conforme?' conforme-auto':''}" onclick="editMonto(${s.num},${i})">${fmt(getMonto(s.num,i))}${dm.conforme?'<small class="conforme-auto-label">saldo automático</small>':' ✏'}</span>
                 <div class="item-monto-detail">
                   <span class="item-devengado" id="dev-${s.num}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(dm.dev)}</span>
                   <span class="item-saldo-sep">·</span>
@@ -5122,7 +5181,7 @@ function refreshAll(){
             </div>
           </div>
           <div class="item-montos">
-            <span class="item-monto-total" onclick="editMonto(${snum},${i})">${fmt(getMonto(snum,i))}${dm.conforme?' · saldo automático':' ✏'}</span>
+            <span class="item-monto-total${dm.conforme?' conforme-auto':''}" onclick="editMonto(${snum},${i})">${fmt(getMonto(snum,i))}${dm.conforme?'<small class="conforme-auto-label">saldo automático</small>':' ✏'}</span>
             <div class="item-monto-detail">
               <span class="item-devengado" id="dev-${snum}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(dm.dev)}</span>
               <span class="item-saldo-sep">·</span>
