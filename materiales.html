@@ -5335,12 +5335,13 @@ function obrasGastosTodasMateriales(){
     ? obrasGastosMateriales.filter(function(o){return o&&o.id&&o.id!=='oficina';})
     : [];
 }
+// CQ 22/10/2026 — Materiales muestra TODAS las obras de Gastos.
+// El tilde/modulo "Materiales" y el estado archived de Gastos ya no filtran esta planilla.
+// La visibilidad del Reporte se administra exclusivamente con Archivar/Restaurar dentro de Materiales.
 function obraModuloMaterialesHabilitado(o){
-  if(!o||o.archived===true)return false;
+  if(!o)return false;
   if(String(o.id)==='oficina')return false;
-  var legacyDefault=(o.integrarModulos!==false);
-  var mods=(o.modulos&&typeof o.modulos==='object'&&!Array.isArray(o.modulos))?o.modulos:null;
-  return mods&&mods.materiales!==undefined ? mods.materiales!==false : legacyDefault;
+  return true;
 }
 function obrasGastosActivasMateriales(){
   return obrasGastosTodasMateriales().filter(function(o){
@@ -5349,8 +5350,8 @@ function obrasGastosActivasMateriales(){
 }
 function obraGastosPorClaveMateriales(clave){
   if(!clave)return null;
-  // Para resolver históricos se consulta también una obra marcada "Solo Gastos".
-  // Esa obra no se inyecta como nueva selección, pero sus registros viejos conservan nombre.
+  // Todas las obras de Gastos participan del catálogo de Materiales; esta búsqueda también
+  // conserva el nombre correcto de registros históricos.
   return obrasGastosTodasMateriales().find(function(o){
     return [o.label,o.short,o.id].some(function(v){return claveLoteMz(v)===clave;});
   })||null;
@@ -9514,8 +9515,8 @@ async function startFirebase(){
       }
 
       // 2b. Escuchar también config/app en tiempo real.
-      // Así al marcar/desmarcar "Materiales" en Gastos la obra aparece/desaparece
-      // sin depender de focus, recarga ni del comportamiento del navegador móvil.
+      // Gastos sigue siendo la fuente del listado y nombres de obras. El tilde "Materiales"
+      // ya no decide la visibilidad: toda obra recibida queda disponible en Materiales.
       if(window._onSnapshot){
         if(unsubConfigMateriales){unsubConfigMateriales();unsubConfigMateriales=null;}
         unsubConfigMateriales=window._onSnapshot(
@@ -9631,9 +9632,9 @@ function getObras(){
   });
   var obras=base.concat(extras);
 
-  // Completa la lista visible con las obras activas creadas en Gastos.
-  // No modifica ni guarda state.extraObras: solamente evita que una obra nueva
-  // de config/app quede fuera de Reporte/Cargar mientras todavía no tenga cargas.
+  // Completa la lista visible con TODAS las obras creadas en Gastos (excepto Oficina).
+  // No depende del tilde "Materiales" ni del archivo de Gastos.
+  // El archivo visible se controla dentro del Reporte de Materiales.
   obrasGastosActivasMateriales().forEach(function(g){
     var nombre=g.label||g.short||g.id||'';
     if(!nombre)return;

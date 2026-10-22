@@ -10562,6 +10562,10 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     ['panol','Pañol'],
     ['pedidos','Solicitud de pedidos']
   ];
+  /* Materiales ya no se administra desde Gastos: todas las obras se muestran allí
+     y el usuario decide cuáles ocultar usando Archivar dentro de Materiales.
+     Se conserva la clave interna por compatibilidad con versiones anteriores. */
+  const MODULOS_OBRA_UI=MODULOS_OBRA.filter(([id])=>id!=='materiales');
   window.CQ_MODULOS_OBRA=MODULOS_OBRA.map(([id,label])=>({id,label}));
 
   function defaultMap(value=true){
@@ -10611,8 +10615,8 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
               <button type="button" onclick="cqSetObraModulos('ninguno')">Ninguno</button>
             </div>
           </div>
-          <div class="obra-modulos-grid">${MODULOS_OBRA.map(([id,label])=>`<label class="obra-modulo-opt"><input type="checkbox" data-obra-modulo="${id}" checked><span>${label}</span></label>`).join('')}</div>
-          <div class="obra-modulos-note"><strong>Gastos siempre conserva la obra.</strong> Desmarcar un módulo sólo evita que esa obra aparezca allí. “Solo financiero” deja Caja Chica y Caja Gerencia activas.</div>
+          <div class="obra-modulos-grid">${MODULOS_OBRA_UI.map(([id,label])=>`<label class="obra-modulo-opt"><input type="checkbox" data-obra-modulo="${id}" checked><span>${label}</span></label>`).join('')}</div>
+          <div class="obra-modulos-note"><strong>Gastos siempre conserva la obra.</strong> Desmarcar un módulo sólo evita que esa obra aparezca allí. “Solo financiero” deja Caja Chica y Caja Gerencia activas. <strong>Materiales se administra desde su propio botón Archivar.</strong></div>
         </div>`;
       anchor.insertAdjacentElement('afterend',wrap);
     }
@@ -10628,8 +10632,15 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     actions.forEach(b=>b.disabled=disabled);
   }
   function getChecks(){
-    const out={};
-    MODULOS_OBRA.forEach(([id])=>{const el=document.querySelector(`[data-obra-modulo="${id}"]`);out[id]=el?!!el.checked:true});
+    /* Preserva permisos internos no visibles (especialmente materiales) para no
+       alterar datos históricos al editar una obra desde Gastos. */
+    const editId=document.getElementById('obra-id-edit')?.value||'';
+    const obra=editId?(config.obras||[]).find(o=>o.id===editId):null;
+    const out=obra?normalizedMap(obra):defaultMap(true);
+    MODULOS_OBRA_UI.forEach(([id])=>{
+      const el=document.querySelector(`[data-obra-modulo="${id}"]`);
+      out[id]=el?!!el.checked:true;
+    });
     return out;
   }
   window.cqSetObraModulos=function(mode){
@@ -10680,14 +10691,16 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     /* Mantiene funcionando el esquema viejo durante la transición: sólo false si no queda ningún módulo activo. */
     obra.integrarModulos=(String(obra.id)==='oficina')?true:Object.values(obra.modulos).some(Boolean);
 
-    /* Ahora sí: se guarda una sola versión, ya con modulos.materiales correcto. */
+    /* Ahora sí: se guarda una sola versión con los permisos editables actualizados. */
     if(typeof persistConfig==='function')persistConfig();
     if(typeof renderConfig==='function'&&document.getElementById('view-config')?.classList.contains('active'))renderConfig();
   };
 
   function vinculoSummary(obra){
     if(String(obra?.id)==='oficina')return '<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Sistema</span>';
-    const map=normalizedMap(obra);const total=MODULOS_OBRA.length;const on=Object.values(map).filter(Boolean).length;
+    const map=normalizedMap(obra);
+    const total=MODULOS_OBRA_UI.length;
+    const on=MODULOS_OBRA_UI.filter(([id])=>map[id]!==false).length;
     if(on===total)return `<span class="obra-vinculo-badge all">Todos (${on}/${total})</span>`;
     if(on===0)return '<span class="obra-vinculo-badge none">Solo Gastos</span>';
     return `<span class="obra-vinculo-badge partial">${on}/${total} módulos</span>`;
