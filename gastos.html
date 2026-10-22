@@ -10513,7 +10513,7 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
       localStorage.setItem('gastos_cur_obra',curObra);
       persist();
     }
-    persistConfig();
+    if(!window.CQ_DEFER_OBRA_CONFIG_SAVE)persistConfig();
     closeModal('modal-obra');
     renderAll();
     if(typeof renderConfig==='function' && document.getElementById('view-config')?.classList.contains('active'))renderConfig();
@@ -10659,13 +10659,28 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     /* Dejamos que la validación visual original muestre el mensaje, pero no tocamos permisos si el alta no es válida. */
     if(!label||!short){if(typeof oldSave==='function')oldSave();return;}
     if(!editId&&targetId&&(config.obras||[]).some(o=>o.id===targetId)){if(typeof oldSave==='function')oldSave();return;}
-    if(typeof oldSave==='function')oldSave();
+
+    /*
+      CQ 22/10/2026 — un único guardado de config por edición de obra.
+      v40 guardaba config ANTES de que v41 aplicara los permisos individuales.
+      Eso disparaba dos setDoc seguidos y Firebase podía terminar conservando el
+      primero (sin el cambio de Materiales) si las respuestas llegaban invertidas.
+    */
+    window.CQ_DEFER_OBRA_CONFIG_SAVE=true;
+    try{
+      if(typeof oldSave==='function')oldSave();
+    }finally{
+      window.CQ_DEFER_OBRA_CONFIG_SAVE=false;
+    }
+
     if(!targetId)return;
     const obra=(config.obras||[]).find(o=>o.id===targetId);
     if(!obra)return;
     obra.modulos=(String(obra.id)==='oficina')?defaultMap(true):selected;
     /* Mantiene funcionando el esquema viejo durante la transición: sólo false si no queda ningún módulo activo. */
     obra.integrarModulos=(String(obra.id)==='oficina')?true:Object.values(obra.modulos).some(Boolean);
+
+    /* Ahora sí: se guarda una sola versión, ya con modulos.materiales correcto. */
     if(typeof persistConfig==='function')persistConfig();
     if(typeof renderConfig==='function'&&document.getElementById('view-config')?.classList.contains('active'))renderConfig();
   };

@@ -7806,6 +7806,7 @@ function promptNuevaCategoria(targetSelectId){
 
 var modoFirebase=true;
 var unsubMateriales=null;
+var unsubConfigMateriales=null;
 var unsubIntegraciones=null;
 var procesandoIntegraciones=false;
 var suppressRemoteUntil=0;
@@ -9512,6 +9513,36 @@ async function startFirebase(){
         );
       }
 
+      // 2b. Escuchar también config/app en tiempo real.
+      // Así al marcar/desmarcar "Materiales" en Gastos la obra aparece/desaparece
+      // sin depender de focus, recarga ni del comportamiento del navegador móvil.
+      if(window._onSnapshot){
+        if(unsubConfigMateriales){unsubConfigMateriales();unsubConfigMateriales=null;}
+        unsubConfigMateriales=window._onSnapshot(
+          window._doc(window._db,'config','app'),
+          function(snap){
+            if(!snap.exists())return;
+            try{
+              var cfg=snap.data()||{};
+              obrasGastosMateriales=Array.isArray(cfg.obras)?cfg.obras:[];
+              var migroCfg=estabilizarObrasGastosMateriales();
+              migroCfg=renombrarExtrasSegunGastos()||migroCfg;
+              migroCfg=consolidarExtrasDuplicadasConGastos()||migroCfg;
+              migroCfg=reubicarEstadoIndexadoPorCargasMateriales()||migroCfg;
+              migroCfg=reubicarCargasPorNombreEstableMateriales()||migroCfg;
+              migroCfg=normalizarNombresObraCargasMateriales()||migroCfg;
+              if(migroCfg)localStorage.setItem(DB_KEY,JSON.stringify(state));
+              renderActive();
+            }catch(e){
+              console.warn('No se pudo aplicar config/app en Materiales',e);
+            }
+          },
+          function(e){
+            console.warn('Error escuchando permisos de obras desde Gastos',e);
+          }
+        );
+      }
+
       // 3. Recién con la base principal cargada escuchar Acopio/Pañol/Cajas.
       startIntegracionesFirebase();
 
@@ -9538,6 +9569,7 @@ function toggleModoFirebase(){
     startFirebase();
   }else{
     if(unsubMateriales){unsubMateriales();unsubMateriales=null;}
+    if(unsubConfigMateriales){unsubConfigMateriales();unsubConfigMateriales=null;}
     if(unsubIntegraciones){unsubIntegraciones();unsubIntegraciones=null;}
     firebaseStarted=false;
     firebaseStartPromise=null;
@@ -9578,7 +9610,17 @@ window.addEventListener('focus',function(){
   }
 });
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='visible'&&modoFirebase&&!firebaseStarted)startFirebase();
+  if(document.visibilityState!=='visible')return;
+  if(modoFirebase&&!firebaseStarted)startFirebase();
+  /* Respaldo móvil: aunque el listener haya quedado suspendido en segundo plano,
+     al volver se fuerza una lectura fresca de los permisos de obra. */
+  if(window._dbReady){
+    cargarObrasGastosMateriales(true).then(function(){
+      var migro=estabilizarObrasGastosMateriales();
+      if(migro)localStorage.setItem(DB_KEY,JSON.stringify(state));
+      renderActive();
+    }).catch(function(e){console.warn('Actualización permisos Materiales al volver visible',e);});
+  }
 });
 
 function getObras(){
