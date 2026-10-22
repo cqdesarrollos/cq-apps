@@ -2146,7 +2146,39 @@ function inferCatBySubrubro(subrubro,currentCat){
   if(matches.length===1 && matches[0]!==currentCat)return matches[0];
   return currentCat;
 }
-function migrateState(s){s=s||emptyState();s.gastos=s.gastos||[];s.financiero=s.financiero||{};const f=s.financiero;if(f.cobrado&&!f.venta)f.venta=f.cobrado;if(!('ventaMes'in f))f.ventaMes='';if(!('cuotas'in f))f.cuotas=0;if(!Array.isArray(f.cuotasDetalle))f.cuotasDetalle=(parseFloat(f.cuotas)||0)?[{monto:parseFloat(f.cuotas)||0,mes:''}]:[];f.cuotasDetalle=f.cuotasDetalle.map(v=>{if(v&&typeof v==='object')return{monto:parseFloat(v.monto)||0,mes:String(v.mes||'')};return{monto:parseFloat(v)||0,mes:''}}).filter(v=>v.monto>0);f.cuotas=f.cuotasDetalle.reduce((a,v)=>a+(parseFloat(v.monto)||0),0);if(!('comision'in f))f.comision=0;if(!('comisionPct'in f))f.comisionPct=2.5;if(!('comisionManual'in f))f.comisionManual=parseFloat(f.comision)||0;if(!('comisionModo'in f))f.comisionModo=(parseFloat(f.comision)||0)>0?'manual':'auto';if(!f.unidades||typeof f.unidades!=='object')f.unidades={};['A','B'].forEach(k=>{if(!f.unidades[k]||typeof f.unidades[k]!=='object')f.unidades[k]={};f.unidades[k].etapa=String(f.unidades[k].etapa||'');f.unidades[k].fechaVenta=String(f.unidades[k].fechaVenta||'')});if(!f.acuerdosMO)f.acuerdosMO={mo:0,ext:{}};if(!f.acuerdosMO.ext)f.acuerdosMO.ext={};s.gastos=s.gastos.map(g=>{const sub=g.subrubro||g.concepto||'Sin subrubro';return{...g,subrubro:sub,cat:inferCatBySubrubro(sub,g.cat)}});return s}
+function migrateState(s){
+  s=s||emptyState();
+  const legacy=Array.isArray(s.gastos)?s.gastos:[];
+  const items=(s.gastosItems&&typeof s.gastosItems==='object')?s.gastosItems:{};
+  const byId=new Map();
+  legacy.forEach(g=>{if(g&&g.id!=null)byId.set(String(g.id),g);});
+  Object.values(items).forEach(g=>{
+    if(!g||g.id==null)return;
+    const id=String(g.id);
+    if(g.activo===false)byId.delete(id);
+    else byId.set(id,g);
+  });
+  s.gastos=[...byId.values()];
+  s.gastosItems=items;
+  s.financiero=s.financiero||{};
+  const f=s.financiero;
+  if(f.cobrado&&!f.venta)f.venta=f.cobrado;
+  if(!('ventaMes'in f))f.ventaMes='';
+  if(!('cuotas'in f))f.cuotas=0;
+  if(!Array.isArray(f.cuotasDetalle))f.cuotasDetalle=(parseFloat(f.cuotas)||0)?[{monto:parseFloat(f.cuotas)||0,mes:''}]:[];
+  f.cuotasDetalle=f.cuotasDetalle.map(v=>{if(v&&typeof v==='object')return{monto:parseFloat(v.monto)||0,mes:String(v.mes||'')};return{monto:parseFloat(v)||0,mes:''}}).filter(v=>v.monto>0);
+  f.cuotas=f.cuotasDetalle.reduce((a,v)=>a+(parseFloat(v.monto)||0),0);
+  if(!('comision'in f))f.comision=0;
+  if(!('comisionPct'in f))f.comisionPct=2.5;
+  if(!('comisionManual'in f))f.comisionManual=parseFloat(f.comision)||0;
+  if(!('comisionModo'in f))f.comisionModo=(parseFloat(f.comision)||0)>0?'manual':'auto';
+  if(!f.unidades||typeof f.unidades!=='object')f.unidades={};
+  ['A','B'].forEach(k=>{if(!f.unidades[k]||typeof f.unidades[k]!=='object')f.unidades[k]={};f.unidades[k].etapa=String(f.unidades[k].etapa||'');f.unidades[k].fechaVenta=String(f.unidades[k].fechaVenta||'')});
+  if(!f.acuerdosMO)f.acuerdosMO={mo:0,ext:{}};
+  if(!f.acuerdosMO.ext)f.acuerdosMO.ext={};
+  s.gastos=s.gastos.map(g=>{const sub=g.subrubro||g.concepto||'Sin subrubro';return{...g,subrubro:sub,cat:inferCatBySubrubro(sub,g.cat)}});
+  return s;
+}
 
 function setSyncStatus(txt,cls=''){const el=document.getElementById('sync-status');if(el){el.title=txt;el.className='sync-dot '+(cls==='ok'?'ok':cls==='err'?'err':'')}}
 function persistConfig(){
@@ -2166,7 +2198,7 @@ function persist(){
     // IMPORTANTE: los gastos pueden ser modificados desde Caja Chica, Caja Gerencia,
     // Pañol, Acopio u otro dispositivo. Un guardado financiero/configurativo de Gastos
     // NO debe volver a escribir el array completo desde una copia local potencialmente vieja.
-    const {gastos:_gastosLocales,...resto}=s;
+    const {gastos:_gastosLocales,gastosItems:_gastosItemsLocales,...resto}=s;
     const payload=JSON.parse(JSON.stringify({...resto,updatedAt:new Date().toISOString()}));
     window._setDoc(window._doc(window._db,'gastos',curObra),payload,{merge:true})
       .then(()=>setSyncStatus('Firebase: guardado','ok'))
@@ -2176,31 +2208,26 @@ function persist(){
   }
 }
 
-// CQ 22/10/2026 — escritura segura y concurrente de movimientos.
-// Lee el array REAL de Firebase dentro de una transacción y modifica solamente el ID
-// involucrado. Así una carga externa (Caja Chica, Caja Gerencia, Pañol, Acopio, etc.)
-// nunca se pierde por una copia local desactualizada de Gastos.
+// CQ 22/10/2026 — escritura concurrente por ID, sin transacciones.
+// El documento conserva el array histórico "gastos", pero todo alta/edición nueva se
+// guarda además en gastosItems[id]. migrateState fusiona ambos orígenes y una baja lógica
+// en gastosItems impide que reaparezca un registro histórico eliminado.
 async function cqPersistGastoUpsert(obraId,gasto){
   if(!obraId||!gasto)return;
   if(!(window._dbReady&&modoFirebase)){
     setSyncStatus('Firebase: local');
     return;
   }
-  if(!window._runTransaction)throw new Error('Firebase transaccional no disponible');
+  const id=String(gasto.id||'').trim();
+  if(!id)throw new Error('Movimiento sin ID');
   const ref=window._doc(window._db,'gastos',obraId);
-  const limpio=JSON.parse(JSON.stringify(gasto));
+  const limpio=JSON.parse(JSON.stringify({...gasto,activo:true,updatedAt:gasto.updatedAt||new Date().toISOString()}));
   setSyncStatus('Firebase: guardando...');
-  const arr=await window._runTransaction(window._db,async tx=>{
-    const snap=await tx.get(ref);
-    const remoto=snap.exists()?(snap.data()||{}):{};
-    let gastos=Array.isArray(remoto.gastos)?remoto.gastos.slice():[];
-    gastos=gastos.filter(x=>String(x&&x.id||'')!==String(limpio.id||''));
-    gastos.push(limpio);
-    tx.set(ref,{gastos,updatedAt:new Date().toISOString()},{merge:true});
-    return gastos;
-  });
+  await window._setDoc(ref,{gastosItems:{[id]:limpio},updatedAtIntegraciones:new Date().toISOString()},{merge:true});
   if(!state[obraId])state[obraId]=emptyState();
-  state[obraId].gastos=migrateState({gastos:arr,financiero:state[obraId].financiero||{}}).gastos;
+  state[obraId].gastosItems=(state[obraId].gastosItems&&typeof state[obraId].gastosItems==='object')?state[obraId].gastosItems:{};
+  state[obraId].gastosItems[id]=limpio;
+  state[obraId]=migrateState(state[obraId]);
   localStorage.setItem(dbKey(obraId),JSON.stringify(state[obraId]));
   setSyncStatus('Firebase: guardado','ok');
 }
@@ -2211,19 +2238,16 @@ async function cqPersistGastoDelete(obraId,id){
     setSyncStatus('Firebase: local');
     return;
   }
-  if(!window._runTransaction)throw new Error('Firebase transaccional no disponible');
+  id=String(id);
   const ref=window._doc(window._db,'gastos',obraId);
+  const now=new Date().toISOString();
+  const tomb={id,activo:false,deletedAt:now,updatedAt:now};
   setSyncStatus('Firebase: guardando...');
-  const arr=await window._runTransaction(window._db,async tx=>{
-    const snap=await tx.get(ref);
-    const remoto=snap.exists()?(snap.data()||{}):{};
-    const gastos=(Array.isArray(remoto.gastos)?remoto.gastos:[])
-      .filter(x=>String(x&&x.id||'')!==String(id));
-    tx.set(ref,{gastos,updatedAt:new Date().toISOString()},{merge:true});
-    return gastos;
-  });
+  await window._setDoc(ref,{gastosItems:{[id]:tomb},updatedAtIntegraciones:now},{merge:true});
   if(!state[obraId])state[obraId]=emptyState();
-  state[obraId].gastos=migrateState({gastos:arr,financiero:state[obraId].financiero||{}}).gastos;
+  state[obraId].gastosItems=(state[obraId].gastosItems&&typeof state[obraId].gastosItems==='object')?state[obraId].gastosItems:{};
+  state[obraId].gastosItems[id]=tomb;
+  state[obraId]=migrateState(state[obraId]);
   localStorage.setItem(dbKey(obraId),JSON.stringify(state[obraId]));
   setSyncStatus('Firebase: guardado','ok');
 }
@@ -3206,9 +3230,9 @@ async function saveGastoMasivo(){
   try{setSyncStatus('Firebase: guardando carga masiva...');await Promise.all(nuevos.map(([obraId,g])=>persistObraMasiva(obraId,g)));setSyncStatus('Firebase: guardado','ok');closeModal('modal-gasto-masivo');renderAll();alert(`Carga realizada en ${obras.length} obra${obras.length===1?'':'s'}.`);}catch(e){console.warn(e);setSyncStatus('Firebase: error','err');alert('Los datos quedaron guardados localmente, pero hubo un problema al sincronizar con Firebase.');renderAll();}
 }
 
-async function saveGasto(){const fecha=document.getElementById('g-fecha').value,cat=document.getElementById('g-cat').value,subrubro=document.getElementById('g-subrubro-sel').value,moneda=document.getElementById('g-moneda').value,montoIngresado=parseFloat(document.getElementById('g-monto').value),tc=parseFloat(document.getElementById('g-tc').value)||getDefaultTC(),nota=document.getElementById('g-nota').value.trim(),editId=document.getElementById('gasto-edit-id')?.value||'',esIngreso=document.getElementById('gasto-tipo')?.value==='ingreso';const usuarioActual=ensureUserName();if(!usuarioActual){openUserSelector();alert('Primero elegí quién está usando la app.');return;}const permiteNegativo=permiteMontoNegativo(cat,subrubro);if(!fecha||!subrubro||isNaN(montoIngresado)||montoIngresado===0||(esIngreso&&montoIngresado<0)||(!esIngreso&&!permiteNegativo&&montoIngresado<0)){alert(esIngreso?'Completá fecha, subrubro y un monto positivo. El sistema lo guardará automáticamente en negativo.':(permiteNegativo?'Completá fecha, subrubro y un monto distinto de cero. En Materiales podés usar negativo para que sume como crédito/devolución.':'Completá fecha, subrubro y monto positivo'));return}const monto=esIngreso?-Math.abs(montoIngresado):montoIngresado;setDefaultTC(tc);const nowISO=new Date().toISOString();const gastoData={fecha,cat,subrubro,moneda,monto,tc,nota,tipoMovimiento:esIngreso?'ingreso':'gasto',updatedAt:nowISO,updatedBy:usuarioActual};let guardado=null;if(editId){const arr=getS().gastos;const idx=arr.findIndex(g=>g.id===editId);if(idx>=0){arr[idx]={...arr[idx],...gastoData};guardado=arr[idx];}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};arr.push(guardado);}}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};getS().gastos.push(guardado);}document.getElementById('gasto-edit-id').value='';localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));closeModal('modal-gasto');renderAll();try{await cqPersistGastoUpsert(curObra,guardado);}catch(e){console.warn('Guardar gasto transaccional',e);setSyncStatus('Firebase: error','err');}}
+async function saveGasto(){const fecha=document.getElementById('g-fecha').value,cat=document.getElementById('g-cat').value,subrubro=document.getElementById('g-subrubro-sel').value,moneda=document.getElementById('g-moneda').value,montoIngresado=parseFloat(document.getElementById('g-monto').value),tc=parseFloat(document.getElementById('g-tc').value)||getDefaultTC(),nota=document.getElementById('g-nota').value.trim(),editId=document.getElementById('gasto-edit-id')?.value||'',esIngreso=document.getElementById('gasto-tipo')?.value==='ingreso';const usuarioActual=ensureUserName();if(!usuarioActual){openUserSelector();alert('Primero elegí quién está usando la app.');return;}const permiteNegativo=permiteMontoNegativo(cat,subrubro);if(!fecha||!subrubro||isNaN(montoIngresado)||montoIngresado===0||(esIngreso&&montoIngresado<0)||(!esIngreso&&!permiteNegativo&&montoIngresado<0)){alert(esIngreso?'Completá fecha, subrubro y un monto positivo. El sistema lo guardará automáticamente en negativo.':(permiteNegativo?'Completá fecha, subrubro y un monto distinto de cero. En Materiales podés usar negativo para que sume como crédito/devolución.':'Completá fecha, subrubro y monto positivo'));return}const monto=esIngreso?-Math.abs(montoIngresado):montoIngresado;setDefaultTC(tc);const nowISO=new Date().toISOString();const gastoData={fecha,cat,subrubro,moneda,monto,tc,nota,tipoMovimiento:esIngreso?'ingreso':'gasto',updatedAt:nowISO,updatedBy:usuarioActual};let guardado=null;if(editId){const arr=getS().gastos;const idx=arr.findIndex(g=>g.id===editId);if(idx>=0){arr[idx]={...arr[idx],...gastoData};guardado=arr[idx];}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};arr.push(guardado);}}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};getS().gastos.push(guardado);}document.getElementById('gasto-edit-id').value='';localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));closeModal('modal-gasto');renderAll();try{await cqPersistGastoUpsert(curObra,guardado);}catch(e){console.warn('Guardar gasto por ID',e);setSyncStatus('Firebase: error','err');}}
 function editGasto(id){const g=getS().gastos.find(x=>x.id===id);if(!g)return;const esIngreso=g.tipoMovimiento==='ingreso';document.getElementById('gasto-edit-id').value=g.id;document.getElementById('gasto-tipo').value=esIngreso?'ingreso':'gasto';document.getElementById('g-fecha').value=g.fecha||today();document.getElementById('g-cat').value=g.cat||(curObra==='oficina'?'ofi':'mat');updateSubrubroOptions();const sub=g.subrubro||g.concepto||'';const sel=document.getElementById('g-subrubro-sel');const opts=[...sel.options].map(o=>o.value);if(sub&&!opts.includes(sub)){const opt=document.createElement('option');opt.value=sub;opt.textContent=sub+' (actual)';sel.appendChild(opt);}sel.value=sub;const ss=document.getElementById('g-subrubro-search');if(ss)ss.value=sub||'';document.getElementById('g-moneda').value=g.moneda||'ars';document.getElementById('g-monto').value=esIngreso?Math.abs(parseFloat(g.monto)||0):(g.monto||'');document.getElementById('g-tc').value=g.tc||getDefaultTC();document.getElementById('g-nota').value=g.nota||'';setGastoModalTipo(esIngreso?'ingreso':'gasto');document.getElementById('modal-gasto').classList.add('open');}
-async function deleteGasto(id){const g=getS().gastos.find(x=>x.id===id);const nombre=g?.tipoMovimiento==='ingreso'?'ingreso':'gasto';if(!confirm('¿Eliminar este '+nombre+'?'))return;getS().gastos=getS().gastos.filter(g=>g.id!==id);localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));renderAll();try{await cqPersistGastoDelete(curObra,id);}catch(e){console.warn('Eliminar gasto transaccional',e);setSyncStatus('Firebase: error','err');}}
+async function deleteGasto(id){const g=getS().gastos.find(x=>x.id===id);const nombre=g?.tipoMovimiento==='ingreso'?'ingreso':'gasto';if(!confirm('¿Eliminar este '+nombre+'?'))return;getS().gastos=getS().gastos.filter(g=>g.id!==id);localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));renderAll();try{await cqPersistGastoDelete(curObra,id);}catch(e){console.warn('Eliminar gasto por ID',e);setSyncStatus('Firebase: error','err');}}
 function toggleAmoTc(kind){return;}
 function openModalAcuerdos(){const acuerdos=ensureAcuerdosMO();const mo=normalizeAcuerdo(acuerdos.mo);document.getElementById('amo-general').value=mo.monto||'';document.getElementById('amo-general-comentario').value=mo.comentario||'';document.getElementById('amo-general-moneda').value='ars';document.getElementById('amo-general-tc').value='';toggleAmoTc('general');const extras=Object.entries(acuerdos.ext);document.getElementById('amo-extras').innerHTML=extras.map(([nombre,acuerdo])=>acuerdoExtraRowHTML(nombre,acuerdo)).join('')||'<div class="muted" id="amo-empty">Sin extras cargados. Usá “Agregar extra”.</div>';openModal('modal-acuerdos')}
 function acuerdoExtraRowHTML(nombre='',acuerdo={monto:0,moneda:'usd',tc:1400,comentario:''}){acuerdo=normalizeAcuerdo(acuerdo);const id='x'+Date.now()+Math.floor(Math.random()*1000);const opts=[...(config.subrubros.ext||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<option value="${s}" ${s===nombre?'selected':''}>${s}</option>`).join('');return`<div data-extra-row="1" data-extra-row-id="${id}" style="border:1px solid #DDE8DE;border-radius:9px;padding:10px;margin-bottom:8px;background:#F8FBF8"><div class="fld-row"><div class="fld"><label>Extra</label><select class="amo-extra-nombre"><option value="">-- Seleccionar --</option>${opts}</select></div><div class="fld"><label>Acordado</label><input class="amo-extra-monto" type="number" min="0" step="0.01" value="${acuerdo.monto||''}"></div></div><div class="fld"><label>Comentario del extra</label><textarea class="amo-extra-comentario" rows="2" placeholder="Agregar comentario u observación">${escComentario(acuerdo.comentario||'')}</textarea></div><div class="fld-row"><div class="fld"><label>Moneda</label><select class="amo-extra-moneda" onchange="toggleAmoTc('${id}')"><option value="ars" selected>$ ARS</option></select></div></div><div style="display:flex;justify-content:flex-end"><button class="btn-del" type="button" onclick="this.closest('[data-extra-row]').remove()">Eliminar</button></div></div>`}

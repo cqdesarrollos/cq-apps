@@ -1439,16 +1439,26 @@ async function upsertGastoCC(obraId,payload,removeOnly=false){
   if(!obraId)throw new Error('El movimiento no tiene una obra/destino válido para Gastos.');
   const f=window._cqGastosBridge;
   const ref=f.doc(f.db,'gastos',obraId);
-  await f.runTransaction(f.db,async tx=>{
-    const snap=await tx.get(ref);
-    const data=snap.exists()?snap.data():{gastos:[],financiero:{venta:0,comision:0,acuerdosMO:{mo:{monto:0,moneda:'usd',tc:1400},ext:{}}}};
-    let gastos=Array.isArray(data.gastos)?data.gastos.slice():[];
-    gastos=gastos.filter(g=>String(g.id)!==String(payload.id));
-    if(!removeOnly)gastos.push(payload);
-    data.gastos=gastos;
-    data.updatedAt=new Date().toISOString();
-    tx.set(ref,data);
-  });
+  const id=String(payload&&payload.id||'').trim();
+  if(!id)throw new Error('El movimiento no tiene un ID válido para Gastos.');
+
+  // CQ 22/10/2026 — store por ID, sin transacciones ni reescritura del array completo.
+  // Cada origen actualiza solamente su movimiento. Gastos fusiona este mapa con el
+  // array histórico al leer el documento. removeOnly deja una baja lógica (tombstone)
+  // para que un gasto histórico con el mismo ID tampoco vuelva a aparecer.
+  const now=new Date().toISOString();
+  const entry=removeOnly
+    ? {id,activo:false,deletedAt:now,updatedAt:now,origen:'cq_caja_chica',cajaChicaMovimientoId:String(payload&&payload.cajaChicaMovimientoId||'')}
+    : {...payload,activo:true,updatedAt:now};
+  const body={gastosItems:{[id]:entry},updatedAtIntegraciones:now};
+
+  const write=f.setDoc(ref,body,{merge:true});
+  // Firestore puede dejar una promesa pendiente si el dispositivo pierde red.
+  // No dejar la UI eternamente en Sync: el reintento automático es idempotente.
+  await Promise.race([
+    write,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Tiempo agotado al escribir en Gastos')),6500))
+  ]);
 }
 function cqCcSetCurrentSyncState(id, destino, estado, error=''){
   try{
@@ -1635,6 +1645,21 @@ async function repararVinculosGastosCC(){
 }
 window.repararVinculosGastosCC=repararVinculosGastosCC;
 
+function cqCcRemoteGastos(data){
+  data=data||{};
+  const legacy=Array.isArray(data.gastos)?data.gastos:[];
+  const items=(data.gastosItems&&typeof data.gastosItems==='object')?data.gastosItems:{};
+  const byId=new Map();
+  legacy.forEach(g=>{if(g&&g.id!=null)byId.set(String(g.id),g);});
+  Object.values(items).forEach(g=>{
+    if(!g||g.id==null)return;
+    const id=String(g.id);
+    if(g.activo===false)byId.delete(id);
+    else byId.set(id,g);
+  });
+  return [...byId.values()];
+}
+
 async function verifyGastosCC(options={}){
   if(cqCcManualRepairRunning)return false;
   const repair=options.repair!==false;
@@ -1665,7 +1690,7 @@ async function verifyGastosCC(options={}){
     for(const oid of obraIds){
       try{
         const snap=await f.getDoc(f.doc(f.db,'gastos',oid));
-        docs[oid]=snap.exists()&&Array.isArray((snap.data()||{}).gastos)?snap.data().gastos:[];
+        docs[oid]=snap.exists()?cqCcRemoteGastos(snap.data()||{}):[];
       }catch(e){
         docs[oid]=null;
         needsAnotherRetry=true;
