@@ -215,6 +215,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
   .toolbar .btn{min-height:34px!important;padding:7px 8px!important;font-size:10px!important;border-radius:9px!important}
   .toolbar .btn-icon{width:17px!important;height:17px!important;font-size:11px!important}
   .toolbar .filter,.toolbar .search{min-height:34px!important;padding:7px 8px!important;font-size:10px!important}
+  #repairGastosBtn{grid-column:1/-1!important}
   .card{border-radius:10px!important}.card-title{padding:8px 9px!important;font-size:10px!important}.empty{padding:18px!important;font-size:10px!important}
 
   /* Historial: de tabla ancha a tarjeta compacta dentro del ancho del teléfono */
@@ -365,7 +366,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
 <main class="wrap">
 <section class="view active" id="movimientos">
 <div class="kpis kpis-currency"><div class="kpi kpi-ars"><small>Saldo · Pesos</small><strong class="green" id="kSaldo">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Saldo · Dólares</small><strong class="green" id="kSaldoUsd">USD 0</strong><span class="kpi-sub">USD</span></div><div class="kpi kpi-ars"><small>Ingresos · Pesos</small><strong class="blue" id="kIngresos">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Ingresos · Dólares</small><strong class="blue" id="kIngresosUsd">USD 0</strong><span class="kpi-sub">USD</span></div><div class="kpi kpi-ars"><small>Salidas · Pesos</small><strong class="red" id="kGastos">$ 0</strong><span class="kpi-sub">ARS</span></div><div class="kpi kpi-usd"><small>Salidas · Dólares</small><strong class="red" id="kGastosUsd">USD 0</strong><span class="kpi-sub">USD</span></div></div>
-<div class="toolbar"><button class="btn btn-primary" onclick="openMovement('gasto')"><span class="btn-icon">🧾</span>Registrar salida</button><button class="btn btn-blue" onclick="openMovement('ingreso')"><span class="btn-icon">💰</span>Registrar ingreso</button><input class="filter" id="movementDay" type="date" onchange="render()" title="Filtrar movimientos por día"/><button class="btn btn-light" id="clearMovementDay" onclick="document.getElementById('movementDay').value='';render()"><span class="btn-icon">🧹</span>Todos los días</button></div>
+<div class="toolbar"><button class="btn btn-primary" onclick="openMovement('gasto')"><span class="btn-icon">🧾</span>Registrar salida</button><button class="btn btn-blue" onclick="openMovement('ingreso')"><span class="btn-icon">💰</span>Registrar ingreso</button><input class="filter" id="movementDay" type="date" onchange="render()" title="Filtrar movimientos por día"/><button class="btn btn-light" id="clearMovementDay" onclick="document.getElementById('movementDay').value='';render()"><span class="btn-icon">🧹</span>Todos los días</button><button class="btn btn-light" id="repairGastosBtn" onclick="repararVinculosGastosCC()" title="Verificar y reconstruir los vínculos de Caja Chica con Gastos"><span class="btn-icon">🔧</span>Reparar vínculos</button></div>
 <div class="card"><div class="card-title"><span>Historial de movimientos</span><span><span id="resultCount">0 registros</span> </span></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Destino</th><th>Subrubro / comentario</th><th style="text-align:right">Importe</th></tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Todavía no hay movimientos cargados.</div></div></div>
 </section>
 <section class="view" id="reportes">
@@ -1343,8 +1344,11 @@ function syncDotCC(m){
   if(!m||m.type!=='gasto')return '';
   const st=m.gastosSyncEstado||'error';
   const cls=st==='ok'?'ok':(st==='pendiente'?'wait':'');
-  const title=st==='ok'?'Sincronizado con Gastos':(st==='pendiente'?'Sincronizando con Gastos…':'Error o faltante en Gastos');
-  return `<span class="gastos-sync-dot ${cls}" title="${esc(title)}"></span>`;
+  const detalle=String(m.gastosSyncError||'').trim();
+  const title=st==='ok'
+    ?'Sincronizado con Gastos'
+    :(st==='pendiente'?'Sincronizando con Gastos…':(detalle||'Error o faltante en Gastos'));
+  return `<span class="gastos-sync-dot ${cls}" title="${esc(title)}" data-sync-error="${esc(title)}" onclick="if(!this.classList.contains('ok'))alert(this.getAttribute('data-sync-error')||'Gastos sin sincronizar')" style="cursor:pointer"></span>`;
 }
 function materialDotCC(m){
   if(!m||m.type!=='gasto'||m.category!=='mat')return '';
@@ -1391,13 +1395,22 @@ function gastoPayloadCC(m){
     ? (detalleMaterial+(comentario?'\n'+comentario:''))
     : comentario;
 
+  // IMPORTANTE: los movimientos históricos pueden no tener algunos campos
+  // que hoy son obligatorios. Firestore rechaza cualquier `undefined` dentro
+  // de un array/documento, por eso normalizamos TODO antes de escribir.
+  var fechaSegura=String(m.date||'').trim();
+  var categoriaSegura=String(m.category||'').trim();
+  var subrubroSeguro=String(m.subrubro||m.concept||'').trim();
+  var creadoSeguro=String(m.createdAt||m.updatedAt||new Date().toISOString());
+  var usuarioSeguro=String(window._cqUsuarioActual||'Caja Chica');
+
   return {
-    id:gastoLinkIdCC(m.id),
-    createdAt:m.createdAt||m.updatedAt||new Date().toISOString(),
-    createdBy:window._cqUsuarioActual||'Caja Chica',
-    fecha:m.date,
-    cat:m.category,
-    subrubro:m.subrubro,
+    id:String(gastoLinkIdCC(m.id)),
+    createdAt:creadoSeguro,
+    createdBy:usuarioSeguro,
+    fecha:fechaSegura,
+    cat:categoriaSegura,
+    subrubro:subrubroSeguro,
     // Gastos trabaja con el importe base en pesos. Si Caja Chica registra USD,
     // se envía convertido a ARS con el TC guardado en el movimiento; Gastos
     // conserva el TC y calcula por sí mismo la equivalencia en dólares.
@@ -1415,13 +1428,15 @@ function gastoPayloadCC(m){
     notaSecundaria:comentario,
 
     updatedAt:new Date().toISOString(),
-    updatedBy:window._cqUsuarioActual||'Caja Chica',
+    updatedBy:usuarioSeguro,
     origen:'cq_caja_chica',
     cajaChicaMovimientoId:String(m.id)
   };
 }
 async function upsertGastoCC(obraId,payload,removeOnly=false){
   if(!window._cqGastosBridge)throw new Error('Firebase no está listo.');
+  obraId=String(obraId||'').trim();
+  if(!obraId)throw new Error('El movimiento no tiene una obra/destino válido para Gastos.');
   const f=window._cqGastosBridge;
   const ref=f.doc(f.db,'gastos',obraId);
   await f.runTransaction(f.db,async tx=>{
@@ -1542,6 +1557,84 @@ function cqCcBackfillGastosObraIdHistoricos(){
   }
   return changed;
 }
+
+async function repararVinculosGastosCC(){
+  const btn=document.getElementById('repairGastosBtn');
+  const oldHtml=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="btn-icon">⏳</span>Reparando…';}
+  try{
+    if(!window._cqGastosBridge)throw new Error('Firebase todavía no está listo. Esperá a que arriba figure ON y volvé a tocar Reparar vínculos.');
+    try{if(!gastosConfigCC)await loadGastosConfigCC();}catch(e){console.warn('Config Gastos para reparación manual',e);}
+
+    const historicosActualizados=cqCcBackfillGastosObraIdHistoricos();
+    const movimientos=(db.movements||[]).filter(m=>m&&m.type==='gasto'&&String(m.gastosObraId||'').trim());
+    if(!movimientos.length){
+      if(historicosActualizados)save();
+      alert('No hay gastos vinculables para reparar.');
+      return;
+    }
+
+    // Reparación fuerte pero eficiente: una transacción por obra, no una por gasto.
+    // Conserva todos los gastos de otros orígenes y reconstruye sólo los IDs de Caja Chica.
+    const grupos=new Map();
+    movimientos.forEach(m=>{
+      const oid=String(m.gastosObraId||'').trim();
+      if(!grupos.has(oid))grupos.set(oid,[]);
+      grupos.get(oid).push(m);
+    });
+
+    const f=window._cqGastosBridge;
+    let reparados=0,errores=0,obrasOk=0,obrasError=0;
+    const mensajes=[];
+
+    for(const [oid,movs] of grupos.entries()){
+      try{
+        const ref=f.doc(f.db,'gastos',oid);
+        await f.runTransaction(f.db,async tx=>{
+          const snap=await tx.get(ref);
+          const data=snap.exists()?snap.data():{gastos:[],financiero:{venta:0,comision:0,acuerdosMO:{mo:{monto:0,moneda:'usd',tc:1400},ext:{}}}};
+          let arr=Array.isArray(data.gastos)?data.gastos.slice():[];
+          const ids=new Set(movs.map(m=>String(gastoLinkIdCC(m.id))));
+          arr=arr.filter(g=>!ids.has(String(g&&g.id||'')));
+          movs.forEach(m=>arr.push(gastoPayloadCC(m)));
+          data.gastos=arr;
+          data.updatedAt=new Date().toISOString();
+          tx.set(ref,data);
+        });
+        const at=new Date().toISOString();
+        movs.forEach(m=>{
+          m.gastosSyncEstado='ok';
+          m.gastosSyncError='';
+          m.gastosSyncAt=at;
+        });
+        reparados+=movs.length;
+        obrasOk++;
+      }catch(e){
+        const msg=String(e&&e.message||e||'Error desconocido');
+        console.warn('Reparar Caja Chica → Gastos · '+oid,e);
+        const at=new Date().toISOString();
+        movs.forEach(m=>{
+          m.gastosSyncEstado='error';
+          m.gastosSyncError=msg;
+          m.gastosSyncAt=at;
+        });
+        errores+=movs.length;
+        obrasError++;
+        mensajes.push((obraLabelCC(oid)||oid)+': '+msg);
+      }
+    }
+
+    save();render();
+    const base=`${movimientos.length} revisados · ${reparados} reparados · ${errores} con error`;
+    alert(mensajes.length?base+'\n\n'+mensajes.slice(0,4).join('\n'):base+'\n\nLos vínculos con Gastos fueron reconstruidos.');
+  }catch(e){
+    console.warn('Reparación manual Caja Chica → Gastos',e);
+    alert('No se pudo reparar: '+String(e&&e.message||e));
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML=oldHtml||'<span class="btn-icon">🔧</span>Reparar vínculos';}
+  }
+}
+window.repararVinculosGastosCC=repararVinculosGastosCC;
 
 async function verifyGastosCC(options={}){
   const repair=options.repair!==false;
