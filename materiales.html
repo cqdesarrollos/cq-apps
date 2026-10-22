@@ -10951,18 +10951,36 @@ window.openReporteArchivarObras=openReporteArchivarObras;
 window.closeReporteArchivarObras=closeReporteArchivarObras;
 window.cqToggleArchivoObraReporte=cqToggleArchivoObraReporte;
 
+function cqReporteMantenerScroll(fn){
+  var sx=window.scrollX||0, sy=window.scrollY||document.documentElement.scrollTop||0;
+  try{
+    var ae=document.activeElement;
+    if(ae&&ae.blur&&ae.closest&&ae.closest('#compare-obra-chips'))ae.blur();
+  }catch(e){}
+  fn();
+  function volver(){
+    try{window.scrollTo(sx,sy);}catch(e){}
+  }
+  volver();
+  requestAnimationFrame(volver);
+  setTimeout(volver,40);
+}
 function selectTodasObras(){
-  var visibles=cqReporteObrasActivas().map(function(x){return x.i;});
-  var todas=visibles.length>0 && compareObrasSel.length===visibles.length
-    && visibles.every(function(i){return compareObrasSel.indexOf(i)>=0;});
-  compareObrasSel=todas?[]:visibles.slice();
-  renderCompareObras();
+  cqReporteMantenerScroll(function(){
+    var visibles=cqReporteObrasActivas().map(function(x){return x.i;});
+    var todas=visibles.length>0 && compareObrasSel.length===visibles.length
+      && visibles.every(function(i){return compareObrasSel.indexOf(i)>=0;});
+    compareObrasSel=todas?[]:visibles.slice();
+    renderCompareObras();
+  });
 }
 function toggleCompareObra(idx){
-  var pos=compareObrasSel.indexOf(idx);
-  if(pos>=0) compareObrasSel.splice(pos,1);
-  else compareObrasSel.push(idx);
-  renderCompareObras();
+  cqReporteMantenerScroll(function(){
+    var pos=compareObrasSel.indexOf(idx);
+    if(pos>=0) compareObrasSel.splice(pos,1);
+    else compareObrasSel.push(idx);
+    renderCompareObras();
+  });
 }
 function renderCompareObras(){
   var obras=getObras();
@@ -10979,9 +10997,7 @@ function renderCompareObras(){
   cqActualizarBotonArchivoReporte();
   var chipsEl=document.getElementById('compare-obra-chips');
   if(chipsEl){
-    chipsEl.style.setProperty('display','grid','important');
-    chipsEl.style.setProperty('grid-template-columns','repeat(6,minmax(0,1fr))','important');
-    chipsEl.style.setProperty('gap','10px','important');
+    /* La grilla se dimensiona sólo por CSS. Evita cambios transitorios de alto/gap al seleccionar en móvil. */
     chipsEl.innerHTML=obrasRev.length?obrasRev.map(function(x){
       var sel=compareObrasSel.indexOf(x.i)>=0;
       return cqReporteObraTile(x.o,x.i,sel);
@@ -16041,6 +16057,7 @@ window.abrirGraficoDirecto = function(){
 /* 15/10/2026 — móvil aprobado: 6 obras por fila, pero con altura suficiente para leer el nombre completo. */
 @media (max-width:620px){
   #compare-obra-chips.cq-report-obras-grid{
+    overflow-anchor:none!important;
     grid-template-columns:repeat(6,minmax(0,1fr))!important;
     gap:4px!important;
   }
@@ -18391,42 +18408,6 @@ body:has(#modal-reporte.open) #modal-reporte{
   window.__cqFitReporteObrasMovil=schedule;
 })();
 </script>
-
-
-
-<script id="cq-forzar-altura-movil-obras-v15">
-(function(){
-  if(window.__cqForzarAlturaMovilObrasV15)return;
-  window.__cqForzarAlturaMovilObrasV15=true;
-  function aplicar(){
-    if(!window.matchMedia || !window.matchMedia('(max-width:620px)').matches)return;
-    var root=document.getElementById('compare-obra-chips');
-    if(!root)return;
-    root.style.setProperty('grid-template-columns','repeat(6,minmax(0,1fr))','important');
-    root.style.setProperty('gap','4px','important');
-    root.querySelectorAll('.cq-report-obra-tile').forEach(function(btn){
-      btn.style.setProperty('height','68px','important');
-      btn.style.setProperty('min-height','68px','important');
-      btn.style.setProperty('max-height','68px','important');
-      btn.style.setProperty('padding-top','5px','important');
-      btn.style.setProperty('padding-bottom','5px','important');
-      btn.style.setProperty('align-items','center','important');
-      btn.style.setProperty('justify-content','center','important');
-    });
-  }
-  function programar(){requestAnimationFrame(function(){aplicar();setTimeout(aplicar,40);setTimeout(aplicar,180);});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',programar,{once:true});else programar();
-  window.addEventListener('resize',programar,{passive:true});
-  document.addEventListener('click',function(e){
-    if(e.target&&e.target.closest&&e.target.closest('#view-obras'))setTimeout(programar,0);
-  },true);
-  var obs=new MutationObserver(function(){programar();});
-  function observar(){var root=document.getElementById('compare-obra-chips');if(root)obs.observe(root,{childList:true,subtree:true});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',observar,{once:true});else observar();
-})();
-</script>
-
-
 <style id="cq-reporte-botones-movil-compactos-v2">
 @media (max-width:620px){
   #view-obras .cq-report-obras-panel{
@@ -18576,38 +18557,10 @@ body:has(#modal-reporte.open) #modal-reporte{
 }
 </style>
 
-<script id="cq-reporte-botones-movil-compactos-script-v2">
-(function(){
-  if(window.__cqReporteBotonesMovilCompactosV2)return;
-  window.__cqReporteBotonesMovilCompactosV2=true;
-  function aplicar(){
-    if(!window.matchMedia||!window.matchMedia('(max-width:620px)').matches)return;
-    var small=window.matchMedia('(max-width:360px)').matches;
-    var grid=document.getElementById('compare-obra-chips');
-    if(grid){
-      grid.style.setProperty('grid-template-columns',small?'repeat(5,minmax(0,1fr))':'repeat(6,minmax(0,1fr))','important');
-      grid.style.setProperty('gap','5px','important');
-      grid.querySelectorAll('.cq-report-obra-tile').forEach(function(btn){
-        btn.style.setProperty('height','56px','important');
-        btn.style.setProperty('min-height','56px','important');
-        btn.style.setProperty('max-height','56px','important');
-        btn.style.setProperty('padding','4px 3px','important');
-        btn.style.setProperty('border-radius','9px','important');
-      });
-    }
-    var actions=document.querySelector('#view-obras .cq-report-obras-actions');
-    if(actions){
-      actions.style.setProperty('display','grid','important');
-      actions.style.setProperty('grid-template-columns','repeat(4,minmax(0,1fr))','important');
-      actions.style.setProperty('gap','5px','important');
-    }
-  }
-  function programar(){requestAnimationFrame(function(){aplicar();setTimeout(aplicar,70);setTimeout(aplicar,240);});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',programar,{once:true});else programar();
-  window.addEventListener('resize',programar,{passive:true});
-  document.addEventListener('click',function(e){if(e.target&&e.target.closest&&e.target.closest('#view-obras'))setTimeout(programar,0);},true);
-  var obs=new MutationObserver(function(){programar();});
-  function observar(){var root=document.getElementById('view-obras');if(root)obs.observe(root,{childList:true,subtree:true});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',observar,{once:true});else observar();
-})();
-</script>
+<style id="cq-reporte-scroll-estable-v1">
+@media (max-width:620px){
+  #view-obras .cq-report-obras-panel,
+  #view-obras #compare-obra-chips,
+  #view-obras #obras-content{overflow-anchor:none!important;}
+}
+</style>
