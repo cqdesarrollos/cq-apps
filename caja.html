@@ -2253,7 +2253,7 @@ render();
 import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, getDocFromServer, setDoc, onSnapshot, serverTimestamp, runTransaction, enableNetwork
+  getFirestore, doc, getDoc, getDocFromServer, setDoc, onSnapshot, serverTimestamp, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const CC_COL="caja_chica_app";
@@ -2280,7 +2280,7 @@ let retryFailuresCC=0;
 let serverReadyCC=false;
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
-window.__cqCajaBuild='2026-10-22-firebase-auth-v1';
+window.__cqCajaBuild='2026-10-22-no-enable-network-v2';
 
 function cqTimeoutCC(promise,ms,label='Firebase'){
   let t;
@@ -2500,7 +2500,8 @@ async function firebaseCC(){
   }
   if(!auth.currentUser)throw new Error("Firebase sin sesión autenticada");
   const fdb=getFirestore(app);
-  try{await cqTimeoutCC(enableNetwork(fdb),5000,'Habilitar red Firebase');}catch(e){console.warn('enableNetwork Caja Chica',e);}
+  // No forzar enableNetwork(): Firestore ya administra su conectividad y
+  // llamadas repetidas pueden dejar el AsyncQueue interno en estado inválido.
   return fdb;
 }
 
@@ -2596,7 +2597,8 @@ async function saveRemoteCC(){
     fallo=true;
     retryFailuresCC=Math.min(retryFailuresCC+1,6);
     console.warn("Caja Chica Firebase save",e);
-    setStatusCC("err","OFF",String(e&&e.message||e||'Sin conexión Firebase'));
+    const msg=String(e&&e.message||e||'Sin conexión Firebase');
+    setStatusCC("err","OFF",msg);
   }finally{
     savingCC=false;
     if(dirtyCC){
@@ -3068,7 +3070,7 @@ onAuthStateChanged(auth,async user=>{
 <script type="module" id="cq-gastos-bridge">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, getDocFromServer, setDoc, runTransaction, enableNetwork } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocFromServer, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const cfg={
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
   authDomain:"cq-mano-de-obra.firebaseapp.com",
@@ -3086,11 +3088,12 @@ async function waitReady(timeoutMs=12000){
     await new Promise(r=>setTimeout(r,125));
   }
   if(!auth.currentUser)throw new Error('Firebase sin sesión autenticada');
-  try{await Promise.race([enableNetwork(db),new Promise((_,rej)=>setTimeout(()=>rej(new Error('No se pudo habilitar la red Firebase')),5000))]);}catch(e){console.warn('Bridge enableNetwork',e);}
+  // La red de Firestore se gestiona de forma nativa. No llamar enableNetwork()
+  // sobre una instancia que ya está online: puede provocar INTERNAL ASSERTION FAILED.
   if(window.__cqWaitFirebaseReadyCC)await window.__cqWaitFirebaseReadyCC();
   return true;
 }
-window._cqGastosBridge={db,doc,getDoc,getDocFromServer,setDoc,runTransaction,enableNetwork,waitReady,auth};
+window._cqGastosBridge={db,doc,getDoc,getDocFromServer,setDoc,runTransaction,waitReady,auth};
 async function announce(){
   try{
     await waitReady();
