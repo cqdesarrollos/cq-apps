@@ -2252,9 +2252,144 @@ render();
 <script type="module" id="cq-caja-chica-full-firebase">
 import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import {
-  getFirestore, doc, getDoc, getDocFromServer, setDoc, onSnapshot, serverTimestamp, runTransaction
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+/* CQ 22/10/2026 — Adaptador Firestore por HTTPS.
+   Evita el AsyncQueue interno del SDK de Firestore en Caja Chica. */
+const CQ_FS_PROJECT="cq-mano-de-obra";
+const CQ_FS_BASE="https://firestore.googleapis.com/v1/projects/"+CQ_FS_PROJECT+"/databases/(default)/documents";
+let cqRestAppCC=null;
+
+function getFirestore(app){cqRestAppCC=app||cqRestAppCC;return{app:cqRestAppCC,projectId:CQ_FS_PROJECT,__rest:true};}
+function doc(_db,...parts){return{parts:parts.map(v=>String(v)),path:parts.map(v=>String(v)).join("/")};}
+function serverTimestamp(){return new Date().toISOString();}
+function cqFsEncodeCC(v){
+  if(v===null)return{nullValue:null};
+  if(v===undefined)return null;
+  if(typeof v==="boolean")return{booleanValue:v};
+  if(typeof v==="number"){
+    if(!Number.isFinite(v))return{doubleValue:0};
+    return Number.isInteger(v)?{integerValue:String(v)}:{doubleValue:v};
+  }
+  if(typeof v==="string")return{stringValue:v};
+  if(Array.isArray(v))return{arrayValue:{values:v.map(cqFsEncodeCC).filter(Boolean)}};
+  if(v&&typeof v==="object"){
+    const fields={};
+    Object.keys(v).forEach(k=>{const ev=cqFsEncodeCC(v[k]);if(ev)fields[k]=ev;});
+    return{mapValue:{fields}};
+  }
+  return{stringValue:String(v)};
+}
+function cqFsDecodeCC(v){
+  if(!v||typeof v!=="object")return null;
+  if("nullValue"in v)return null;
+  if("booleanValue"in v)return!!v.booleanValue;
+  if("integerValue"in v)return Number(v.integerValue);
+  if("doubleValue"in v)return Number(v.doubleValue);
+  if("timestampValue"in v)return String(v.timestampValue||"");
+  if("stringValue"in v)return String(v.stringValue||"");
+  if("arrayValue"in v)return((v.arrayValue&&v.arrayValue.values)||[]).map(cqFsDecodeCC);
+  if("mapValue"in v){const out={};const fs=(v.mapValue&&v.mapValue.fields)||{};Object.keys(fs).forEach(k=>out[k]=cqFsDecodeCC(fs[k]));return out;}
+  if("referenceValue"in v)return String(v.referenceValue||"");
+  return null;
+}
+function cqFsFieldsEncodeCC(obj){const fields={};Object.keys(obj||{}).forEach(k=>{const ev=cqFsEncodeCC(obj[k]);if(ev)fields[k]=ev;});return fields;}
+function cqFsFieldsDecodeCC(fields){const out={};Object.keys(fields||{}).forEach(k=>out[k]=cqFsDecodeCC(fields[k]));return out;}
+function cqFsFieldSegmentCC(s){s=String(s);if(/^[A-Za-z_][A-Za-z0-9_]*$/.test(s))return s;return"`"+s.replace(/\\/g,"\\\\").replace(/`/g,"\\`")+"`";}
+function cqFsLeafPathsCC(value,prefix=[]){
+  const out=[];
+  if(value===null||value===undefined||Array.isArray(value)||typeof value!=="object"){if(prefix.length)out.push(prefix.map(cqFsFieldSegmentCC).join("."));return out;}
+  const keys=Object.keys(value).filter(k=>value[k]!==undefined);
+  if(!keys.length){if(prefix.length)out.push(prefix.map(cqFsFieldSegmentCC).join("."));return out;}
+  keys.forEach(k=>out.push(...cqFsLeafPathsCC(value[k],prefix.concat(k))));
+  return out;
+}
+async function cqFsAuthCC(){
+  const app=cqRestAppCC||(getApps().length?getApp():null);
+  if(!app)throw new Error("Firebase no disponible");
+  const auth=getAuth(app);
+  let tries=0;
+  while(!auth.currentUser&&tries<80){await new Promise(r=>setTimeout(r,125));tries++;}
+  if(!auth.currentUser)throw new Error("Firebase sin sesión autenticada");
+  return auth.currentUser;
+}
+async function cqFsRequestCC(ref,method="GET",body=null,params=[],timeoutMs=9000){
+  const user=await cqFsAuthCC();
+  const token=await user.getIdToken(false);
+  const path=(ref.parts||String(ref.path||"").split("/")).map(encodeURIComponent).join("/");
+  const qs=params.length?("?"+params.map(([k,v])=>encodeURIComponent(k)+"="+encodeURIComponent(v)).join("&")):"";
+  const ctrl=new AbortController(), t=setTimeout(()=>ctrl.abort(),timeoutMs);
+  try{
+    const res=await fetch(CQ_FS_BASE+"/"+path+qs,{
+      method,
+      headers:{"Authorization":"Bearer "+token,...(body?{"Content-Type":"application/json"}:{})},
+      body:body?JSON.stringify(body):undefined,
+      cache:"no-store",signal:ctrl.signal
+    });
+    if(method==="GET"&&res.status===404)return null;
+    let data=null;try{data=await res.json();}catch(_e){}
+    if(!res.ok){const msg=(data&&data.error&&data.error.message)||("HTTP "+res.status);const e=new Error(msg);e.status=res.status;e.code=(res.status===403?'permission-denied':(res.status===401?'unauthenticated':''));e.payload=data;throw e;}
+    return data||{};
+  }catch(e){if(e&&e.name==="AbortError")throw new Error("Firebase HTTPS · tiempo agotado");throw e;}
+  finally{clearTimeout(t);}
+}
+async function getDoc(ref){
+  const raw=await cqFsRequestCC(ref,"GET");
+  const data=raw?cqFsFieldsDecodeCC(raw.fields||{}):null;
+  return{exists:()=>!!raw,data:()=>data,_updateTime:raw&&raw.updateTime?String(raw.updateTime):""};
+}
+const getDocFromServer=getDoc;
+async function setDoc(ref,data,options={}){
+  const params=[];
+  if(options&&options.merge)cqFsLeafPathsCC(data||{}).forEach(fp=>params.push(["updateMask.fieldPaths",fp]));
+  if(options&&options.__updateTime)params.push(["currentDocument.updateTime",String(options.__updateTime)]);
+  return cqFsRequestCC(ref,"PATCH",{fields:cqFsFieldsEncodeCC(data||{})},params,10000);
+}
+function onSnapshot(ref,next,error){
+  let stopped=false,timer=null,last="";
+  const tick=async()=>{
+    if(stopped)return;
+    try{const snap=await getDoc(ref);const token=String(snap._updateTime||"");if(token!==last){last=token;next(snap);}}
+    catch(e){if(error)error(e);}
+    if(!stopped)timer=setTimeout(tick,15000);
+  };
+  timer=setTimeout(tick,80);
+  return()=>{stopped=true;if(timer)clearTimeout(timer);};
+}
+async function runTransaction(_db,fn){
+  let lastErr=null;
+  for(let attempt=0;attempt<4;attempt++){
+    const reads=new Map(),writes=[];
+    const tx={get:async ref=>{const s=await getDoc(ref);reads.set(ref.path,s);return s;},set:(ref,data,options)=>writes.push({ref,data,options:options||{}})};
+    try{
+      const result=await fn(tx);
+      for(const w of writes){
+        const rs=reads.get(w.ref.path);
+        await setDoc(w.ref,w.data,{...(w.options||{}),__updateTime:rs&&rs._updateTime?rs._updateTime:undefined});
+      }
+      return result;
+    }catch(e){
+      lastErr=e;
+      if(!(e&&e.status===409)&&!/precondition|ABORTED|FAILED_PRECONDITION/i.test(String(e&&e.message||e)))throw e;
+      await new Promise(r=>setTimeout(r,150*(attempt+1)));
+    }
+  }
+  throw lastErr||new Error("No se pudo completar la operación");
+}
+async function listCollection(collectionPath,pageSize=50,orderBy=''){
+  const parts=String(collectionPath||'').split('/').filter(Boolean);
+  const params=[['pageSize',String(Math.max(1,Math.min(1000,Number(pageSize)||50)))]];
+  if(orderBy)params.push(['orderBy',String(orderBy)]);
+  const raw=await cqFsRequestCC({parts,path:parts.join('/')},'GET',null,params,10000);
+  return ((raw&&raw.documents)||[]).map(d=>{
+    const name=String(d.name||'');
+    const id=name.split('/').pop()||'';
+    const data=cqFsFieldsDecodeCC(d.fields||{});
+    return{id,data:()=>data,ref:doc(null,...parts,id),_updateTime:String(d.updateTime||'')};
+  });
+}
+async function deleteDoc(ref){return cqFsRequestCC(ref,'DELETE',null,[],10000);}
+window.__cqRestFirestoreAdapterCC={getFirestore,doc,getDoc,getDocFromServer,setDoc,onSnapshot,serverTimestamp,runTransaction,listCollection,deleteDoc};
+
 
 const CC_COL="caja_chica_app";
 const CC_DOC="main";
@@ -2280,7 +2415,7 @@ let retryFailuresCC=0;
 let serverReadyCC=false;
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
-window.__cqCajaBuild='2026-10-22-no-enable-network-v2';
+window.__cqCajaBuild='2026-10-22-rest-https-v3';
 
 function cqTimeoutCC(promise,ms,label='Firebase'){
   let t;
@@ -2990,7 +3125,9 @@ setTimeout(()=>{if(window._cqAuthProfile)startCC();},900);
 <script type="module" id="cq-access-total-script">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const aFS=window.__cqRestFirestoreAdapterCC;
+if(!aFS)throw new Error("Adaptador Firebase HTTPS no disponible");
+const {getFirestore,doc,getDoc}=aFS;
 
 const cfg={apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",authDomain:"cq-mano-de-obra.firebaseapp.com",projectId:"cq-mano-de-obra",storageBucket:"cq-mano-de-obra.firebasestorage.app",messagingSenderId:"502127540211",appId:"1:502127540211:web:8daefc75bdaafad412c486"};
 const app=getApps().length?getApp():initializeApp(cfg);
@@ -3070,7 +3207,6 @@ onAuthStateChanged(auth,async user=>{
 <script type="module" id="cq-gastos-bridge">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, getDocFromServer, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const cfg={
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
   authDomain:"cq-mano-de-obra.firebaseapp.com",
@@ -3081,19 +3217,18 @@ const cfg={
 };
 const app=getApps().length?getApp():initializeApp(cfg);
 const auth=getAuth(app);
-const db=getFirestore(app);
+const a=window.__cqRestFirestoreAdapterCC;
+if(!a)throw new Error('Adaptador Firebase HTTPS no disponible');
+const db=a.getFirestore(app);
+const {doc,getDoc,getDocFromServer,setDoc,runTransaction}=a;
 async function waitReady(timeoutMs=12000){
   const started=Date.now();
-  while(!auth.currentUser&&Date.now()-started<timeoutMs){
-    await new Promise(r=>setTimeout(r,125));
-  }
+  while(!auth.currentUser&&Date.now()-started<timeoutMs){await new Promise(r=>setTimeout(r,125));}
   if(!auth.currentUser)throw new Error('Firebase sin sesión autenticada');
-  // La red de Firestore se gestiona de forma nativa. No llamar enableNetwork()
-  // sobre una instancia que ya está online: puede provocar INTERNAL ASSERTION FAILED.
   if(window.__cqWaitFirebaseReadyCC)await window.__cqWaitFirebaseReadyCC();
   return true;
 }
-window._cqGastosBridge={db,doc,getDoc,getDocFromServer,setDoc,runTransaction,waitReady,auth};
+window._cqGastosBridge={db,doc,getDoc,getDocFromServer,setDoc,runTransaction,waitReady,auth,transport:'https'};
 async function announce(){
   try{
     await waitReady();
@@ -3109,7 +3244,9 @@ if(window.__cqFirebaseServerReadyCC)announce();
 <script type="module" id="cq-tipo-cambio-global">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const aTC=window.__cqRestFirestoreAdapterCC;
+if(!aTC)throw new Error("Adaptador Firebase HTTPS no disponible");
+const {getFirestore,doc,getDoc,onSnapshot}=aTC;
 
 const cfgTC={
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
@@ -4397,8 +4534,9 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
 </div></div>
 <script type="module" id="cq-backup-caja-script">
 import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
+const aBK=window.__cqRestFirestoreAdapterCC;
+if(!aBK)throw new Error('Adaptador Firebase HTTPS no disponible');
+const {getFirestore,doc,setDoc,deleteDoc,listCollection}=aBK;
 const BK_COL="backups_caja_chica";
 const KEEP=30;
 const btn=document.getElementById("cqBackupCajaBtn"), modal=document.getElementById("cqBkCajaModal");
@@ -4407,27 +4545,27 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function db(){for(let i=0;i<40&&!getApps().length;i++)await sleep(150);if(!getApps().length)throw new Error("Firebase no disponible");return getFirestore(getApp())}
 function state(){if(typeof window.__cqCajaChicaGetState!=="function")throw new Error("Estado de Caja Chica no disponible");return JSON.parse(JSON.stringify(window.__cqCajaChicaGetState()))}
 function idNow(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}_${Date.now()}`}
-async function prune(fdb){const snap=await getDocs(query(collection(fdb,BK_COL),orderBy("createdAtMs","desc")));const docs=snap.docs;for(let i=KEEP;i<docs.length;i++)await deleteDoc(docs[i].ref)}
-async function createBackup(kind="Manual"){
- const fdb=await db(), now=Date.now();
- await setDoc(doc(fdb,BK_COL,idNow()),{kind,createdAt:serverTimestamp(),createdAtMs:now,state:state()});
- await prune(fdb); await loadList();
+function dayKey(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}`}
+async function rows(){return await listCollection(BK_COL,KEEP+20,'createdAtMs desc')}
+async function prune(){const docs=await rows();for(let i=KEEP;i<docs.length;i++)await deleteDoc(docs[i].ref)}
+async function createBackup(kind="Manual",fixedId=''){
+ const fdb=await db(), now=Date.now(), id=fixedId||idNow();
+ await setDoc(doc(fdb,BK_COL,id),{kind,createdAt:new Date().toISOString(),createdAtMs:now,state:state()});
+ await prune(); await loadList();
 }
 async function ensureDaily(){
  try{
-  const fdb=await db(), snap=await getDocs(query(collection(fdb,BK_COL),orderBy("createdAtMs","desc"),limit(1)));
-  const last=snap.empty?0:Number(snap.docs[0].data().createdAtMs||0), a=new Date(last), b=new Date();
-  const same=last&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
-  if(!same) await createBackup("Automático diario");
+  const id='auto_'+dayKey(), docs=await rows();
+  if(!docs.some(x=>x.id===id))await createBackup("Automático diario",id);
  }catch(e){console.warn("Backup diario Caja Chica:",e)}
 }
 async function loadList(){
  try{
   list.innerHTML='<div class="cq-bk-empty">Cargando…</div>';
-  const fdb=await db(), snap=await getDocs(query(collection(fdb,BK_COL),orderBy("createdAtMs","desc"),limit(KEEP)));
-  if(snap.empty){list.innerHTML='<div class="cq-bk-empty">Todavía no hay backups guardados.</div>';return}
+  const docs=(await rows()).slice(0,KEEP);
+  if(!docs.length){list.innerHTML='<div class="cq-bk-empty">Todavía no hay backups guardados.</div>';return}
   list.innerHTML="";
-  snap.forEach(ds=>{
+  docs.forEach(ds=>{
    const x=ds.data(), d=new Date(Number(x.createdAtMs||0));
    const row=document.createElement("div");row.className="cq-bk-row";
    const meta=document.createElement("div");meta.className="cq-bk-meta";
@@ -4448,7 +4586,8 @@ btn.addEventListener("click",async()=>{modal.classList.add("open");modal.setAttr
 close.addEventListener("click",()=>{modal.classList.remove("open");modal.setAttribute("aria-hidden","true")});
 modal.addEventListener("click",e=>{if(e.target===modal)close.click()});
 manual.addEventListener("click",async()=>{manual.disabled=true;try{await createBackup("Manual");alert("Backup creado.")}catch(e){alert("No se pudo crear: "+e.message)}finally{manual.disabled=false}});
-setTimeout(ensureDaily,2200);
+// Esperar a que la sincronización principal esté estable antes del backup diario.
+document.addEventListener('cq-firebase-server-ready',()=>setTimeout(ensureDaily,4000),{once:true});
 </script>
 
 <!-- CQ 2026-10-13: permisos individuales de obras por módulo. Caja Chica respeta modulos.cajaChica y Materiales respeta modulos.materiales. -->
