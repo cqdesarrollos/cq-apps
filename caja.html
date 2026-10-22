@@ -1438,6 +1438,8 @@ async function upsertGastoCC(obraId,payload,removeOnly=false){
   obraId=String(obraId||'').trim();
   if(!obraId)throw new Error('El movimiento no tiene una obra/destino válido para Gastos.');
   const f=window._cqGastosBridge;
+  if(f.waitReady)await f.waitReady();
+  if(window.__cqFirebaseServerReadyCC!==true)throw new Error(window.__cqFirebaseLastErrorCC||'Firebase OFF');
   const ref=f.doc(f.db,'gastos',obraId);
   const id=String(payload&&payload.id||'').trim();
   if(!id)throw new Error('El movimiento no tiene un ID válido para Gastos.');
@@ -1527,7 +1529,7 @@ function launchSyncCC(m,oldM=null){
 
   // Si Firebase todavía no terminó de inicializar, mantener pendiente. El evento
   // cq-gastos-bridge-ready disparará el reintento sin convertirlo en un falso error.
-  if(!window._cqGastosBridge)return;
+  if(!window._cqGastosBridge||window.__cqFirebaseServerReadyCC!==true)return;
 
   syncMovementCC(m,oldM).catch(e=>{
     console.warn('Caja Chica → Gastos',e);
@@ -1585,7 +1587,7 @@ async function repararVinculosGastosCC(){
   ]);
 
   try{
-    if(!window._cqGastosBridge)throw new Error('Firebase todavía no está listo. Esperá a que arriba figure ON y volvé a tocar Reparar vínculos.');
+    if(!window._cqGastosBridge||window.__cqFirebaseServerReadyCC!==true)throw new Error(window.__cqFirebaseLastErrorCC||'Firebase todavía no está conectado.');
     try{if(!gastosConfigCC)await loadGastosConfigCC();}catch(e){console.warn('Config Gastos para reparación manual',e);}
 
     const historicosActualizados=cqCcBackfillGastosObraIdHistoricos();
@@ -1665,8 +1667,8 @@ async function verifyGastosCC(options={}){
   const repair=options.repair!==false;
   const auto=options.auto===true;
   if(verifyingCC)return false;
-  if(!window._cqGastosBridge){
-    // No gastar lecturas mientras Firebase no esté listo; el evento ready reintenta.
+  if(!window._cqGastosBridge||window.__cqFirebaseServerReadyCC!==true){
+    // No intentar escrituras mientras Firebase no confirmó servidor + sesión.
     return false;
   }
   verifyingCC=true;
@@ -1836,6 +1838,7 @@ setTimeout(()=>{
 },1500);
 setTimeout(verifyMaterialesCC,1700);
 document.addEventListener('cq-gastos-bridge-ready',()=>cqCcScheduleGastosRepair(180,true));
+document.addEventListener('cq-firebase-server-ready',()=>cqCcScheduleGastosRepair(350,true));
 window.addEventListener('online',()=>cqCcScheduleGastosRepair(250,true));
 window.loadGastosConfigCC=loadGastosConfigCC;window.verifyGastosCC=verifyGastosCC;window.verifyMaterialesCC=verifyMaterialesCC;
 
@@ -2248,8 +2251,9 @@ render();
 
 <script type="module" id="cq-caja-chica-full-firebase">
 import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp, runTransaction
+  getFirestore, doc, getDoc, getDocFromServer, setDoc, onSnapshot, serverTimestamp, runTransaction, enableNetwork
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const CC_COL="caja_chica_app";
@@ -2272,6 +2276,27 @@ let lastTokenCC="";
 // CQ 28/08/2026 — contador de cambios locales para evitar que una escritura
 // Firebase en curso borre un movimiento creado/modificado mientras esperaba.
 let localRevisionCC=0;
+let retryFailuresCC=0;
+let serverReadyCC=false;
+window.__cqFirebaseServerReadyCC=false;
+window.__cqFirebaseLastErrorCC='';
+window.__cqCajaBuild='2026-10-22-firebase-auth-v1';
+
+function cqTimeoutCC(promise,ms,label='Firebase'){
+  let t;
+  const timeout=new Promise((_,reject)=>{t=setTimeout(()=>reject(new Error(label+' · tiempo agotado')),ms);});
+  return Promise.race([promise,timeout]).finally(()=>clearTimeout(t));
+}
+
+function cqSetServerReadyCC(ok,error=''){
+  const prev=serverReadyCC;
+  serverReadyCC=!!ok;
+  window.__cqFirebaseServerReadyCC=serverReadyCC;
+  window.__cqFirebaseLastErrorCC=String(error||'');
+  if(serverReadyCC&&!prev){
+    document.dispatchEvent(new CustomEvent('cq-firebase-server-ready'));
+  }
+}
 
 function cloneCC(v){
   try{return JSON.parse(JSON.stringify(v));}catch(e){return null;}
@@ -2425,12 +2450,16 @@ function mergeMigrationCC(remote,local){
     exchangeRateUpdatedAt:tcMaster.updatedAt
   };
 }
-function setStatusCC(state,text){
+function setStatusCC(state,text,title=''){
   const el=document.querySelector(".cq-firebase-status");
-  if(!el)return;
-  el.classList.remove("ok","err","checking");
-  if(state)el.classList.add(state);
-  el.textContent=text;
+  if(el){
+    el.classList.remove("ok","err","checking");
+    if(state)el.classList.add(state);
+    el.textContent=text;
+    el.title=title||text;
+  }
+  if(state==='ok')cqSetServerReadyCC(true,'');
+  else if(state==='err')cqSetServerReadyCC(false,title||text);
 }
 function markDirtyCC(){
   if(applyingRemoteCC)return;
@@ -2459,12 +2488,34 @@ function setBaseTokenCC(token){
 }
 async function firebaseCC(){
   let tries=0;
-  while(!getApps().length&&tries<40){
+  while(!getApps().length&&tries<60){
     await new Promise(r=>setTimeout(r,150));tries++;
   }
   if(!getApps().length)throw new Error("Firebase no disponible");
-  return getFirestore(getApp());
+  const app=getApp();
+  const auth=getAuth(app);
+  tries=0;
+  while(!auth.currentUser&&tries<80){
+    await new Promise(r=>setTimeout(r,125));tries++;
+  }
+  if(!auth.currentUser)throw new Error("Firebase sin sesión autenticada");
+  const fdb=getFirestore(app);
+  try{await cqTimeoutCC(enableNetwork(fdb),5000,'Habilitar red Firebase');}catch(e){console.warn('enableNetwork Caja Chica',e);}
+  return fdb;
 }
+
+async function cqProbeServerCC(fdb){
+  const ref=doc(fdb,CC_COL,CC_DOC);
+  await cqTimeoutCC(getDocFromServer(ref),8000,'Conexión Firebase');
+  return true;
+}
+
+window.__cqWaitFirebaseReadyCC=async function(){
+  const fdb=await firebaseCC();
+  if(!serverReadyCC)await cqProbeServerCC(fdb);
+  cqSetServerReadyCC(true,'');
+  return fdb;
+};
 function refreshCC(){
   try{saveLocalCC();}catch(e){}
   try{if(typeof initExchangeRate==="function"){
@@ -2477,6 +2528,8 @@ async function saveRemoteCC(){
   if(savingCC||!dirtyCC)return;
   savingCC=true;
   let revisionGuardada=localRevisionCC;
+  let fallo=false;
+  setStatusCC("checking","Sync","Sincronizando Caja Chica con Firebase…");
   try{
     const fdb=await firebaseCC();
     const ref=doc(fdb,CC_COL,CC_DOC);
@@ -2484,11 +2537,16 @@ async function saveRemoteCC(){
     // Leer remoto para no pisar movimientos de otro dispositivo.
     let remoteState=null;
     try{
-      const latest=await getDoc(ref);
+      const latest=await cqTimeoutCC(getDocFromServer(ref),8000,'Lectura Firebase Caja Chica');
+      cqSetServerReadyCC(true,'');
       if(latest.exists()&&latest.data()&&latest.data().state){
         remoteState=normalizeCC(latest.data().state);
       }
-    }catch(e){console.warn("Merge previo Caja Chica",e);}
+    }catch(e){
+      console.warn("Merge previo Caja Chica",e);
+      cqSetServerReadyCC(false,String(e&&e.message||e||'No se pudo leer Firebase'));
+      throw e;
+    }
 
     // CRÍTICO: volver a tomar el estado local DESPUÉS del await anterior.
     // Si durante esa lectura se agregó/modificó un movimiento, usar la versión nueva,
@@ -2513,12 +2571,12 @@ async function saveRemoteCC(){
 
     const token=new Date().toISOString();
     suppressCCUntil=Date.now()+1600;
-    await setDoc(ref,{
+    await cqTimeoutCC(setDoc(ref,{
       state,
       updatedAt:token,
       updatedAtServer:serverTimestamp(),
       updatedBy:String(window._cqUsuarioActual||"")
-    },{merge:false});
+    },{merge:false}),9000,'Escritura Firebase Caja Chica');
     lastTokenCC=token;
     setBaseTokenCC(token);
 
@@ -2532,16 +2590,19 @@ async function saveRemoteCC(){
     }
 
     try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
-    setStatusCC("ok","ON");
+    retryFailuresCC=0;
+    setStatusCC("ok","ON","Firebase conectado");
   }catch(e){
+    fallo=true;
+    retryFailuresCC=Math.min(retryFailuresCC+1,6);
     console.warn("Caja Chica Firebase save",e);
-    setStatusCC("err","OFF");
+    setStatusCC("err","OFF",String(e&&e.message||e||'Sin conexión Firebase'));
   }finally{
     savingCC=false;
-    // Si apareció un cambio mientras guardábamos, no dejarlo colgado.
     if(dirtyCC){
       clearTimeout(timerCC);
-      timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},120);
+      const delay=fallo?Math.min(30000,2000*Math.pow(2,retryFailuresCC-1)):180;
+      timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},delay);
     }
   }
 }
@@ -2559,7 +2620,8 @@ async function startCC(){
   try{
     const fdb=await firebaseCC();
     const ref=doc(fdb,CC_COL,CC_DOC);
-    const snap=await getDoc(ref);
+    const snap=await cqTimeoutCC(getDocFromServer(ref),8000,'Conexión inicial Firebase');
+    cqSetServerReadyCC(true,'');
     const local=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));
     const migrated=localStorage.getItem(MIGRATION_KEY)==="1";
 
@@ -2626,14 +2688,24 @@ async function startCC(){
       setStatusCC("ok","ON");
     },e=>{
       console.warn("Caja Chica Firebase listener",e);
-      setStatusCC("err","OFF");
+      setStatusCC("err","OFF",String(e&&e.message||e||'Listener Firebase desconectado'));
+      initializedCC=false;
+      clearTimeout(timerCC);
+      if(navigator.onLine)timerCC=setTimeout(()=>{timerCC=null;if(!initializedCC)startCC();},5000);
     });
 
-    setStatusCC("ok","ON");
+    retryFailuresCC=0;
+    setStatusCC("ok","ON","Firebase conectado");
   }catch(e){
     initializedCC=false;
+    retryFailuresCC=Math.min(retryFailuresCC+1,6);
     console.warn("Caja Chica Firebase init",e);
-    setStatusCC("err","OFF");
+    setStatusCC("err","OFF",String(e&&e.message||e||'No se pudo conectar con Firebase'));
+    clearTimeout(timerCC);
+    if(navigator.onLine){
+      const delay=Math.min(30000,2500*Math.pow(2,retryFailuresCC-1));
+      timerCC=setTimeout(()=>{timerCC=null;if(!initializedCC)startCC();},delay);
+    }
   }
 }
 
@@ -2898,8 +2970,18 @@ document.addEventListener("cq-auth-ready",startCajaGerenciaIntegrations);
 setTimeout(()=>{if(window._cqAuthProfile)startCajaGerenciaIntegrations();},1200);
 
 
+async function cqReconnectFirebaseCC(){
+  try{if(unsubCC){unsubCC();unsubCC=null;}}catch(e){}
+  initializedCC=false;
+  await startCC();
+  if(serverReadyCC&&dirtyCC)saveRemoteCC();
+}
+window.__cqReconnectFirebaseCC=cqReconnectFirebaseCC;
 document.addEventListener("cq-auth-ready",startCC);
-window.addEventListener("online",()=>{if(dirtyCC)saveRemoteCC();});
+window.addEventListener("online",()=>{cqReconnectFirebaseCC().catch(()=>{});});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&!serverReadyCC)cqReconnectFirebaseCC().catch(()=>{});
+});
 setTimeout(()=>{if(window._cqAuthProfile)startCC();},900);
 </script>
 
@@ -2985,7 +3067,8 @@ onAuthStateChanged(auth,async user=>{
 
 <script type="module" id="cq-gastos-bridge">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, getDocFromServer, setDoc, runTransaction, enableNetwork } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const cfg={
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
   authDomain:"cq-mano-de-obra.firebaseapp.com",
@@ -2995,10 +3078,28 @@ const cfg={
   appId:"1:502127540211:web:8daefc75bdaafad412c486"
 };
 const app=getApps().length?getApp():initializeApp(cfg);
+const auth=getAuth(app);
 const db=getFirestore(app);
-window._cqGastosBridge={db,doc,getDoc,setDoc,runTransaction};
-document.dispatchEvent(new Event("cq-gastos-bridge-ready"));
-try{await window.loadGastosConfigCC?.();}catch(e){console.warn("Config Gastos Caja Chica",e)}
+async function waitReady(timeoutMs=12000){
+  const started=Date.now();
+  while(!auth.currentUser&&Date.now()-started<timeoutMs){
+    await new Promise(r=>setTimeout(r,125));
+  }
+  if(!auth.currentUser)throw new Error('Firebase sin sesión autenticada');
+  try{await Promise.race([enableNetwork(db),new Promise((_,rej)=>setTimeout(()=>rej(new Error('No se pudo habilitar la red Firebase')),5000))]);}catch(e){console.warn('Bridge enableNetwork',e);}
+  if(window.__cqWaitFirebaseReadyCC)await window.__cqWaitFirebaseReadyCC();
+  return true;
+}
+window._cqGastosBridge={db,doc,getDoc,getDocFromServer,setDoc,runTransaction,enableNetwork,waitReady,auth};
+async function announce(){
+  try{
+    await waitReady();
+    document.dispatchEvent(new Event("cq-gastos-bridge-ready"));
+    try{await window.loadGastosConfigCC?.();}catch(e){console.warn("Config Gastos Caja Chica",e)}
+  }catch(e){console.warn('Bridge Gastos esperando Firebase',e);}
+}
+document.addEventListener('cq-firebase-server-ready',announce);
+if(window.__cqFirebaseServerReadyCC)announce();
 </script>
 
 
@@ -3132,80 +3233,30 @@ window.cqRecargarTCDesdeGerenciaCC=async function(){
 };
 </script>
 
-<script type="module" id="cq-firebase-status-probe">
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDocFromServer } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-const cfg={
-  apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
-  authDomain:"cq-mano-de-obra.firebaseapp.com",
-  projectId:"cq-mano-de-obra",
-  storageBucket:"cq-mano-de-obra.firebasestorage.app",
-  messagingSenderId:"502127540211",
-  appId:"1:502127540211:web:8daefc75bdaafad412c486"
-};
-const app=getApps().length?getApp():initializeApp(cfg);
-const auth=getAuth(app);
-const db=getFirestore(app);
-const el=document.getElementById("cqFirebaseStatus");
-const userMap={
-  "emilio@cqgerencia.com":"emilio",
-  "juan@cqgerencia.com":"juan",
-  "eugenia@cqoperaciones.com":"eugenia",
-  "hebe@cqoperaciones.com":"hebe",
-  "maximiliano@cqoperaciones.com":"maximiliano"
-};
-let currentUser=null;
-let checking=false;
-
-function setStatus(state,text,title){
+<script id="cq-firebase-status-probe">
+(function(){
+  const el=document.getElementById('cqFirebaseStatus');
   if(!el)return;
-  el.classList.remove("ok","err","checking");
-  el.classList.add(state);
-  el.textContent=text;
-  el.title=title||text;
-}
-async function probe(){
-  if(checking)return;
-  checking=true;
-  if(!navigator.onLine){
-    setStatus("err","OFF","El dispositivo no tiene conexión a internet.");
-    checking=false;
-    return;
-  }
-  if(!currentUser){
-    setStatus("err","OFF","No hay una sesión Firebase iniciada.");
-    checking=false;
-    return;
-  }
-  const key=userMap[String(currentUser.email||"").toLowerCase()];
-  if(!key){
-    setStatus("err","OFF","Usuario no reconocido para Firebase.");
-    checking=false;
-    return;
-  }
-  setStatus("checking","Sync","Comprobando conexión real con Firebase.");
-  try{
-    await getDocFromServer(doc(db,"cq_operaciones_usuarios",key));
-    setStatus("ok","ON","Conexión real con Firebase verificada ahora.");
-  }catch(e){
-    console.warn("Firebase connectivity probe:",e);
-    setStatus("err","OFF","No se pudo llegar al servidor de Firebase.");
-  }finally{
-    checking=false;
-  }
-}
-
-onAuthStateChanged(auth,user=>{
-  currentUser=user||null;
-  probe();
-});
-window.addEventListener("online",probe);
-window.addEventListener("offline",probe);
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")probe();});
-if(el)el.addEventListener("click",probe);
-setInterval(probe,30000);
+  el.addEventListener('click',async function(){
+    const previo=el.textContent;
+    try{
+      if(window.__cqReconnectFirebaseCC){
+        el.classList.remove('ok','err');el.classList.add('checking');el.textContent='Sync';
+        await window.__cqReconnectFirebaseCC();
+        if(window.__cqFirebaseServerReadyCC!==true){
+          const msg=String(window.__cqFirebaseLastErrorCC||'No se pudo conectar con Firebase');
+          el.classList.remove('ok','checking');el.classList.add('err');el.textContent='OFF';el.title=msg;
+          if(previo==='OFF')alert('Firebase: '+msg+'\nBuild: '+String(window.__cqCajaBuild||''));
+        }
+      }
+    }catch(e){
+      console.warn('Reintento manual Firebase',e);
+      const msg=String(e&&e.message||e||window.__cqFirebaseLastErrorCC||'No se pudo conectar');
+      el.classList.remove('ok','checking');el.classList.add('err');el.textContent='OFF';el.title=msg;
+      if(previo==='OFF')alert('Firebase: '+msg+'\nBuild: '+String(window.__cqCajaBuild||''));
+    }
+  });
+})();
 </script>
 
 
