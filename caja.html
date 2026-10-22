@@ -1473,10 +1473,35 @@ async function syncMovementCC(m,oldM=null){
   cqCcSetCurrentSyncState(m.id,'gastos','ok','');
   save();render();
 }
+let cqCcGastosRepairTimer=null;
+let cqCcGastosAutoRetryCount=0;
+const CQ_CC_GASTOS_MAX_AUTO_RETRIES=3;
+
+function cqCcScheduleGastosRepair(delay=2200,resetBudget=false){
+  if(resetBudget)cqCcGastosAutoRetryCount=0;
+  clearTimeout(cqCcGastosRepairTimer);
+  cqCcGastosRepairTimer=setTimeout(()=>{
+    cqCcGastosRepairTimer=null;
+    verifyGastosCC({repair:true,auto:true}).catch(e=>console.warn('Caja Chica → Gastos (autorreparación)',e));
+  },Math.max(100,Number(delay)||2200));
+}
+
 function launchSyncCC(m,oldM=null){
   if(!m||m.type!=='gasto')return;
   m.gastosSyncEstado='pendiente';
+  m.gastosSyncError='';
+  m.gastosSyncAt=new Date().toISOString();
+  cqCcSetCurrentSyncState(m.id,'gastos','pendiente','');
   save();render();
+
+  // El watchdog cubre transacciones lentas/interrumpidas. El upsert es idempotente
+  // porque usa siempre caja_chica_<id> y reemplaza ese mismo registro en Gastos.
+  cqCcScheduleGastosRepair(2500,true);
+
+  // Si Firebase todavía no terminó de inicializar, mantener pendiente. El evento
+  // cq-gastos-bridge-ready disparará el reintento sin convertirlo en un falso error.
+  if(!window._cqGastosBridge)return;
+
   syncMovementCC(m,oldM).catch(e=>{
     console.warn('Caja Chica → Gastos',e);
     m.gastosSyncEstado='error';
@@ -1484,6 +1509,7 @@ function launchSyncCC(m,oldM=null){
     m.gastosSyncAt=new Date().toISOString();
     cqCcSetCurrentSyncState(m.id,'gastos','error',m.gastosSyncError);
     save();render();
+    cqCcScheduleGastosRepair(1600,false);
   });
 }
 async function deleteLinkedGastoCC(m){
@@ -1493,29 +1519,43 @@ async function deleteLinkedGastoCC(m){
   return true;
 }
 let verifyingCC=false;
-async function verifyGastosCC(){
-  if(verifyingCC||!window._cqGastosBridge)return;
+async function verifyGastosCC(options={}){
+  const repair=options.repair!==false;
+  const auto=options.auto===true;
+  if(verifyingCC)return false;
+  if(!window._cqGastosBridge){
+    // No gastar lecturas mientras Firebase no esté listo; el evento ready reintenta.
+    return false;
+  }
   verifyingCC=true;
+  let needsAnotherRetry=false;
   try{
     const gastos=db.movements.filter(m=>m.type==='gasto'&&m.gastosObraId);
     const obraIds=[...new Set(gastos.map(m=>m.gastosObraId))];
     const docs={};
     const f=window._cqGastosBridge;
+
     for(const oid of obraIds){
       try{
         const snap=await f.getDoc(f.doc(f.db,'gastos',oid));
         docs[oid]=snap.exists()&&Array.isArray((snap.data()||{}).gastos)?snap.data().gastos:[];
-      }catch(e){docs[oid]=null}
+      }catch(e){
+        docs[oid]=null;
+        needsAnotherRetry=true;
+      }
     }
+
     let changed=false;
-    gastos.forEach(m=>{
+    for(const m of gastos){
       const arr=docs[m.gastosObraId];
       let next='error',err='';
-      if(arr===null){err='No se pudo verificar Firebase';}
-      else{
+
+      if(arr===null){
+        err='No se pudo verificar Firebase';
+      }else{
         const g=arr.find(x=>String(x.id)===String(gastoLinkIdCC(m.id)));
-        if(!g)err='El gasto ya no existe en Gastos';
-        else {
+        if(!g)err='El gasto no existe en Gastos';
+        else{
           const esperadoMonto=(String(m.currency||'ars').toLowerCase()==='usd')
             ? (Number(m.amount)||0)*(Number(m.tc)||Number(db.exchangeRate)||0)
             : (Number(m.amount)||0);
@@ -1525,16 +1565,50 @@ async function verifyGastosCC(){
           else if(String(g.subrubro||'')!==String(m.subrubro||''))err='El subrubro no coincide';
           else next='ok';
         }
-        if(next==='ok'){}
-        else if(!err && String(g.cat||'')!==String(m.category||''))err='La categoría no coincide';
+      }
 
+      // Autorreparación: si falta o quedó desactualizado, volver a escribir el movimiento.
+      // No duplica: upsertGastoCC elimina primero el mismo ID y luego agrega la versión actual.
+      if(repair && arr!==null && next!=='ok'){
+        try{
+          if(m.gastosSyncEstado!=='pendiente'||m.gastosSyncError){
+            m.gastosSyncEstado='pendiente';
+            m.gastosSyncError='';
+            m.gastosSyncAt=new Date().toISOString();
+            changed=true;
+          }
+          await upsertGastoCC(m.gastosObraId,gastoPayloadCC(m),false);
+          next='ok';
+          err='';
+        }catch(e){
+          next='error';
+          err=String(e?.message||e||'No se pudo reparar Gastos');
+          needsAnotherRetry=true;
+          console.warn('Reintento Caja Chica → Gastos',e);
+        }
       }
+
       if(m.gastosSyncEstado!==next||m.gastosSyncError!==err){
-        m.gastosSyncEstado=next;m.gastosSyncError=err;m.gastosSyncAt=new Date().toISOString();changed=true;
+        m.gastosSyncEstado=next;
+        m.gastosSyncError=err;
+        m.gastosSyncAt=new Date().toISOString();
+        changed=true;
       }
-    });
-    if(changed){save();render()}
-  }finally{verifyingCC=false}
+    }
+
+    if(changed){save();render();}
+
+    const quedanMal=gastos.some(m=>m.gastosSyncEstado!=='ok');
+    if(!quedanMal){
+      cqCcGastosAutoRetryCount=0;
+    }else if((needsAnotherRetry||auto) && cqCcGastosAutoRetryCount<CQ_CC_GASTOS_MAX_AUTO_RETRIES){
+      cqCcGastosAutoRetryCount++;
+      cqCcScheduleGastosRepair(2200*cqCcGastosAutoRetryCount,false);
+    }
+    return !quedanMal;
+  }finally{
+    verifyingCC=false;
+  }
 }
 
 let verifyingMaterialesCC=false;
@@ -1601,12 +1675,16 @@ async function verifyMaterialesCC(){
     verifyingMaterialesCC=false;
   }
 }
-// CQ 27/08/2026 — Bajo consumo Firestore.
-// Verificación agrupada una sola vez al iniciar. Se eliminan polling cada 12 s
-// y verificaciones por focus/visibility. Altas, modificaciones y borrados
-// actualizan sus destinos en el momento de la acción.
-setTimeout(verifyGastosCC,1500);
+// CQ 21/10/2026 — Bajo consumo + autorreparación Caja Chica → Gastos.
+// No hay polling permanente. Se verifica al iniciar, cuando Firebase queda listo,
+// al recuperar conexión y después de una carga que quedó pendiente/error.
+setTimeout(()=>{
+  const necesita=(db.movements||[]).some(m=>m&&m.type==='gasto'&&m.gastosObraId&&m.gastosSyncEstado!=='ok');
+  if(necesita)cqCcScheduleGastosRepair(0,false);
+},1500);
 setTimeout(verifyMaterialesCC,1700);
+document.addEventListener('cq-gastos-bridge-ready',()=>cqCcScheduleGastosRepair(180,true));
+window.addEventListener('online',()=>cqCcScheduleGastosRepair(250,true));
 window.loadGastosConfigCC=loadGastosConfigCC;window.verifyGastosCC=verifyGastosCC;window.verifyMaterialesCC=verifyMaterialesCC;
 
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.view).classList.add('active');if(b.dataset.view==='reportes')renderReports()});
@@ -2755,7 +2833,6 @@ const db=getFirestore(app);
 window._cqGastosBridge={db,doc,getDoc,setDoc,runTransaction};
 document.dispatchEvent(new Event("cq-gastos-bridge-ready"));
 try{await window.loadGastosConfigCC?.();}catch(e){console.warn("Config Gastos Caja Chica",e)}
-// La verificación inicial de Gastos se ejecuta una sola vez desde el bloque principal.
 </script>
 
 
