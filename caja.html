@@ -1519,6 +1519,30 @@ async function deleteLinkedGastoCC(m){
   return true;
 }
 let verifyingCC=false;
+function cqCcBackfillGastosObraIdHistoricos(){
+  let changed=false;
+  const obras=(gastosConfigCC&&Array.isArray(gastosConfigCC.obras))?gastosConfigCC.obras:[];
+  const norm=v=>String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  for(const m of (db.movements||[])){
+    if(!m||m.type!=='gasto'||m.gastosObraId)continue;
+    let oid='';
+    if(m.destType==='oficina'||norm(m.work)==='oficina')oid='oficina';
+    else if(m.workId)oid=String(m.workId);
+    else if(m.work){
+      const w=norm(m.work);
+      const o=obras.find(o=>norm(o&&o.id)===w||norm(o&&o.label)===w||norm(o&&o.short)===w);
+      if(o&&o.id)oid=String(o.id);
+    }
+    if(!oid)continue;
+    m.gastosObraId=oid;
+    if(!m.workId)m.workId=oid;
+    if(!m.destType)m.destType=(oid==='oficina'?'oficina':'obra');
+    if(!m.gastosSyncEstado||m.gastosSyncEstado!=='ok')m.gastosSyncEstado='pendiente';
+    changed=true;
+  }
+  return changed;
+}
+
 async function verifyGastosCC(options={}){
   const repair=options.repair!==false;
   const auto=options.auto===true;
@@ -1530,6 +1554,16 @@ async function verifyGastosCC(options={}){
   verifyingCC=true;
   let needsAnotherRetry=false;
   try{
+    // Antes de verificar, completar el vínculo de movimientos históricos.
+    // Esto permite reparar gastos viejos que sólo tenían work/workId.
+    try{
+      if(!gastosConfigCC)await loadGastosConfigCC();
+    }catch(e){
+      console.warn('Caja Chica → Gastos (config histórica)',e);
+    }
+    const historicosActualizados=cqCcBackfillGastosObraIdHistoricos();
+    if(historicosActualizados)save();
+
     const gastos=db.movements.filter(m=>m.type==='gasto'&&m.gastosObraId);
     const obraIds=[...new Set(gastos.map(m=>m.gastosObraId))];
     const docs={};
@@ -2133,6 +2167,20 @@ function normalizeCC(x){
   x.movements=(Array.isArray(x.movements)?x.movements:[]).filter(m=>{
     const id=String(m&&m.id||'');
     return id && !deleted.has(id);
+  }).map(m=>{
+    if(!m||m.type!=="gasto")return m;
+
+    // Compatibilidad con movimientos históricos creados antes de gastosObraId.
+    // Las versiones viejas guardaban la obra principalmente en workId/work.
+    if(!m.gastosObraId){
+      if(m.destType==="oficina" || String(m.work||'').trim().toLowerCase()==="oficina")
+        m.gastosObraId="oficina";
+      else if(m.workId)
+        m.gastosObraId=String(m.workId);
+    }
+    if(!m.workId && m.gastosObraId)m.workId=String(m.gastosObraId);
+    if(!m.destType && m.gastosObraId)m.destType=(String(m.gastosObraId)==="oficina"?"oficina":"obra");
+    return m;
   });
   x.works=Array.isArray(x.works)&&x.works.length?x.works:[...DEFAULT_WORKS];
   x.concepts=Array.isArray(x.concepts)&&x.concepts.length?x.concepts:[...DEFAULT_CONCEPTS];
