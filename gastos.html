@@ -363,7 +363,7 @@ body.modal-open{overflow:hidden!important;}
 </style>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, query, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, query, orderBy, limit, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   const firebaseConfig = {
     apiKey: "AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
     authDomain: "cq-mano-de-obra.firebaseapp.com",
@@ -374,7 +374,7 @@ body.modal-open{overflow:hidden!important;}
   };
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  window._db = db; window._doc = doc; window._setDoc = setDoc; window._getDoc = getDoc; window._onSnapshot = onSnapshot; window._collection = collection; window._getDocs = getDocs; window._query = query; window._orderBy = orderBy; window._limit = limit; window._deleteDoc = deleteDoc; window._dbReady = true;
+  window._db = db; window._doc = doc; window._setDoc = setDoc; window._getDoc = getDoc; window._onSnapshot = onSnapshot; window._collection = collection; window._getDocs = getDocs; window._query = query; window._orderBy = orderBy; window._limit = limit; window._deleteDoc = deleteDoc; window._runTransaction = runTransaction; window._dbReady = true;
   document.dispatchEvent(new Event('firebase-ready'));
 </script>
 
@@ -2163,11 +2163,69 @@ function persist(){
   localStorage.setItem(dbKey(curObra),JSON.stringify(s));
   if(window._dbReady&&modoFirebase){
     setSyncStatus('Firebase: guardando...');
-    const payload=JSON.parse(JSON.stringify({...s,updatedAt:new Date().toISOString()}));
-    window._setDoc(window._doc(window._db,'gastos',curObra),payload).then(()=>setSyncStatus('Firebase: guardado','ok')).catch(e=>{console.warn(e);setSyncStatus('Firebase: error','err')});
+    // IMPORTANTE: los gastos pueden ser modificados desde Caja Chica, Caja Gerencia,
+    // Pañol, Acopio u otro dispositivo. Un guardado financiero/configurativo de Gastos
+    // NO debe volver a escribir el array completo desde una copia local potencialmente vieja.
+    const {gastos:_gastosLocales,...resto}=s;
+    const payload=JSON.parse(JSON.stringify({...resto,updatedAt:new Date().toISOString()}));
+    window._setDoc(window._doc(window._db,'gastos',curObra),payload,{merge:true})
+      .then(()=>setSyncStatus('Firebase: guardado','ok'))
+      .catch(e=>{console.warn(e);setSyncStatus('Firebase: error','err')});
   } else {
     setSyncStatus('Firebase: local');
   }
+}
+
+// CQ 22/10/2026 — escritura segura y concurrente de movimientos.
+// Lee el array REAL de Firebase dentro de una transacción y modifica solamente el ID
+// involucrado. Así una carga externa (Caja Chica, Caja Gerencia, Pañol, Acopio, etc.)
+// nunca se pierde por una copia local desactualizada de Gastos.
+async function cqPersistGastoUpsert(obraId,gasto){
+  if(!obraId||!gasto)return;
+  if(!(window._dbReady&&modoFirebase)){
+    setSyncStatus('Firebase: local');
+    return;
+  }
+  if(!window._runTransaction)throw new Error('Firebase transaccional no disponible');
+  const ref=window._doc(window._db,'gastos',obraId);
+  const limpio=JSON.parse(JSON.stringify(gasto));
+  setSyncStatus('Firebase: guardando...');
+  const arr=await window._runTransaction(window._db,async tx=>{
+    const snap=await tx.get(ref);
+    const remoto=snap.exists()?(snap.data()||{}):{};
+    let gastos=Array.isArray(remoto.gastos)?remoto.gastos.slice():[];
+    gastos=gastos.filter(x=>String(x&&x.id||'')!==String(limpio.id||''));
+    gastos.push(limpio);
+    tx.set(ref,{gastos,updatedAt:new Date().toISOString()},{merge:true});
+    return gastos;
+  });
+  if(!state[obraId])state[obraId]=emptyState();
+  state[obraId].gastos=migrateState({gastos:arr,financiero:state[obraId].financiero||{}}).gastos;
+  localStorage.setItem(dbKey(obraId),JSON.stringify(state[obraId]));
+  setSyncStatus('Firebase: guardado','ok');
+}
+
+async function cqPersistGastoDelete(obraId,id){
+  if(!obraId||!id)return;
+  if(!(window._dbReady&&modoFirebase)){
+    setSyncStatus('Firebase: local');
+    return;
+  }
+  if(!window._runTransaction)throw new Error('Firebase transaccional no disponible');
+  const ref=window._doc(window._db,'gastos',obraId);
+  setSyncStatus('Firebase: guardando...');
+  const arr=await window._runTransaction(window._db,async tx=>{
+    const snap=await tx.get(ref);
+    const remoto=snap.exists()?(snap.data()||{}):{};
+    const gastos=(Array.isArray(remoto.gastos)?remoto.gastos:[])
+      .filter(x=>String(x&&x.id||'')!==String(id));
+    tx.set(ref,{gastos,updatedAt:new Date().toISOString()},{merge:true});
+    return gastos;
+  });
+  if(!state[obraId])state[obraId]=emptyState();
+  state[obraId].gastos=migrateState({gastos:arr,financiero:state[obraId].financiero||{}}).gastos;
+  localStorage.setItem(dbKey(obraId),JSON.stringify(state[obraId]));
+  setSyncStatus('Firebase: guardado','ok');
 }
 async function loadFromFirebase(){
   if(!window._dbReady||!modoFirebase)return;
@@ -3111,10 +3169,10 @@ function updateMasivoSummary(){
   document.getElementById('gm-summary').textContent=n?`${n} obra${n===1?'':'s'} · ${moneda} ${Math.abs(monto).toLocaleString('es-AR')} por obra`:'Seleccioná una o más obras.';
 }
 ['gm-monto','gm-moneda'].forEach(id=>document.addEventListener('input',e=>{if(e.target&&e.target.id===id)updateMasivoSummary()}));
-async function persistObraMasiva(obraId){
+async function persistObraMasiva(obraId,gasto){
   const s=state[obraId]||emptyState(); state[obraId]=s;
   localStorage.setItem(dbKey(obraId),JSON.stringify(s));
-  if(window._dbReady&&modoFirebase){const payload=JSON.parse(JSON.stringify({...s,updatedAt:new Date().toISOString()}));await window._setDoc(window._doc(window._db,'gastos',obraId),payload);}
+  if(gasto)await cqPersistGastoUpsert(obraId,gasto);
 }
 async function saveGastoMasivo(){
   const fecha=document.getElementById('gm-fecha').value;
@@ -3143,13 +3201,14 @@ async function saveGastoMasivo(){
   const detalleConfirmacion=nota?`“${nota}”`:`${subrubro}`;
   if(!confirm(`Se cargará ${detalleConfirmacion} por ${moneda==='usd'?'U$S':'$'} ${Math.abs(monto).toLocaleString('es-AR')} en ${obras.length} obra${obras.length===1?'':'s'}. ¿Continuar?`))return;
   setDefaultTC(tc); const nowISO=new Date().toISOString();
-  obras.forEach((obraId,i)=>{if(!state[obraId])state[obraId]=emptyState();state[obraId].gastos.push({id:Date.now().toString()+'_'+i+'_'+Math.random().toString(36).slice(2,6),createdAt:nowISO,createdBy:usuarioActual,fecha,cat,subrubro,moneda,monto,tc,nota,updatedAt:nowISO,updatedBy:usuarioActual,cargaMasiva:true});});
-  try{setSyncStatus('Firebase: guardando carga masiva...');await Promise.all(obras.map(persistObraMasiva));setSyncStatus('Firebase: guardado','ok');closeModal('modal-gasto-masivo');renderAll();alert(`Carga realizada en ${obras.length} obra${obras.length===1?'':'s'}.`);}catch(e){console.warn(e);setSyncStatus('Firebase: error','err');alert('Los datos quedaron guardados localmente, pero hubo un problema al sincronizar con Firebase.');renderAll();}
+  const nuevos=[];
+  obras.forEach((obraId,i)=>{if(!state[obraId])state[obraId]=emptyState();const g={id:Date.now().toString()+'_'+i+'_'+Math.random().toString(36).slice(2,6),createdAt:nowISO,createdBy:usuarioActual,fecha,cat,subrubro,moneda,monto,tc,nota,updatedAt:nowISO,updatedBy:usuarioActual,cargaMasiva:true};state[obraId].gastos.push(g);nuevos.push([obraId,g]);});
+  try{setSyncStatus('Firebase: guardando carga masiva...');await Promise.all(nuevos.map(([obraId,g])=>persistObraMasiva(obraId,g)));setSyncStatus('Firebase: guardado','ok');closeModal('modal-gasto-masivo');renderAll();alert(`Carga realizada en ${obras.length} obra${obras.length===1?'':'s'}.`);}catch(e){console.warn(e);setSyncStatus('Firebase: error','err');alert('Los datos quedaron guardados localmente, pero hubo un problema al sincronizar con Firebase.');renderAll();}
 }
 
-function saveGasto(){const fecha=document.getElementById('g-fecha').value,cat=document.getElementById('g-cat').value,subrubro=document.getElementById('g-subrubro-sel').value,moneda=document.getElementById('g-moneda').value,montoIngresado=parseFloat(document.getElementById('g-monto').value),tc=parseFloat(document.getElementById('g-tc').value)||getDefaultTC(),nota=document.getElementById('g-nota').value.trim(),editId=document.getElementById('gasto-edit-id')?.value||'',esIngreso=document.getElementById('gasto-tipo')?.value==='ingreso';const usuarioActual=ensureUserName();if(!usuarioActual){openUserSelector();alert('Primero elegí quién está usando la app.');return;}const permiteNegativo=permiteMontoNegativo(cat,subrubro);if(!fecha||!subrubro||isNaN(montoIngresado)||montoIngresado===0||(esIngreso&&montoIngresado<0)||(!esIngreso&&!permiteNegativo&&montoIngresado<0)){alert(esIngreso?'Completá fecha, subrubro y un monto positivo. El sistema lo guardará automáticamente en negativo.':(permiteNegativo?'Completá fecha, subrubro y un monto distinto de cero. En Materiales podés usar negativo para que sume como crédito/devolución.':'Completá fecha, subrubro y monto positivo'));return}const monto=esIngreso?-Math.abs(montoIngresado):montoIngresado;setDefaultTC(tc);const nowISO=new Date().toISOString();const gastoData={fecha,cat,subrubro,moneda,monto,tc,nota,tipoMovimiento:esIngreso?'ingreso':'gasto',updatedAt:nowISO,updatedBy:usuarioActual};if(editId){const arr=getS().gastos;const idx=arr.findIndex(g=>g.id===editId);if(idx>=0){arr[idx]={...arr[idx],...gastoData};}else{arr.push({id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData});}}else{getS().gastos.push({id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData});}document.getElementById('gasto-edit-id').value='';persist();closeModal('modal-gasto');renderAll()}
+async function saveGasto(){const fecha=document.getElementById('g-fecha').value,cat=document.getElementById('g-cat').value,subrubro=document.getElementById('g-subrubro-sel').value,moneda=document.getElementById('g-moneda').value,montoIngresado=parseFloat(document.getElementById('g-monto').value),tc=parseFloat(document.getElementById('g-tc').value)||getDefaultTC(),nota=document.getElementById('g-nota').value.trim(),editId=document.getElementById('gasto-edit-id')?.value||'',esIngreso=document.getElementById('gasto-tipo')?.value==='ingreso';const usuarioActual=ensureUserName();if(!usuarioActual){openUserSelector();alert('Primero elegí quién está usando la app.');return;}const permiteNegativo=permiteMontoNegativo(cat,subrubro);if(!fecha||!subrubro||isNaN(montoIngresado)||montoIngresado===0||(esIngreso&&montoIngresado<0)||(!esIngreso&&!permiteNegativo&&montoIngresado<0)){alert(esIngreso?'Completá fecha, subrubro y un monto positivo. El sistema lo guardará automáticamente en negativo.':(permiteNegativo?'Completá fecha, subrubro y un monto distinto de cero. En Materiales podés usar negativo para que sume como crédito/devolución.':'Completá fecha, subrubro y monto positivo'));return}const monto=esIngreso?-Math.abs(montoIngresado):montoIngresado;setDefaultTC(tc);const nowISO=new Date().toISOString();const gastoData={fecha,cat,subrubro,moneda,monto,tc,nota,tipoMovimiento:esIngreso?'ingreso':'gasto',updatedAt:nowISO,updatedBy:usuarioActual};let guardado=null;if(editId){const arr=getS().gastos;const idx=arr.findIndex(g=>g.id===editId);if(idx>=0){arr[idx]={...arr[idx],...gastoData};guardado=arr[idx];}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};arr.push(guardado);}}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};getS().gastos.push(guardado);}document.getElementById('gasto-edit-id').value='';localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));closeModal('modal-gasto');renderAll();try{await cqPersistGastoUpsert(curObra,guardado);}catch(e){console.warn('Guardar gasto transaccional',e);setSyncStatus('Firebase: error','err');}}
 function editGasto(id){const g=getS().gastos.find(x=>x.id===id);if(!g)return;const esIngreso=g.tipoMovimiento==='ingreso';document.getElementById('gasto-edit-id').value=g.id;document.getElementById('gasto-tipo').value=esIngreso?'ingreso':'gasto';document.getElementById('g-fecha').value=g.fecha||today();document.getElementById('g-cat').value=g.cat||(curObra==='oficina'?'ofi':'mat');updateSubrubroOptions();const sub=g.subrubro||g.concepto||'';const sel=document.getElementById('g-subrubro-sel');const opts=[...sel.options].map(o=>o.value);if(sub&&!opts.includes(sub)){const opt=document.createElement('option');opt.value=sub;opt.textContent=sub+' (actual)';sel.appendChild(opt);}sel.value=sub;const ss=document.getElementById('g-subrubro-search');if(ss)ss.value=sub||'';document.getElementById('g-moneda').value=g.moneda||'ars';document.getElementById('g-monto').value=esIngreso?Math.abs(parseFloat(g.monto)||0):(g.monto||'');document.getElementById('g-tc').value=g.tc||getDefaultTC();document.getElementById('g-nota').value=g.nota||'';setGastoModalTipo(esIngreso?'ingreso':'gasto');document.getElementById('modal-gasto').classList.add('open');}
-function deleteGasto(id){const g=getS().gastos.find(x=>x.id===id);const nombre=g?.tipoMovimiento==='ingreso'?'ingreso':'gasto';if(!confirm('¿Eliminar este '+nombre+'?'))return;getS().gastos=getS().gastos.filter(g=>g.id!==id);persist();renderAll()}
+async function deleteGasto(id){const g=getS().gastos.find(x=>x.id===id);const nombre=g?.tipoMovimiento==='ingreso'?'ingreso':'gasto';if(!confirm('¿Eliminar este '+nombre+'?'))return;getS().gastos=getS().gastos.filter(g=>g.id!==id);localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));renderAll();try{await cqPersistGastoDelete(curObra,id);}catch(e){console.warn('Eliminar gasto transaccional',e);setSyncStatus('Firebase: error','err');}}
 function toggleAmoTc(kind){return;}
 function openModalAcuerdos(){const acuerdos=ensureAcuerdosMO();const mo=normalizeAcuerdo(acuerdos.mo);document.getElementById('amo-general').value=mo.monto||'';document.getElementById('amo-general-comentario').value=mo.comentario||'';document.getElementById('amo-general-moneda').value='ars';document.getElementById('amo-general-tc').value='';toggleAmoTc('general');const extras=Object.entries(acuerdos.ext);document.getElementById('amo-extras').innerHTML=extras.map(([nombre,acuerdo])=>acuerdoExtraRowHTML(nombre,acuerdo)).join('')||'<div class="muted" id="amo-empty">Sin extras cargados. Usá “Agregar extra”.</div>';openModal('modal-acuerdos')}
 function acuerdoExtraRowHTML(nombre='',acuerdo={monto:0,moneda:'usd',tc:1400,comentario:''}){acuerdo=normalizeAcuerdo(acuerdo);const id='x'+Date.now()+Math.floor(Math.random()*1000);const opts=[...(config.subrubros.ext||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<option value="${s}" ${s===nombre?'selected':''}>${s}</option>`).join('');return`<div data-extra-row="1" data-extra-row-id="${id}" style="border:1px solid #DDE8DE;border-radius:9px;padding:10px;margin-bottom:8px;background:#F8FBF8"><div class="fld-row"><div class="fld"><label>Extra</label><select class="amo-extra-nombre"><option value="">-- Seleccionar --</option>${opts}</select></div><div class="fld"><label>Acordado</label><input class="amo-extra-monto" type="number" min="0" step="0.01" value="${acuerdo.monto||''}"></div></div><div class="fld"><label>Comentario del extra</label><textarea class="amo-extra-comentario" rows="2" placeholder="Agregar comentario u observación">${escComentario(acuerdo.comentario||'')}</textarea></div><div class="fld-row"><div class="fld"><label>Moneda</label><select class="amo-extra-moneda" onchange="toggleAmoTc('${id}')"><option value="ars" selected>$ ARS</option></select></div></div><div style="display:flex;justify-content:flex-end"><button class="btn-del" type="button" onclick="this.closest('[data-extra-row]').remove()">Eliminar</button></div></div>`}

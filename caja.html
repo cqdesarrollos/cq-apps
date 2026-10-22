@@ -1490,9 +1490,11 @@ async function syncMovementCC(m,oldM=null){
 }
 let cqCcGastosRepairTimer=null;
 let cqCcGastosAutoRetryCount=0;
+let cqCcManualRepairRunning=false;
 const CQ_CC_GASTOS_MAX_AUTO_RETRIES=3;
 
 function cqCcScheduleGastosRepair(delay=2200,resetBudget=false){
+  if(cqCcManualRepairRunning)return;
   if(resetBudget)cqCcGastosAutoRetryCount=0;
   clearTimeout(cqCcGastosRepairTimer);
   cqCcGastosRepairTimer=setTimeout(()=>{
@@ -1561,82 +1563,80 @@ function cqCcBackfillGastosObraIdHistoricos(){
 async function repararVinculosGastosCC(){
   const btn=document.getElementById('repairGastosBtn');
   const oldHtml=btn?btn.innerHTML:'';
+  if(cqCcManualRepairRunning)return;
+  cqCcManualRepairRunning=true;
+  clearTimeout(cqCcGastosRepairTimer);
+  cqCcGastosRepairTimer=null;
   if(btn){btn.disabled=true;btn.innerHTML='<span class="btn-icon">⏳</span>Reparando…';}
+
+  const timeout=(promise,ms,label)=>Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Tiempo agotado al reparar '+label)),ms))
+  ]);
+
   try{
     if(!window._cqGastosBridge)throw new Error('Firebase todavía no está listo. Esperá a que arriba figure ON y volvé a tocar Reparar vínculos.');
     try{if(!gastosConfigCC)await loadGastosConfigCC();}catch(e){console.warn('Config Gastos para reparación manual',e);}
 
     const historicosActualizados=cqCcBackfillGastosObraIdHistoricos();
-    const movimientos=(db.movements||[]).filter(m=>m&&m.type==='gasto'&&String(m.gastosObraId||'').trim());
-    if(!movimientos.length){
+    const candidatos=(db.movements||[]).filter(m=>
+      m&&m.type==='gasto'&&String(m.gastosObraId||'').trim()&&String(m.gastosSyncEstado||'')!=='ok'
+    );
+
+    if(!candidatos.length){
       if(historicosActualizados)save();
-      alert('No hay gastos vinculables para reparar.');
+      render();
+      alert('No hay vínculos rojos o pendientes para reparar.');
       return;
     }
 
-    // Reparación fuerte pero eficiente: una transacción por obra, no una por gasto.
-    // Conserva todos los gastos de otros orígenes y reconstruye sólo los IDs de Caja Chica.
-    const grupos=new Map();
-    movimientos.forEach(m=>{
-      const oid=String(m.gastosObraId||'').trim();
-      if(!grupos.has(oid))grupos.set(oid,[]);
-      grupos.get(oid).push(m);
-    });
-
-    const f=window._cqGastosBridge;
-    let reparados=0,errores=0,obrasOk=0,obrasError=0;
+    let reparados=0,errores=0;
     const mensajes=[];
-
-    for(const [oid,movs] of grupos.entries()){
+    for(const m of candidatos){
+      const oid=String(m.gastosObraId||'').trim();
+      const label=obraLabelCC(oid)||oid||'movimiento';
+      m.gastosSyncEstado='pendiente';
+      m.gastosSyncError='';
+      m.gastosSyncAt=new Date().toISOString();
+      render();
       try{
-        const ref=f.doc(f.db,'gastos',oid);
-        await f.runTransaction(f.db,async tx=>{
-          const snap=await tx.get(ref);
-          const data=snap.exists()?snap.data():{gastos:[],financiero:{venta:0,comision:0,acuerdosMO:{mo:{monto:0,moneda:'usd',tc:1400},ext:{}}}};
-          let arr=Array.isArray(data.gastos)?data.gastos.slice():[];
-          const ids=new Set(movs.map(m=>String(gastoLinkIdCC(m.id))));
-          arr=arr.filter(g=>!ids.has(String(g&&g.id||'')));
-          movs.forEach(m=>arr.push(gastoPayloadCC(m)));
-          data.gastos=arr;
-          data.updatedAt=new Date().toISOString();
-          tx.set(ref,data);
-        });
-        const at=new Date().toISOString();
-        movs.forEach(m=>{
-          m.gastosSyncEstado='ok';
-          m.gastosSyncError='';
-          m.gastosSyncAt=at;
-        });
-        reparados+=movs.length;
-        obrasOk++;
+        // Un movimiento por vez. El ID es estable, por lo que no genera duplicados.
+        await timeout(upsertGastoCC(oid,gastoPayloadCC(m),false),8000,label);
+        m.gastosSyncEstado='ok';
+        m.gastosSyncError='';
+        m.gastosSyncAt=new Date().toISOString();
+        reparados++;
       }catch(e){
         const msg=String(e&&e.message||e||'Error desconocido');
-        console.warn('Reparar Caja Chica → Gastos · '+oid,e);
-        const at=new Date().toISOString();
-        movs.forEach(m=>{
-          m.gastosSyncEstado='error';
-          m.gastosSyncError=msg;
-          m.gastosSyncAt=at;
-        });
-        errores+=movs.length;
-        obrasError++;
-        mensajes.push((obraLabelCC(oid)||oid)+': '+msg);
+        console.warn('Reparar Caja Chica → Gastos · '+label,e);
+        m.gastosSyncEstado='error';
+        m.gastosSyncError=msg;
+        m.gastosSyncAt=new Date().toISOString();
+        errores++;
+        mensajes.push(label+': '+msg);
+
+        // Si Firebase dejó de responder, no iniciar una cadena de operaciones colgadas.
+        if(msg.includes('Tiempo agotado'))break;
       }
+      saveLocalCC();
+      render();
     }
 
     save();render();
-    const base=`${movimientos.length} revisados · ${reparados} reparados · ${errores} con error`;
-    alert(mensajes.length?base+'\n\n'+mensajes.slice(0,4).join('\n'):base+'\n\nLos vínculos con Gastos fueron reconstruidos.');
+    const base=`${candidatos.length} pendientes · ${reparados} reparados · ${errores} con error`;
+    alert(mensajes.length?base+'\n\n'+mensajes.slice(0,4).join('\n'):base+'\n\nLos vínculos rojos fueron reparados.');
   }catch(e){
     console.warn('Reparación manual Caja Chica → Gastos',e);
     alert('No se pudo reparar: '+String(e&&e.message||e));
   }finally{
+    cqCcManualRepairRunning=false;
     if(btn){btn.disabled=false;btn.innerHTML=oldHtml||'<span class="btn-icon">🔧</span>Reparar vínculos';}
   }
 }
 window.repararVinculosGastosCC=repararVinculosGastosCC;
 
 async function verifyGastosCC(options={}){
+  if(cqCcManualRepairRunning)return false;
   const repair=options.repair!==false;
   const auto=options.auto===true;
   if(verifyingCC)return false;
@@ -1689,7 +1689,7 @@ async function verifyGastosCC(options={}){
           if(Math.abs((Number(g.monto)||0)-esperadoMonto)>.01)err='El importe no coincide';
           else if(String(g.moneda||'ars').toLowerCase()!=='ars')err='La moneda no coincide';
           else if(String(g.cat||'')!==String(m.category||''))err='La categoría no coincide';
-          else if(String(g.subrubro||'')!==String(m.subrubro||''))err='El subrubro no coincide';
+          else if(String(g.subrubro||'')!==String(m.subrubro||m.concept||''))err='El subrubro no coincide';
           else next='ok';
         }
       }
