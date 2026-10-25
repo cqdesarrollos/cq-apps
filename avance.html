@@ -2482,6 +2482,53 @@ window.cqRevealInitialScreen=function(){
   #view-avances .semana-items.open .item-monto-total.conforme-auto .conforme-auto-label{font-size:9px!important;bottom:4px!important;}
 }
 </style>
+
+<style id="cq-finanzas-share-img-v1">
+/* Compartir Detalle por semana como imagen, independiente del ancho del teléfono */
+.fin-share-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fin-share-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;border:1px solid #9ACFB4;background:#E8F4EE;color:#1C3D35;border-radius:8px;padding:6px 10px;font:700 11px 'Space Grotesk',sans-serif;cursor:pointer}
+.fin-share-btn:hover{background:#D9EEDF;border-color:#76B995}
+.fin-share-btn:disabled{opacity:.55;cursor:wait}
+@media(max-width:700px){
+  .fin-share-btn{padding:5px 8px!important;font-size:8px!important;border-radius:6px!important;gap:4px!important}
+}
+
+/* Esta hoja vive fuera de pantalla y se usa sólo para generar el PNG de WhatsApp. */
+.cq-fin-share-sheet{position:fixed;left:-20000px;top:0;width:1200px;box-sizing:border-box;background:#F7F8F5;color:#1C2B22;padding:44px 48px 52px;font-family:Arial,Helvetica,sans-serif;z-index:-1}
+.cq-fin-share-sheet *{box-sizing:border-box}
+.cq-fin-share-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:26px}
+.cq-fin-share-kicker{font-size:18px;line-height:1;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#6D9277;margin-bottom:8px}
+.cq-fin-share-title{font-size:38px;line-height:1.05;font-weight:900;color:#173F35}
+.cq-fin-share-sub{font-size:20px;line-height:1.25;font-weight:700;color:#496653;margin-top:9px}
+.cq-fin-share-date{font-size:16px;color:#78907E;text-align:right;white-space:nowrap}
+.cq-fin-share-card{background:#fff;border:1px solid #D5E3D8;border-radius:18px;overflow:hidden;box-shadow:0 3px 14px rgba(28,61,53,.07)}
+.cq-fin-share-table{width:100%;table-layout:fixed;border-collapse:collapse}
+.cq-fin-share-table col:nth-child(1){width:7%}
+.cq-fin-share-table col:nth-child(2){width:29%}
+.cq-fin-share-table col:nth-child(3){width:17%}
+.cq-fin-share-table col:nth-child(4){width:17%}
+.cq-fin-share-table col:nth-child(5){width:16%}
+.cq-fin-share-table col:nth-child(6){width:14%}
+.cq-fin-share-table th{height:58px;padding:0 15px;background:#EEF5F0;border-bottom:1px solid #D4E2D7;color:#688672;font-size:16px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;text-align:left;vertical-align:middle}
+.cq-fin-share-table th.num,.cq-fin-share-table td.num{text-align:right}
+.cq-fin-share-table td{padding:13px 15px;border-bottom:1px solid #E7EEE9;font-size:19px;line-height:1.22;vertical-align:middle;background:#fff}
+.cq-fin-share-table tbody tr:nth-child(even) td{background:#FBFCFA}
+.cq-fin-share-table td.sem{font-size:17px;font-weight:800;color:#93AA98}
+.cq-fin-share-table td.etapa{font-weight:700;color:#496653;overflow-wrap:anywhere}
+.cq-fin-share-table td.money{font-family:'Courier New',monospace;font-size:18px;font-weight:700;white-space:nowrap;color:#28483A}
+.cq-fin-share-table td.dev{color:#16704D}
+.cq-fin-share-table td.saldo{color:#849B89}
+.cq-fin-share-progress{display:flex;align-items:center;gap:10px}
+.cq-fin-share-pct{min-width:47px;font-family:'Courier New',monospace;font-size:19px;font-weight:900;color:#16704D}
+.cq-fin-share-bar{height:10px;flex:1;background:#DEE9E1;border-radius:999px;overflow:hidden}
+.cq-fin-share-bar>span{display:block;height:100%;background:#2E7D5E;border-radius:999px}
+.cq-fin-share-table tfoot td{padding:16px 15px;background:#EAF3ED!important;border-top:3px solid #2E7D5E;border-bottom:none;font-weight:900;color:#173F35}
+.cq-fin-share-table tfoot td.etapa{font-size:18px;letter-spacing:.04em}
+.cq-fin-share-table tfoot td.money{font-size:18px;color:#173F35}
+.cq-fin-share-foot{display:flex;justify-content:space-between;gap:18px;margin-top:18px;font-size:15px;color:#829788}
+.cq-fin-share-brand{font-weight:800;color:#557560}
+</style>
+
 </head>
 <body>
 
@@ -2717,7 +2764,10 @@ window.cqRevealInitialScreen=function(){
     <div class="fin-card" id="card-cq" style="border-left:4px solid #2E7D5E"></div>
 
     <!-- TABLA SEMANAS -->
-    <div class="section-title" style="margin-top:20px">Detalle por semana</div>
+    <div class="section-title fin-share-title-row" style="margin-top:20px">
+      <span>Detalle por semana</span>
+      <button type="button" class="fin-share-btn" id="fin-share-btn" onclick="compartirDetalleSemanasImagen()" title="Compartir el detalle por semana como imagen">↗ WhatsApp</button>
+    </div>
     <div style="background:#fff;border:1px solid #DDE8DE;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(28,61,53,.05)">
       <table class="pagos-table" id="pagos-table"></table>
     </div>
@@ -5461,6 +5511,131 @@ function renderFinanzas(){
       <div class="pagos-total-bar"><div style="width:${avanceTotalPct.toFixed(0)}%"></div></div>
     </td>
   </tr></tfoot>`;
+}
+
+
+// ─── COMPARTIR FINANZAS · DETALLE POR SEMANA COMO IMAGEN ────────────────
+function finanzasNombreSeguro(v){
+  return String(v||'obra').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'') || 'obra';
+}
+function finanzasFechaCorta(){
+  try{return new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return new Date().toLocaleDateString('es-AR');}
+}
+function construirDetalleSemanasShare(){
+  const meta=currentObra()||{};
+  const cons=currentConstructor()||{};
+  const semanas=getSemanas();
+  let totalPagoMax=0,totalDev=0,totalSaldo=0;
+
+  const filas=semanas.map(s=>{
+    const c=calcSemana(s);
+    const pagoMax=getPagoMax(s.num);
+    const saldo=pagoMax-c.devengado;
+    const pct=Math.max(0,Math.min(1,c.pctSem||0));
+    totalPagoMax+=pagoMax;
+    totalDev+=c.devengado;
+    totalSaldo+=saldo;
+    return {sem:'S'+(s.displayNum||s.num),etapa:s.etapa||'',pagoMax,devengado:c.devengado,saldo,pct};
+  });
+  const totalPct=totalPagoMax>0?Math.max(0,Math.min(1,totalDev/totalPagoMax)):0;
+
+  const hoja=document.createElement('div');
+  hoja.className='cq-fin-share-sheet';
+  hoja.setAttribute('aria-hidden','true');
+  hoja.innerHTML=`
+    <div class="cq-fin-share-head">
+      <div>
+        <div class="cq-fin-share-kicker">Finanzas</div>
+        <div class="cq-fin-share-title">Detalle por semana</div>
+        <div class="cq-fin-share-sub">${escHtml(meta.label||meta.obraNum||'Obra')}${cons.nombre?` · ${escHtml(cons.nombre)}`:''}</div>
+      </div>
+      <div class="cq-fin-share-date">Actualizado ${finanzasFechaCorta()}</div>
+    </div>
+    <div class="cq-fin-share-card">
+      <table class="cq-fin-share-table">
+        <colgroup><col><col><col><col><col><col></colgroup>
+        <thead><tr>
+          <th>Sem.</th><th>Etapa</th><th class="num">Pago máx.</th><th class="num">Devengado</th><th class="num">Saldo</th><th>Avance</th>
+        </tr></thead>
+        <tbody>${filas.map(f=>`<tr>
+          <td class="sem">${escHtml(f.sem)}</td>
+          <td class="etapa">${escHtml(f.etapa)}</td>
+          <td class="num money">${fmt(f.pagoMax)}</td>
+          <td class="num money dev">${fmt(f.devengado)}</td>
+          <td class="num money saldo">${fmt(f.saldo)}</td>
+          <td><div class="cq-fin-share-progress"><span class="cq-fin-share-pct">${Math.round(f.pct*100)}%</span><span class="cq-fin-share-bar"><span style="width:${Math.round(f.pct*100)}%"></span></span></div></td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr>
+          <td></td><td class="etapa">TOTAL</td>
+          <td class="num money">${fmt(totalPagoMax)}</td>
+          <td class="num money">${fmt(totalDev)}</td>
+          <td class="num money">${fmt(totalSaldo)}</td>
+          <td><div class="cq-fin-share-progress"><span class="cq-fin-share-pct">${Math.round(totalPct*100)}%</span><span class="cq-fin-share-bar"><span style="width:${Math.round(totalPct*100)}%"></span></span></div></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div class="cq-fin-share-foot"><span class="cq-fin-share-brand">CQ Desarrollos</span><span>Detalle financiero por semana</span></div>`;
+  document.body.appendChild(hoja);
+  return hoja;
+}
+async function asegurarHtml2CanvasFinanzas(){
+  if(window.html2canvas) return;
+  await cargarScriptReporte('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+}
+function canvasABlobFinanzas(canvas){
+  return new Promise((resolve,reject)=>{
+    canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('No se pudo crear la imagen.')),'image/png');
+  });
+}
+async function generarDetalleSemanasImagen(){
+  await asegurarHtml2CanvasFinanzas();
+  const hoja=construirDetalleSemanasShare();
+  try{
+    if(document.fonts && document.fonts.ready) await document.fonts.ready;
+    const canvas=await html2canvas(hoja,{
+      scale:1.6,
+      backgroundColor:'#F7F8F5',
+      useCORS:true,
+      logging:false,
+      scrollX:0,
+      scrollY:0,
+      windowWidth:1200,
+      windowHeight:hoja.scrollHeight
+    });
+    return await canvasABlobFinanzas(canvas);
+  }finally{
+    hoja.remove();
+  }
+}
+async function compartirDetalleSemanasImagen(){
+  const btn=document.getElementById('fin-share-btn');
+  const original=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.innerHTML='Generando…';}
+  try{
+    const blob=await generarDetalleSemanasImagen();
+    const meta=currentObra()||{};
+    const file=new File([blob],`detalle_semanas_${finanzasNombreSeguro(meta.label||meta.obraNum||curObraId)}.png`,{type:'image/png'});
+    const shareData={title:'Detalle por semana',text:`Detalle por semana · ${meta.label||meta.obraNum||'Obra'}`,files:[file]};
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share(shareData);
+      return;
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2500);
+    alert('Se descargó la imagen. Podés adjuntarla en WhatsApp.');
+  }catch(e){
+    if(e && e.name==='AbortError') return;
+    console.error('Error compartiendo detalle por semana',e);
+    alert('No se pudo generar la imagen para compartir.');
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML=original||'↗ WhatsApp';}
+  }
 }
 
 
