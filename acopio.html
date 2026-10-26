@@ -1532,6 +1532,23 @@ button[onclick*="crearBackupManual"]{
   border-color:rgba(46,125,94,.55);
   box-shadow:0 0 0 4px rgba(46,125,94,.10);
 }
+.bulk-sub-auto-note{
+  margin-top:12px;padding:10px 12px;border:1px solid rgba(46,125,94,.16);border-radius:12px;
+  background:#F2F8F4;color:#557864;font-size:10.5px;font-weight:700;line-height:1.4;
+}
+.bulk-sub-auto-note b{color:var(--green)}
+.bulk-sub-clasificar{display:none;margin-top:12px;border:1px solid #E5C680;border-radius:14px;background:#FFF9EC;overflow:hidden}
+.bulk-sub-clasificar.open{display:block}
+.bulk-sub-clasificar-hd{padding:10px 12px;background:#FFF2D5;border-bottom:1px solid #E9D4A3}
+.bulk-sub-clasificar-ttl{font-size:11px;font-weight:900;color:#7A5317}
+.bulk-sub-clasificar-sub{font-size:9.5px;color:#9A7843;margin-top:3px;line-height:1.35}
+.bulk-sub-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(180px,.9fr);gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid #F0DFC0}
+.bulk-sub-row:last-child{border-bottom:none}
+.bulk-sub-prod{min-width:0}
+.bulk-sub-prod strong{display:block;font-size:11px;color:var(--green);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bulk-sub-prod small{display:block;font-family:var(--mono);font-size:8.5px;color:#9A8A68;margin-top:2px}
+.bulk-sub-row select{width:100%;background:#fff;border:1px solid #D9C28E;border-radius:9px;padding:8px 9px;font-size:11px;font-weight:750;color:var(--green);outline:none}
+.bulk-sub-row select:focus{border-color:var(--green2);box-shadow:0 0 0 3px rgba(46,125,94,.09)}
 @media(max-width:620px){
   .bulk-mat-modal{max-width:96vw!important}
   .bulk-mat-grid{
@@ -1551,6 +1568,7 @@ button[onclick*="crearBackupManual"]{
     padding:8px;
     font-size:10px;
   }
+  .bulk-sub-row{grid-template-columns:1fr;gap:6px;padding:9px 10px}
 }
 </style>
 
@@ -3429,16 +3447,24 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
         </div>
       </div>
 
-      <div class="fld" style="margin-top:12px">
-        <label>Categoría compartida</label>
-        <select id="bulk-mat-cat"></select>
+      <div class="bulk-sub-auto-note">
+        <b>Subrubro automático:</b> se busca primero por código y luego por nombre exacto en los acopios anteriores.
+        Si el artículo ya fue clasificado, se reutiliza ese subrubro. Si es nuevo, te lo va a pedir antes de guardar.
       </div>
 
-      <div id="bulk-mat-preview" style="font-size:11px;color:#7A9E82;font-weight:700"></div>
+      <div id="bulk-sub-clasificar" class="bulk-sub-clasificar">
+        <div class="bulk-sub-clasificar-hd">
+          <div class="bulk-sub-clasificar-ttl">Clasificar artículos nuevos</div>
+          <div class="bulk-sub-clasificar-sub">Estos artículos no tienen una clasificación anterior. Elegí el subrubro de cada uno para poder grabarlos.</div>
+        </div>
+        <div id="bulk-sub-clasificar-list"></div>
+      </div>
+
+      <div id="bulk-mat-preview" style="font-size:11px;color:#7A9E82;font-weight:700;margin-top:10px"></div>
     </div>
     <div class="mfooter" style="justify-content:flex-end">
       <button class="btn btn-s btn-sm" onclick="closeModal('modal-carga-masiva-mat')">Cancelar</button>
-      <button class="btn btn-p btn-sm" onclick="guardarCargaMasivaMateriales()">Agregar materiales</button>
+      <button id="bulk-mat-guardar-btn" class="btn btn-p btn-sm" onclick="guardarCargaMasivaMateriales()">Agregar materiales</button>
     </div>
   </div>
 </div>
@@ -6324,15 +6350,17 @@ function cqBulkPrecioAcordado(precio){
   return precio/1.21;
 }
 function openCargaMasivaMateriales(){
-  var cat=getLastMatCat();
-  var sel=document.getElementById('bulk-mat-cat');
-  sel.innerHTML=renderMatCatOptions(cat);
-  if(cat)sel.value=cat;
   document.getElementById('bulk-mat-codigos').value='';
   document.getElementById('bulk-mat-articulos').value='';
   document.getElementById('bulk-mat-precios').value='';
   document.getElementById('bulk-mat-cantidades').value='';
   document.getElementById('bulk-mat-preview').textContent='';
+  var clas=document.getElementById('bulk-sub-clasificar');
+  var lista=document.getElementById('bulk-sub-clasificar-list');
+  if(clas)clas.classList.remove('open');
+  if(lista)lista.innerHTML='';
+  var btn=document.getElementById('bulk-mat-guardar-btn');
+  if(btn)btn.textContent='Agregar materiales';
   cqBulkElegirRegla('ferro');
   var d=document.getElementById('bulk-regla-dividir'),m=document.getElementById('bulk-regla-multiplicar');
   if(d)d.value='1';if(m)m.value='1';
@@ -6366,15 +6394,127 @@ document.addEventListener('keydown',function(e){
   }
 });
 
+function cqNormBulkMaterial(v){
+  return String(v||'').trim().toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+}
+function cqSubrubrosCargaMasiva(){
+  var arr=[];
+  try{arr=subrubrosMaterialesAcopio();}catch(_e){arr=[];}
+  if(!Array.isArray(arr)||!arr.length){
+    try{arr=getCats().slice();}catch(_e2){arr=[];}
+  }
+  return arr.filter(function(x){return String(x||'').trim();});
+}
+function cqSubrubroValidoCargaMasiva(sub){
+  var key=cqNormBulkMaterial(sub);
+  if(!key)return '';
+  var validos=cqSubrubrosCargaMasiva();
+  return validos.find(function(x){return cqNormBulkMaterial(x)===key;})||'';
+}
+function cqBuscarSubrubroHistoricoCargaMasiva(cod,nom){
+  var codKey=cqNormBulkMaterial(cod);
+  var nomKey=cqNormBulkMaterial(nom);
+  var acopios=(DB&&Array.isArray(DB.acopios)?DB.acopios:[]).filter(function(ac){
+    return String(ac&&ac.id)!==String(curAcopioId);
+  }).slice().sort(function(a,b){
+    var oa=Number(a&&a.order),ob=Number(b&&b.order);
+    if(isFinite(oa)&&isFinite(ob)&&oa!==ob)return ob-oa;
+    return Number(b&&b.id||0)-Number(a&&a.id||0);
+  });
+
+  // 1) El código exacto manda. Es la coincidencia más segura.
+  if(codKey){
+    for(var i=0;i<acopios.length;i++){
+      var mats=Array.isArray(acopios[i]&&acopios[i].mats)?acopios[i].mats:[];
+      for(var j=0;j<mats.length;j++){
+        if(cqNormBulkMaterial(mats[j]&&mats[j].cod)!==codKey)continue;
+        var porCodigo=cqSubrubroValidoCargaMasiva(mats[j]&&mats[j].cat);
+        if(porCodigo)return porCodigo;
+      }
+    }
+  }
+
+  // 2) Si el código nunca apareció, aceptar solamente nombre EXACTO normalizado.
+  if(nomKey){
+    for(var x=0;x<acopios.length;x++){
+      var matsNom=Array.isArray(acopios[x]&&acopios[x].mats)?acopios[x].mats:[];
+      for(var y=0;y<matsNom.length;y++){
+        if(cqNormBulkMaterial(matsNom[y]&&matsNom[y].nom)!==nomKey)continue;
+        var porNombre=cqSubrubroValidoCargaMasiva(matsNom[y]&&matsNom[y].cat);
+        if(porNombre)return porNombre;
+      }
+    }
+  }
+  return '';
+}
+function cqEscBulk(v){
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function cqBulkClasifKey(m){
+  return String(m&&m.fila||0)+'|'+cqNormBulkMaterial(m&&m.cod)+'|'+cqNormBulkMaterial(m&&m.nom);
+}
+function cqRenderClasificacionBulk(pendientes){
+  var wrap=document.getElementById('bulk-sub-clasificar');
+  var list=document.getElementById('bulk-sub-clasificar-list');
+  var btn=document.getElementById('bulk-mat-guardar-btn');
+  if(!wrap||!list)return;
+  var subs=cqSubrubrosCargaMasiva();
+  var opts='<option value="">Elegir subrubro…</option>'+subs.map(function(s){
+    return '<option value="'+cqEscBulk(s)+'">'+cqEscBulk(s)+'</option>';
+  }).join('');
+  list.innerHTML=pendientes.map(function(m){
+    return '<div class="bulk-sub-row">'
+      +'<div class="bulk-sub-prod"><strong>'+cqEscBulk(m.nom)+'</strong>'
+      +'<small>'+(m.cod?('Código '+cqEscBulk(m.cod)):'Sin código')+'</small></div>'
+      +'<select class="bulk-sub-select" data-bulk-key="'+cqEscBulk(cqBulkClasifKey(m))+'">'+opts+'</select>'
+      +'</div>';
+  }).join('');
+  wrap.classList.add('open');
+  if(btn)btn.textContent='Guardar materiales';
+  var preview=document.getElementById('bulk-mat-preview');
+  if(preview)preview.textContent='Falta clasificar '+pendientes.length+' artículo'+(pendientes.length===1?'':'s')+' nuevo'+(pendientes.length===1?'':'s')+'. Todavía no se guardó nada.';
+  setTimeout(function(){
+    var first=list.querySelector('.bulk-sub-select');
+    if(first)first.focus();
+    try{wrap.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(_e){}
+  },50);
+}
+function cqClasificacionManualBulkPorFila(){
+  var out={};
+  document.querySelectorAll('#bulk-sub-clasificar-list .bulk-sub-select').forEach(function(sel){
+    var key=String(sel.getAttribute('data-bulk-key')||'');
+    var sub=cqSubrubroValidoCargaMasiva(sel.value);
+    if(key&&sub)out[key]=sub;
+  });
+  return out;
+}
+function cqOcultarClasificacionBulk(){
+  var wrap=document.getElementById('bulk-sub-clasificar');
+  var list=document.getElementById('bulk-sub-clasificar-list');
+  var btn=document.getElementById('bulk-mat-guardar-btn');
+  if(wrap)wrap.classList.remove('open');
+  if(list)list.innerHTML='';
+  if(btn)btn.textContent='Agregar materiales';
+}
+
 function guardarCargaMasivaMateriales(){
-  var cat=document.getElementById('bulk-mat-cat').value;
+  var clasWrap=document.getElementById('bulk-sub-clasificar');
+  if(clasWrap&&clasWrap.classList.contains('open')){
+    var faltante=Array.from(document.querySelectorAll('#bulk-sub-clasificar-list .bulk-sub-select')).find(function(sel){
+      return !cqSubrubroValidoCargaMasiva(sel.value);
+    });
+    if(faltante){
+      alert('Elegí el subrubro de todos los artículos nuevos antes de guardar.');
+      faltante.focus();
+      return;
+    }
+  }
   try{cqBulkPrecioAcordado(1);}catch(e){alert(e.message||e);return;}
   var codigos=(document.getElementById('bulk-mat-codigos').value||'').split(/\r?\n/);
   var articulos=(document.getElementById('bulk-mat-articulos').value||'').split(/\r?\n/);
   var precios=(document.getElementById('bulk-mat-precios').value||'').split(/\r?\n/);
   var cantidades=(document.getElementById('bulk-mat-cantidades').value||'').split(/\r?\n/);
-
-  if(!cat){alert('Elegí una categoría.');return;}
 
   var maxLen=Math.max(codigos.length,articulos.length,precios.length,cantidades.length);
   var parsed=[];
@@ -6396,6 +6536,7 @@ function guardarCargaMasivaMateriales(){
     }
 
     parsed.push({
+      fila:i+1,
       cod:cod,
       nom:nom,
       precioUnit:pu,
@@ -6417,6 +6558,40 @@ function guardarCargaMasivaMateriales(){
     if(String(m.cod||'').trim())existingCodes[catKey(m.cod)]=true;
   });
 
+  // No pedir clasificación para códigos que igualmente se van a omitir por duplicados.
+  var seenCodes=Object.assign({},existingCodes);
+  parsed.forEach(function(m){
+    if(m.cod && seenCodes[catKey(m.cod)]){
+      m.omitirDuplicado=true;
+    }else if(m.cod){
+      seenCodes[catKey(m.cod)]=true;
+    }
+  });
+
+  var manuales=cqClasificacionManualBulkPorFila();
+  var pendientes=[];
+  var heredados=0;
+  parsed.forEach(function(m){
+    if(m.omitirDuplicado)return;
+    var sub=cqBuscarSubrubroHistoricoCargaMasiva(m.cod,m.nom);
+    if(sub){
+      m.cat=sub;
+      heredados++;
+      return;
+    }
+    var manual=manuales[cqBulkClasifKey(m)]||'';
+    if(manual){
+      m.cat=manual;
+      return;
+    }
+    pendientes.push(m);
+  });
+
+  if(pendientes.length){
+    cqRenderClasificacionBulk(pendientes);
+    return;
+  }
+
   var agregados=[];
   var duplicados=[];
   var maxId=1;
@@ -6433,33 +6608,56 @@ function guardarCargaMasivaMateriales(){
     }
   });
 
+  // Revalidar duplicados justo antes de grabar.
+  existingCodes={};
+  (a.mats||[]).forEach(function(m){
+    if(String(m.cod||'').trim())existingCodes[catKey(m.cod)]=true;
+  });
+
+  var hayParaAgregar=parsed.some(function(m){
+    return !m.omitirDuplicado && !!m.cat && !(m.cod && existingCodes[catKey(m.cod)]);
+  });
+  if(!hayParaAgregar){
+    alert('No se agregó ningún producto. Los códigos ingresados ya existen.');
+    return;
+  }
+
+  // Guardar el estado ANTERIOR para que Deshacer vuelva realmente atrás.
+  pushUndo();
+
   parsed.forEach(function(m){
     if(m.cod && existingCodes[catKey(m.cod)]){
       duplicados.push(m.cod);
       return;
     }
+    if(!m.cat)return;
     m.id=maxId++;
-    m.cat=cat;
+    m.cat=ensureCat(m.cat);
+    delete m.fila;
+    delete m.omitirDuplicado;
     a.mats.push(m);
     if(m.cod)existingCodes[catKey(m.cod)]=true;
     agregados.push(m);
   });
 
   if(!agregados.length){
+    // Caso extremadamente raro (por ejemplo, cambio concurrente justo antes de grabar).
+    undoStack.pop();
+    updateUndoBtn();
     alert('No se agregó ningún producto. Los códigos ingresados ya existen.');
     return;
   }
-
-  pushUndo();
-  cat=ensureCat(cat);
-  agregados.forEach(function(m){m.cat=cat;});
-  setLastMatCat(cat);
+  if(agregados.length)setLastMatCat(agregados[agregados.length-1].cat);
   persist();
+  cqOcultarClasificacionBulk();
   closeModal('modal-carga-masiva-mat');
   renderMateriales();
 
   var controlados=agregados.filter(function(m){return m.controlStock==='limitado';}).length;
-  var msg='✓ '+agregados.length+' materiales agregados en '+cat;
+  var nuevosClasificados=agregados.length-heredados;
+  var msg='✓ '+agregados.length+' materiales agregados';
+  if(heredados>0)msg+=' · '+heredados+' subrubros recuperados';
+  if(nuevosClasificados>0)msg+=' · '+nuevosClasificados+' clasificados ahora';
   if(controlados)msg+=' · '+controlados+' con cantidad específica';
   if(duplicados.length)msg+=' · '+duplicados.length+' códigos repetidos omitidos';
   if(invalidas.length)msg+=' · '+invalidas.length+' líneas incompletas';
@@ -14200,8 +14398,7 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
     openCargaMasivaMateriales=function(){
       asegurarConfig(function(){
         cqOrigOpenMasiva();
-        var s=document.getElementById('bulk-mat-cat');
-        if(s)s.innerHTML=options(getLastMatCat?getLastMatCat():'',false);
+        // El subrubro masivo ya no es compartido; se resuelve por artículo.
       });
     };
   }
@@ -14240,21 +14437,16 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
     };
   }
   if(cqOrigGuardarMasiva){
+    // La carga masiva ya resuelve el subrubro artículo por artículo:
+    // hereda desde acopios anteriores y sólo pregunta por los productos nuevos.
     guardarCargaMasivaMateriales=function(){
-      var cat=validarSelect('bulk-mat-cat');
-      if(!cat){
-        alert('Elegí un subrubro válido de Gastos antes de cargar.');
-        return;
-      }
-      document.getElementById('bulk-mat-cat').value=cat;
       return cqOrigGuardarMasiva();
     };
   }
 
   function rotular(){
     [
-      ['mat-cat','Subrubro (Gastos)'],
-      ['bulk-mat-cat','Subrubro compartido (Gastos)']
+      ['mat-cat','Subrubro (Gastos)']
     ].forEach(function(p){
       var el=document.getElementById(p[0]);
       if(!el)return;
@@ -14271,8 +14463,7 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
     try{
       var s=document.getElementById('mat-cat');
       if(s&&!document.getElementById('modal-mat').classList.contains('open'))s.innerHTML=options('',false);
-      var b=document.getElementById('bulk-mat-cat');
-      if(b&&!document.getElementById('modal-carga-masiva-mat').classList.contains('open'))b.innerHTML=options('',false);
+      // Sin selector compartido en carga masiva.
     }catch(e){}
   }
 
