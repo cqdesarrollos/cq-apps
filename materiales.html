@@ -7651,6 +7651,9 @@ if(!state.deletedMatIds) state.deletedMatIds=[];
 // CQ 26/10/2026 — lápidas persistentes por identidad. Evitan que una integración
 // vuelva a crear con otro ID un material que el usuario eliminó expresamente.
 if(!state.deletedMaterialKeys) state.deletedMaterialKeys=[];
+// CQ 26/10/2026 — tombstones de cargas automáticas por identidad lógica.
+// Un integrationId puede cambiar al republicarse desde Caja; el movimiento de origen no.
+if(!state.ignoredIntegrationKeys) state.ignoredIntegrationKeys=[];
 if(!state.deletedCatNames) state.deletedCatNames=[];
 if(!state.matNombres) state.matNombres={};
 if(!state.matCodigos) state.matCodigos={};
@@ -7961,6 +7964,32 @@ function cqIgnorarIntegracion(iid){
   if(!iid)return;
   if(!Array.isArray(state.ignoredIntegrationIds))state.ignoredIntegrationIds=[];
   if(!cqIntegracionIgnorada(iid))state.ignoredIntegrationIds.push(iid);
+}
+
+// Identidad estable de una carga automática. Caja Gerencia puede volver a publicar
+// el mismo movimiento con otro integrationId; sourceMovementId + obra siguen siendo
+// la identidad real del vínculo. Para Acopio/Pañol/Caja Chica también es segura.
+function cqClaveIntegracionLogica(x){
+  if(!x)return '';
+  var origen=cqOrigenCargaNormalizado(x);
+  var mov=String(x.sourceMovementId||'').trim();
+  if(!origen||!mov)return '';
+  var obra=cqClaveObraIntegracion(x.obraNameOrigen||x.obraName||'');
+  return 'src:'+origen+'|mov:'+mov+'|obra:'+obra;
+}
+function cqIntegracionLogicaIgnorada(x){
+  var k=cqClaveIntegracionLogica(x);
+  return !!k && Array.isArray(state.ignoredIntegrationKeys)
+    && state.ignoredIntegrationKeys.some(function(v){return String(v)===k;});
+}
+function cqIgnorarIntegracionLogica(x){
+  var k=cqClaveIntegracionLogica(x);
+  if(!k)return '';
+  if(!Array.isArray(state.ignoredIntegrationKeys))state.ignoredIntegrationKeys=[];
+  if(!state.ignoredIntegrationKeys.some(function(v){return String(v)===k;})){
+    state.ignoredIntegrationKeys.push(k);
+  }
+  return k;
 }
 
 
@@ -8324,6 +8353,7 @@ function normalizeState(){
   if(!state.extraCats)state.extraCats=[];
   if(!state.deletedMatIds)state.deletedMatIds=[];
   if(!state.deletedMaterialKeys)state.deletedMaterialKeys=[];
+  if(!state.ignoredIntegrationKeys)state.ignoredIntegrationKeys=[];
   if(!state.deletedCatNames)state.deletedCatNames=[];
   if(!state.matNombres)state.matNombres={};
   if(!state.matCodigos)state.matCodigos={};
@@ -8332,6 +8362,17 @@ function normalizeState(){
   if(!state.categoriaMemoria)state.categoriaMemoria={};
   if(!state.ignoredIntegrationIds)state.ignoredIntegrationIds=[];
   if(!state.reporteComentarios)state.reporteComentarios={};
+
+  // Defensa adicional: si Firebase contiene todavía una copia vieja de una carga
+  // que ya tiene tombstone, ni siquiera dejarla entrar al estado visible.
+  state.cargas=(state.cargas||[]).filter(function(c){
+    if(!c)return false;
+    var esAuto=c.automatico===true||!!c.integracionId;
+    if(!esAuto)return true;
+    if(c.integracionId&&cqIntegracionIgnorada(c.integracionId))return false;
+    if(cqIntegracionLogicaIgnorada(c))return false;
+    return true;
+  });
 
   // Normaliza el origen de cargas automáticas viejas y nuevas.
   // Esto hace que cualquier filtro por origen reconozca siempre Acopio/Pañol,
@@ -8595,10 +8636,22 @@ async function cqGuardarMaterialesSeguro(extra){
     // dando prioridad a la versión que ya está en Firebase para no borrar altas externas.
     var manuales=locCargas.filter(function(c){return !esAuto(c);});
     var mapa={};
-    locCargas.filter(esAuto).filter(function(c){return !cqEsAcopioAnteriorAlLinkeo(c);}).forEach(function(c){
+    var idsIgnorados=(Array.isArray(local.ignoredIntegrationIds)?local.ignoredIntegrationIds:[]).map(String);
+    var clavesIgnoradas=(Array.isArray(local.ignoredIntegrationKeys)?local.ignoredIntegrationKeys:[]).map(String);
+    function autoPermitida(c){
+      if(!c||cqEsAcopioAnteriorAlLinkeo(c))return false;
+      var iid=String(c.integracionId||'');
+      if(iid && idsIgnorados.indexOf(iid)>=0)return false;
+      var lk=cqClaveIntegracionLogica(c);
+      if(lk && clavesIgnoradas.indexOf(String(lk))>=0)return false;
+      return true;
+    }
+    locCargas.filter(esAuto).filter(autoPermitida).forEach(function(c){
       var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
     });
-    remCargas.filter(esAuto).filter(function(c){return !cqEsAcopioAnteriorAlLinkeo(c);}).forEach(function(c){
+    // CRÍTICO: una carga borrada no puede volver desde la copia remota del documento
+    // principal. Antes este merge la reinsertaba inmediatamente después de borrarla.
+    remCargas.filter(esAuto).filter(autoPermitida).forEach(function(c){
       var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
     });
     local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
@@ -9165,8 +9218,10 @@ function aplicarIntegracion(ev){
   }
 
   // Si el usuario eliminó expresamente una carga automática desde Materiales,
-  // no permitir que el listener de Firebase la vuelva a crear.
-  if(ev.active!==false && cqIntegracionIgnorada(ev.integrationId)) return false;
+  // no permitir que el listener de Firebase la vuelva a crear. Se bloquea tanto
+  // el integrationId actual como la identidad lógica del movimiento, porque Caja
+  // Gerencia puede republicarlo con un integrationId distinto.
+  if(ev.active!==false && (cqIntegracionIgnorada(ev.integrationId)||cqIntegracionLogicaIgnorada(ev))) return false;
 
   if(cqEsTechiCau29_77Integracion(ev)){
     var idxBloq=(state.cargas||[]).findIndex(function(c){return c.integracionId===ev.integrationId;});
@@ -12529,10 +12584,11 @@ async function borrarCarga(id){
   // Antes se borraba sólo de state.cargas; el listener veía la integración aún
   // activa y la volvía a crear. Ahora se guarda un "tombstone" compartido y,
   // además, se desactiva el documento de integración en Firebase.
-  if(carga && carga.automatico && carga.integracionId){
-    cqIgnorarIntegracion(carga.integracionId);
+  if(carga && carga.automatico){
+    if(carga.integracionId)cqIgnorarIntegracion(carga.integracionId);
+    var claveLogicaBorrada=cqIgnorarIntegracionLogica(carga);
 
-    if(window._dbReady && window._setDoc && window._doc){
+    if(carga.integracionId && window._dbReady && window._setDoc && window._doc){
       try{
         await window._setDoc(
           window._doc(window._db,'materiales_integraciones',String(carga.integracionId)),
@@ -12550,7 +12606,15 @@ async function borrarCarga(id){
     }
   }
 
-  state.cargas=state.cargas.filter(function(c){return c.id!==id;});
+  // Quitar la carga elegida. Si el mismo vínculo lógico ya había quedado duplicado
+  // con otro integrationId, quitar esas copias también; no afecta movimientos distintos.
+  state.cargas=state.cargas.filter(function(c){
+    if(c.id===id)return false;
+    if(carga && carga.automatico && claveLogicaBorrada && c && c.automatico){
+      return cqClaveIntegracionLogica(c)!==claveLogicaBorrada;
+    }
+    return true;
+  });
   editingCargaId=null;
   pendingDeleteId=null;
   await persist();
