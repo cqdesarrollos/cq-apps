@@ -7648,6 +7648,9 @@ if(!state.obraNombres) state.obraNombres={};
 if(!state.obraOrder) state.obraOrder=[];
 if(!state.extraCats) state.extraCats=[];
 if(!state.deletedMatIds) state.deletedMatIds=[];
+// CQ 26/10/2026 — lápidas persistentes por identidad. Evitan que una integración
+// vuelva a crear con otro ID un material que el usuario eliminó expresamente.
+if(!state.deletedMaterialKeys) state.deletedMaterialKeys=[];
 if(!state.deletedCatNames) state.deletedCatNames=[];
 if(!state.matNombres) state.matNombres={};
 if(!state.matCodigos) state.matCodigos={};
@@ -7710,7 +7713,37 @@ function aplicarNombresMateriales(){
   });
 }
 
-function isMatDeleted(id){ return (state.deletedMatIds||[]).indexOf(id)>=0; }
+function isMatDeleted(id){
+  // Tolerar IDs numéricos/string provenientes de distintas versiones/Firebase.
+  return (state.deletedMatIds||[]).some(function(x){return String(x)===String(id);});
+}
+function cqDeletedMaterialNameKey(nombre){
+  var k=claveMaterialUnificar(nombre||'');
+  return k?'name:'+k:'';
+}
+function cqMaterialNameBloqueado(nombre){
+  var k=cqDeletedMaterialNameKey(nombre);
+  return !!k && (state.deletedMaterialKeys||[]).indexOf(k)>=0;
+}
+function cqBloquearNombreMaterialEliminado(nombre){
+  var k=cqDeletedMaterialNameKey(nombre);
+  if(!k)return;
+  if(!Array.isArray(state.deletedMaterialKeys))state.deletedMaterialKeys=[];
+  if(state.deletedMaterialKeys.indexOf(k)<0)state.deletedMaterialKeys.push(k);
+}
+function cqDesbloquearNombreMaterial(nombre){
+  var k=cqDeletedMaterialNameKey(nombre);
+  if(!k)return;
+  state.deletedMaterialKeys=(state.deletedMaterialKeys||[]).filter(function(x){return x!==k;});
+}
+function cqHayOtroMaterialActivoMismoNombre(mat){
+  if(!mat)return false;
+  var k=claveMaterialUnificar(mat.mat||'');
+  if(!k)return false;
+  return getAllMats().some(function(x){
+    return x && String(x.id)!==String(mat.id) && !isMatDeleted(x.id) && claveMaterialUnificar(x.mat||'')===k;
+  });
+}
 function isCatDeleted(name){ return (state.deletedCatNames||[]).indexOf(name)>=0; }
 
 var EXTRA_CAT_COLORS=['#7B3FA0','#2B7BE0','#C8882A','#1E8DB4','#3A8A20','#C0392B','#6D5BD0','#8A6D2B','#00A6A6','#B8690A'];
@@ -8060,6 +8093,9 @@ function cqCrearMaterialOrigenSeguroMateriales(nombre,codigo,categoria,origen){
   if(!limpio)return null;
   var existe=cqBuscarMaterialExactoPorNombreMateriales(limpio);
   if(existe)return existe;
+  // Si el usuario borró expresamente este nombre del catálogo, una integración
+  // no puede recrearlo con un ID nuevo. Las cargas históricas se conservan.
+  if(cqMaterialNameBloqueado(limpio))return null;
 
   var maxId=10000;
   getAllMats().forEach(function(m){
@@ -8287,6 +8323,7 @@ function normalizeState(){
   if(!state.obraOrder)state.obraOrder=[];
   if(!state.extraCats)state.extraCats=[];
   if(!state.deletedMatIds)state.deletedMatIds=[];
+  if(!state.deletedMaterialKeys)state.deletedMaterialKeys=[];
   if(!state.deletedCatNames)state.deletedCatNames=[];
   if(!state.matNombres)state.matNombres={};
   if(!state.matCodigos)state.matCodigos={};
@@ -9018,6 +9055,8 @@ function buscarMaterialIntegracion(codigo,nombre,origen,materialId,categoriaOrig
   }
 
   // 3. Si no hay coincidencia segura, crear el producto recibido.
+  // Pero respetar un borrado manual persistente: no resucitar el mismo nombre con otro ID.
+  if(cqMaterialNameBloqueado(nombre))return null;
   // Es preferible un material nuevo a cargar cantidad sobre un producto incorrecto.
   var maxId=10000;
   mats.forEach(function(mat){if(mat.id>=maxId)maxId=mat.id+1;});
@@ -11229,6 +11268,8 @@ function guardarNombreMat(){
     state.extraMats.forEach(function(m){if(m.id===mat.id){m.mat=nuevo;m.comentarios=comentarios;m.codigo=codigo;}});
   }
 
+  // Un renombre manual también es una restauración deliberada de ese nombre.
+  cqDesbloquearNombreMaterial(nuevo);
   // Aprende esta categoría por código y por nombre para futuras integraciones automáticas.
   guardarMemoriaCategoriaMaterial(mat,nuevaCategoria);
 
@@ -11253,26 +11294,47 @@ function guardarNombreMat(){
   renderActive();
 }
 function eliminarMaterialSeleccionado(){
-  var mat=ALL_MATS.find(function(m){return m.id===selectedCargaMat;});
+  var mat=getAllMats().find(function(m){return String(m.id)===String(selectedCargaMat);});
   if(!mat){closeEditarNombreMat();return;}
   if(CALCULATED_MATS[mat.id]){alert('Este material es calculado automáticamente y no se puede eliminar.');return;}
-  var nCargas=state.cargas.filter(function(c){return c.matId===mat.id;}).length;
+  var nCargas=(state.cargas||[]).filter(function(c){return String(c.matId)===String(mat.id);}).length;
   var msg=nCargas
-    ? 'Hay '+nCargas+' carga'+(nCargas===1?'':'s')+' registrada'+(nCargas===1?'':'s')+' con "'+mat.mat+'". Esas cargas quedan en el historial igual, pero el material ya no se va a poder elegir para cargas nuevas. ¿Eliminar igual?'
-    : '¿Eliminar el material "'+mat.mat+'"? No se podrá elegir para cargas nuevas.';
+    ? 'Hay '+nCargas+' carga'+(nCargas===1?'':'s')+' registrada'+(nCargas===1?'':'s')+' con "'+mat.mat+'". Las cargas quedan en el historial, pero este material se elimina del catálogo y no volverá a aparecer por una sincronización automática. ¿Eliminar igual?'
+    : '¿Eliminar el material "'+mat.mat+'" del catálogo? No volverá a aparecer por una sincronización automática.';
   if(!confirm(msg)) return;
-  state.deletedMatIds.push(mat.id);
-  if(selectedCargaMat===mat.id){
+
+  if(!Array.isArray(state.deletedMatIds))state.deletedMatIds=[];
+  if(!isMatDeleted(mat.id))state.deletedMatIds.push(mat.id);
+
+  // Si no queda otro producto activo con exactamente el mismo nombre, guardar también
+  // una lápida por nombre. Esto impide que Pañol/Acopio/Cajas lo recreen con otro ID.
+  if(!cqHayOtroMaterialActivoMismoNombre(mat))cqBloquearNombreMaterialEliminado(mat.mat);
+
+  // Los materiales agregados/automáticos sí se quitan físicamente del catálogo persistido.
+  // Los materiales base quedan ocultos por deletedMatIds porque forman parte de la plantilla.
+  var eraExtra=(state.extraMats||[]).some(function(m){return String(m.id)===String(mat.id);});
+  if(eraExtra){
+    state.extraMats=(state.extraMats||[]).filter(function(m){return String(m.id)!==String(mat.id);});
+    CATS.forEach(function(c){c.items=(c.items||[]).filter(function(m){return String(m.id)!==String(mat.id);});});
+    ALL_MATS=ALL_MATS.filter(function(m){return String(m.id)!==String(mat.id);});
+    if(state.matNombres)delete state.matNombres[mat.id];
+    if(state.matCodigos)delete state.matCodigos[mat.id];
+    if(state.matCategorias)delete state.matCategorias[mat.id];
+    if(state.categoriaManual)delete state.categoriaManual[mat.id];
+    if(state.catalogoManual)delete state.catalogoManual[mat.id];
+  }
+
+  if(String(selectedCargaMat)===String(mat.id)){
     var next=null;
     CATS.forEach(function(c){
       if(next||isCatDeleted(c.name)) return;
-      c.items.forEach(function(m){ if(!next && !CALCULATED_MATS[m.id] && !isMatDeleted(m.id)) next=m.id; });
+      (c.items||[]).forEach(function(m){ if(!next && !CALCULATED_MATS[m.id] && !isMatDeleted(m.id)) next=m.id; });
     });
     selectedCargaMat=next;
   }
   persist();
   closeEditarNombreMat();
-  showToast('✓ Material "'+mat.mat+'" eliminado');
+  showToast('✓ Material "'+mat.mat+'" eliminado definitivamente del catálogo');
   renderActive();
 }
 function openGestionarCats(){
@@ -11389,6 +11451,9 @@ function guardarNuevoMat(){
 
   var maxId=10000;
   getAllMats().forEach(function(m){if(m.id>=maxId)maxId=m.id+1;});
+  // Alta manual explícita: si ese nombre había sido borrado antes, se lo restaura
+  // deliberadamente y vuelve a poder recibir integraciones.
+  cqDesbloquearNombreMaterial(nombre);
   var newMat={id:maxId, mat:nombre, codigo:codigo, prom:prom, data:[], catName:cat, comentarios:comentarios};
   if(!state.matCodigos) state.matCodigos={};
   if(codigo) state.matCodigos[maxId]=codigo;
@@ -11508,6 +11573,7 @@ function procesarCargaMasivaCatalogo(){
       return;
     }
 
+    cqDesbloquearNombreMaterial(nombre);
     var nuevo={
       id:maxId++,
       mat:nombre,
@@ -11663,6 +11729,7 @@ function procesarCargaMasiva(){
     }
 
     if(!mat){
+      cqDesbloquearNombreMaterial(nombre);
       mat={id:maxId++,mat:nombre,codigo:codigo,prom:0,data:[],catName:catDefault};
       state.extraMats.push(mat);
       if(!state.matCategorias)state.matCategorias={};
