@@ -6082,7 +6082,37 @@ function renderReporteConstructor(){
   const pendientesHasta23 = r.rows.filter(x=>x.incluidoHasta23 && x.pendienteHasta23>0);
 
   const rowsPagadas = pagadas.length ? pagadas.map(x=>rowHtml(x,'paid')).join('') : `<tr><td colspan="5" class="rep-cons-empty">Sin actividades pagadas/certificadas</td></tr>`;
-  const rowsPendientes = pendientesHasta23.length ? pendientesHasta23.map(x=>rowHtml(x,'pending')).join('') : `<tr><td colspan="6" class="rep-cons-empty">Sin pendientes hasta S${r.semanaLimite}</td></tr>`;
+
+  // Pendientes agrupados por semana. Cada bloque comienza con una franja-resumen
+  // para separar visualmente S1, S2, S3, etc. en pantalla y en PDF/WhatsApp.
+  function rowsPendientesAgrupadas(rows){
+    if(!rows.length) return `<tr><td colspan="6" class="rep-cons-empty">Sin pendientes hasta S${r.semanaLimite}</td></tr>`;
+
+    const grupos=new Map();
+    rows.forEach(x=>{
+      const key=String(x.sem);
+      if(!grupos.has(key)) grupos.set(key,[]);
+      grupos.get(key).push(x);
+    });
+
+    return Array.from(grupos.entries()).map(([sem,items])=>{
+      const totalMonto=items.reduce((a,x)=>a+(Number(x.monto)||0),0);
+      const totalPagado=items.reduce((a,x)=>a+(Number(x.certificado)||0),0);
+      const totalPendiente=items.reduce((a,x)=>a+(Number(x.pendienteHasta23)||0),0);
+      return `
+        <tr class="rep-week-separator">
+          <td class="rep-week-num">S${escHtml(sem)}</td>
+          <td class="rep-week-label">TOTAL SEMANA ${escHtml(sem)}</td>
+          <td class="rep-week-av"></td>
+          <td class="rep-cons-money rep-week-money">${fmt(totalMonto)}</td>
+          <td class="rep-cons-money rep-cons-ok rep-week-money">${fmt(totalPagado)}</td>
+          <td class="rep-cons-money rep-cons-pending rep-week-money">${fmt(totalPendiente)}</td>
+        </tr>
+        ${items.map(x=>rowHtml(x,'pending')).join('')}`;
+    }).join('');
+  }
+
+  const rowsPendientes = rowsPendientesAgrupadas(pendientesHasta23);
 
   const tableHeadPaid = `<thead><tr>
     <th>Sem.</th><th>Actividad</th><th>Av.</th><th>Monto</th><th>Pagado</th>
@@ -6181,7 +6211,7 @@ async function generarBlobPDFReporteConstructor(){
 
   // Guardamos límites de filas antes de capturar para no cortar el PDF en medio de una actividad.
   const elRect=el.getBoundingClientRect();
-  const rowBreakCss=Array.from(el.querySelectorAll('.rep-cons-table tbody tr')).map(tr=>{
+  const rowBreakCss=Array.from(el.querySelectorAll('.rep-cons-table tbody tr:not(.rep-week-separator)')).map(tr=>{
     const r=tr.getBoundingClientRect();
     return Math.round((r.bottom - elRect.top) * 3.5);
   }).filter(v=>v>0).sort((a,b)=>a-b);
@@ -10800,3 +10830,66 @@ body.cq-constructor-mode #tab-reporte{
   #view-finanzas #pagos-table .pagos-total-pct{font-size:17px!important;}
 }
 </style>
+
+<style id="cq-reporte-semanas-separadas-v41">
+/* V41 - Separación visual por semana en Reporte Constructor / PDF WhatsApp */
+#reporte-constructor-print .pend-table .rep-week-separator td{
+  background:linear-gradient(90deg,#FFF1D9 0%,#FFF8EC 100%)!important;
+  border-top:2px solid #E9A34A!important;
+  border-bottom:1px solid #F1C98F!important;
+  padding-top:6px!important;
+  padding-bottom:6px!important;
+  vertical-align:middle!important;
+  font-weight:900!important;
+}
+#reporte-constructor-print .pend-table .rep-week-num{
+  color:#B85B08!important;
+  font-size:10px!important;
+  white-space:nowrap!important;
+}
+#reporte-constructor-print .pend-table .rep-week-label{
+  color:#B85B08!important;
+  font-size:8px!important;
+  text-transform:uppercase!important;
+  letter-spacing:.02em!important;
+  white-space:nowrap!important;
+}
+#reporte-constructor-print .pend-table .rep-week-money{
+  font-weight:900!important;
+}
+
+/* Reporte visible en celular/tablet */
+#reporte-constructor-container .reporte-constructor-wrap:not(.reporte-pdf-grande) .pend-table .rep-week-separator td{
+  padding-top:9px!important;
+  padding-bottom:9px!important;
+}
+#reporte-constructor-container .reporte-constructor-wrap:not(.reporte-pdf-grande) .pend-table .rep-week-num{
+  font-size:13px!important;
+}
+#reporte-constructor-container .reporte-constructor-wrap:not(.reporte-pdf-grande) .pend-table .rep-week-label{
+  font-size:10px!important;
+}
+#reporte-constructor-container .reporte-constructor-wrap:not(.reporte-pdf-grande) .pend-table .rep-week-money{
+  font-size:10.8px!important;
+}
+
+/* PDF / WhatsApp ampliado */
+#reporte-constructor-print.reporte-pdf-grande .pend-table .rep-week-separator td{
+  padding-top:7px!important;
+  padding-bottom:7px!important;
+  border-top-width:2px!important;
+}
+#reporte-constructor-print.reporte-pdf-grande .pend-table .rep-week-num{
+  font-size:16px!important;
+  line-height:1!important;
+}
+#reporte-constructor-print.reporte-pdf-grande .pend-table .rep-week-label{
+  font-size:10.5px!important;
+  line-height:1!important;
+}
+#reporte-constructor-print.reporte-pdf-grande .pend-table .rep-week-money{
+  font-size:12.2px!important;
+  line-height:1!important;
+}
+</style>
+
