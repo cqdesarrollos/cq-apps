@@ -18948,3 +18948,135 @@ body:has(#modal-reporte.open) #modal-reporte{
   setTimeout(corregirSilvermoon,3500);
 })();
 </script>
+
+<!-- CQ 27/10/2026 — edición manual gana al shadow local anterior -->
+<script id="cq-manual-gana-shadow-v8">
+(function(){
+  if(window.__cqManualGanaShadowV8)return;
+  window.__cqManualGanaShadowV8=true;
+
+  var SHADOW_KEY='cq_materiales_manual_shadow_v1';
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]+/g,' ')
+      .replace(/\s+/g,' ').trim();
+  }
+  function codeKey(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,'');}
+  function readShadow(){
+    try{return JSON.parse(localStorage.getItem(SHADOW_KEY)||'{}')||{};}catch(e){return {};}
+  }
+  function writeShadow(s){
+    try{localStorage.setItem(SHADOW_KEY,JSON.stringify(s||{}));return true;}catch(e){console.warn('CQ shadow manual v8',e);return false;}
+  }
+  function matById(id){
+    try{return (window.ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;}catch(e){return null;}
+  }
+
+  /*
+    El shadow existe para recuperar ediciones manuales ante snapshots remotos.
+    Pero una edición manual NUEVA tiene que reemplazar al shadow anterior antes
+    de que persist() ejecute applyShadow(); de lo contrario la copia vieja gana.
+  */
+  function adelantarDecisionManualAlShadow(){
+    if(!window.state)return false;
+
+    var id=Number(window.selectedCargaMat!=null?window.selectedCargaMat:selectedCargaMat);
+    if(!Number.isFinite(id))return false;
+
+    var catEl=document.getElementById('editar-mat-cat');
+    var nomEl=document.getElementById('editar-mat-nombre-input');
+    var codEl=document.getElementById('editar-mat-codigo');
+    var cat=String(catEl&&catEl.value||'').trim();
+    if(!cat)return false;
+
+    var mat=matById(id);
+    var nombre=String(nomEl&&nomEl.value || (mat&&mat.mat) || '').trim();
+    var codigo=String(codEl&&codEl.value || (mat&&((state.matCodigos&&state.matCodigos[id])||mat.codigo||mat.cod)) || '').trim();
+    if(!nombre)return false;
+
+    var s=readShadow();
+    if(!s.catalogoManual||typeof s.catalogoManual!=='object')s.catalogoManual={};
+    if(!s.categoriaManual||typeof s.categoriaManual!=='object')s.categoriaManual={};
+    if(!s.categoriaManualIdentidad||typeof s.categoriaManualIdentidad!=='object')s.categoriaManualIdentidad={};
+
+    var ahora=new Date().toISOString();
+    var nk=norm(nombre), ck=codeKey(codigo);
+    var ids={}; ids[String(id)]=1;
+
+    // Si hay IDs duplicados del mismo nombre, todos reciben la decisión nueva.
+    try{
+      (window.ALL_MATS||[]).forEach(function(m){
+        if(m&&norm(m.mat)===nk)ids[String(m.id)]=1;
+      });
+    }catch(e){}
+
+    Object.keys(ids).forEach(function(k){
+      s.categoriaManual[k]=cat;
+      s.catalogoManual[k]=Object.assign({},s.catalogoManual[k]||{}, {
+        nombre:nombre,
+        codigo:codigo,
+        categoria:cat,
+        manual:true,
+        updatedAt:ahora
+      });
+    });
+
+    var lock={nombre:nombre,codigo:codigo,categoria:cat,manual:true,updatedAt:ahora};
+    if(nk)s.categoriaManualIdentidad['name:'+nk]=Object.assign({},lock);
+    if(ck)s.categoriaManualIdentidad['code:'+ck]=Object.assign({},lock);
+
+    // Neutraliza locks viejos por código/ID del mismo producto que todavía digan VARIOS.
+    Object.keys(s.categoriaManualIdentidad).forEach(function(k){
+      var l=s.categoriaManualIdentidad[k];
+      if(l&&norm(l.nombre)===nk){
+        s.categoriaManualIdentidad[k]=Object.assign({},l,lock);
+      }
+    });
+    Object.keys(s.catalogoManual).forEach(function(k){
+      var l=s.catalogoManual[k];
+      if(l&&norm(l.nombre)===nk){
+        s.catalogoManual[k]=Object.assign({},l,lock);
+        s.categoriaManual[k]=cat;
+      }
+    });
+
+    s.savedAt=ahora;
+    writeShadow(s);
+
+    // Dejar también el estado actual alineado antes de entrar a cualquier persist/normalize.
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.categoriaManualIdentidad||typeof state.categoriaManualIdentidad!=='object')state.categoriaManualIdentidad={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+
+    Object.keys(ids).forEach(function(k){
+      state.categoriaManual[k]=cat;
+      state.catalogoManual[k]=Object.assign({},state.catalogoManual[k]||{}, {
+        nombre:nombre,codigo:codigo,categoria:cat,manual:true,updatedAt:ahora
+      });
+      state.matCategorias[k]=cat;
+    });
+    if(nk)state.categoriaManualIdentidad['name:'+nk]=Object.assign({},lock);
+    if(ck)state.categoriaManualIdentidad['code:'+ck]=Object.assign({},lock);
+
+    return true;
+  }
+
+  var guardarPrev=(typeof window.guardarNombreMat==='function')?window.guardarNombreMat:null;
+  if(guardarPrev){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      // CRÍTICO: actualizar shadow ANTES de que cualquier persist() pueda aplicar el shadow viejo.
+      adelantarDecisionManualAlShadow();
+      var r=await guardarPrev.apply(this,arguments);
+      // Repetir con el ID/canónico resultante por si hubo unificación de duplicados.
+      adelantarDecisionManualAlShadow();
+      return r;
+    };
+  }
+
+  console.log('CQ Materiales: edición manual > shadow anterior (v8) activa');
+})();
+</script>
+
