@@ -6235,15 +6235,32 @@ async function generarBlobPDFReporteConstructor(){
   if(close) close.style.display=oldClose;
 
   const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF('p','mm','a4');
-  const pageW=pdf.internal.pageSize.getWidth();
-  const pageH=pdf.internal.pageSize.getHeight();
+
+  // WhatsApp: generamos el reporte como UNA SOLA HOJA CONTINUA.
+  // Evita las franjas grises/cortes entre páginas del visor y garantiza que
+  // ninguna actividad quede tapada o partida por un salto de página.
   const margin=0.5;
+  const pageW=210; // ancho A4 en mm
   const imgW=pageW-margin*2;
   const pxPerMm=canvas.width/imgW;
-  const pageContentH=pageH-margin*2;
-  const sliceHpx=Math.floor(pageContentH*pxPerMm);
+  const imgH=canvas.height/pxPerMm;
+  const pageH=Math.max(20,imgH+margin*2);
 
+  // El límite práctico de PDF es muy superior al largo habitual de este reporte.
+  // Si alguna obra futura superara ese límite, usamos paginado seguro como respaldo.
+  const maxContinuousHmm=4900;
+  if(pageH<=maxContinuousHmm){
+    const pdf=new jsPDF({orientation:'p',unit:'mm',format:[pageW,pageH],compress:true});
+    const imgData=canvas.toDataURL('image/jpeg',0.95);
+    pdf.addImage(imgData,'JPEG',margin,margin,imgW,imgH,undefined,'FAST');
+    return pdf.output('blob');
+  }
+
+  // Respaldo para reportes excepcionalmente largos: páginas A4 sin cortar actividades.
+  const pdf=new jsPDF('p','mm','a4');
+  const a4H=pdf.internal.pageSize.getHeight();
+  const pageContentH=a4H-margin*2;
+  const sliceHpx=Math.floor(pageContentH*pxPerMm);
   const pageCanvas=document.createElement('canvas');
   const ctx=pageCanvas.getContext('2d');
   pageCanvas.width=canvas.width;
@@ -6251,29 +6268,27 @@ async function generarBlobPDFReporteConstructor(){
   let yPx=0;
   let page=0;
   while(yPx<canvas.height){
-    let currentSliceH=Math.min(sliceHpx, canvas.height-yPx);
+    const targetEnd=Math.min(yPx+sliceHpx,canvas.height);
+    let endPx=targetEnd;
 
-    // Ajuste anti-corte: si el final de página cae sobre una fila, movemos el corte
-    // al borde inferior de la fila anterior/cercana para que no se parta entre semanas.
-    const targetEnd=yPx+currentSliceH;
-    if(targetEnd < canvas.height-10){
-      const minEnd=yPx+Math.floor(sliceHpx*0.72);
-      const maxEnd=Math.min(canvas.height, yPx+sliceHpx+Math.floor(80*3.5));
-      const candidates=rowBreakCss.filter(b=>b>minEnd && b<maxEnd);
-      if(candidates.length){
-        const best=candidates.reduce((a,b)=>Math.abs(b-targetEnd)<Math.abs(a-targetEnd)?b:a,candidates[0]);
-        currentSliceH=Math.max(1,best-yPx);
-      }
+    if(targetEnd<canvas.height-10){
+      // Siempre cortamos hacia atrás, en el final de una actividad completa.
+      // Nunca extendemos la imagen más allá del alto A4 porque eso era lo que
+      // podía dejar una fila parcialmente oculta en el borde de página.
+      const minUseful=yPx+Math.floor(sliceHpx*0.60);
+      const candidates=rowBreakCss.filter(b=>b>minUseful && b<=targetEnd-2);
+      if(candidates.length) endPx=candidates[candidates.length-1];
     }
 
+    const currentSliceH=Math.max(1,endPx-yPx);
     pageCanvas.height=currentSliceH;
     ctx.clearRect(0,0,pageCanvas.width,pageCanvas.height);
     ctx.drawImage(canvas,0,yPx,canvas.width,currentSliceH,0,0,canvas.width,currentSliceH);
     const sliceData=pageCanvas.toDataURL('image/jpeg',0.95);
     const sliceHmm=currentSliceH/pxPerMm;
     if(page>0) pdf.addPage();
-    pdf.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHmm);
-    yPx+=currentSliceH;
+    pdf.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHmm,undefined,'FAST');
+    yPx=endPx;
     page++;
   }
   return pdf.output('blob');
