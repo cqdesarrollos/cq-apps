@@ -18695,3 +18695,256 @@ body:has(#modal-reporte.open) #modal-reporte{
   #view-obras #obras-content{overflow-anchor:none!important;}
 }
 </style>
+
+<!-- CQ 27/10/2026 — subrubro seguro: nombre > código + edición manual definitiva -->
+<script id="cq-subrubro-manual-definitivo-v7">
+(function(){
+  if(window.__cqSubrubroManualDefinitivoV7)return;
+  window.__cqSubrubroManualDefinitivoV7=true;
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]+/g,' ')
+      .replace(/\s+/g,' ').trim();
+  }
+  function codeKey(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,'');}
+  function nameKey(v){return norm(v);}
+  function ensure(){
+    if(!window.state)return false;
+    if(!state.categoriaMemoria||typeof state.categoriaMemoria!=='object')state.categoriaMemoria={};
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.categoriaManualIdentidad||typeof state.categoriaManualIdentidad!=='object')state.categoriaManualIdentidad={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+    return true;
+  }
+  function mats(){
+    try{
+      if(typeof getAllMats==='function')return getAllMats()||[];
+      return window.ALL_MATS||[];
+    }catch(e){return window.ALL_MATS||[];}
+  }
+  function matById(id){
+    return mats().find(function(m){return Number(m&&m.id)===Number(id);})||null;
+  }
+  function codigoDe(m){
+    if(!m)return '';
+    try{if(typeof getMatCodigo==='function')return String(getMatCodigo(m)||'').trim();}catch(e){}
+    return String((state.matCodigos&&state.matCodigos[m.id])||m.codigo||m.cod||'').trim();
+  }
+  function categoriaCanon(v){
+    var k=norm(v); if(!k)return '';
+    var cs=Array.isArray(window.CATS)?window.CATS:[];
+    var c=cs.find(function(x){
+      if(!x||!x.name)return false;
+      try{if(typeof isCatDeleted==='function'&&isCatDeleted(x.name))return false;}catch(e){}
+      return norm(x.name)===k;
+    });
+    return c?c.name:'';
+  }
+  function categoriaPisosRevestimientos(){
+    var cs=Array.isArray(window.CATS)?window.CATS:[];
+    var c=cs.find(function(x){
+      var n=norm(x&&x.name);
+      return n.indexOf('piso')>=0 && n.indexOf('revest')>=0;
+    });
+    return c?c.name:'';
+  }
+  function esSilvermoon(m){
+    var n=nameKey(m&&m.mat);
+    return n.indexOf('silvermoon')>=0 && n.indexOf('out')>=0 &&
+      n.indexOf('57')>=0 && n.indexOf('117')>=0;
+  }
+  function identidadKeys(nombre,codigo){
+    var out=[],nk=nameKey(nombre),ck=codeKey(codigo);
+    if(nk)out.push('name:'+nk);
+    if(ck)out.push('code:'+ck);
+    return out;
+  }
+  function manualPorMaterial(m){
+    if(!m||!ensure())return '';
+    var id=Number(m.id);
+    var cm=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
+    var can=categoriaCanon(cm); if(can)return can;
+    var reg=state.catalogoManual[id]||state.catalogoManual[String(id)]||null;
+    can=reg&&reg.manual!==false?categoriaCanon(reg.categoria):'';
+    if(can)return can;
+    var nk='name:'+nameKey(m.mat), ck='code:'+codeKey(codigoDe(m));
+    var l=(nk!=='name:'?state.categoriaManualIdentidad[nk]:null)||null;
+    can=l&&l.manual!==false?categoriaCanon(l.categoria):'';
+    if(can)return can;
+    l=(ck!=='code:'?state.categoriaManualIdentidad[ck]:null)||null;
+    if(l&&l.manual!==false&&nameKey(l.nombre)===nameKey(m.mat)){
+      can=categoriaCanon(l.categoria); if(can)return can;
+    }
+    return '';
+  }
+  function fijarManual(m,categoria,opts){
+    opts=opts||{};
+    if(!m||!ensure())return false;
+    var cat=categoriaCanon(categoria); if(!cat)return false;
+    var id=Number(m.id),codigo=codigoDe(m),ahora=new Date().toISOString();
+    var antes=String((state.matCategorias&&state.matCategorias[id])||m.catName||'');
+    var cambio=norm(antes)!==norm(cat) || norm(manualPorMaterial(m))!==norm(cat);
+
+    state.categoriaManual[id]=cat;
+    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{}, {
+      nombre:String(m.mat||'').trim(),
+      codigo:codigo,
+      categoria:cat,
+      manual:true,
+      updatedAt:ahora
+    });
+    identidadKeys(m.mat,codigo).forEach(function(k){
+      state.categoriaManualIdentidad[k]={
+        nombre:String(m.mat||'').trim(),codigo:codigo,categoria:cat,manual:true,updatedAt:ahora
+      };
+    });
+
+    state.matCategorias[id]=cat;
+    m.catName=cat;
+    (state.extraMats||[]).forEach(function(x){if(Number(x&&x.id)===id)x.catName=cat;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x&&x.id)===id)x.catName=cat;});
+
+    // La memoria por NOMBRE es la identidad segura para clasificar.
+    var nk=nameKey(m.mat);
+    if(nk)state.categoriaMemoria['name:'+nk]=cat;
+
+    try{
+      (CATS||[]).forEach(function(c){
+        c.items=(c.items||[]).filter(function(x){return Number(x&&x.id)!==id;});
+      });
+      var dest=(CATS||[]).find(function(c){return c&&norm(c.name)===norm(cat);});
+      if(dest&&!dest.items.some(function(x){return Number(x&&x.id)===id;}))dest.items.push(m);
+    }catch(e){}
+    return cambio;
+  }
+
+  /*
+    CORRECCIÓN 1:
+    La memoria de subrubro ya no puede clasificar un producto distinto solamente
+    porque comparte/reutiliza el mismo código. Primero manda el nombre exacto.
+    El código sólo se acepta como apoyo si YA existe ese mismo nombre con ese código.
+  */
+  var categoriaAprendidaAnterior=(typeof window.categoriaAprendidaPara==='function')?window.categoriaAprendidaPara:null;
+  window.categoriaAprendidaPara=categoriaAprendidaPara=function(codigo,nombre){
+    if(!ensure())return categoriaAprendidaAnterior?categoriaAprendidaAnterior.apply(this,arguments):'';
+    var nk=nameKey(nombre), ck=codeKey(codigo);
+
+    // 1) Decisión manual por identidad/nombre.
+    if(nk){
+      var l=state.categoriaManualIdentidad['name:'+nk];
+      var lc=l&&l.manual!==false?categoriaCanon(l.categoria):'';
+      if(lc)return lc;
+      var porNombre=state.categoriaMemoria['name:'+nk];
+      var cn=categoriaCanon(porNombre);
+      if(cn)return cn;
+    }
+
+    // 2) Código sólo si corresponde al MISMO nombre; nunca cruza productos diferentes.
+    if(ck){
+      var mismo=mats().find(function(m){
+        if(!m)return false;
+        try{if(typeof isMatDeleted==='function'&&isMatDeleted(m.id))return false;}catch(e){}
+        return codeKey(codigoDe(m))===ck && (!nk || nameKey(m.mat)===nk);
+      })||null;
+      if(mismo){
+        var manual=manualPorMaterial(mismo); if(manual)return manual;
+        // No usar categoriaMemoria por código: un código puede estar repetido/reutilizado.
+        // Sólo heredar la categoría REAL del mismo producto (mismo nombre + mismo código).
+        var actual=categoriaCanon((state.matCategorias&&state.matCategorias[mismo.id])||mismo.catName||'');
+        if(actual && norm(actual)!=='varios' && actual.indexOf('⚠')!==0)return actual;
+      }
+    }
+    return '';
+  };
+
+  /* CORRECCIÓN 2: una edición manual queda bloqueada por ID + nombre + código. */
+  var guardarAnterior=(typeof window.guardarNombreMat==='function')?window.guardarNombreMat:null;
+  if(guardarAnterior){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var idAntes=Number(window.selectedCargaMat!=null?window.selectedCargaMat:selectedCargaMat);
+      var matAntes=matById(idAntes);
+      var sel=document.getElementById('editar-mat-cat');
+      var catElegida=categoriaCanon(sel&&sel.value);
+      var nombreInput=document.getElementById('editar-mat-nombre-input');
+      var nombreElegido=String(nombreInput&&nombreInput.value||'').trim();
+
+      var r=await guardarAnterior.apply(this,arguments);
+
+      // Reubicar el material incluso si la rutina anterior lo unificó con otro ID.
+      var m=matById(window.selectedCargaMat!=null?window.selectedCargaMat:selectedCargaMat) || matById(idAntes);
+      if(!m && nombreElegido){
+        m=mats().find(function(x){return nameKey(x&&x.mat)===nameKey(nombreElegido);})||null;
+      }
+      if(m&&catElegida){
+        fijarManual(m,catElegida);
+        try{
+          if(typeof persist==='function')await persist();
+        }catch(e){console.warn('CQ subrubro manual definitivo: persist',e);}
+        // Si el merge remoto intentó restaurar la categoría vieja, volver a imponer la decisión local.
+        fijarManual(m,catElegida);
+        try{if(typeof renderActive==='function')renderActive();}catch(e){}
+        try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
+        try{if(typeof renderReporte==='function')renderReporte();}catch(e){}
+      }
+      return r;
+    };
+  }
+
+  // Blindaje adicional: normalizaciones/sincronizaciones respetan siempre lo manual.
+  var moverAnterior=(typeof window.moverMaterialACategoria==='function')?window.moverMaterialACategoria:null;
+  if(moverAnterior){
+    window.moverMaterialACategoria=moverMaterialACategoria=function(id,nuevaCat){
+      var m=matById(id),manual=m?manualPorMaterial(m):'';
+      return moverAnterior.call(this,id,manual||nuevaCat);
+    };
+  }
+
+  var normalizarAnterior=(typeof window.normalizeState==='function')?window.normalizeState:null;
+  if(normalizarAnterior){
+    window.normalizeState=normalizeState=function(){
+      var r=normalizarAnterior.apply(this,arguments);
+      if(ensure())mats().forEach(function(m){
+        var manual=manualPorMaterial(m);
+        if(manual)fijarManual(m,manual);
+      });
+      return r;
+    };
+  }
+
+  // Migración puntual pedida: SILVERMOON OUT 57,5×117 → Pisos y Revestimientos.
+  var corrigiendoSilvermoon=false;
+  async function corregirSilvermoon(){
+    if(corrigiendoSilvermoon||!ensure())return false;
+    var destino=categoriaPisosRevestimientos();
+    if(!destino)return false;
+    var encontrados=mats().filter(esSilvermoon);
+    if(!encontrados.length)return false;
+    var cambio=false;
+    encontrados.forEach(function(m){cambio=fijarManual(m,destino)||cambio;});
+    if(cambio){
+      corrigiendoSilvermoon=true;
+      try{
+        if(typeof persist==='function')await persist();
+        encontrados.forEach(function(m){fijarManual(m,destino);});
+        try{if(typeof renderActive==='function')renderActive();}catch(e){}
+        try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
+        try{if(typeof renderReporte==='function')renderReporte();}catch(e){}
+        console.info('CQ Materiales: SILVERMOON OUT 57,5×117 fijado en '+destino+'.');
+      }catch(e){console.warn('CQ corrección SILVERMOON',e);}
+      finally{corrigiendoSilvermoon=false;}
+    }
+    return cambio;
+  }
+
+  document.addEventListener('firebase-ready',function(){setTimeout(corregirSilvermoon,500);});
+  document.addEventListener('cq-firebase-ready',function(){setTimeout(corregirSilvermoon,500);});
+  document.addEventListener('DOMContentLoaded',function(){
+    setTimeout(corregirSilvermoon,900);
+    setTimeout(corregirSilvermoon,2200);
+  });
+  setTimeout(corregirSilvermoon,3500);
+})();
+</script>
