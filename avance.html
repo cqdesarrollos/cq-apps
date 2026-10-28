@@ -4732,11 +4732,21 @@ function getAv(snum,idx){
   if(!state.items || typeof state.items!=='object') state.items={};
   const it=getTask(snum,idx);
   const stable=taskStateKey(snum,idx,it);
-  if(state.items[stable] != null) return Number(state.items[stable]) || 0;
-  // Compatibilidad con datos anteriores: los extras guardaban avance por índice visible.
-  const legacy=`${snum}-${idx}`;
-  if(legacy!==stable && state.items[legacy] != null) return Number(state.items[legacy]) || 0;
-  return Number(it && it.avance) || 0;
+  let actual;
+  if(state.items[stable] != null) actual = Number(state.items[stable]) || 0;
+  else {
+    // Compatibilidad con datos anteriores: los extras guardaban avance por índice visible.
+    const legacy=`${snum}-${idx}`;
+    if(legacy!==stable && state.items[legacy] != null) actual = Number(state.items[legacy]) || 0;
+    else actual = Number(it && it.avance) || 0;
+  }
+
+  // Una tarea nunca puede volver a computarse por debajo de lo ya certificado.
+  // En obras históricas, cambios de índices/ediciones podían dejar el avance actual
+  // menor que su bloqueo certificado y generar diferencias entre Finanzas y Avances.
+  let locked = 0;
+  try { locked = (typeof getLockedAv==='function') ? (Number(getLockedAv(snum,idx))||0) : 0; } catch(e) {}
+  return Math.max(0, Math.min(1, Math.max(actual, locked)));
 }
 function setAv(snum,idx,val){
   const min=getLockedAv ? getLockedAv(snum,idx) : 0;
@@ -4754,15 +4764,45 @@ function setAv(snum,idx,val){
 function fmt(n){ return '$ ' + Math.round(n).toLocaleString('es-AR'); }
 
 // ─── CÁLCULOS ─────────────────────────────────────────────────────────────
+function calcTotalRaw(){
+  let totalDev=0, obraTotal=0;
+  getSemanas().forEach(s=>{
+    getItems(s.num).forEach((it,i)=>{
+      const av=getAv(s.num,i);
+      const m=getMonto(s.num,i);
+      totalDev+=m*av;
+      obraTotal+=m;
+    });
+  });
+  return { totalDev, obraTotal };
+}
+function calcBrechaCertificada(){
+  // Si hay dinero ya certificado que la estructura histórica de tareas no logra
+  // reconstruir como devengado, esa diferencia NO puede volver a quedar pendiente.
+  // Se concilia contra Conforme de obra, que es el rubro residual del acuerdo.
+  const raw=calcTotalRaw();
+  let certificado=0;
+  try { certificado=(typeof sumCertificados==='function') ? (Number(sumCertificados())||0) : 0; } catch(e) {}
+  return Math.max(0, certificado-raw.totalDev);
+}
 function calcSemana(s){
   let totalMonto=0, devengado=0;
-  getItems(s.num).forEach((it,i)=>{ const av=getAv(s.num,i); const m=getMonto(s.num,i); totalMonto+=m; devengado+=m*av; });
-  return { totalMonto, devengado, pctSem: totalMonto>0?devengado/totalMonto:0 };
+  let tieneConforme=false;
+  getItems(s.num).forEach((it,i)=>{
+    const av=getAv(s.num,i);
+    const m=getMonto(s.num,i);
+    totalMonto+=m;
+    devengado+=m*av;
+    if(isConformeTask(s.num,i)) tieneConforme=true;
+  });
+  if(tieneConforme) devengado += calcBrechaCertificada();
+  const devSeguro=Math.min(totalMonto,devengado);
+  return { totalMonto, devengado:devSeguro, pctSem: totalMonto>0?devSeguro/totalMonto:0 };
 }
 function calcTotal(){
-  let totalDev=0, obraTotal=0;
-  getSemanas().forEach(s=>{ getItems(s.num).forEach((it,i)=>{ const av=getAv(s.num,i); const m=getMonto(s.num,i); totalDev+=m*av; obraTotal+=m; }); });
-  return { totalDev, obraTotal, pctTotal: obraTotal>0?totalDev/obraTotal:0 };
+  const raw=calcTotalRaw();
+  const totalDev=Math.min(raw.obraTotal, raw.totalDev + calcBrechaCertificada());
+  return { totalDev, obraTotal:raw.obraTotal, pctTotal: raw.obraTotal>0?totalDev/raw.obraTotal:0 };
 }
 
 // ─── CERTIFICADOS DE AVANCE ───────────────────────────────────────────────
@@ -5007,10 +5047,13 @@ function calcConformeObra(){
   // neto > 0 = en contra del constructor: reduce Conforme.
   // neto < 0 = a favor del constructor: aumenta Conforme.
   const ajustePagos = Number(pf.neto) || 0;
+  const brechaCertificada = (typeof calcBrechaCertificada==='function') ? calcBrechaCertificada() : 0;
   const devManual = montoConforme * avManual;
-  const devAjustado = devManual + ajustePagos;
+  // Cualquier importe ya certificado pero no reconstruido por los avances históricos
+  // se imputa al Conforme para que no reaparezca como deuda.
+  const devAjustado = devManual + ajustePagos + brechaCertificada;
   const saldoConforme = montoConforme - devManual;
-  const saldoAjustado = saldoConforme - ajustePagos;
+  const saldoAjustado = saldoConforme - ajustePagos - brechaCertificada;
   const avEfectivo = montoConforme > 0 ? (devAjustado / montoConforme) : avManual;
 
   return {
@@ -5022,6 +5065,7 @@ function calcConformeObra(){
     avManual,
     avEfectivo,
     ajustePagos,
+    brechaCertificada,
     devManual,
     devAjustado,
     saldoConforme,
