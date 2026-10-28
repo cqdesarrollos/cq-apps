@@ -7359,6 +7359,9 @@ function cqIdentidadCannesTripoli(nombreA,nombreB){
 }
 function cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nomCarga,codCarga){
   if(cqCruceCodoDuratopAdicionalAcopio(nomRet,nomCarga))return false;
+  var retTechi=cqEsTechiCauNombreAcopio(nomRet), cargaTechi=cqEsTechiCauNombreAcopio(nomCarga);
+  if((retTechi||cargaTechi) && !(retTechi&&cargaTechi))return false;
+  if(retTechi&&cargaTechi)return true;
   var retWeber=cqEsWeberMembranaNombreAcopio(nomRet), cargaWeber=cqEsWeberMembranaNombreAcopio(nomCarga);
   if((retWeber||cargaWeber) && !(retWeber&&cargaWeber))return false;
   if((codRet===cqNormVerifMat(CQ_WEBER_MEMBRANA_CODIGO)||codCarga===cqNormVerifMat(CQ_WEBER_MEMBRANA_CODIGO))
@@ -8139,6 +8142,13 @@ function cqEsAdicionalNombreAcopio(v){
 function cqEsWeberMembranaNombreAcopio(v){
   return cqMatNormDirecto(v||'')===cqMatNormDirecto(CQ_WEBER_MEMBRANA_NOMBRE);
 }
+// CQ 28/10/2026 — TECHI CAU aparece con nombres distintos entre Acopio y Materiales
+// (ej. "TECHI CAU EMAPI CAJA X 18 KGR" / "Techi Cau emuls. Asf.").
+// Tratar ambos como el mismo producto evita crear una ficha dinámica duplicada.
+function cqEsTechiCauNombreAcopio(v){
+  var n=cqMatNormDirecto(v||'');
+  return n.indexOf('techi')>=0 && n.indexOf('cau')>=0;
+}
 function cqCruceCodoDuratopAdicionalAcopio(a,b){
   return (cqEsCodoDuratop45HH63NombreAcopio(a)&&cqEsAdicionalNombreAcopio(b))
       || (cqEsCodoDuratop45HH63NombreAcopio(b)&&cqEsAdicionalNombreAcopio(a));
@@ -8292,6 +8302,9 @@ function cqMatResolverMaterialDirecto(data,ev){
   if(!mat&&cqEsWeberMembranaNombreAcopio(nombre)){
     mat=mats.find(function(x){return cqEsWeberMembranaNombreAcopio(x.mat||'');})||null;
   }
+  if(!mat&&cqEsTechiCauNombreAcopio(nombre)){
+    mat=mats.find(function(x){return cqEsTechiCauNombreAcopio(x.mat||'');})||null;
+  }
 
   if(!mat&&nk){
     mat=mats.find(function(x){return cqMatNormDirecto(x.mat)===nk;})||null;
@@ -8324,8 +8337,14 @@ function cqMatResolverMaterialDirecto(data,ev){
   }
 
   if(!mat){
+    // CQ 28/10/2026 — nunca reutilizar IDs eliminados (deletedMatIds).
+    // Antes un material dinámico podía recrearse con un ID tombstone: la carga quedaba
+    // escrita pero Catálogo/Reportes la ocultaba, y el punto de Materiales volvía a rojo.
+    var idsOcupados=new Set();
+    cqMatTodosDirecto(data).forEach(function(x){if(x&&x.id!=null)idsOcupados.add(String(x.id));});
+    (Array.isArray(data.deletedMatIds)?data.deletedMatIds:[]).forEach(function(id){idsOcupados.add(String(id));});
     var maxId=10000;
-    mats.forEach(function(x){if(Number(x.id)>=maxId)maxId=Number(x.id)+1;});
+    while(idsOcupados.has(String(maxId)))maxId++;
     var cat=cqMatCategoriaFinalDirecto(
       data,
       {id:maxId,mat:nombre||('Material '+String(ev.materialCode||'')),codigo:cqCodigoMaterialSeguro(ev.materialCode)},
@@ -8482,8 +8501,24 @@ function cqMatAplicarEventoDirecto(data,ev){
 
   if(mismo)return {data:data,cambio:false};
 
+  var matIdAnterior=prev&&prev.matId!=null?String(prev.matId):'';
   if(idx>=0)data.cargas[idx]=entry;
   else data.cargas.push(entry);
+
+  // Si una reparación remapea una carga huérfana/duplicada a la ficha correcta,
+  // limpiar la ficha dinámica anterior cuando ya no la usa ningún otro movimiento.
+  if(matIdAnterior && matIdAnterior!==String(entry.matId)){
+    var sigueUsadoAnterior=data.cargas.some(function(c){return String(c&&c.matId)===matIdAnterior;});
+    if(!sigueUsadoAnterior){
+      var extraAnterior=(data.extraMats||[]).find(function(x){return String(x&&x.id)===matIdAnterior;});
+      if(extraAnterior&&(extraAnterior.autoCreated===true||String(extraAnterior.comentarios||'').indexOf('Creado automáticamente desde ')===0)){
+        data.extraMats=(data.extraMats||[]).filter(function(x){return String(x&&x.id)!==matIdAnterior;});
+        delete data.matCodigos[matIdAnterior];
+        delete data.matCategorias[matIdAnterior];
+        if(data.matNombres)delete data.matNombres[matIdAnterior];
+      }
+    }
+  }
 
   // Sólo deduplicar por integrationId real.
   var vistos={};
@@ -9968,12 +10003,31 @@ async function cqRepararMaterialesPendientes(){
   var f=window._cqFirebase, ref=f.doc(f.db,'materiales','data_planilla_exacta_v4');
   try{
     var snap=await f.getDoc(ref), data=snap.exists()?(snap.data()||{}):{}, cargas=Array.isArray(data.cargas)?data.cargas:[];
+
+    // CQ 28/10/2026 — Reparar no debe considerar válida una carga sólo porque
+    // exista su integrationId. También tiene que apuntar a una ficha visible del catálogo.
+    var borradosReparar=new Set((Array.isArray(data.deletedMatIds)?data.deletedMatIds:[]).map(function(id){return String(id);}));
+    var catalogoReparar=new Set();
+    function registrarMatReparar(m){
+      if(!m||m.id==null)return;
+      var id=String(m.id);
+      if(!borradosReparar.has(id))catalogoReparar.add(id);
+    }
+    try{(Array.isArray(CQ_MAT_BASE_DIRECTO)?CQ_MAT_BASE_DIRECTO:[]).forEach(registrarMatReparar);}catch(_e){}
+    (Array.isArray(data.extraMats)?data.extraMats:[]).forEach(registrarMatReparar);
+    function cargaTieneFichaReparar(c){
+      return !!(c&&c.matId!=null&&catalogoReparar.has(String(c.matId)));
+    }
+
     var faltantes=candidatos.filter(function(x){
       var iid=integracionRetiroId(x.acopio.id,x.retiro.id);
-      // Primero ID canónico; luego huella segura ya existente en esta app para históricos.
-      if(cargas.some(function(c){return String(c&&c.integracionId||'')===String(iid);})){return false;}
+      // ID canónico + ficha real. Si el ID existe pero la ficha fue borrada/queda huérfana,
+      // forzar el upsert para remapear el movimiento a una ficha válida.
+      var canon=cargas.find(function(c){return String(c&&c.integracionId||'')===String(iid);});
+      if(canon)return !cargaTieneFichaReparar(canon);
       try{
-        return !cargas.some(function(c){return cqCargaMaterialesCoincideRetiroUnico(c,x.retiro,x.acopio);});
+        var historica=cargas.find(function(c){return cqCargaMaterialesCoincideRetiroUnico(c,x.retiro,x.acopio);});
+        return !historica || !cargaTieneFichaReparar(historica);
       }catch(_e){return true;}
     });
 
