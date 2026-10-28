@@ -2103,6 +2103,53 @@ html.cq-profile-ready #cq-boot-loader{display:none!important}
 .cq-boot-sub{font-size:9px;color:#9fb1c7;margin-top:-7px}
 @keyframes cqBootSpin{to{transform:rotate(360deg)}}
 </style>
+
+<style id="cq-system-status-compact-v1">
+/* Estado compacto de infraestructura — visible sólo para Gerencia */
+.cq-system-strip{
+  flex:0 0 auto;
+  width:min(100%,520px);
+  min-height:28px;
+  margin:5px auto 1px;
+  padding:4px 9px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  border:1px solid rgba(76,224,157,.34);
+  border-radius:999px;
+  background:linear-gradient(90deg,rgba(7,60,52,.70),rgba(6,43,49,.72));
+  box-shadow:0 5px 15px rgba(0,0,0,.11),inset 0 1px 0 rgba(255,255,255,.035);
+  color:#dfeee8;
+  font-size:8.2px;
+  font-weight:850;
+  line-height:1;
+  white-space:nowrap;
+  overflow:hidden;
+}
+.cq-system-strip[hidden]{display:none!important}
+.cq-system-strip .cq-sys-overall{display:flex;align-items:center;gap:5px;color:#8ee6bb;font-weight:950}
+.cq-system-strip .cq-sys-dot{width:7px;height:7px;border-radius:50%;background:#23da83;box-shadow:0 0 0 3px rgba(35,218,131,.10);flex:0 0 auto}
+.cq-system-strip .cq-sys-sep{width:1px;height:13px;background:rgba(255,255,255,.16);flex:0 0 auto}
+.cq-system-strip .cq-sys-item{display:flex;align-items:center;gap:3px;min-width:0}
+.cq-system-strip .cq-sys-item b{font-weight:950;color:#e8f3ef}
+.cq-system-strip .cq-sys-state{color:#8ee6bb;font-weight:950}
+.cq-system-strip[data-level="warn"]{border-color:rgba(246,190,77,.45);background:linear-gradient(90deg,rgba(82,61,16,.64),rgba(50,44,25,.72))}
+.cq-system-strip[data-level="warn"] .cq-sys-dot{background:#f3b944;box-shadow:0 0 0 3px rgba(243,185,68,.11)}
+.cq-system-strip[data-level="warn"] .cq-sys-overall,.cq-system-strip[data-level="warn"] .cq-sys-state.is-warn{color:#ffd47d}
+.cq-system-strip[data-level="error"]{border-color:rgba(239,98,98,.52);background:linear-gradient(90deg,rgba(86,27,32,.72),rgba(54,29,34,.76))}
+.cq-system-strip[data-level="error"] .cq-sys-dot{background:#ef6262;box-shadow:0 0 0 3px rgba(239,98,98,.12)}
+.cq-system-strip[data-level="error"] .cq-sys-overall,.cq-system-strip[data-level="error"] .cq-sys-state.is-error{color:#ff9d9d}
+@media(max-width:390px){
+  .cq-system-strip{gap:5px;padding:4px 7px;font-size:7.45px;min-height:26px;margin-top:4px}
+  .cq-system-strip .cq-sys-sep{height:11px}
+  .cq-system-strip .cq-sys-dot{width:6px;height:6px}
+}
+@media(max-width:350px){
+  .cq-system-strip{font-size:6.8px;gap:4px;padding-left:5px;padding-right:5px}
+}
+</style>
+
 </head>
 <body>
 <div id="cq-boot-loader" role="status" aria-live="polite">
@@ -2124,6 +2171,16 @@ html.cq-profile-ready #cq-boot-loader{display:none!important}
       <div class="status"><span class="dot"></span> Online</div>
     </div>
   </header>
+
+  <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="status" aria-live="polite" title="Estado de servicios CQ">
+    <span class="cq-sys-overall"><span class="cq-sys-dot"></span><span id="cqSysOverall">Sistemas OK</span></span>
+    <span class="cq-sys-sep"></span>
+    <span class="cq-sys-item">🔥 <b>Firebase</b> <span class="cq-sys-state" id="cqSysFirebase">OK</span></span>
+    <span class="cq-sys-sep"></span>
+    <span class="cq-sys-item">◆ <b>Netlify</b> <span class="cq-sys-state" id="cqSysNetlify">OK</span></span>
+    <span class="cq-sys-sep"></span>
+    <span class="cq-sys-item">🧠 <b>IA</b> <span class="cq-sys-state" id="cqSysIA">OK</span></span>
+  </div>
 
   <main class="hero">
     <div class="logo-wrap">
@@ -5129,13 +5186,14 @@ async function ask(q){
  try{
   const context=await buildContext(q);const token=await user.getIdToken();
   const res=await fetch('/.netlify/functions/cq-ai',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({question:q,context})});
-  const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||('Error '+res.status));
+  const data=await res.json().catch(()=>({}));if(!res.ok){if(window.cqSystemSet)window.cqSystemSet('ia','error','Error');throw new Error(data.error||('Error '+res.status));}
+  if(window.cqSystemSet)window.cqSystemSet('ia','ok','OK');
   const answerText=data.answer||'No recibí una respuesta de la IA.';
   wait.innerHTML=cqRenderAI(answerText);
   setNote('Datos reales · Firebase solo lectura · '+context.modulosCargados.join(' + '));
   liveBodyHTML=body.innerHTML;
   saveHistory(user,q,answerText,context.modulosCargados);
- }catch(e){console.error('CQ IA',e);wait.textContent='No pude completar la consulta: '+(e?.message||'error desconocido')+'.';setNote('No se modificó ningún dato.');}
+ }catch(e){console.error('CQ IA',e);if(window.cqSystemSet)window.cqSystemSet('ia','error','Error');wait.textContent='No pude completar la consulta: '+(e?.message||'error desconocido')+'.';setNote('No se modificó ningún dato.');}
  finally{busy=false;body.scrollTop=body.scrollHeight}
 }
 
@@ -5464,6 +5522,91 @@ document.querySelectorAll('.cq-ia-quick button[data-q]').forEach(b=>b.addEventLi
   }
 }
 </style>
+
+
+<script id="cq-system-status-runtime-v1">
+(function(){
+  const strip=document.getElementById('cqSystemStrip');
+  if(!strip)return;
+  const els={
+    overall:document.getElementById('cqSysOverall'),
+    firebase:document.getElementById('cqSysFirebase'),
+    netlify:document.getElementById('cqSysNetlify'),
+    ia:document.getElementById('cqSysIA')
+  };
+  const state={firebase:'checking',netlify:(navigator.onLine?'ok':'error'),ia:'ok'};
+  const label={firebase:'Verificando',netlify:(navigator.onLine?'OK':'Sin red'),ia:'OK'};
+
+  function render(){
+    const values=Object.values(state);
+    const level=values.includes('error')?'error':(values.includes('warn')||values.includes('checking')?'warn':'ok');
+    strip.dataset.level=level;
+    els.overall.textContent=level==='ok'?'Sistemas OK':level==='warn'?'Verificando…':'Revisar sistemas';
+    ['firebase','netlify','ia'].forEach(k=>{
+      const el=els[k]; if(!el)return;
+      el.textContent=label[k]||'';
+      el.classList.toggle('is-error',state[k]==='error');
+      el.classList.toggle('is-warn',state[k]==='warn'||state[k]==='checking');
+    });
+    const now=new Date();
+    strip.title='Estado CQ · última verificación '+now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  }
+  window.cqSystemSet=function(service,status,text){
+    if(!Object.prototype.hasOwnProperty.call(state,service))return;
+    state[service]=status||'ok';
+    label[service]=text||(status==='ok'?'OK':status==='warn'?'Atención':'Error');
+    render();
+  };
+  function netState(){
+    window.cqSystemSet('netlify',navigator.onLine?'ok':'error',navigator.onLine?'OK':'Sin red');
+  }
+  window.addEventListener('online',netState);
+  window.addEventListener('offline',netState);
+  render();
+})();
+</script>
+<script type="module" id="cq-system-firebase-check-v1">
+import { getApps, getApp, initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const firebaseConfig={
+  apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
+  authDomain:"cq-mano-de-obra.firebaseapp.com",
+  projectId:"cq-mano-de-obra",
+  storageBucket:"cq-mano-de-obra.firebasestorage.app",
+  messagingSenderId:"502127540211",
+  appId:"1:502127540211:web:8daefc75bdaafad412c486"
+};
+const app=getApps().length?getApp():initializeApp(firebaseConfig);
+const auth=getAuth(app),db=getFirestore(app);
+let timer=null,checking=false;
+function statusFromError(e){
+  const code=String(e?.code||'').toLowerCase(),msg=String(e?.message||'').toLowerCase();
+  if(code.includes('resource-exhausted')||msg.includes('quota')||msg.includes('resource exhausted'))return ['error','Sin cuota'];
+  if(code.includes('unavailable')||msg.includes('offline')||msg.includes('network'))return ['error','Sin conexión'];
+  if(code.includes('permission-denied'))return ['warn','Sin permiso'];
+  return ['error','Error'];
+}
+async function checkFirebase(){
+  if(checking||!auth.currentUser)return;
+  checking=true;
+  try{
+    await getDoc(doc(db,'config','app'));
+    window.cqSystemSet&&window.cqSystemSet('firebase','ok','OK');
+  }catch(e){
+    const [st,tx]=statusFromError(e);
+    window.cqSystemSet&&window.cqSystemSet('firebase',st,tx);
+    console.warn('CQ estado Firebase:',e);
+  }finally{checking=false}
+}
+onAuthStateChanged(auth,u=>{
+  if(timer){clearInterval(timer);timer=null}
+  if(!u){window.cqSystemSet&&window.cqSystemSet('firebase','warn','Sin sesión');return}
+  checkFirebase();
+  timer=setInterval(checkFirebase,10*60*1000);
+});
+window.addEventListener('online',()=>{if(auth.currentUser)checkFirebase()});
+</script>
 
 </body>
 </html>
