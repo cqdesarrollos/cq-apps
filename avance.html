@@ -3206,11 +3206,27 @@ function findConformeTaskRef(){
   const idx=items23.findIndex(it=>normalizarNombreTarea(it && it.desc).includes('conforme'));
   return idx>=0 ? {semNum:23,idx,item:items23[idx]} : null;
 }
+// Clave estable para importes de tareas base.
+// getItems() oculta tareas eliminadas, por lo que el índice visible puede correrse.
+// Las tareas base conservan en it.key su índice original (ej. "12-3").
+function montoStateKey(snum, idx, taskRef) {
+  const it = taskRef || getTask(snum, idx);
+  if (it && it.base && typeof it.key === 'string') {
+    const prefix = String(snum) + '-';
+    if (it.key.startsWith(prefix) && !it.key.includes('-c-')) {
+      const originalIdx = it.key.slice(prefix.length);
+      if (/^\d+$/.test(originalIdx)) return snum + '-m-' + originalIdx;
+    }
+  }
+  // Compatibilidad con tareas personalizadas y estados históricos.
+  return snum + '-m-' + idx;
+}
 function getMontoRaw(snum, idx) {
-  const key = snum + '-m-' + idx;
-  if (state.montos && state.montos[key] != null) return Number(state.montos[key]) || 0;
   const it = getTask(snum, idx);
-  return it ? (Number(it.monto) || 0) : 0;
+  if (!it) return 0;
+  const key = montoStateKey(snum, idx, it);
+  if (state.montos && state.montos[key] != null) return Number(state.montos[key]) || 0;
+  return Number(it.monto) || 0;
 }
 function calcConformeBase(){
   const ref=findConformeTaskRef();
@@ -3268,7 +3284,7 @@ function editTarea(snum, idx) {
     arr[cidx] = { ...arr[cidx], desc: desc.trim(), monto, comentario };
     state.customTasks[snum] = arr;
   }
-  if (state.montos) delete state.montos[snum + '-m-' + idx];
+  if (state.montos) delete state.montos[montoStateKey(snum, idx, it)];
   recalcSemanaTotal(snum);
   persist();
   renderSemanas();
@@ -3307,7 +3323,7 @@ function editMonto(snum, idx) {
   const monto = parseMontoFlexible(val);
   if (!Number.isFinite(monto) || monto < 0) { alert('Ingresá un importe válido.'); return; }
   if (!state.montos) state.montos = {};
-  state.montos[snum + '-m-' + idx] = Math.round(monto);
+  state.montos[montoStateKey(snum, idx, it)] = Math.round(monto);
   recalcSemanaTotal(snum);
   persist();
   renderSemanas();
@@ -3332,7 +3348,7 @@ function aplicarValorSemana(snum) {
   let resto = total - (base * asignables.length);
   if (!state.montos) state.montos = {};
   asignables.forEach((x, pos) => {
-    state.montos[snum + '-m-' + x.i] = base + (pos < resto ? 1 : 0);
+    state.montos[montoStateKey(snum, x.i, x.it)] = base + (pos < resto ? 1 : 0);
   });
   recalcSemanaTotal(snum);
   persist();
@@ -3363,7 +3379,7 @@ function aplicarValorTodasSemanas(){
     const asignables=getTareasAsignables(sem.num);
     const base=Math.floor(total/asignables.length);
     let resto=total-(base*asignables.length);
-    asignables.forEach((x,pos)=>{ state.montos[sem.num+'-m-'+x.i]=base+(pos<resto?1:0); });
+    asignables.forEach((x,pos)=>{ state.montos[montoStateKey(sem.num, x.i, x.it)]=base+(pos<resto?1:0); });
     recalcSemanaTotal(sem.num);
   });
   persist();
@@ -3436,7 +3452,7 @@ function deleteTarea(snum, idx) {
   }
 
   if (state.items) delete state.items[`${snum}-${idx}`];
-  if (state.montos) delete state.montos[`${snum}-m-${idx}`];
+  if (state.montos) delete state.montos[montoStateKey(snum, idx, it)];
   recalcSemanaTotal(snum);
   persist();
   renderSemanas();
