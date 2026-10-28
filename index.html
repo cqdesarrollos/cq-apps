@@ -2158,11 +2158,19 @@ html.cq-profile-ready #cq-boot-loader{display:none!important}
   <div class="cq-boot-sub">Restaurando tu acceso</div>
 </div>
 <div class="app">
-  <header class="header">
-    <div class="header-left">
-      <div class="kicker">CQ Desarrollos</div>
+  <header class="header cq-header-unificado">
+    <div class="header-left cq-header-health">
       <a class="cq-actividad-mini" href="actividad.html" data-cq-gerencia-only="1" aria-label="Abrir actividad" title="Actividad"></a>
-</div>
+      <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="status" aria-live="polite" title="Estado de servicios CQ">
+        <span class="cq-sys-overall"><span class="cq-sys-dot"></span><span id="cqSysOverall">Sistemas OK</span></span>
+        <span class="cq-sys-sep"></span>
+        <span class="cq-sys-item">🔥 <b>Firebase</b> <span class="cq-sys-state" id="cqSysFirebase">OK</span></span>
+        <span class="cq-sys-sep"></span>
+        <span class="cq-sys-item">◆ <b>Netlify</b> <span class="cq-sys-state" id="cqSysNetlify">OK</span></span>
+        <span class="cq-sys-sep"></span>
+        <span class="cq-sys-item">🧠 <b>IA</b> <span class="cq-sys-state" id="cqSysIA">OK</span></span>
+      </div>
+    </div>
     <div class="cq-header-session">
       <div id="cq-gerencia-user-wrap">
         <div id="cq-gerencia-user"></div>
@@ -2171,16 +2179,6 @@ html.cq-profile-ready #cq-boot-loader{display:none!important}
       <div class="status"><span class="dot"></span> Online</div>
     </div>
   </header>
-
-  <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="status" aria-live="polite" title="Estado de servicios CQ">
-    <span class="cq-sys-overall"><span class="cq-sys-dot"></span><span id="cqSysOverall">Sistemas OK</span></span>
-    <span class="cq-sys-sep"></span>
-    <span class="cq-sys-item">🔥 <b>Firebase</b> <span class="cq-sys-state" id="cqSysFirebase">OK</span></span>
-    <span class="cq-sys-sep"></span>
-    <span class="cq-sys-item">◆ <b>Netlify</b> <span class="cq-sys-state" id="cqSysNetlify">OK</span></span>
-    <span class="cq-sys-sep"></span>
-    <span class="cq-sys-item">🧠 <b>IA</b> <span class="cq-sys-state" id="cqSysIA">OK</span></span>
-  </div>
 
   <main class="hero">
     <div class="logo-wrap">
@@ -5607,6 +5605,86 @@ onAuthStateChanged(auth,u=>{
 });
 window.addEventListener('online',()=>{if(auth.currentUser)checkFirebase()});
 </script>
+
+<style id="cq-header-unificado-final-v1">
+/* Encabezado aprobado: reloj + estado de sistemas en una sola fila. */
+.cq-header-unificado{
+  width:100%!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+}
+.cq-header-unificado .cq-header-health{
+  flex:1 1 auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:7px!important;
+}
+.cq-header-unificado .cq-actividad-mini{
+  flex:0 0 28px!important;
+  width:28px!important;
+  height:28px!important;
+  min-width:28px!important;
+  border-radius:999px!important;
+  color:#16355a!important;
+  background:rgba(255,255,255,.94)!important;
+  border:1px solid rgba(255,255,255,.58)!important;
+  box-shadow:0 4px 12px rgba(0,0,0,.14)!important;
+}
+.cq-header-unificado .cq-actividad-mini::before{font-size:14px!important}
+.cq-header-unificado .cq-system-strip{
+  flex:1 1 auto!important;
+  width:auto!important;
+  max-width:none!important;
+  min-width:0!important;
+  min-height:28px!important;
+  height:28px!important;
+  margin:0!important;
+  padding:4px 10px!important;
+  gap:8px!important;
+  justify-content:center!important;
+  font-size:8.2px!important;
+  border-radius:999px!important;
+}
+.cq-header-unificado .cq-header-session{
+  flex:0 0 auto!important;
+  min-width:0!important;
+  gap:5px!important;
+}
+.cq-header-unificado #cq-gerencia-user{
+  min-height:28px!important;
+  height:28px!important;
+  display:flex!important;
+  align-items:center!important;
+  padding:4px 9px!important;
+}
+/* El estado detallado ya reemplaza al antiguo indicador Online. */
+.cq-header-unificado .cq-header-session > .status{display:none!important}
+
+@media(max-width:520px){
+  .cq-header-unificado{gap:5px!important}
+  .cq-header-unificado .cq-header-health{gap:5px!important}
+  .cq-header-unificado .cq-actividad-mini{flex-basis:26px!important;width:26px!important;height:26px!important;min-width:26px!important}
+  .cq-header-unificado .cq-actividad-mini::before{font-size:12px!important}
+  .cq-header-unificado .cq-system-strip{height:26px!important;min-height:26px!important;padding:3px 6px!important;gap:5px!important;font-size:7.1px!important}
+  .cq-header-unificado .cq-system-strip .cq-sys-sep{height:11px!important}
+  .cq-header-unificado .cq-system-strip .cq-sys-dot{width:6px!important;height:6px!important}
+  .cq-header-unificado #cq-gerencia-user{height:26px!important;min-height:26px!important;padding:3px 7px!important;font-size:7.8px!important}
+  .cq-header-unificado #cq-gerencia-salir{min-height:26px!important;height:26px!important;padding:3px 7px!important;font-size:7.8px!important}
+}
+@media(max-width:390px){
+  .cq-header-unificado .cq-header-health{gap:4px!important}
+  .cq-header-unificado .cq-actividad-mini{flex-basis:24px!important;width:24px!important;height:24px!important;min-width:24px!important}
+  .cq-header-unificado .cq-system-strip{height:24px!important;min-height:24px!important;padding:3px 5px!important;gap:4px!important;font-size:6.35px!important}
+  .cq-header-unificado .cq-system-strip .cq-sys-overall{gap:3px!important}
+  .cq-header-unificado .cq-system-strip .cq-sys-item{gap:2px!important}
+  .cq-header-unificado #cq-gerencia-user{height:24px!important;min-height:24px!important;padding:3px 5px!important;font-size:7px!important}
+  .cq-header-unificado #cq-gerencia-salir{height:24px!important;min-height:24px!important;padding:3px 5px!important;font-size:7px!important}
+}
+</style>
 
 </body>
 </html>
