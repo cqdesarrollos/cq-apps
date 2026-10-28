@@ -3348,6 +3348,16 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
     <div class="modal-hd"><span class="modal-ttl">Nuevo acopio</span><button class="modal-x" onclick="closeModal('modal-nuevo-acopio')">×</button></div>
     <div class="mbody">
       <div class="fld"><label>Nombre del acopio</label><input type="text" id="na-nombre" placeholder="ej: Acopio Junio 2026"></div>
+      <div class="fld cq-acopio-tipo-fld">
+        <label>Rubro / icono del acopio</label>
+        <input type="hidden" id="na-tipo" value="grueso">
+        <div class="cq-acopio-tipo-grid" id="na-tipo-grid">
+          <button type="button" class="cq-acopio-tipo-btn active" data-tipo="grueso" onclick="cqSeleccionarTipoAcopio('grueso')"><span>🧱</span><b>Grueso</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="terminaciones" onclick="cqSeleccionarTipoAcopio('terminaciones')"><span>🖌️</span><b>Terminaciones</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="instalaciones" onclick="cqSeleccionarTipoAcopio('instalaciones')"><span>💧</span><b>Instalaciones</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="electricidad" onclick="cqSeleccionarTipoAcopio('electricidad')"><span>⚡</span><b>Electricidad</b></button>
+        </div>
+      </div>
       <div class="fld"><label>Tipo de cambio inicial</label><input type="number" id="na-tc" min="1" step="1" placeholder="1210"></div>
       <div class="fld">
         <label>Materiales iniciales</label>
@@ -4308,6 +4318,35 @@ function loadDB(){
   try{var s=JSON.parse(localStorage.getItem(DB_KEY)||'null');if(s)return sanitizeDB(s);}catch(e){}
   return {acopios:[],backups:[],cats:CATS_BASE.slice()}; // each acopio: {id,nombre,creado,tc,obras,mats,pagos,retiros}
 }
+var CQ_ACOPIO_TIPOS={
+  grueso:{nombre:'Grueso',icono:'🧱'},
+  terminaciones:{nombre:'Terminaciones',icono:'🖌️'},
+  instalaciones:{nombre:'Instalaciones',icono:'💧'},
+  electricidad:{nombre:'Electricidad',icono:'⚡'}
+};
+function cqNormalizarTipoAcopio(v){
+  var k=String(v||'').toLowerCase().trim();
+  return CQ_ACOPIO_TIPOS[k]?k:'grueso';
+}
+function cqInferirTipoAcopio(nombre){
+  var n=String(nombre||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if(n.indexOf('termin')>=0)return 'terminaciones';
+  if(n.indexOf('electric')>=0)return 'electricidad';
+  if(n.indexOf('instal')>=0)return 'instalaciones';
+  return 'grueso';
+}
+function cqTipoAcopioInfo(v){
+  return CQ_ACOPIO_TIPOS[cqNormalizarTipoAcopio(v)]||CQ_ACOPIO_TIPOS.grueso;
+}
+function cqSeleccionarTipoAcopio(tipo){
+  tipo=cqNormalizarTipoAcopio(tipo);
+  var h=document.getElementById('na-tipo');
+  if(h)h.value=tipo;
+  document.querySelectorAll('#na-tipo-grid .cq-acopio-tipo-btn').forEach(function(b){
+    b.classList.toggle('active',b.getAttribute('data-tipo')===tipo);
+  });
+}
+
 function sanitizeDB(s){
   s=s||{};
   if(!Array.isArray(s.acopios)) s.acopios=[];
@@ -4335,6 +4374,7 @@ function sanitizeDB(s){
       creado:a.creado||todayISO(),
       tc:parseFloat(a.tc)||TC_DEFAULT,
       color:a.color||pickAcopioColor(i||0),
+      tipoAcopio:cqNormalizarTipoAcopio(a.tipoAcopio||cqInferirTipoAcopio(a.nombre)),
       archived:!!a.archived,
       order:(typeof a.order==='number'?a.order:i),
       obras:Array.isArray(a.obras)?a.obras:OBRAS_BASE.slice(),
@@ -5966,9 +6006,10 @@ function renderHome(){
     /* Color visual distinto por acopio en la pantalla inicial. No modifica los datos guardados. */
     var cqHomePalette=['#238B68','#2B7BE0','#C8882A','#7B3FA0','#C65A45','#1E8DB4'];
     var col=saldoCero?'#8A8F87':cqHomePalette[idx%cqHomePalette.length];
+    var tipo=cqTipoAcopioInfo(a.tipoAcopio);
     return '<div class="acopio-card'+(saldoCero?' saldo-cero':'')+'" style="--cq-acopio-accent:'+col+';border-left:6px solid '+col+'" onclick="abrirAcopio('+a.id+')">'
       +'<div class="acopio-card-top">'
-      +'<div class="acopio-card-ident"><span class="acopio-card-icon">🏗</span><div class="acopio-card-ttl">'+a.nombre+'</div></div>'
+      +'<div class="acopio-card-ident"><span class="acopio-card-icon">'+tipo.icono+'</span><div class="cq-acopio-card-copy"><div class="acopio-card-ttl">'+a.nombre+'</div><div class="cq-acopio-rubro">'+tipo.nombre+'</div></div></div>'
       +'<div class="acopio-actions">'
       +'<button class="acopio-card-btn" title="Subir" onclick="event.stopPropagation();moverAcopio('+a.id+',-1)">↑</button>'
       +'<button class="acopio-card-btn" title="Bajar" onclick="event.stopPropagation();moverAcopio('+a.id+',1)">↓</button>'
@@ -6083,6 +6124,7 @@ function openNuevoAcopio(){
   document.getElementById('na-tc').value=(ultimo&&Number(ultimo.tc)>0)?Number(ultimo.tc):TC_DEFAULT;
   cqCargarReferenciasNuevoAcopio();
   document.getElementById('na-copiar').value='base';
+  cqSeleccionarTipoAcopio('grueso');
   if(document.getElementById('na-color')) document.getElementById('na-color').value=pickAcopioColor(DB.acopios.length);
   renderColorPicker();
   openModal('modal-nuevo-acopio');
@@ -6108,6 +6150,7 @@ function guardarNuevoAcopio(){
     creado:todayISO(),
     tc:tc,
     color:(document.getElementById('na-color')?document.getElementById('na-color').value:pickAcopioColor(DB.acopios.length)),
+    tipoAcopio:cqNormalizarTipoAcopio(document.getElementById('na-tipo')?document.getElementById('na-tipo').value:'grueso'),
     archived:false,
     order:DB.acopios.length,
     obras:OBRAS_BASE.slice(),
@@ -15490,5 +15533,44 @@ document.addEventListener('click',function(e){
     overflow:visible!important;
     text-overflow:clip!important;
   }
+}
+</style>
+
+
+<style id="cq-acopio-rubros-y-alineacion-v1">
+/* CQ 28/10/2026 — rubro/icono de acopio + obras justificadas + botones de retiro iguales */
+.cq-acopio-tipo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.cq-acopio-tipo-btn{min-width:0;min-height:68px;border:1px solid rgba(28,61,53,.14);border-radius:12px;background:linear-gradient(180deg,#fff,#F7F8F5);color:var(--green);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:7px 4px;font-family:'Space Grotesk',sans-serif;cursor:pointer;box-shadow:0 4px 11px rgba(28,61,53,.055)}
+.cq-acopio-tipo-btn span{font-size:22px;line-height:1}
+.cq-acopio-tipo-btn b{font-size:8px;line-height:1.1;white-space:normal;text-align:center}
+.cq-acopio-tipo-btn.active{border-color:#248B68;box-shadow:0 0 0 2px rgba(36,139,104,.13),0 6px 14px rgba(36,139,104,.10);background:linear-gradient(180deg,#F7FFFB,#EAF7F0)}
+.cq-acopio-tipo-btn[data-tipo="terminaciones"].active{border-color:#2B7BE0;background:linear-gradient(180deg,#FAFDFF,#EDF5FF);box-shadow:0 0 0 2px rgba(43,123,224,.11)}
+.cq-acopio-tipo-btn[data-tipo="instalaciones"].active{border-color:#C8882A;background:linear-gradient(180deg,#FFFDF9,#FFF4E2);box-shadow:0 0 0 2px rgba(200,136,42,.11)}
+.cq-acopio-tipo-btn[data-tipo="electricidad"].active{border-color:#7B3FA0;background:linear-gradient(180deg,#FFFCFF,#F5EEFF);box-shadow:0 0 0 2px rgba(123,63,160,.11)}
+.cq-acopio-card-copy{display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1 1 auto}
+.cq-acopio-card-copy .acopio-card-ttl{width:100%}
+.cq-acopio-rubro{margin-top:3px;padding:2px 6px;border-radius:999px;background:color-mix(in srgb,var(--cq-acopio-accent) 9%,white);border:1px solid color-mix(in srgb,var(--cq-acopio-accent) 18%,transparent);color:var(--cq-acopio-accent);font-size:7px;font-weight:900;line-height:1.1}
+
+/* Obras: columnas iguales para que todas queden alineadas/justificadas. */
+#retirar-obra-chips{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(112px,1fr))!important;gap:7px!important;align-items:stretch!important}
+#retirar-obra-chips .chip{width:100%!important;min-width:0!important;height:100%!important;min-height:36px!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;white-space:normal!important;line-height:1.15!important;padding:6px 7px!important}
+
+/* Carga masiva exactamente con la misma caja/tamaño que Registrar retiro. */
+#btn-carga-masiva-retiros{min-height:50px!important;height:auto!important;padding:12px!important;border-radius:14px!important;font-size:13px!important}
+
+@media(max-width:560px){
+  .cq-acopio-tipo-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+  .cq-acopio-tipo-btn{min-height:58px;padding:6px 2px;border-radius:10px}
+  .cq-acopio-tipo-btn span{font-size:18px}
+  .cq-acopio-tipo-btn b{font-size:6.9px}
+  .cq-acopio-rubro{font-size:6.5px;margin-top:2px;padding:2px 5px}
+  #retirar-obra-chips{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px!important;margin-bottom:8px!important}
+  #retirar-obra-chips .chip{min-height:34px!important;padding:5px 4px!important;font-size:8.5px!important;line-height:1.15!important}
+  #btn-carga-masiva-retiros,
+  #btn-registrar-retiro{min-height:32px!important;height:32px!important;padding:5px 8px!important;border-radius:8px!important;font-size:9px!important}
+}
+@media(max-width:360px){
+  #retirar-obra-chips{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .cq-acopio-tipo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 </style>
