@@ -9436,7 +9436,19 @@ async function procesarSnapshotIntegraciones(snapshot){
 
       docsActuales.forEach(function(docSnap){
         try{
-          if(aplicarIntegracion(docSnap.data()))cambio=true;
+          var ev=docSnap.data()||{};
+          var origenEv=cqOrigenCargaNormalizado({
+            origen:ev.source||ev.origen||'',
+            sourceLabel:ev.sourceLabel||'',
+            integrationId:ev.integrationId||''
+          });
+
+          // Caja Gerencia ya materializa sus cargas directamente en data_planilla_exacta_v4.
+          // materiales_integraciones queda sólo como auditoría. Reprocesarla acá generaba una
+          // segunda escritura y podía regrabar un snapshot parcial cuando un gasto tenía varias obras.
+          if(origenEv==='caja_gerencia')return;
+
+          if(aplicarIntegracion(ev))cambio=true;
         }catch(e){
           console.warn('Integración omitida',e);
         }
