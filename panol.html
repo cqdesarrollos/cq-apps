@@ -3580,10 +3580,18 @@ window.recuperarPanolBackup=async function(){
 
 
 function panolEsEntradaAcopio(m){
-  return !!(m && m.tipo==='entrada' && (m.origen==='cq_acopio' || m.acopioEntradaId || (m.acopioId!=null && m.acopioRetiroId!=null)));
+  // Entradas externas autoritativas: Acopio + Caja Gerencia.
+  // Se conservan desde Firebase antes de cualquier guardado local de Pañol.
+  return !!(m && m.tipo==='entrada' && (
+    m.origen==='cq_acopio' || m.acopioEntradaId || (m.acopioId!=null && m.acopioRetiroId!=null) ||
+    m.origen==='cq_caja_gerencia' || m.cajaGerenciaEntradaId || m.cajaMovimientoId!=null
+  ));
 }
 function panolEsLoteAcopio(l){
-  return !!(l && (l.origen==='cq_acopio' || (l.acopioId!=null && l.acopioRetiroId!=null)));
+  return !!(l && (
+    l.origen==='cq_acopio' || (l.acopioId!=null && l.acopioRetiroId!=null) ||
+    l.origen==='cq_caja_gerencia' || l.cajaGerenciaEntradaId || l.cajaMovimientoId!=null
+  ));
 }
 function panolAplicarAcopioAutoritativo(local,remote){
   local=panolClonarEstado(local||{}); remote=remote||{};
@@ -3685,7 +3693,7 @@ async function persist(opts){
         delete remotoPrev.updatedAt;
       }
 
-      // Las entradas nacidas en Acopio son autoritativas desde Firebase,
+      // Las entradas nacidas en Acopio o Caja Gerencia son autoritativas desde Firebase,
       // SALVO cuando el usuario hizo un borrado explícito.
       if(remotoPrev){
         state=panolAplicarAcopioAutoritativo(state,remotoPrev);
