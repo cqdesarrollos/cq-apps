@@ -3902,9 +3902,30 @@ async function ensureProjectTypeTemplates(writeRemote=false){
   }
   const cristian=findCristianObra();
   if(cristian){
-    if(Number(cristian.tipoPlantas)!==2){ cristian.tipoPlantas=2; configChanged=true; }
     const st=estadosObras[cristian.id]||normalizeState(null,cristian);
-    if(Number(st.tipoPlantas)!==2 || !st._migracionDosPlantas){ estadosObras[cristian.id]=buildCristianTwoStoryState(cristian,st); changedStates.push(cristian.id); }
+    const cim=normalizeCimentacion2P(st?.tipoCimentacion || cristian.tipoCimentacion || '');
+
+    // IMPORTANTE: esta migración existía para convertir UNA obra legacy de Cristian
+    // al primer esquema de 2 plantas. No debe volver a ejecutarse sobre cada obra nueva.
+    // Si la obra ya declara un proyecto de 2 plantas (y especialmente Platea 24 semanas),
+    // se respeta tal cual y jamás se reconstruye con buildCristianTwoStoryState().
+    if(Number(cristian.tipoPlantas)!==2 || Number(st.tipoPlantas)!==2){
+      cristian.tipoPlantas=2;
+      configChanged=true;
+      estadosObras[cristian.id]=buildCristianTwoStoryState(cristian,st);
+      changedStates.push(cristian.id);
+    }else if(cim==='platea'){
+      let changed=false;
+      if(cristian.tipoCimentacion!=='platea'){ cristian.tipoCimentacion='platea'; changed=true; }
+      if(cristian.plantillaVersion!==PLANTILLA_2P_PLATEA_EXCEL){ cristian.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL; changed=true; }
+      if(st.tipoCimentacion!=='platea'){ st.tipoCimentacion='platea'; changed=true; }
+      if(st.plantillaVersion!==PLANTILLA_2P_PLATEA_EXCEL){ st.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL; changed=true; }
+      if(changed){
+        configChanged=true;
+        estadosObras[cristian.id]=normalizeState(st,cristian);
+        changedStates.push(cristian.id);
+      }
+    }
   }
   if(configChanged){ normalizeObrasConfig(); localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig)); }
   changedStates.forEach(id=>localStorage.setItem('mano_obra_'+id,JSON.stringify(estadosObras[id])));
@@ -4304,8 +4325,8 @@ const SEMANAS_2P_PLATEA_INICIO = [
 ];
 
 // ─── CRONOGRAMA FIJO · 2 PLANTAS CON PLATEA ────────────────────────────
-// Fuente: cronograma tentativo.xlsx. Se aplica SOLO a obras nuevas creadas
-// como 2 plantas + Platea. Las obras existentes conservan su plantilla.
+// Fuente: cronograma tentativo.xlsx. Es la ÚNICA plantilla válida para
+// cualquier obra configurada como 2 plantas + Platea.
 const PLANTILLA_2P_PLATEA_EXCEL = '2p_platea_excel_v1';
 const SEMANAS_2P_PLATEA_CRONOGRAMA = [
   {num:1, etapa:"Platea · Replanteo / Preparación", items:[
@@ -4608,9 +4629,12 @@ function getBaseSemanasForProject(st,meta){
   if(tipo===2){
     const cim=normalizeCimentacion2P(st?.tipoCimentacion || meta?.tipoCimentacion || '');
     const version=st?.plantillaVersion || meta?.plantillaVersion || '';
-    // Las obras NUEVAS de 2 plantas con platea usan el cronograma fijo de 24 semanas
-    // del Excel. Las obras de platea ya existentes (2p_v1) conservan su esquema anterior.
-    if(cim==='platea' && version===PLANTILLA_2P_PLATEA_EXCEL){
+    // REGLA ÚNICA: toda obra de 2 plantas + platea usa SIEMPRE el cronograma
+    // fijo de 24 semanas. El esquema legacy de 30 semanas deja de ser válido
+    // para platea, aunque Firebase todavía devuelva plantillaVersion='2p_v1'.
+    if(cim==='platea'){
+      if(st) st.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+      if(meta) meta.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
       return SEMANAS_2P_PLATEA_CRONOGRAMA;
     }
     if(cim){
@@ -4658,6 +4682,15 @@ function normalizeState(s, meta={}) {
   if(Number(s.tipoPlantas)===2){
     const cim=normalizeCimentacion2P(s.tipoCimentacion || meta.tipoCimentacion || '');
     if(cim) s.tipoCimentacion=cim;
+    // Platea no puede volver a la plantilla legacy de 30 semanas.
+    if(cim==='platea'){
+      s.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+      if(meta && typeof meta==='object'){
+        meta.tipoPlantas=2;
+        meta.tipoCimentacion='platea';
+        meta.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+      }
+    }
   }else if(s.tipoCimentacion){ delete s.tipoCimentacion; }
   if(!s.items) s.items = {};
   const baseSemanas = getBaseSemanasForProject(s,meta);
@@ -4707,8 +4740,33 @@ obrasConfig.forEach((o,idx)=>{
   const saved = JSON.parse(localStorage.getItem('mano_obra_'+o.id) || 'null') || migratedLegacy;
   estadosObras[o.id] = normalizeState(saved, o);
 });
+// Blindaje de esquema: si metadata o estado identifican 2P + Platea,
+ // ambos quedan normalizados a la plantilla de 24 semanas antes de cualquier migración legacy.
+obrasConfig.forEach(o=>{
+  const st=estadosObras[o.id];
+  const cim=normalizeCimentacion2P(st?.tipoCimentacion || o?.tipoCimentacion || '');
+  const tipo=Number(st?.tipoPlantas || o?.tipoPlantas || 1);
+  if(tipo===2 && cim==='platea'){
+    // Recuperación del bug anterior: buildCristianTwoStoryState() guardaba una copia
+    // de items/montos/locks antes de reconstruir la obra a 30 semanas. Si esa copia
+    // existe en una Platea, corresponde al estado correcto previo al borrado y se
+    // restaura una sola vez.
+    const b=st && st._backupAntesDosPlantas;
+    if(st && b && !st._plateaRecovery24V8){
+      ['items','montos','customTasks','taskOverrides','customWeeks','weekOverrides','hiddenWeeks','weekOrder','certLocks'].forEach(k=>{
+        if(b[k]!=null) st[k]=deepClone(b[k]);
+      });
+      st._plateaRecovery24V8=true;
+      delete st._migracionDosPlantas;
+      try{ localStorage.setItem('mano_obra_'+o.id,JSON.stringify(st)); }catch(e){}
+    }
+    o.tipoPlantas=2; o.tipoCimentacion='platea'; o.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+    if(st){ st.tipoPlantas=2; st.tipoCimentacion='platea'; st.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL; }
+  }
+});
+try{ localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig)); }catch(e){}
 let state = estadosObras[curObraId];
-// Etiqueta las referencias iniciales y prepara la obra de Cristian como primer modelo de 2 plantas.
+// Etiqueta referencias legacy sin tocar obras nuevas que ya tengan proyecto definido.
 ensureProjectTypeTemplates(false);
 state = estadosObras[curObraId] || state;
 async function asegurarBanquinasInterioresNelson(){
@@ -5027,6 +5085,19 @@ function persistConfig(){
 function currentObra(){ return obrasConfig.find(o=>o.id===curObraId) || obrasConfig[0]; }
 function persist() {
   const id=curObraId;
+  const meta=obrasConfig.find(o=>o.id===id);
+  if(Number(state?.tipoPlantas || meta?.tipoPlantas)===2 &&
+     normalizeCimentacion2P(state?.tipoCimentacion || meta?.tipoCimentacion || '')==='platea'){
+    state.tipoPlantas=2;
+    state.tipoCimentacion='platea';
+    state.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+    if(meta){
+      meta.tipoPlantas=2;
+      meta.tipoCimentacion='platea';
+      meta.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+    }
+  }
+  state._cqUpdatedAt=Date.now();
   estadosObras[id] = state;
   localStorage.setItem('mano_obra_actual', id);
   localStorage.setItem('mano_obra_'+id, JSON.stringify(state));
@@ -5105,7 +5176,14 @@ function defaultObraColor(idx){
   return palette[idx % palette.length];
 }
 function normalizeObrasConfig(){
-  obrasConfig = (obrasConfig || []).map((o,i)=>({ ...o, color:o.color || defaultObraColor(i) }));
+  obrasConfig = (obrasConfig || []).map((o,i)=>{
+    const x={ ...o, color:o.color || defaultObraColor(i) };
+    if(Number(x.tipoPlantas)===2 && normalizeCimentacion2P(x.tipoCimentacion)==='platea'){
+      x.tipoCimentacion='platea';
+      x.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+    }
+    return x;
+  });
   if(typeof normalizeConstructoresConfig === 'function') normalizeConstructoresConfig();
   // Color automático: cada obra hereda el color de su constructor.
   obrasConfig = obrasConfig.map((o,i)=>{
@@ -5245,6 +5323,23 @@ let _cqAvancePersistTimer=null;
 let _cqAvanceSummaryTimer=null;
 let _cqAvancePersistDirty=false;
 let _cqAvanceSummaryWeek=null;
+
+// Checkpoint local sin Firebase ni historial pesado. Se usa al FINALIZAR una
+// interacción (click, onchange del porcentaje, soltar slider). Así un refresh
+// inmediato nunca pierde el avance aunque la escritura remota siga diferida.
+function cqCheckpointAvanceLocal(){
+  const id=curObraId;
+  if(!id || !state) return;
+  state._cqUpdatedAt=Date.now();
+  estadosObras[id]=state;
+  _cqLocallyTouchedObras.add(id);
+  try{
+    localStorage.setItem('mano_obra_actual',id);
+    localStorage.setItem('mano_obra_'+id,JSON.stringify(state));
+    if(obrasConfig[0] && id===obrasConfig[0].id) localStorage.setItem('simon_state',JSON.stringify(state));
+  }catch(e){ console.warn('Checkpoint local de avance',e); }
+  cqMarkObraDirty(id);
+}
 
 function cqScheduleAvancePersist(delay=750){
   _cqLocallyTouchedObras.add(curObraId);
@@ -5776,7 +5871,7 @@ function renderSemanas(){
             <div class="item-row-bottom">
               <div class="item-avance">
                 <input type="range" id="av-sld-${s.num}-${i}" class="avance-slider ${getLockedAv(s.num,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(sliderVal)}"
-                  oninput="onSlider(${s.num},${i},this.value)" onchange="onSlider(${s.num},${i},this.value)">
+                  oninput="onSlider(${s.num},${i},this.value,false)" onchange="onSlider(${s.num},${i},this.value,true)">
                 <div class="avance-input-wrap">
                   <input type="number" id="av-inp-${s.num}-${i}" class="avance-input ${getLockedAv(s.num,i)>0?'locked-input':''}" min="${dm.conforme?'-999':'0'}" max="${dm.conforme?'999':'100'}" step="0.01"
                     value="${Math.round(av*10000)/100}" onfocus="this.select()" onchange="onAvanceInput(${s.num},${i},this.value)">
@@ -5826,6 +5921,7 @@ function toggleCheck(snum,idx){
   }
   // Respuesta visual inmediata; cálculos globales y guardado quedan fuera del click.
   updateItemRowUI(snum,idx,getAv(snum,idx));
+  cqCheckpointAvanceLocal();
   cqScheduleAvanceSummary(snum);
 }
 function updateItemRowUI(snum, idx, av){
@@ -5864,7 +5960,7 @@ function updateItemRowUI(snum, idx, av){
   if(devEl){ devEl.textContent=fmt(dm.dev); devEl.style.color=done?'#0A6E3A':'#2E7D5E'; }
   if(saldoEl){ saldoEl.textContent=fmt(dm.saldo); saldoEl.style.color=done?'#A8BFA8':'#C0392B'; }
 }
-function onSlider(snum,idx,val){
+function onSlider(snum,idx,val,commit=false){
   if(isConformeTask(snum,idx)){
     const target=Math.max(0,Math.min(100,parseFloat(val)||0))/100;
     setConformeEffectiveAv(snum,idx,target);
@@ -5879,6 +5975,7 @@ function onSlider(snum,idx,val){
     setAv(snum,idx,av);
     updateItemRowUI(snum,idx,av);
   }
+  if(commit) cqCheckpointAvanceLocal();
   cqScheduleAvanceSummary(snum);
 }
 function onAvanceInput(snum,idx,val){
@@ -5899,6 +5996,7 @@ function onAvanceInput(snum,idx,val){
     setAv(snum,idx,av);
     updateItemRowUI(snum,idx,av);
   }
+  cqCheckpointAvanceLocal();
   cqScheduleAvanceSummary(snum);
 }
 
@@ -5953,7 +6051,7 @@ function refreshAll(){
         <div class="item-row-bottom">
           <div class="item-avance">
             <input type="range" id="av-sld-${snum}-${i}" class="avance-slider ${getLockedAv(snum,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(sliderVal)}"
-              oninput="onSlider(${snum},${i},this.value)" onchange="onSlider(${snum},${i},this.value)">
+              oninput="onSlider(${snum},${i},this.value,false)" onchange="onSlider(${snum},${i},this.value,true)">
             <div class="avance-input-wrap">
               <input type="number" id="av-inp-${snum}-${i}" class="avance-input ${getLockedAv(snum,i)>0?'locked-input':''}" min="${dm.conforme?'-999':'0'}" max="${dm.conforme?'999':'100'}" step="0.01"
                 value="${Math.round(av*10000)/100}" onfocus="this.select()" onchange="onAvanceInput(${snum},${i},this.value)">
@@ -7267,7 +7365,44 @@ async function cqReadRemoteObra(meta, idx=0){
       return false;
     }
     if(snap.exists()){
-      const remote=normalizeState(snap.data(),meta);
+      const rawRemote=snap.data()||{};
+      const localState=estadosObras[id] || (()=>{ try{return JSON.parse(localStorage.getItem('mano_obra_'+id)||'null');}catch(e){return null;} })();
+      const localPlatea24=
+        Number(localState?.tipoPlantas || meta?.tipoPlantas)===2 &&
+        normalizeCimentacion2P(localState?.tipoCimentacion || meta?.tipoCimentacion || '')==='platea' &&
+        (localState?.plantillaVersion===PLANTILLA_2P_PLATEA_EXCEL || meta?.plantillaVersion===PLANTILLA_2P_PLATEA_EXCEL);
+      const remoteCim=normalizeCimentacion2P(rawRemote?.tipoCimentacion || meta?.tipoCimentacion || '');
+      const remoteLegacyPlatea=(remoteCim==='platea' && rawRemote?.plantillaVersion!==PLANTILLA_2P_PLATEA_EXCEL);
+
+      // Caso crítico: Firebase aún guarda el esquema viejo de 30 semanas pero este
+      // dispositivo ya tiene la obra correcta de 24. El remoto NO se aplica:
+      // se reescribe Firebase con el estado local correcto.
+      if(localPlatea24 && remoteLegacyPlatea){
+        if(meta){
+          meta.tipoPlantas=2;
+          meta.tipoCimentacion='platea';
+          meta.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+        }
+        localState.tipoPlantas=2;
+        localState.tipoCimentacion='platea';
+        localState.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+        estadosObras[id]=localState;
+        try{
+          localStorage.setItem('mano_obra_'+id,JSON.stringify(localState));
+          localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
+        }catch(e){}
+        try{
+          const cfgToken=cqMarkConfigDirty();
+          const obraToken=cqMarkObraDirty(id);
+          _cqConfigRevision++;
+          await cqWriteConfigRemote({obras:obrasConfig,constructores:constructoresConfig},cfgToken);
+          await cqWriteObraRemote(id,localState,obraToken);
+        }catch(e){ console.warn('No se pudo reemplazar Platea legacy en Firebase',id,e); }
+        _cqRemoteLoadedObras.add(id);
+        return false;
+      }
+
+      const remote=normalizeState(rawRemote,meta);
       estadosObras[id]=remote;
       try{ localStorage.setItem('mano_obra_'+id,JSON.stringify(remote)); }catch(e){}
     }else if(!estadosObras[id]){
@@ -7414,7 +7549,23 @@ async function initApp() {
       await cqFlushPendingLocalToFirebase();
     }else if(confSnap.exists() && Array.isArray(confSnap.data().obras) && confSnap.data().obras.length){
       const data=confSnap.data();
-      obrasConfig=data.obras;
+
+      // No permitir que una config remota vieja vuelva una Platea 24 semanas a 2p_v1.
+      // Si localmente esa misma obra ya está identificada como Platea, se conservan
+      // esos tres campos de esquema aunque Firebase todavía tenga metadatos antiguos.
+      const prevById=new Map((obrasConfig||[]).map(o=>[o.id,o]));
+      obrasConfig=data.obras.map(remoteMeta=>{
+        const localMeta=prevById.get(remoteMeta.id);
+        const localState=estadosObras && estadosObras[remoteMeta.id];
+        const localPlatea=
+          (Number(localMeta?.tipoPlantas)===2 && normalizeCimentacion2P(localMeta?.tipoCimentacion)==='platea') ||
+          (Number(localState?.tipoPlantas)===2 && normalizeCimentacion2P(localState?.tipoCimentacion)==='platea');
+        const remotePlatea=Number(remoteMeta?.tipoPlantas)===2 && normalizeCimentacion2P(remoteMeta?.tipoCimentacion)==='platea';
+        if(localPlatea || remotePlatea){
+          return {...remoteMeta,tipoPlantas:2,tipoCimentacion:'platea',plantillaVersion:PLANTILLA_2P_PLATEA_EXCEL};
+        }
+        return remoteMeta;
+      });
       if(Array.isArray(data.constructores)) constructoresConfig=data.constructores;
       normalizeConstructoresConfig();
       normalizeObrasConfig();
