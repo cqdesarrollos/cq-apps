@@ -3759,6 +3759,14 @@ function cloneStateAsNewProject(plantilla,newMeta,tipo){
   nuevo.certLocks={};
   delete nuevo._backupAntesDosPlantas;
   delete nuevo._migracionDosPlantas;
+  // Metadatos internos de la obra modelo no deben heredarse como si pertenecieran
+  // a la obra nueva. La estructura y los importes sí se conservan.
+  delete nuevo._plateaInitialTemplate;
+  delete nuevo._plateaFinanceSeededV1;
+  delete nuevo._plateaFinanceSource;
+  delete nuevo._plateaFinanceRepairedV2;
+  delete nuevo._templateSourceId;
+  delete nuevo._templateSourceLabel;
   return normalizeState(nuevo,{...newMeta,tipoPlantas:tipo});
 }
 function resetFoundationWeeksForNewTwoStory(st,cimentacion){
@@ -3785,21 +3793,31 @@ function createStateFromLatestTemplate(newMeta,tipo){
     : (tipo===2 ? '2p_v1' : '1p_detallada_v1');
   const metaConVersion = {...newMeta, plantillaVersion, ...(tipo===2?{tipoCimentacion:cim}:{})};
 
-  // 2 plantas + Platea: cronograma fijo del Excel, sin heredar cambios de semanas,
-  // tareas, orden o importes de otra obra. Solo conserva parámetros generales útiles.
+  // 2 plantas + Platea: la última obra de este mismo sistema pasa a ser el modelo.
+  // Copia semanas, tareas, orden, importes y demás ajustes, pero reinicia avances,
+  // certificados y pagos para que la obra nueva nazca limpia.
   if(tipo===2 && cim==='platea'){
-    const nuevo=createDefaultState(metaConVersion);
-    const refMeta=findLatestObraByTipo(2,'platea') || findLatestTwoStoryAny();
+    const refMeta=findLatestObraByTipo(2,'platea');
     const ref=refMeta ? estadosObras[refMeta.id] : null;
     if(ref){
-      nuevo.acuerdo=Number(ref.acuerdo)>0?Number(ref.acuerdo):nuevo.acuerdo;
-      nuevo.acuerdoComentario=ref.acuerdoComentario||'';
-      nuevo.itemsCQ=deepClone(ref.itemsCQ||nuevo.itemsCQ);
+      const nuevo=cloneStateAsNewProject(ref,metaConVersion,2);
+      nuevo.tipoCimentacion='platea';
+      nuevo.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
+      nuevo._templateSourceId=refMeta.id;
+      nuevo._templateSourceLabel=refMeta.label||refMeta.obraNum||refMeta.id;
+      return normalizeState(nuevo,metaConVersion);
     }
-    // Conserva la capacidad de certificar desde el primer avance: toma sólo
-    // el perfil monetario de una referencia y lo adapta a las 24 semanas nuevas.
-    const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
-    if(perfilFin) cqAplicarPerfilFinancieroPlatea(nuevo,metaConVersion,perfilFin);
+
+    // Sólo si todavía no existe ninguna obra 2P + Platea usa el cronograma inicial.
+    const nuevo=createDefaultState(metaConVersion);
+    const commonMeta=findLatestTwoStoryAny();
+    const common=commonMeta ? estadosObras[commonMeta.id] : null;
+    if(common){
+      nuevo.acuerdo=Number(common.acuerdo)>0?Number(common.acuerdo):nuevo.acuerdo;
+      nuevo.acuerdoComentario=common.acuerdoComentario||'';
+      nuevo.itemsCQ=deepClone(common.itemsCQ||nuevo.itemsCQ);
+    }
+    nuevo._plateaInitialTemplate=true;
     return normalizeState(nuevo,metaConVersion);
   }
 
@@ -3855,7 +3873,9 @@ function updatePlantTemplateHint(setAgreement=false){
         ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
         : `<strong>Modelo inicial:</strong> plantilla detallada de 1 planta con zapata corrida.`;
     }else if(cim==='platea'){
-      hint.innerHTML=`<strong>2 plantas · Platea:</strong> usa el cronograma fijo de 24 semanas definido para este sistema. No copia modificaciones de otra obra.`;
+      hint.innerHTML=meta
+        ? `<strong>Modelo Platea:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
+        : `<strong>Modelo inicial Platea:</strong> cronograma base de 24 semanas. A partir de la siguiente obra se copiará la última obra Platea creada.`;
     }else if(meta){
       hint.innerHTML=`<strong>Modelo Pilotes:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia las últimas modificaciones de ese mismo sistema.`;
     }else{
@@ -3953,9 +3973,10 @@ function saveEditObra() {
     obrasConfig.push(newMeta);
     estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
     estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
-    // El acuerdo definitivo se conoce recién acá. Reaplica el perfil financiero
-    // escalado a ese acuerdo para que la obra nazca lista para certificar.
-    if(tipoPlantas===2 && tipoCimentacion==='platea'){
+    // Si es la primera Platea del sistema (todavía no había una Platea anterior),
+    // genera importes desde una referencia financiera. Cuando sí existe una obra
+    // Platea anterior, sus importes ya fueron copiados y no deben sobrescribirse.
+    if(tipoPlantas===2 && tipoCimentacion==='platea' && estadosObras[newMeta.id]._plateaInitialTemplate){
       const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
       if(perfilFin) cqAplicarPerfilFinancieroPlatea(estadosObras[newMeta.id],newMeta,perfilFin);
     }
