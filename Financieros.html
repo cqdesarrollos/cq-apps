@@ -1878,6 +1878,17 @@ function cqIndicatorMaxPoints(){
     .filter(k=>k!=='indiceCQ')
     .reduce((a,k)=>a+Math.max(0,Number(cqCfg(k).pg)||0,Number(cqCfg(k).py)||0,Number(cqCfg(k).pr)||0),0);
 }
+function cqScoreBreakdown(c){
+  const keys=['ventas','stockCant','stockViejo','stockProm','stockVentas','diasTerminada','diasPozo','pctPozo','obrasActivas','liquidez','riesgoOp','obrasIniciadas'];
+  return keys.map(key=>({
+    key,
+    value:c[key],
+    zone:cqZone(key,c[key]),
+    points:cqIndicatorPoints(key,c[key]),
+    max:Math.max(0,Number(cqCfg(key).pg)||0,Number(cqCfg(key).py)||0,Number(cqCfg(key).pr)||0)
+  }));
+}
+
 function cqRuleText(key){
   const c=cqCfg(key),g=Number(c.green),y=Number(c.yellow);
   if(c.direction==='high')return `🟢 ≥${cqRuleVal(key,g)} · 🟡 ${cqRuleVal(key,y)}–${cqRuleVal(key,g)} · 🔴 <${cqRuleVal(key,y)}`;
@@ -1974,6 +1985,7 @@ function saveState(){
 window.__cqFinGetSnapshot=cqFinSnapshot;
 window.__cqFinApplyRemote=function(data){
   if(!data || typeof data!=="object")return false;
+  window.__cqFinDataReady=true;
   __cqFinApplyingRemote=true;
   try{
     state.data=data.data||{};
@@ -2065,7 +2077,11 @@ const CQ_HISTORICAL_BACKFILL = [
   {code:'8.86', inicio:['2025',6], fin:['2025',12], ventas:{A:['2025',7,'vendida_pozo'],B:['2025',9,'vendida_pozo']}},
   {code:'4.86', inicio:['2025',6], fin:['2025',12], ventas:{A:['2025',12,'vendida_terminada'],B:['2025',12,'vendida_terminada']}},
   // Preventa: se vendió en octubre y la construcción comenzó en noviembre.
-  {code:'25.85', inicio:['2025',11], fin:['2026',5], ventas:{A:['2025',10,'vendida_pozo'],B:['2025',10,'vendida_pozo']}}
+  {code:'25.85', inicio:['2025',11], fin:['2026',5], ventas:{A:['2025',10,'vendida_pozo'],B:['2025',10,'vendida_pozo']}},
+  // 5.94 sigue abierta comercialmente: A fue preventa y B continúa sin vender al cierre de Oct-2026.
+  {code:'5.94', inicio:['2025',11], fin:['2026',6], archived:false,
+   ventas:{A:['2025',10,'vendida_pozo']},
+   openUnits:{B:{unsoldThrough:['2026',10]}}}
 ];
 
 function cqSameCasaPayload(a,b){
@@ -2078,19 +2094,20 @@ function cqHistoricalMeses(def, venta){
   if(!origen)return 0;
   return Math.max(0, ordOf(sy,sm)-ordOf(origen[0],origen[1]));
 }
-function cqEnsureHistoricalObra(code){
+function cqEnsureHistoricalObra(code, archived){
   let ob=findObraByCode(code), changed=false;
+  const shouldArchive = archived!==false;
   if(!ob){
     let base='hist_'+normalizeCodeCQ(code).replace(/[^0-9A-Za-z]+/g,'_');
     let id=base, n=2;
     while(state.obras.some(x=>x.id===id)){id=base+'_'+(n++);}
-    ob={id,code,casas:['A','B'],archived:true};
+    ob={id,code,casas:['A','B'],archived:shouldArchive};
     state.obras.push(ob); changed=true;
   }
   if(!Array.isArray(ob.casas) || !ob.casas.includes('A') || !ob.casas.includes('B')){
     ob.casas=['A','B']; changed=true;
   }
-  if(ob.archived!==true){ob.archived=true;changed=true;}
+  if(!!ob.archived!==shouldArchive){ob.archived=shouldArchive;changed=true;}
   return {ob,changed};
 }
 function cqDeleteYear2020(){
@@ -2108,7 +2125,7 @@ function applyCQHistoricalBackfill(){
   if(!state.obraEstados)state.obraEstados={};
 
   CQ_HISTORICAL_BACKFILL.forEach(def=>{
-    const ensured=cqEnsureHistoricalObra(def.code), ob=ensured.ob;
+    const ensured=cqEnsureHistoricalObra(def.code,def.archived), ob=ensured.ob;
     if(ensured.changed)changed=true;
 
     const desiredObra={};
@@ -2155,6 +2172,17 @@ function applyCQHistoricalBackfill(){
           if(!Object.prototype.hasOwnProperty.call(slot,casaKey))return;
           const dk=String(y)+'-'+Number(m)+'-'+letra;
           const wanted=desiredCasas[dk];
+          const openCfg=def.openUnits && def.openUnits[letra];
+          if(!wanted && openCfg){
+            const cutoff=openCfg.unsoldThrough ? ordOf(openCfg.unsoldThrough[0],openCfg.unsoldThrough[1]) : null;
+            // Hasta la fecha declarada como "sin vender" limpiamos una venta errónea.
+            // Después de esa fecha, cualquier venta nueva del usuario se conserva.
+            if(cutoff!==null && ordOf(y,m)<=cutoff){
+              const nr=normalizeCasa(slot[casaKey]);
+              if(nr.saleStatus){delete slot[casaKey];changed=true;}
+            }
+            return;
+          }
           if(!wanted){delete slot[casaKey];changed=true;}
           else if(!cqSameCasaPayload(slot[casaKey],wanted)){slot[casaKey]=Object.assign({},wanted);changed=true;}
         });
@@ -3430,6 +3458,15 @@ function resetIndicatorConfig(){
 
 // ---------- panel ----------
 function renderPanel(){
+  if(window.__cqFinDataReady===false){
+    document.getElementById('heroRing').textContent='--';
+    document.getElementById('heroRing').className='ring';
+    document.getElementById('heroStatus').textContent='Sincronizando';
+    document.getElementById('heroPeriod').textContent=MESES[state.month-1]+' '+state.year;
+    document.getElementById('indList').innerHTML='<div class="empty">Sincronizando el estado compartido de Firebase…</div>';
+    renderAnnualTable();
+    return;
+  }
   if(isFutureMonth(state.year,state.month)){
     document.getElementById('heroRing').textContent='--';
     document.getElementById('heroRing').className='ring';
@@ -3839,7 +3876,10 @@ function renderTendenciaAllYears(){
           <div class="cq-trend-current ${currentZone}"><span>${latestYear}</span><b>${currentLabel}</b></div>
         </div>
       </div>
-      <div class="cq-trend-stats"><div class="cq-trend-stat mode"><span>Cálculo por año</span><b>${cqTrendYearModeLabel(ind)}</b></div></div>
+      <div class="cq-trend-stats">
+        <div class="cq-trend-stat mode"><span>${cqTrendYearModeLabel(ind)}</span><b>${currentLabel}</b></div>
+        <div class="cq-trend-stat avg"><span>Año</span><b>${latestYear}</b></div>
+      </div>
       <div class="cq-trend-canvas"><canvas></canvas></div>`;
     wrap.appendChild(card);
     const canvas=card.querySelector('canvas');
@@ -4437,6 +4477,9 @@ function renderAll(){
   if(document.getElementById('tab-presentacion') && document.getElementById('tab-presentacion').classList.contains('active')) renderPresentacion();
 }
 
+// Online: el Índice CQ espera el estado compartido para no mostrar primero
+// un valor local viejo y después otro valor de Firebase.
+window.__cqFinDataReady = !navigator.onLine;
 loadState();
 
 // Al abrir la app, mostrar siempre el mes y año actuales.
@@ -4634,8 +4677,10 @@ async function start(){
     if(snap.exists()){
       if(typeof window.__cqFinApplyRemote==="function")window.__cqFinApplyRemote(snap.data()||{});
     }else{
+      window.__cqFinDataReady=true;
       const local=typeof window.__cqFinGetSnapshot==="function"?window.__cqFinGetSnapshot():{};
       await window.__cqFinFirebaseSave(local);
+      if(typeof renderAll==="function")renderAll();
     }
     if(unsub)unsub();
     unsub=onSnapshot(ref,s=>{
@@ -4644,7 +4689,12 @@ async function start(){
       status("Firebase · sincronizado","ok");
     },e=>{console.warn(e);status("Firebase · error","err")});
     status("Firebase · sincronizado","ok");
-  }catch(e){console.warn("Financieros Firebase",e);status("Firebase · error","err")}
+  }catch(e){
+    console.warn("Financieros Firebase",e);
+    window.__cqFinDataReady=true;
+    if(typeof renderAll==="function")renderAll();
+    status("Firebase · error","err");
+  }
 }
 
 document.addEventListener("cq-auth-ready",start,{once:true});
