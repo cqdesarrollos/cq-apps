@@ -2529,6 +2529,28 @@ window.cqRevealInitialScreen=function(){
 .cq-fin-share-brand{font-weight:800;color:#557560}
 </style>
 
+
+<style id="cq-ajuste-porcentajes-decimales-v1">
+/* Porcentaje: un poco más chico para que entren cómodamente dos decimales. */
+@media (min-width:701px){
+  #view-avances .semana-items.open .avance-input{
+    font-size:15px!important;
+    letter-spacing:-.03em!important;
+  }
+  #view-avances .semana-items.open .avance-pct-sign{
+    font-size:13px!important;
+  }
+}
+@media (max-width:700px){
+  #view-avances .semana-items.open .avance-input{
+    font-size:14px!important;
+    letter-spacing:-.03em!important;
+  }
+  #view-avances .semana-items.open .avance-pct-sign{
+    font-size:11px!important;
+  }
+}
+</style>
 </head>
 <body>
 
@@ -3757,6 +3779,10 @@ function createStateFromLatestTemplate(newMeta,tipo){
       nuevo.acuerdoComentario=ref.acuerdoComentario||'';
       nuevo.itemsCQ=deepClone(ref.itemsCQ||nuevo.itemsCQ);
     }
+    // Conserva la capacidad de certificar desde el primer avance: toma sólo
+    // el perfil monetario de una referencia y lo adapta a las 24 semanas nuevas.
+    const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
+    if(perfilFin) cqAplicarPerfilFinancieroPlatea(nuevo,metaConVersion,perfilFin);
     return normalizeState(nuevo,metaConVersion);
   }
 
@@ -3889,6 +3915,12 @@ function saveEditObra() {
     obrasConfig.push(newMeta);
     estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
     estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
+    // El acuerdo definitivo se conoce recién acá. Reaplica el perfil financiero
+    // escalado a ese acuerdo para que la obra nazca lista para certificar.
+    if(tipoPlantas===2 && tipoCimentacion==='platea'){
+      const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
+      if(perfilFin) cqAplicarPerfilFinancieroPlatea(estadosObras[newMeta.id],newMeta,perfilFin);
+    }
     curObraId = newMeta.id;
     state = estadosObras[curObraId];
     persistConfig();
@@ -4330,6 +4362,127 @@ const SEMANAS_2P_PLATEA_CRONOGRAMA = [
     {desc:"Carpeta de frente",avance:0,monto:0},{desc:"Terminaciones",avance:0,monto:0},{desc:"Conforme de obra",avance:0,monto:0}
   ]}
 ];
+
+// ─── PERFIL FINANCIERO PARA EL CRONOGRAMA FIJO DE PLATEA ──────────────
+// El cronograma nuevo cambia tareas/semanas, pero debe conservar la lógica
+// financiera existente: una tarea con importe > 0 genera monto a certificar.
+// Para no copiar nombres/orden de otra obra, se toma únicamente el TOTAL por
+// semana de una referencia 2P con valores y se redistribuye entre las tareas
+// del cronograma nuevo. Si la referencia tenía más/menos semanas, se comprime
+// proporcionalmente manteniendo exactamente el total asignado.
+function cqCapturarPerfilFinancieroObra(meta){
+  if(!meta || !estadosObras || !estadosObras[meta.id]) return null;
+  const originalState=state;
+  const originalCur=curObraId;
+  try{
+    state=deepClone(estadosObras[meta.id]);
+    curObraId=meta.id;
+    const weeks=getSemanas();
+    const weekly=weeks.map(sem=>{
+      let total=0;
+      getItems(sem.num).forEach((it,i)=>{
+        if(esNombreConforme(it && it.desc)) return;
+        total += Math.max(0, Number(getMontoRaw(sem.num,i)) || 0);
+      });
+      return Math.round(total);
+    });
+    return {
+      weekly,
+      total:weekly.reduce((a,b)=>a+b,0),
+      acuerdo:Number(state.acuerdo)||0,
+      meta
+    };
+  }catch(e){
+    console.warn('No se pudo leer perfil financiero de referencia',e);
+    return null;
+  }finally{
+    state=originalState;
+    curObraId=originalCur;
+  }
+}
+function cqBuscarReferenciaFinanciera2P(excluirId){
+  const todas=[...obrasConfig].reverse().filter(o=>
+    o && o.id!==excluirId && estadosObras[o.id]
+  );
+  const candidatas=todas.filter(o=>Number(o.tipoPlantas)===2);
+  // Prioridad: 2P con platea → otra 2P → cualquier obra con importes reales.
+  // El último nivel permite que la PRIMERA obra 2P con platea también nazca
+  // certificable, tomando sólo el perfil porcentual de pagos de una obra real.
+  const ordenadas=[
+    ...candidatas.filter(o=>getObraCimentacion(o)==='platea'),
+    ...candidatas.filter(o=>getObraCimentacion(o)!=='platea'),
+    ...todas.filter(o=>Number(o.tipoPlantas)!==2)
+  ];
+  const vistos=new Set();
+  for(const meta of ordenadas){
+    if(vistos.has(meta.id)) continue;
+    vistos.add(meta.id);
+    const perfil=cqCapturarPerfilFinancieroObra(meta);
+    if(perfil && perfil.total>0.5) return perfil;
+  }
+  return null;
+}
+function cqAplicarPerfilFinancieroPlatea(target,targetMeta,perfil){
+  if(!target || !perfil || !(perfil.total>0.5)) return false;
+  const semanas=getBaseSemanasForProject(target,targetMeta)
+    .filter(s=>Number(s.num)>=1 && Number(s.num)<=24);
+  if(!semanas.length) return false;
+  const targetAcuerdo=Math.max(0,Number(target.acuerdo)||0);
+  const refAcuerdo=Math.max(0,Number(perfil.acuerdo)||0);
+  const escala=(targetAcuerdo>0 && refAcuerdo>0) ? (targetAcuerdo/refAcuerdo) : 1;
+  const src=(perfil.weekly||[]).map(v=>Math.max(0,Math.round((Number(v)||0)*escala)));
+  if(!src.length) return false;
+
+  const buckets=Array(semanas.length).fill(0);
+  src.forEach((m,j)=>{
+    const dest=Math.min(semanas.length-1, Math.floor(j*semanas.length/src.length));
+    buckets[dest]+=m;
+  });
+
+  if(!target.montos || typeof target.montos!=='object') target.montos={};
+  semanas.forEach((sem,si)=>{
+    const normales=(sem.items||[])
+      .map((it,i)=>({it,i}))
+      .filter(x=>!esNombreConforme(x.it && x.it.desc));
+    if(!normales.length) return;
+    const total=Math.max(0,Math.round(buckets[si]||0));
+    const base=Math.floor(total/normales.length);
+    let resto=total-(base*normales.length);
+    normales.forEach((x,pos)=>{
+      target.montos[`${sem.num}-m-${x.i}`]=base+(pos<resto?1:0);
+    });
+    target.montos[`${sem.num}-pagoMax`]=total;
+  });
+  target._plateaFinanceSeededV1=true;
+  target._plateaFinanceSource=perfil.meta?.id||'';
+  return true;
+}
+function cqAsegurarImportesCronogramaPlatea(){
+  const meta=currentObra && currentObra();
+  if(!state || !meta) return false;
+  const version=state.plantillaVersion || meta.plantillaVersion || '';
+  const cim=normalizeCimentacion2P(state.tipoCimentacion || meta.tipoCimentacion || '');
+  if(version!==PLANTILLA_2P_PLATEA_EXCEL || cim!=='platea') return false;
+
+  // Si ya existen importes reales, jamás los toca.
+  let totalActual=0;
+  getSemanas().forEach(sem=>getItems(sem.num).forEach((it,i)=>{
+    if(!esNombreConforme(it && it.desc)) totalActual+=Math.max(0,Number(getMontoRaw(sem.num,i))||0);
+  }));
+  if(totalActual>0.5){
+    state._plateaFinanceSeededV1=true;
+    return false;
+  }
+
+  const perfil=cqBuscarReferenciaFinanciera2P(meta.id);
+  if(!perfil) return false;
+  const ok=cqAplicarPerfilFinancieroPlatea(state,meta,perfil);
+  if(ok){
+    try{ persist(); }catch(e){ console.warn('No se pudo persistir perfil financiero platea',e); }
+  }
+  return ok;
+}
+
 function getBaseSemanasForProject(st,meta){
   const tipo=Number(st?.tipoPlantas || meta?.tipoPlantas || 1)===2?2:1;
   if(tipo===2){
@@ -5278,6 +5431,9 @@ function semanaTienePendiente(snum){
 }
 
 function renderSemanas(){
+  // Migra también obras de prueba creadas con la primera versión del cronograma
+  // fijo, donde todas las tareas habían quedado accidentalmente en $0.
+  cqAsegurarImportesCronogramaPlatea();
   const cont=document.getElementById('semanas-container');
   const semanasActuales=getSemanas();
   const globalInput=document.getElementById('all-weeks-total');
