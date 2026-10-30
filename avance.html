@@ -209,6 +209,21 @@ html,body{min-height:100%;background:#F7F6F3;color:#1C2B22;font-family:'Space Gr
 .task-mini:hover{background:#E8F4EE;border-color:#9ACFB4}
 .task-mini.del{border-color:#E4AAAA;background:transparent;color:#C0392B}
 .task-mini.del:hover{background:#FAE8E8}
+
+/* Gestión del título de cada semana: visible también en celular */
+.semana-title-wrap{display:flex;align-items:center;gap:7px;min-width:0;flex:1}
+.semana-title-wrap .semana-etapa{min-width:0;flex:1}
+.week-title-actions{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto}
+.week-action-btn{width:25px;height:25px;min-width:25px;border:1px solid #CFE0D2;border-radius:7px;background:#F7FAF7;color:#315B45;display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer;font-size:12px;line-height:1}
+.week-action-btn:hover{background:#E8F4EE;border-color:#9ACFB4}
+.week-action-btn.delete{border-color:#E8BDBD;color:#B42318;background:#FFF9F9}
+.week-action-btn.delete:hover{background:#FAE8E8;border-color:#D99898}
+@media(max-width:700px){
+  .semana-title-wrap{gap:4px!important;overflow:hidden!important}
+  .semana-title-wrap .semana-etapa{font-size:10px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+  .week-title-actions{gap:2px!important}
+  .week-action-btn{display:inline-flex!important;width:20px!important;height:20px!important;min-width:20px!important;border-radius:6px!important;font-size:10px!important}
+}
 .add-task-row{padding:10px 16px;background:#F8FBF8;border-top:1px solid #EEF4EE;display:flex;justify-content:flex-end}
 
 .hint{background:#E8F4EE;border:1px solid #9ACFB4;border-radius:7px;padding:10px 13px;font-size:12px;color:#3D5A42;margin-bottom:13px;line-height:1.5}
@@ -2433,6 +2448,123 @@ window.cqRevealInitialScreen=function(){
   document.documentElement.classList.remove('cq-app-booting');
 };
 </script>
+
+<style id="cq-fix-conforme-auto-centrado-v1">
+/* Conforme: importe centrado como los demás y leyenda secundaria debajo. */
+#view-avances .semana-items.open .item-monto-total.conforme-auto{
+  position:relative!important;
+  justify-content:center!important;
+  padding-bottom:15px!important;
+}
+#view-avances .semana-items.open .item-monto-total.conforme-auto::after{
+  content:none!important;
+  display:none!important;
+}
+#view-avances .semana-items.open .item-monto-total.conforme-auto .conforme-auto-label{
+  position:absolute!important;
+  left:50%!important;
+  bottom:3px!important;
+  transform:translateX(-50%)!important;
+  width:max-content!important;
+  max-width:95%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  font-family:'Space Grotesk',sans-serif!important;
+  font-size:7px!important;
+  line-height:1!important;
+  font-weight:600!important;
+  color:#8A9B91!important;
+  letter-spacing:.01em!important;
+  white-space:nowrap!important;
+}
+@media(min-width:761px){
+  #view-avances .semana-items.open .item-monto-total.conforme-auto{padding-bottom:18px!important;}
+  #view-avances .semana-items.open .item-monto-total.conforme-auto .conforme-auto-label{font-size:9px!important;bottom:4px!important;}
+}
+</style>
+
+<style id="cq-finanzas-share-img-v1">
+/* Compartir Detalle por semana como imagen, independiente del ancho del teléfono */
+.fin-share-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fin-share-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;border:1px solid #9ACFB4;background:#E8F4EE;color:#1C3D35;border-radius:8px;padding:6px 10px;font:700 11px 'Space Grotesk',sans-serif;cursor:pointer}
+.fin-share-btn:hover{background:#D9EEDF;border-color:#76B995}
+.fin-share-btn:disabled{opacity:.55;cursor:wait}
+@media(max-width:700px){
+  .fin-share-btn{padding:5px 8px!important;font-size:8px!important;border-radius:6px!important;gap:4px!important}
+}
+
+/* Esta hoja vive fuera de pantalla y se usa sólo para generar el PNG de WhatsApp. */
+.cq-fin-share-sheet{position:fixed;left:-20000px;top:0;width:1200px;box-sizing:border-box;background:#F7F8F5;color:#1C2B22;padding:44px 48px 52px;font-family:Arial,Helvetica,sans-serif;z-index:-1}
+.cq-fin-share-sheet *{box-sizing:border-box}
+.cq-fin-share-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:26px}
+.cq-fin-share-kicker{font-size:18px;line-height:1;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#6D9277;margin-bottom:8px}
+.cq-fin-share-title{font-size:38px;line-height:1.05;font-weight:900;color:#173F35}
+.cq-fin-share-sub{font-size:20px;line-height:1.25;font-weight:700;color:#496653;margin-top:9px}
+.cq-fin-share-date{font-size:16px;color:#78907E;text-align:right;white-space:nowrap}
+.cq-fin-share-card{background:#fff;border:1px solid #D5E3D8;border-radius:18px;overflow:hidden;box-shadow:0 3px 14px rgba(28,61,53,.07)}
+.cq-fin-share-table{width:100%;table-layout:fixed;border-collapse:collapse}
+.cq-fin-share-table col:nth-child(1){width:7%}
+.cq-fin-share-table col:nth-child(2){width:29%}
+.cq-fin-share-table col:nth-child(3){width:17%}
+.cq-fin-share-table col:nth-child(4){width:17%}
+.cq-fin-share-table col:nth-child(5){width:16%}
+.cq-fin-share-table col:nth-child(6){width:14%}
+.cq-fin-share-table th{height:58px;padding:0 15px;background:#EEF5F0;border-bottom:1px solid #D4E2D7;color:#688672;font-size:16px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;text-align:left;vertical-align:middle}
+.cq-fin-share-table th.num,.cq-fin-share-table td.num{text-align:right}
+.cq-fin-share-table td{padding:13px 15px;border-bottom:1px solid #E7EEE9;font-size:19px;line-height:1.22;vertical-align:middle;background:#fff}
+.cq-fin-share-table tbody tr:nth-child(even) td{background:#FBFCFA}
+.cq-fin-share-table td.sem{font-size:17px;font-weight:800;color:#93AA98}
+.cq-fin-share-table td.etapa{font-weight:700;color:#496653;overflow-wrap:anywhere}
+.cq-fin-share-table td.money{font-family:'Courier New',monospace;font-size:18px;font-weight:700;white-space:nowrap;color:#28483A}
+.cq-fin-share-table td.dev{color:#16704D}
+.cq-fin-share-table td.saldo{color:#849B89}
+.cq-fin-share-progress{display:flex;align-items:center;gap:10px}
+.cq-fin-share-pct{min-width:47px;font-family:'Courier New',monospace;font-size:19px;font-weight:900;color:#16704D}
+.cq-fin-share-bar{height:10px;flex:1;background:#DEE9E1;border-radius:999px;overflow:hidden}
+.cq-fin-share-bar>span{display:block;height:100%;background:#2E7D5E;border-radius:999px}
+.cq-fin-share-table tfoot td{padding:16px 15px;background:#EAF3ED!important;border-top:3px solid #2E7D5E;border-bottom:none;font-weight:900;color:#173F35}
+.cq-fin-share-table tfoot td.etapa{font-size:18px;letter-spacing:.04em}
+.cq-fin-share-table tfoot td.money{font-size:18px;color:#173F35}
+.cq-fin-share-foot{display:flex;justify-content:space-between;gap:18px;margin-top:18px;font-size:15px;color:#829788}
+.cq-fin-share-brand{font-weight:800;color:#557560}
+</style>
+
+
+<style id="cq-ajuste-porcentajes-decimales-v1">
+/* Porcentaje: un poco más chico para que entren cómodamente dos decimales. */
+@media (min-width:701px){
+  #view-avances .semana-items.open .avance-input{
+    font-size:15px!important;
+    letter-spacing:-.03em!important;
+  }
+  #view-avances .semana-items.open .avance-pct-sign{
+    font-size:13px!important;
+  }
+}
+@media (max-width:700px){
+  #view-avances .semana-items.open .avance-input{
+    font-size:14px!important;
+    letter-spacing:-.03em!important;
+  }
+  #view-avances .semana-items.open .avance-pct-sign{
+    font-size:11px!important;
+  }
+}
+</style>
+
+<style id="cq-ajuste-porcentaje-tablet-2dec">
+/* Ajuste solicitado: SOLO TABLET. En teléfono se conserva el tamaño actual. */
+@media (min-width:701px) and (max-width:1700px) and (pointer:coarse){
+  #view-avances .semana-items.open .avance-input{
+    width:58px!important;
+    font-size:15px!important;
+    letter-spacing:-.025em!important;
+  }
+  #view-avances .semana-items.open .avance-pct-sign{
+    font-size:14px!important;
+  }
+}
+</style>
 </head>
 <body>
 
@@ -2605,6 +2737,21 @@ window.cqRevealInitialScreen=function(){
         <button class="btn-sm btn-danger-sm obra-icon-btn uncheck" onclick="marcarTodo(0)" title="Restaurar sin borrar certificados" aria-label="Restaurar sin borrar certificados">⊘</button>
       </span>
     </div>
+    <div class="all-weeks-value-bar collapsed" id="all-weeks-value-bar" onclick="event.stopPropagation()">
+      <button type="button" class="all-weeks-value-toggle" id="all-weeks-value-toggle" onclick="event.stopPropagation();toggleAllWeeksValuePanel()" aria-expanded="false" aria-controls="all-weeks-value-body">
+        <span class="all-weeks-toggle-left"><span class="all-weeks-toggle-icon">$</span><span>Valor para todas las semanas</span></span>
+        <span class="all-weeks-toggle-chevron" id="all-weeks-value-chevron">▼</span>
+      </button>
+      <div class="all-weeks-value-body" id="all-weeks-value-body">
+        <div class="all-weeks-value-copy">
+          <span class="all-weeks-value-help">Asigna el mismo total a cada semana y lo divide por igual entre sus tareas. Después podés modificar cualquier tarea a mano.</span>
+        </div>
+        <div class="all-weeks-value-controls">
+          <div class="all-weeks-value-input-wrap"><span>$</span><input id="all-weeks-total" class="all-weeks-value-input" type="number" inputmode="numeric" min="0" step="1" placeholder="1350000" onfocus="this.select()" onkeydown="onAllWeeksTotalKeydown(event)"></div>
+          <button type="button" class="all-weeks-value-apply" onclick="event.stopPropagation();aplicarValorTodasSemanas()">Aplicar a todas</button>
+        </div>
+      </div>
+    </div>
     <div id="semanas-container"></div>
   </div>
 </div>
@@ -2653,7 +2800,10 @@ window.cqRevealInitialScreen=function(){
     <div class="fin-card" id="card-cq" style="border-left:4px solid #2E7D5E"></div>
 
     <!-- TABLA SEMANAS -->
-    <div class="section-title" style="margin-top:20px">Detalle por semana</div>
+    <div class="section-title fin-share-title-row" style="margin-top:20px">
+      <span>Detalle por semana</span>
+      <button type="button" class="fin-share-btn" id="fin-share-btn" onclick="compartirDetalleSemanasImagen()" title="Compartir el detalle por semana como imagen">↗ WhatsApp</button>
+    </div>
     <div style="background:#fff;border:1px solid #DDE8DE;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(28,61,53,.05)">
       <table class="pagos-table" id="pagos-table"></table>
     </div>
@@ -2923,28 +3073,64 @@ async function loadAllForBackup(){
 function getSemanas() {
   const hidden = state.hiddenWeeks || [];
   const overrides = state.weekOverrides || {};
-  const base = SEMANAS
+  const base = getBaseSemanas(state, currentObra())
     .filter(s => !hidden.includes(s.num))
     .map(s => ({ ...s, ...(overrides[s.num] || {}) }));
   const custom = (state.customWeeks || []);
-  return [...base, ...custom].sort((a,b)=>a.num-b.num);
+  const raw = [...base, ...custom];
+
+  // El ID interno de cada semana no cambia nunca. El orden visible se guarda
+  // aparte para poder mover/renumerar semanas sin romper avances/certificados.
+  const ids = raw.map(s=>Number(s.num));
+  let order = Array.isArray(state.weekOrder) ? state.weekOrder.map(Number).filter(id=>ids.includes(id)) : [];
+  ids.forEach(id=>{ if(!order.includes(id)) order.push(id); });
+  state.weekOrder = order;
+  const pos = new Map(order.map((id,i)=>[id,i]));
+  return raw
+    .sort((a,b)=>(pos.get(Number(a.num))??9999)-(pos.get(Number(b.num))??9999))
+    .map((s,i)=>({ ...s, displayNum:i+1 }));
 }
 function getSemanaByNum(snum) {
-  return getSemanas().find(x => x.num === snum);
+  return getSemanas().find(x => Number(x.num) === Number(snum));
+}
+function getDisplayWeekNum(snum) {
+  const s = getSemanaByNum(snum);
+  return s ? (s.displayNum || snum) : snum;
+}
+function moveSemanaToPosition(snum, targetPos) {
+  const semanas = getSemanas();
+  const ids = semanas.map(s=>Number(s.num));
+  const id = Number(snum);
+  const from = ids.indexOf(id);
+  if(from < 0) return;
+  const max = ids.length;
+  const to = Math.max(0, Math.min(max-1, Number(targetPos)-1));
+  ids.splice(from,1);
+  ids.splice(to,0,id);
+  state.weekOrder = ids;
 }
 function editSemana(snum) {
   const s = getSemanaByNum(snum);
   if (!s) return;
-  const nuevoNombre = prompt('Editar nombre del rubro/semana:', s.etapa || '');
+  const actual = s.displayNum || getDisplayWeekNum(snum);
+  const posRaw = prompt('Número / posición de la semana (1 a ' + getSemanas().length + '):', actual);
+  if (posRaw === null) return;
+  const nuevaPos = parseInt(posRaw,10);
+  if (!Number.isFinite(nuevaPos) || nuevaPos < 1 || nuevaPos > getSemanas().length) {
+    alert('Ingresá un número de semana válido.'); return;
+  }
+  const nuevoNombre = prompt('Editar título de la semana S' + nuevaPos + ':', s.etapa || '');
   if (nuevoNombre === null) return;
   const etapa = nuevoNombre.trim();
-  if (!etapa) { alert('Ingresá un nombre válido.'); return; }
+  if (!etapa) { alert('Ingresá un título válido.'); return; }
+
   if (s.customWeek) {
-    state.customWeeks = (state.customWeeks || []).map(w => w.num === snum ? { ...w, etapa } : w);
+    state.customWeeks = (state.customWeeks || []).map(w => Number(w.num) === Number(snum) ? { ...w, etapa } : w);
   } else {
     if (!state.weekOverrides) state.weekOverrides = {};
     state.weekOverrides[snum] = { ...(state.weekOverrides[snum] || {}), etapa };
   }
+  moveSemanaToPosition(snum, nuevaPos);
   persist();
   renderSemanas();
   renderKPIs();
@@ -2953,10 +3139,25 @@ function editSemana(snum) {
   if(currentScreen==='constructor' && currentConstructorId) openConstructor(currentConstructorId);
 }
 
+function semanaTieneCertificacion(snum) {
+  try {
+    const certs = (typeof getCertificados === 'function') ? getCertificados() : (state.certificados || []);
+    if ((certs || []).some(c => (c.detalleItems || []).some(it => Number(it.snum) === Number(snum)))) return true;
+    const locks = state.certLocks || {};
+    return Object.keys(locks).some(k => String(k).startsWith(String(snum) + '-') && Number(locks[k]) > 0);
+  } catch(e) {
+    return false;
+  }
+}
+
 function deleteSemana(snum) {
   const s = getSemanaByNum(snum);
   if (!s) return;
-  const ok = confirm('¿Eliminar el rubro/semana "' + s.etapa + '" completo?\n\nSe ocultará del avance y no sumará más al total.');
+  if (semanaTieneCertificacion(snum)) {
+    alert('La semana S' + getDisplayWeekNum(snum) + ' tiene avances ya certificados. Para evitar inconsistencias, eliminá primero el/los certificados relacionados y luego eliminá la semana.');
+    return;
+  }
+  const ok = confirm('¿Eliminar la semana S' + getDisplayWeekNum(snum) + ' · "' + s.etapa + '" completa?\n\nSe quitarán sus tareas, avances e importes de esta obra. Las semanas siguientes se renumerarán automáticamente.');
   if (!ok) return;
   if (s.customWeek) {
     state.customWeeks = (state.customWeeks || []).filter(w => w.num !== snum);
@@ -2965,6 +3166,7 @@ function deleteSemana(snum) {
     if (!state.hiddenWeeks) state.hiddenWeeks = [];
     if (!state.hiddenWeeks.includes(snum)) state.hiddenWeeks.push(snum);
   }
+  if (Array.isArray(state.weekOrder)) state.weekOrder = state.weekOrder.map(Number).filter(id=>id!==Number(snum));
   if (state.weekOverrides) delete state.weekOverrides[snum];
   if (state.customTasks) delete state.customTasks[snum];
   Object.keys(state.items || {}).forEach(k => { if (String(k).startsWith(snum + '-')) delete state.items[k]; });
@@ -3018,25 +3220,141 @@ function getItems(snum) {
   return [...base, ...extra];
 }
 function getTask(snum, idx) { return getItems(snum)[idx]; }
+// Identidad estable de tarea: no depende de la posición visible.
+// Base: "semana-indiceOriginal" · Extra: "semana-c-indiceExtra".
+function taskStateKey(snum, idx, taskRef){
+  const it = taskRef || getTask(snum, idx);
+  if(it && typeof it.key === 'string' && it.key) return it.key;
+  return `${snum}-${idx}`;
+}
+function normalizarNombreTarea(v){
+  return String(v || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().trim();
+}
+function esNombreConforme(v){
+  const n=normalizarNombreTarea(v);
+  return n === 'conforme de obra' || n.includes('conforme de obra') || n.includes('conforme a obra');
+}
+function findConformeTaskRef(){
+  for(const sem of getSemanas()){
+    const items=getItems(sem.num);
+    for(let i=0;i<items.length;i++){
+      if(esNombreConforme(items[i] && items[i].desc)) return {semNum:sem.num,idx:i,item:items[i]};
+    }
+  }
+  // Fallback histórico para obras viejas.
+  const sem23=getSemanaByNum(23);
+  const items23=sem23 ? getItems(23) : [];
+  const idx=items23.findIndex(it=>normalizarNombreTarea(it && it.desc).includes('conforme'));
+  return idx>=0 ? {semNum:23,idx,item:items23[idx]} : null;
+}
+// Claves estables de importes.
+// IMPORTANTE: las tareas base y las tareas agregadas manualmente NO pueden compartir
+// la misma clave posicional. Si se elimina una tarea base, el índice visible cambia y
+// un extra podía terminar leyendo el importe de otra tarea (ej. un extra de $100.000
+// podía computarse por un importe viejo de la misma posición visible).
+function getCustomTaskIndex(taskRef) {
+  const it = taskRef;
+  if (!it || typeof it.key !== 'string' || !it.key.includes('-c-')) return -1;
+  const n = parseInt(it.key.split('-c-')[1], 10);
+  return Number.isFinite(n) ? n : -1;
+}
+function montoStateKey(snum, idx, taskRef) {
+  const it = taskRef || getTask(snum, idx);
+  if (it && it.base && typeof it.key === 'string') {
+    const prefix = String(snum) + '-';
+    if (it.key.startsWith(prefix) && !it.key.includes('-c-')) {
+      const originalIdx = it.key.slice(prefix.length);
+      if (/^\d+$/.test(originalIdx)) return snum + '-m-' + originalIdx;
+    }
+  }
+  const cidx = getCustomTaskIndex(it);
+  if (cidx >= 0) return snum + '-mc-' + cidx;
+  return snum + '-m-' + idx;
+}
+function getMontoRaw(snum, idx) {
+  const it = getTask(snum, idx);
+  if (!it) return 0;
+
+  // Los extras usan como fuente principal su propio monto guardado en customTasks.
+  // NO se consulta la vieja clave "semana-m-indiceVisible" porque puede pertenecer
+  // a una tarea base y fue la causa de montos cruzados en obras con tareas eliminadas.
+  if (!it.base) {
+    const cidx = getCustomTaskIndex(it);
+    const customKey = cidx >= 0 ? (snum + '-mc-' + cidx) : null;
+    if (customKey && state.montos && state.montos[customKey] != null) {
+      return Number(state.montos[customKey]) || 0;
+    }
+    return Number(it.monto) || 0;
+  }
+
+  const key = montoStateKey(snum, idx, it);
+  if (state.montos && state.montos[key] != null) return Number(state.montos[key]) || 0;
+  return Number(it.monto) || 0;
+}
+function setMontoTask(snum, idx, monto, taskRef) {
+  const it = taskRef || getTask(snum, idx);
+  const valor = Math.round(Number(monto) || 0);
+  if (!it) return;
+
+  if (!it.base) {
+    const cidx = getCustomTaskIndex(it);
+    if (cidx >= 0) {
+      if (!state.customTasks) state.customTasks = {};
+      const arr = state.customTasks[snum] || [];
+      if (arr[cidx]) arr[cidx] = { ...arr[cidx], monto: valor };
+      state.customTasks[snum] = arr;
+      // Limpiar sólo la clave exclusiva nueva del extra. No borrar claves legacy
+      // posicionales porque pueden corresponder a una tarea base.
+      if (state.montos) delete state.montos[snum + '-mc-' + cidx];
+      return;
+    }
+  }
+
+  if (!state.montos) state.montos = {};
+  state.montos[montoStateKey(snum, idx, it)] = valor;
+}
+function calcConformeBase(){
+  const ref=findConformeTaskRef();
+  const acuerdo=Number(state && state.acuerdo) || 0;
+  let asignado=0;
+  getSemanas().forEach(sem=>{
+    getItems(sem.num).forEach((it,i)=>{
+      if(ref && ref.semNum===sem.num && ref.idx===i) return;
+      asignado += getMontoRaw(sem.num,i);
+    });
+  });
+  return { ref, acuerdo, asignado, montoConforme: acuerdo - asignado };
+}
 function recalcSemanaTotal(snum) {
   if (!state.montos) state.montos = {};
   state.montos[snum + '-pagoMax'] = getItems(snum).reduce((sum, it, i) => sum + getMonto(snum, i), 0);
 }
 function getMonto(snum, idx) {
-  const key = snum + '-m-' + idx;
-  if (state.montos && state.montos[key] != null) return state.montos[key];
-  const it = getTask(snum, idx);
-  return it ? (it.monto || 0) : 0;
+  const base=calcConformeBase();
+  if(base.ref && base.ref.semNum===snum && base.ref.idx===idx) return base.montoConforme;
+  return getMontoRaw(snum, idx);
+}
+function getMontoSemanaAsignable(snum){
+  return getItems(snum).reduce((sum,it,i)=>sum+(isConformeTask(snum,i)?0:getMontoRaw(snum,i)),0);
+}
+function getTareasAsignables(snum){
+  return getItems(snum).map((it,i)=>({it,i})).filter(x=>!isConformeTask(snum,x.i));
 }
 function editTarea(snum, idx) {
   const it = getTask(snum, idx);
   if (!it) return;
   const desc = prompt('Nombre de la tarea/rubro:', it.desc || '');
   if (desc === null) return;
-  const val = prompt('Importe para "' + desc.trim() + '":', getMonto(snum, idx));
-  if (val === null) return;
-  const monto = parseFloat(String(val).replace(/[^0-9.]/g, ''));
-  if (!desc.trim() || isNaN(monto) || monto < 0) { alert('Completá nombre e importe válido.'); return; }
+  const esConforme = isConformeTask(snum, idx);
+  let monto = getMonto(snum, idx);
+  if(!esConforme){
+    const val = prompt('Importe para "' + desc.trim() + '":', getMonto(snum, idx));
+    if (val === null) return;
+    monto = parseFloat(String(val).replace(/[^0-9.]/g, ''));
+  }
+  if (!desc.trim() || isNaN(monto) || (!esConforme && monto < 0)) { alert('Completá nombre e importe válido.'); return; }
   let comentario = it.comentario || '';
   if (!it.base) {
     const c = prompt('Comentario del extra (opcional):', comentario);
@@ -3045,7 +3363,7 @@ function editTarea(snum, idx) {
   }
   if (it.base) {
     if (!state.taskOverrides) state.taskOverrides = {};
-    state.taskOverrides[it.key] = { ...(state.taskOverrides[it.key] || {}), desc: desc.trim(), monto };
+    state.taskOverrides[it.key] = { ...(state.taskOverrides[it.key] || {}), desc: desc.trim(), ...(!esConforme?{monto}:{}) };
   } else {
     if (!state.customTasks) state.customTasks = {};
     const arr = state.customTasks[snum] || [];
@@ -3053,14 +3371,122 @@ function editTarea(snum, idx) {
     arr[cidx] = { ...arr[cidx], desc: desc.trim(), monto, comentario };
     state.customTasks[snum] = arr;
   }
-  if (state.montos) delete state.montos[snum + '-m-' + idx];
+  if (state.montos) delete state.montos[montoStateKey(snum, idx, it)];
   recalcSemanaTotal(snum);
   persist();
   renderSemanas();
   renderKPIs();
   if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
 }
-function editMonto(snum, idx) { editTarea(snum, idx); }
+function parseMontoFlexible(val) {
+  let s = String(val == null ? '' : val).trim().replace(/\s/g,'').replace(/\$/g,'');
+  if (!s) return NaN;
+  // Admite 1500000, 1.500.000, 1,500,000 y decimales simples.
+  if (s.includes(',') && s.includes('.')) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g,'').replace(',', '.');
+    else s = s.replace(/,/g,'');
+  } else if ((s.match(/\./g)||[]).length > 1) {
+    s = s.replace(/\./g,'');
+  } else if ((s.match(/,/g)||[]).length > 1) {
+    s = s.replace(/,/g,'');
+  } else if (s.includes(',')) {
+    const p=s.split(',');
+    s = (p[1] && p[1].length===3) ? p.join('') : p[0]+'.'+(p[1]||'');
+  } else if (s.includes('.')) {
+    const p=s.split('.');
+    if (p[1] && p[1].length===3) s=p.join('');
+  }
+  return Number(s.replace(/[^0-9.-]/g,''));
+}
+function editMonto(snum, idx) {
+  const it = getTask(snum, idx);
+  if (!it) return;
+  if(isConformeTask(snum,idx)){
+    alert('El importe de Conforme de obra se calcula automáticamente como saldo del acuerdo total menos todas las demás tareas. Modificá los importes de las otras semanas/tareas o el acuerdo total para cambiarlo.');
+    return;
+  }
+  const val = prompt('Importe de la tarea "' + (it.desc || '') + '":', Math.round(getMonto(snum, idx)).toString());
+  if (val === null) return;
+  const monto = parseMontoFlexible(val);
+  if (!Number.isFinite(monto) || monto < 0) { alert('Ingresá un importe válido.'); return; }
+  setMontoTask(snum, idx, monto, it);
+  recalcSemanaTotal(snum);
+  persist();
+  renderSemanas();
+  setTimeout(() => { const el=document.getElementById('si-'+snum); if(el && !el.classList.contains('open')) toggleSemana(snum); }, 30);
+  renderKPIs();
+  if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
+}
+function aplicarValorSemana(snum) {
+  const asignables = getTareasAsignables(snum);
+  if (!asignables.length) { alert('Esta semana no tiene tareas normales para distribuir. Conforme de obra se calcula automáticamente como saldo.'); return; }
+  const input = document.getElementById('week-total-' + snum);
+  if (!input) return;
+  const parsed = parseMontoFlexible(input.value);
+  if (!Number.isFinite(parsed) || parsed < 0) { alert('Ingresá un valor de semana válido.'); input.focus(); return; }
+
+  // Se trabaja en pesos enteros para que la suma visible de las tareas coincida exactamente con la semana.
+  const total = Math.round(parsed);
+  const hayCertificado = asignables.some(x => getLockedAv(snum,x.i) > 0);
+  const aviso = '¿Dividir ' + fmt(total) + ' entre ' + asignables.length + ' tarea' + (asignables.length===1?'':'s') + '?\n\nEsto reemplazará los importes actuales de las tareas de esta semana.' + (hayCertificado ? '\n\n⚠ Esta semana tiene avance certificado.' : '');
+  if (!confirm(aviso)) return;
+  const base = Math.floor(total / asignables.length);
+  let resto = total - (base * asignables.length);
+  asignables.forEach((x, pos) => {
+    setMontoTask(snum, x.i, base + (pos < resto ? 1 : 0), x.it);
+  });
+  recalcSemanaTotal(snum);
+  persist();
+  renderSemanas();
+  setTimeout(() => { const el=document.getElementById('si-'+snum); if(el && !el.classList.contains('open')) toggleSemana(snum); }, 30);
+  renderKPIs();
+  if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
+}
+function onWeekTotalKeydown(ev, snum){
+  if(ev.key==='Enter'){
+    ev.preventDefault();
+    aplicarValorSemana(snum);
+  }
+}
+function aplicarValorTodasSemanas(){
+  const input=document.getElementById('all-weeks-total');
+  if(!input) return;
+  const parsed=parseMontoFlexible(input.value);
+  if(!Number.isFinite(parsed) || parsed < 0){ alert('Ingresá un valor válido para todas las semanas.'); input.focus(); return; }
+  const total=Math.round(parsed);
+  const semanas=getSemanas().filter(s=>getTareasAsignables(s.num).length>0);
+  if(!semanas.length){ alert('No hay semanas con tareas normales para distribuir.'); return; }
+  const hayCertificado=semanas.some(s=>getTareasAsignables(s.num).some(x=>getLockedAv(s.num,x.i)>0));
+  const aviso='¿Asignar ' + fmt(total) + ' a cada una de las ' + semanas.length + ' semanas activas?\n\nEn cada semana el importe se dividirá por igual entre sus tareas normales. Conforme de obra queda fuera del reparto y se recalcula automáticamente como saldo del acuerdo.' + (hayCertificado ? '\n\n⚠ Hay semanas con avance certificado.' : '');
+  if(!confirm(aviso)) return;
+  semanas.forEach(sem=>{
+    const asignables=getTareasAsignables(sem.num);
+    const base=Math.floor(total/asignables.length);
+    let resto=total-(base*asignables.length);
+    asignables.forEach((x,pos)=>{ setMontoTask(sem.num, x.i, base+(pos<resto?1:0), x.it); });
+    recalcSemanaTotal(sem.num);
+  });
+  persist();
+  renderSemanas();
+  renderKPIs();
+  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
+  toggleAllWeeksValuePanel(false);
+}
+function toggleAllWeeksValuePanel(forceOpen){
+  const bar=document.getElementById('all-weeks-value-bar');
+  const btn=document.getElementById('all-weeks-value-toggle');
+  if(!bar) return;
+  const isOpen=!bar.classList.contains('collapsed');
+  const shouldOpen=(typeof forceOpen==='boolean') ? forceOpen : !isOpen;
+  bar.classList.toggle('collapsed', !shouldOpen);
+  if(btn) btn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+  if(shouldOpen){
+    setTimeout(()=>{ const input=document.getElementById('all-weeks-total'); if(input) input.focus(); },20);
+  }
+}
+function onAllWeeksTotalKeydown(ev){
+  if(ev.key==='Enter'){ ev.preventDefault(); aplicarValorTodasSemanas(); }
+}
 function addTarea(snum) {
   const desc = prompt('Nombre de la nueva tarea/rubro:\nEj: Pintura a cargo del constructor');
   if (desc === null) return;
@@ -3075,7 +3501,8 @@ function addTarea(snum) {
   if (!state.customTasks[snum]) state.customTasks[snum] = [];
   state.customTasks[snum].push({ desc: desc.trim(), avance:0, monto, comentario, custom:true });
   const newIdx = getItems(snum).length - 1;
-  state.items[`${snum}-${newIdx}`] = 0;
+  const newTask=getTask(snum,newIdx);
+  state.items[taskStateKey(snum,newIdx,newTask)] = 0;
   recalcSemanaTotal(snum);
   persist();
   renderSemanas();
@@ -3091,6 +3518,14 @@ function deleteTarea(snum, idx) {
     : '¿Eliminar esta tarea/rubro?';
   if (!confirm(aviso)) return;
 
+  // Conservar exactamente la vista actual: semanas abiertas y posición de la semana editada.
+  const semanasAbiertas = Array.from(document.querySelectorAll('.semana-items.open'))
+    .map(el => parseInt(String(el.id || '').replace('si-','')))
+    .filter(Number.isFinite);
+  const bloqueAntes = document.getElementById('sb-' + snum);
+  const topAntes = bloqueAntes ? bloqueAntes.getBoundingClientRect().top : null;
+  const scrollAntes = window.scrollY || window.pageYOffset || 0;
+
   if (it.base) {
     if (!state.taskOverrides) state.taskOverrides = {};
     state.taskOverrides[it.key] = { ...(state.taskOverrides[it.key] || {}), deleted:true };
@@ -3099,15 +3534,53 @@ function deleteTarea(snum, idx) {
     const cidx = parseInt(String(it.key).split('-c-')[1]);
     arr.splice(cidx, 1);
     state.customTasks[snum] = arr;
+    // Al compactar el array de extras, compactar también sus claves estables.
+    const shiftKeys=(obj,prefix)=>{
+      if(!obj || !Number.isFinite(cidx)) return;
+      delete obj[`${snum}-${prefix}${cidx}`];
+      for(let n=cidx+1;n<=arr.length;n++){
+        const oldK=`${snum}-${prefix}${n}`, newK=`${snum}-${prefix}${n-1}`;
+        if(obj[oldK] != null){ obj[newK]=obj[oldK]; delete obj[oldK]; }
+      }
+    };
+    shiftKeys(state.items,'c-');
+    shiftKeys(state.certLocks,'c-');
+    if(state.montos){
+      delete state.montos[`${snum}-mc-${cidx}`];
+      for(let n=cidx+1;n<=arr.length;n++){
+        const oldK=`${snum}-mc-${n}`, newK=`${snum}-mc-${n-1}`;
+        if(state.montos[oldK] != null){ state.montos[newK]=state.montos[oldK]; delete state.montos[oldK]; }
+      }
+    }
   }
 
-  if (state.items) delete state.items[`${snum}-${idx}`];
-  if (state.montos) delete state.montos[`${snum}-m-${idx}`];
+  if (it.base) {
+    if (state.items) delete state.items[taskStateKey(snum, idx, it)];
+    if (state.certLocks) delete state.certLocks[certKey(snum, idx, it)];
+    if (state.montos) delete state.montos[montoStateKey(snum, idx, it)];
+  }
   recalcSemanaTotal(snum);
   persist();
   renderSemanas();
   renderKPIs();
   if (document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
+
+  requestAnimationFrame(() => {
+    semanasAbiertas.forEach(num => {
+      const items = document.getElementById('si-' + num);
+      const chev = document.getElementById('chev-' + num);
+      if (items) items.classList.add('open');
+      if (chev) chev.classList.add('open');
+    });
+
+    const bloqueDespues = document.getElementById('sb-' + snum);
+    if (bloqueDespues && topAntes !== null) {
+      const delta = bloqueDespues.getBoundingClientRect().top - topAntes;
+      if (Math.abs(delta) > 0.5) window.scrollBy(0, delta);
+    } else {
+      window.scrollTo(0, scrollAntes);
+    }
+  });
 }
 
 function addSemana() {
@@ -3120,6 +3593,8 @@ function addSemana() {
 if (!state.weekOverrides) state.weekOverrides = {};
 if (!state.hiddenWeeks) state.hiddenWeeks = [];
   state.customWeeks.push({ num:snum, etapa:nombre, pagoMax:0, pctObra:0, items:[], customWeek:true });
+  if (!Array.isArray(state.weekOrder)) state.weekOrder = getSemanas().map(s=>Number(s.num));
+  if (!state.weekOrder.includes(Number(snum))) state.weekOrder.push(Number(snum));
   if (!state.customTasks) state.customTasks = {};
   state.customTasks[snum] = [];
   persist();
@@ -3129,9 +3604,16 @@ if (!state.hiddenWeeks) state.hiddenWeeks = [];
 }
 
 function marcarSemana(snum, val) {
-  getItems(snum).forEach((it,i) => { state.items[`${snum}-${i}`] = val; });
+  if(!state.items || typeof state.items!=='object') state.items={};
+  getItems(snum).forEach((it,i) => {
+    const min=(typeof getLockedAv==='function') ? Number(getLockedAv(snum,i)||0) : 0;
+    state.items[taskStateKey(snum,i,it)] = Math.max(min, Number(val)||0);
+  });
   persist();
-  refreshAll();
+  getItems(snum).forEach((it,i)=>updateItemRowUI(snum,i,getAv(snum,i)));
+  refreshSemana(snum);
+  renderKPIs();
+  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
 }
 
 function marcarTodo(val) {
@@ -3140,8 +3622,9 @@ function marcarTodo(val) {
     : '¿Restaurar los items no certificados? Los avances ya certificados se conservarán.';
   if (!confirm(msg)) return;
 
+  if(!state.items || typeof state.items!=='object') state.items={};
   getSemanas().forEach(s => getItems(s.num).forEach((it,i) => {
-    const key = `${s.num}-${i}`;
+    const key = taskStateKey(s.num,i,it);
     if (val === 1) {
       state.items[key] = 1;
     } else {
@@ -3180,6 +3663,8 @@ function openEditObra() {
   document.getElementById('eo-num').value = state.obraNum || meta?.obraNum || '';
   document.getElementById('eo-acuerdo').value = state.acuerdo || '';
   document.getElementById('eo-color').value = meta?.color || '#E8A838';
+  const tipoWrap=document.getElementById('eo-tipo-wrap'); if(tipoWrap) tipoWrap.style.display='none';
+  const cimWrap=document.getElementById('eo-cimentacion-wrap'); if(cimWrap) cimWrap.style.display='none';
   renderConstructorSelect(meta?.constructorId || currentConstructor()?.id);
 }
 
@@ -3192,9 +3677,14 @@ function openNuevaObra() {
   document.getElementById('eo-num').value = '';
   document.getElementById('eo-acuerdo').value = OBRA_ACORDADA_DEFAULT;
   document.getElementById('eo-color').value = defaultObraColor(obrasConfig.length);
+  const tipoWrap=document.getElementById('eo-tipo-wrap'); if(tipoWrap) tipoWrap.style.display='block';
+  const tipoSel=document.getElementById('eo-tipo'); if(tipoSel) tipoSel.value='1';
+  const cimSel=document.getElementById('eo-cimentacion'); if(cimSel) cimSel.value='pilotes';
+  updateFoundationSelectorVisibility();
   renderConstructorSelect(currentConstructorId || constructoresConfig[0]?.id);
   const selC=constructoresConfig.find(c=>c.id===(currentConstructorId || constructoresConfig[0]?.id));
   document.getElementById('eo-constructor').value = selC?.nombre || '';
+  updatePlantTemplateHint(true);
   setTimeout(()=>document.getElementById('eo-label').focus(), 30);
 }
 function closeEditObra() { document.getElementById('modal-obra').classList.remove('open'); }
@@ -3205,39 +3695,224 @@ function makeObraId(label) {
   while (obrasConfig.some(o => o.id === id)) id = base + '_' + (++i);
   return id;
 }
-function findObraPlantillaL29M77() {
+function isL29M77(o){
   const norm = v => (v || '').toString().toLowerCase().replace(/\s+/g,'').replace(/manzana|mz/g,'m').replace(/lote|lt/g,'l');
-  return obrasConfig.find(o => {
-    const label = norm(o.label);
-    const num = (o.obraNum || '').toString().replace(/\s+/g,'');
-    return num === '29/77' || label.includes('l29m77');
-  });
+  const label=norm(o?.label); const num=(o?.obraNum||'').toString().replace(/\s+/g,'');
+  return num==='29/77' || label.includes('l29m77');
 }
-function createStateFromL29M77(newMeta) {
-  const plantillaMeta = findObraPlantillaL29M77();
-  const plantilla = plantillaMeta ? estadosObras[plantillaMeta.id] : null;
-  if (!plantilla) return createDefaultState(newMeta);
-
-  const nuevo = createDefaultState(newMeta);
-  nuevo.acuerdo = Number(plantilla.acuerdo) > 0 ? Number(plantilla.acuerdo) : OBRA_ACORDADA_DEFAULT;
-  nuevo.itemsCQ = deepClone(plantilla.itemsCQ || cloneDefaultCQ());
-  nuevo.montos = deepClone(plantilla.montos || {});
-  nuevo.taskOverrides = deepClone(plantilla.taskOverrides || {});
-  nuevo.customWeeks = deepClone(plantilla.customWeeks || []);
-  nuevo.weekOverrides = deepClone(plantilla.weekOverrides || {});
-  nuevo.hiddenWeeks = deepClone(plantilla.hiddenWeeks || []);
-  nuevo.customTasks = deepClone(plantilla.customTasks || {});
-
-  Object.keys(nuevo.customTasks).forEach(sem => {
-    nuevo.customTasks[sem] = (nuevo.customTasks[sem] || []).map(t => ({...t, avance:0}));
+function obraConstructorNombre(o){
+  const cons=constructoresConfig.find(c=>c.id===o?.constructorId);
+  return (cons?.nombre || o?.constructor || '').trim();
+}
+function isCristianObra(o){ return normKey(obraConstructorNombre(o)).includes('cristian'); }
+function findCristianObra(){
+  const arr=obrasConfig.filter(isCristianObra);
+  return [...arr].reverse().find(o=>!o.terminado) || arr[arr.length-1] || null;
+}
+function normalizeCimentacion2P(v){
+  const k=normKey(v||'');
+  if(k.includes('pilote')) return 'pilotes';
+  if(k.includes('platea')) return 'platea';
+  return '';
+}
+function getObraCimentacion(o){
+  const st=o ? estadosObras[o.id] : null;
+  return normalizeCimentacion2P(st?.tipoCimentacion || o?.tipoCimentacion || '');
+}
+function findLatestObraByTipo(tipo,cimentacion=''){
+  tipo=Number(tipo)===2?2:1;
+  const cim=tipo===2 ? normalizeCimentacion2P(cimentacion) : '';
+  let candidatas=obrasConfig.filter(o=>{
+    if(!estadosObras[o.id]) return false; // excluye la obra nueva todavía sin estado
+    if(Number(o.tipoPlantas)!==tipo) return false;
+    if(tipo===1){
+      const st=estadosObras[o.id];
+      return (st?.plantillaVersion || o.plantillaVersion) === '1p_detallada_v1';
+    }
+    if(cim) return getObraCimentacion(o)===cim;
+    return true;
   });
-  Object.keys(nuevo.items).forEach(k => { nuevo.items[k] = 0; });
-  nuevo.pagosFuera = [];
-  nuevo.certificados = [];
-  nuevo.certLocks = {};
-  nuevo.constructor = newMeta.constructor || 'Constructor';
-  nuevo.obraNum = newMeta.obraNum || '';
-  return normalizeState(nuevo, newMeta);
+  if(!candidatas.length && tipo===2 && !cim){ const o=findCristianObra(); if(o) candidatas=[o]; }
+  return candidatas.length ? candidatas[candidatas.length-1] : null;
+}
+function findLatestTwoStoryAny(){
+  const candidatas=obrasConfig.filter(o=>Number(o.tipoPlantas)===2 && !!estadosObras[o.id]);
+  if(candidatas.length) return candidatas[candidatas.length-1];
+  return findCristianObra();
+}
+function cloneStateAsNewProject(plantilla,newMeta,tipo){
+  if(!plantilla) return createDefaultState({...newMeta,tipoPlantas:tipo});
+  const nuevo=deepClone(plantilla);
+  nuevo.tipoPlantas=tipo;
+  nuevo.plantillaVersion = tipo===2 ? (plantilla.plantillaVersion||'2p_v1') : '1p_detallada_v1';
+  if(tipo===2) nuevo.tipoCimentacion=normalizeCimentacion2P(newMeta.tipoCimentacion || plantilla.tipoCimentacion || '');
+  else delete nuevo.tipoCimentacion;
+  nuevo.constructor=newMeta.constructor||'Constructor';
+  nuevo.obraNum=newMeta.obraNum||'';
+  nuevo.items={};
+  Object.keys(plantilla.items||{}).forEach(k=>{ nuevo.items[k]=0; });
+  const base=getBaseSemanasForProject(nuevo,newMeta);
+  base.forEach(sem=>(sem.items||[]).forEach((it,i)=>{ nuevo.items[`${sem.num}-${i}`]=0; }));
+  if(nuevo.customTasks){ Object.keys(nuevo.customTasks).forEach(sem=>{ nuevo.customTasks[sem]=(nuevo.customTasks[sem]||[]).map(t=>({...t,avance:0})); }); }
+  nuevo.pagosFuera=[];
+  nuevo.certificados=[];
+  nuevo.certLocks={};
+  delete nuevo._backupAntesDosPlantas;
+  delete nuevo._migracionDosPlantas;
+  return normalizeState(nuevo,{...newMeta,tipoPlantas:tipo});
+}
+function resetFoundationWeeksForNewTwoStory(st,cimentacion){
+  const cim=normalizeCimentacion2P(cimentacion);
+  if(!st || !cim) return st;
+  st.tipoCimentacion=cim;
+  [1,2,3,4].forEach(n=>{
+    if(st.weekOverrides) delete st.weekOverrides[n];
+    if(st.customTasks) delete st.customTasks[n];
+    if(st.hiddenWeeks) st.hiddenWeeks=st.hiddenWeeks.filter(x=>Number(x)!==n);
+    Object.keys(st.taskOverrides||{}).forEach(k=>{ if(String(k).startsWith(n+'-')) delete st.taskOverrides[k]; });
+    Object.keys(st.items||{}).forEach(k=>{ if(String(k).startsWith(n+'-')) delete st.items[k]; });
+    Object.keys(st.montos||{}).forEach(k=>{ if(String(k).startsWith(n+'-')) delete st.montos[k]; });
+  });
+  const foundation = cim==='pilotes' ? SEMANAS_2P_PILOTES_INICIO : SEMANAS_2P_PLATEA_INICIO;
+  foundation.forEach(sem=>(sem.items||[]).forEach((it,i)=>{ st.items[`${sem.num}-${i}`]=0; }));
+  return st;
+}
+function createStateFromLatestTemplate(newMeta,tipo){
+  tipo=Number(tipo)===2?2:1;
+  const cim=tipo===2 ? normalizeCimentacion2P(newMeta.tipoCimentacion) : '';
+  const plantillaVersion = (tipo===2 && cim==='platea')
+    ? PLANTILLA_2P_PLATEA_EXCEL
+    : (tipo===2 ? '2p_v1' : '1p_detallada_v1');
+  const metaConVersion = {...newMeta, plantillaVersion, ...(tipo===2?{tipoCimentacion:cim}:{})};
+
+  // 2 plantas + Platea: cronograma fijo del Excel, sin heredar cambios de semanas,
+  // tareas, orden o importes de otra obra. Solo conserva parámetros generales útiles.
+  if(tipo===2 && cim==='platea'){
+    const nuevo=createDefaultState(metaConVersion);
+    const refMeta=findLatestObraByTipo(2,'platea') || findLatestTwoStoryAny();
+    const ref=refMeta ? estadosObras[refMeta.id] : null;
+    if(ref){
+      nuevo.acuerdo=Number(ref.acuerdo)>0?Number(ref.acuerdo):nuevo.acuerdo;
+      nuevo.acuerdoComentario=ref.acuerdoComentario||'';
+      nuevo.itemsCQ=deepClone(ref.itemsCQ||nuevo.itemsCQ);
+    }
+    // Conserva la capacidad de certificar desde el primer avance: toma sólo
+    // el perfil monetario de una referencia y lo adapta a las 24 semanas nuevas.
+    const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
+    if(perfilFin) cqAplicarPerfilFinancieroPlatea(nuevo,metaConVersion,perfilFin);
+    return normalizeState(nuevo,metaConVersion);
+  }
+
+  // Para 2 plantas con pilotes, mantiene la lógica existente de tomar la última
+  // obra del mismo sistema como modelo.
+  if(tipo===2 && cim){
+    const exactMeta=findLatestObraByTipo(2,cim);
+    const exact=exactMeta ? estadosObras[exactMeta.id] : null;
+    if(exact) return cloneStateAsNewProject(exact,metaConVersion,2);
+
+    const commonMeta=findLatestTwoStoryAny();
+    const common=commonMeta ? estadosObras[commonMeta.id] : null;
+    if(common){
+      const nuevo=cloneStateAsNewProject(common,metaConVersion,2);
+      resetFoundationWeeksForNewTwoStory(nuevo,cim);
+      return normalizeState(nuevo,metaConVersion);
+    }
+    return normalizeState(createDefaultState(metaConVersion),metaConVersion);
+  }
+
+  const plantillaMeta=findLatestObraByTipo(tipo);
+  const plantilla=plantillaMeta ? estadosObras[plantillaMeta.id] : null;
+  if(plantilla) return cloneStateAsNewProject(plantilla,metaConVersion,tipo);
+
+  const nuevo=createDefaultState(metaConVersion);
+  // Primera obra con la nueva plantilla de 1 planta: toma de 29.77 solo los
+  // parámetros generales, sin arrastrar el esquema incompleto anterior.
+  if(tipo===1){
+    const ref=obrasConfig.find(isL29M77);
+    const old=ref?estadosObras[ref.id]:null;
+    if(old){
+      nuevo.acuerdo=Number(old.acuerdo)>0?Number(old.acuerdo):nuevo.acuerdo;
+      nuevo.acuerdoComentario=old.acuerdoComentario||'';
+      nuevo.itemsCQ=deepClone(old.itemsCQ||nuevo.itemsCQ);
+    }
+  }
+  return normalizeState(nuevo,metaConVersion);
+}
+function updateFoundationSelectorVisibility(){
+  const tipo=Number(document.getElementById('eo-tipo')?.value||1)===2?2:1;
+  const wrap=document.getElementById('eo-cimentacion-wrap');
+  if(wrap) wrap.style.display=(obraModalMode==='new' && tipo===2)?'block':'none';
+}
+function updatePlantTemplateHint(setAgreement=false){
+  const tipo=Number(document.getElementById('eo-tipo')?.value||1)===2?2:1;
+  updateFoundationSelectorVisibility();
+  const cim=tipo===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value||'pilotes') : '';
+  const meta=tipo===2 ? findLatestObraByTipo(2,cim) : findLatestObraByTipo(1);
+  const hint=document.getElementById('eo-template-hint');
+  if(hint){
+    if(tipo===1){
+      hint.innerHTML=meta
+        ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
+        : `<strong>Modelo inicial:</strong> plantilla detallada de 1 planta con zapata corrida.`;
+    }else if(cim==='platea'){
+      hint.innerHTML=`<strong>2 plantas · Platea:</strong> usa el cronograma fijo de 24 semanas definido para este sistema. No copia modificaciones de otra obra.`;
+    }else if(meta){
+      hint.innerHTML=`<strong>Modelo Pilotes:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia las últimas modificaciones de ese mismo sistema.`;
+    }else{
+      const common=findLatestTwoStoryAny();
+      hint.innerHTML=`<strong>Primer proyecto 2 plantas · Pilotes:</strong> S1–S4 se crean con este sistema de fundación${common ? ` y desde S5 toma como referencia ${escHtml(common.label||common.obraNum||common.id)}.` : '.'}`;
+    }
+  }
+  if(setAgreement){
+    let st=meta?estadosObras[meta.id]:null;
+    if(!st && tipo===2){ const common=findLatestTwoStoryAny(); st=common?estadosObras[common.id]:null; }
+    if(!st && tipo===1){ const ref=obrasConfig.find(isL29M77); st=ref?estadosObras[ref.id]:null; }
+    const inp=document.getElementById('eo-acuerdo');
+    if(inp) inp.value=Number(st?.acuerdo)>0?Number(st.acuerdo):OBRA_ACORDADA_DEFAULT;
+  }
+}
+function buildCristianTwoStoryState(meta,old){
+  old=old||createDefaultState(meta);
+  const nuevo=createDefaultState({...meta,tipoPlantas:2});
+  nuevo.tipoPlantas=2;
+  nuevo.plantillaVersion='2p_v1';
+  nuevo.constructor=old.constructor||meta.constructor||'Cristian';
+  nuevo.obraNum=old.obraNum||meta.obraNum||'';
+  nuevo.acuerdo=Number(old.acuerdo)>0?Number(old.acuerdo):OBRA_ACORDADA_DEFAULT;
+  nuevo.acuerdoComentario=old.acuerdoComentario||'';
+  nuevo.itemsCQ=deepClone(old.itemsCQ||cloneDefaultCQ());
+  nuevo.pagosFuera=deepClone(old.pagosFuera||[]);
+  // Conserva el historial financiero de certificados, pero reinicia los locks porque cambió el esquema.
+  nuevo.certificados=deepClone(old.certificados||[]);
+  nuevo.certLocks={};
+  nuevo._backupAntesDosPlantas={
+    fecha:new Date().toISOString(), items:deepClone(old.items||{}), montos:deepClone(old.montos||{}),
+    customTasks:deepClone(old.customTasks||{}), taskOverrides:deepClone(old.taskOverrides||{}),
+    customWeeks:deepClone(old.customWeeks||[]), weekOverrides:deepClone(old.weekOverrides||{}), hiddenWeeks:deepClone(old.hiddenWeeks||[]), weekOrder:deepClone(old.weekOrder||[]), certLocks:deepClone(old.certLocks||{})
+  };
+  nuevo._migracionDosPlantas=1;
+  return normalizeState(nuevo,{...meta,tipoPlantas:2});
+}
+async function ensureProjectTypeTemplates(writeRemote=false){
+  let configChanged=false; const changedStates=[];
+  const one=obrasConfig.find(isL29M77);
+  if(one){
+    if(Number(one.tipoPlantas)!==1){ one.tipoPlantas=1; configChanged=true; }
+    const st=estadosObras[one.id]; if(st && Number(st.tipoPlantas)!==1){ st.tipoPlantas=1; estadosObras[one.id]=normalizeState(st,one); changedStates.push(one.id); }
+  }
+  const cristian=findCristianObra();
+  if(cristian){
+    if(Number(cristian.tipoPlantas)!==2){ cristian.tipoPlantas=2; configChanged=true; }
+    const st=estadosObras[cristian.id]||normalizeState(null,cristian);
+    if(Number(st.tipoPlantas)!==2 || !st._migracionDosPlantas){ estadosObras[cristian.id]=buildCristianTwoStoryState(cristian,st); changedStates.push(cristian.id); }
+  }
+  if(configChanged){ normalizeObrasConfig(); localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig)); }
+  changedStates.forEach(id=>localStorage.setItem('mano_obra_'+id,JSON.stringify(estadosObras[id])));
+  if(writeRemote && isFirebaseEnabled() && window._dbReady){
+    if(configChanged) await window._setDoc(window._doc(window._db,'config','mano_obra_multiobra'),JSON.parse(JSON.stringify({obras:obrasConfig,constructores:constructoresConfig})));
+    for(const id of [...new Set(changedStates)]) await window._setDoc(window._doc(window._db,'obras',id),JSON.parse(JSON.stringify(estadosObras[id])));
+  }
+  if(estadosObras[curObraId]) state=estadosObras[curObraId];
 }
 
 function saveEditObra() {
@@ -3251,10 +3926,18 @@ function saveEditObra() {
   const constructorNombre = c || consObj?.nombre || 'Constructor';
   const finalLabel = label || (n ? 'L' + n.replace('/', ' Mz') : c || 'Nueva obra');
   if (obraModalMode === 'new') {
-    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color };
+    const tipoPlantas = Number(document.getElementById('eo-tipo')?.value || 1) === 2 ? 2 : 1;
+    const tipoCimentacion = tipoPlantas===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value || 'pilotes') : '';
+    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, ...(tipoPlantas===2?{tipoCimentacion}:{}), plantillaVersion: tipoPlantas===2 ? (tipoCimentacion==='platea' ? PLANTILLA_2P_PLATEA_EXCEL : '2p_v1') : '1p_detallada_v1', createdAt:new Date().toISOString() };
     obrasConfig.push(newMeta);
-    estadosObras[newMeta.id] = createStateFromL29M77(newMeta);
+    estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
     estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
+    // El acuerdo definitivo se conoce recién acá. Reaplica el perfil financiero
+    // escalado a ese acuerdo para que la obra nazca lista para certificar.
+    if(tipoPlantas===2 && tipoCimentacion==='platea'){
+      const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
+      if(perfilFin) cqAplicarPerfilFinancieroPlatea(estadosObras[newMeta.id],newMeta,perfilFin);
+    }
     curObraId = newMeta.id;
     state = estadosObras[curObraId];
     persistConfig();
@@ -3302,7 +3985,7 @@ function deleteCurrentObra() {
 }
 
 // ─── DATOS ────────────────────────────────────────────────────────────────
-const SEMANAS = [
+const SEMANAS_UNA_PLANTA_LEGACY = [
   {num:1, etapa:"Replanteo / Excavacion", pagoMax:1200000, pctObra:0.03158,
    items:[
      {desc:"Replanteo", avance:0, monto:300000},
@@ -3408,6 +4091,541 @@ const SEMANAS = [
    items:[{desc:"Conforme de obra", avance:0, monto:3260000}]},
 ];
 
+
+
+// ─── PLANTILLA BASE DETALLADA: 1 PLANTA / 2 DORMITORIOS / 2 BAÑOS ──────
+// Se usa para las obras NUEVAS de 1 planta. Las obras antiguas conservan
+// su esquema anterior. Una vez creada la primera obra con esta versión,
+// las siguientes copian la última obra detallada de 1 planta y sus cambios.
+const SEMANAS = [
+  {num:1, etapa:"Replanteo / Excavación", items:[
+    {desc:"Replanteo",avance:0,monto:0},{desc:"Cerramiento",avance:0,monto:0},{desc:"Pilar luz y gas",avance:0,monto:0},{desc:"Excavación 50%",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Cavado y fundaciones", items:[
+    {desc:"Excavación 100%",avance:0,monto:0},{desc:"Fundaciones armadas y presentadas",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Llenado de fundaciones", items:[
+    {desc:"Llenado de fundaciones",avance:0,monto:0},{desc:"Arranques de columnas",avance:0,monto:0},{desc:"Control de niveles",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Nivelación / Capa", items:[
+    {desc:"Nivelación",avance:0,monto:0},{desc:"Capa aisladora",avance:0,monto:0},{desc:"Replanteo de mampostería",avance:0,monto:0}
+  ]},
+  {num:5, etapa:"Mampostería 1,20 m", items:[
+    {desc:"Mampostería exterior",avance:0,monto:0},{desc:"Mampostería interior",avance:0,monto:0},{desc:"Mampostería a 1,20 m",avance:0,monto:0}
+  ]},
+  {num:6, etapa:"Mampostería / Columnas", items:[
+    {desc:"Mampostería hasta 2 m",avance:0,monto:0},{desc:"Llenado de columnas 50%",avance:0,monto:0}
+  ]},
+  {num:7, etapa:"Mampostería / Columnas / Encadenados", items:[
+    {desc:"Mampostería 100%",avance:0,monto:0},{desc:"Columnas 100%",avance:0,monto:0},{desc:"Armado de encadenados",avance:0,monto:0},{desc:"Dinteles",avance:0,monto:0}
+  ]},
+  {num:8, etapa:"Losa de techo - Armado", items:[
+    {desc:"Puntalamiento",avance:0,monto:0},{desc:"Encofrado",avance:0,monto:0},{desc:"Armado de hierro",avance:0,monto:0},{desc:"Pases de instalaciones",avance:0,monto:0}
+  ]},
+  {num:9, etapa:"Losa de techo - Llenado", items:[
+    {desc:"Llenado de losa",avance:0,monto:0},{desc:"Nivelación",avance:0,monto:0},{desc:"Curado / desencofrado",avance:0,monto:0}
+  ]},
+  {num:10, etapa:"Tanques / Parapetos", items:[
+    {desc:"Base y sector tanques",avance:0,monto:0},{desc:"Construcción / apoyo de tanques",avance:0,monto:0},{desc:"Parapetos",avance:0,monto:0}
+  ]},
+  {num:11, etapa:"Techo / Pendientes / Impermeabilización", items:[
+    {desc:"Carga",avance:0,monto:0},{desc:"Formación de pendientes",avance:0,monto:0},{desc:"Lechinado",avance:0,monto:0},{desc:"Impermeabilización",avance:0,monto:0}
+  ]},
+  {num:12, etapa:"Revoque exterior", items:[
+    {desc:"Revoque exterior 50%",avance:0,monto:0},{desc:"Fretachado exterior 50%",avance:0,monto:0}
+  ]},
+  {num:13, etapa:"Revoque exterior / Frente", items:[
+    {desc:"Revoque exterior 100%",avance:0,monto:0},{desc:"Fretachado exterior 100%",avance:0,monto:0},{desc:"Frente",avance:0,monto:0}
+  ]},
+  {num:14, etapa:"Revoque interior / Nichos", items:[
+    {desc:"Revoque interior 50%",avance:0,monto:0},{desc:"Nicho placard dormitorio 1",avance:0,monto:0},{desc:"Nicho placard dormitorio 2",avance:0,monto:0}
+  ]},
+  {num:15, etapa:"Revoque interior / Premarcos", items:[
+    {desc:"Revoque interior 100%",avance:0,monto:0},{desc:"Colocación de premarcos",avance:0,monto:0},{desc:"Terminaciones de vanos",avance:0,monto:0}
+  ]},
+  {num:16, etapa:"Medianeras / Asador", items:[
+    {desc:"Excavación medianeras",avance:0,monto:0},{desc:"Fundaciones medianeras",avance:0,monto:0},{desc:"Mampostería medianeras",avance:0,monto:0},{desc:"Tapa medianeras",avance:0,monto:0},{desc:"Asador",avance:0,monto:0}
+  ]},
+  {num:17, etapa:"Contrapiso / Carpetas", items:[
+    {desc:"Contrapisos interiores",avance:0,monto:0},{desc:"Carpetas interiores",avance:0,monto:0},{desc:"Contrapiso galería / patio",avance:0,monto:0}
+  ]},
+  {num:18, etapa:"Baños / Impermeabilización", items:[
+    {desc:"Impermeabilización baño 1",avance:0,monto:0},{desc:"Impermeabilización baño 2",avance:0,monto:0},{desc:"Carpetas con pendiente en duchas",avance:0,monto:0},{desc:"Pruebas de estanqueidad",avance:0,monto:0}
+  ]},
+  {num:23, etapa:"Banquinas", items:[
+    {desc:"Banquinas interiores",avance:0,monto:0}
+  ]},
+  {num:24, etapa:"Frente / Ingreso / Exteriores", items:[
+    {desc:"Contrapiso ingreso",avance:0,monto:0},{desc:"Huellas ingreso de autos",avance:0,monto:0},{desc:"Perimetrales",avance:0,monto:0},{desc:"Pilar / frente",avance:0,monto:0}
+  ]},
+  {num:25, etapa:"Galería / Pérgola", items:[
+    {desc:"Terminaciones de galería",avance:0,monto:0},{desc:"Colocación de caños / estructura de pérgola",avance:0,monto:0},{desc:"Terminaciones sector asador",avance:0,monto:0}
+  ]},
+  {num:26, etapa:"Aberturas / Terminaciones de albañilería", items:[
+    {desc:"Colocación / ajuste puertas de ingreso",avance:0,monto:0},{desc:"Repaso de premarcos y vanos",avance:0,monto:0},{desc:"Sellados y terminaciones de albañilería",avance:0,monto:0}
+  ]},
+  {num:27, etapa:"Revisión final / Correcciones", items:[
+    {desc:"Repaso general",avance:0,monto:0},{desc:"Correcciones de albañilería",avance:0,monto:0},{desc:"Correcciones de terminaciones",avance:0,monto:0}
+  ]},
+  {num:28, etapa:"Entrega / Limpieza", items:[
+    {desc:"Limpieza final",avance:0,monto:0},{desc:"Retiro de sobrantes",avance:0,monto:0},{desc:"Conforme de obra",avance:0,monto:0}
+  ]}
+];
+
+// ─── PLANTILLA BASE: 2 PLANTAS / 3 DORMITORIOS / 3 BAÑOS ────────────────
+// Los importes arrancan en 0. La primera referencia real será la obra de Cristian;
+// las siguientes obras de 2 plantas copiarán sus importes y modificaciones vigentes.
+const SEMANAS_DOS_PLANTAS = [
+  {num:1, etapa:"Replanteo / Excavación", items:[
+    {desc:"Replanteo",avance:0,monto:0},{desc:"Cerramiento",avance:0,monto:0},{desc:"Pilar luz y gas",avance:0,monto:0},{desc:"Excavación 50%",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Cavado y fundaciones", items:[
+    {desc:"Excavación 100%",avance:0,monto:0},{desc:"Fundaciones armadas y presentadas",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Llenado de fundaciones", items:[
+    {desc:"Llenado de fundaciones",avance:0,monto:0},{desc:"Arranques de columnas",avance:0,monto:0},{desc:"Control de niveles",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Nivelación / Capa", items:[
+    {desc:"Nivelación",avance:0,monto:0},{desc:"Capa aisladora",avance:0,monto:0},{desc:"Replanteo mampostería PB",avance:0,monto:0}
+  ]},
+  {num:5, etapa:"Mampostería PB 1,20 m", items:[
+    {desc:"Mampostería exterior PB",avance:0,monto:0},{desc:"Mampostería interior PB",avance:0,monto:0},{desc:"Mampostería PB a 1,20 m",avance:0,monto:0}
+  ]},
+  {num:6, etapa:"Mampostería PB / Columnas", items:[
+    {desc:"Mampostería PB hasta 2 m",avance:0,monto:0},{desc:"Llenado columnas PB 50%",avance:0,monto:0}
+  ]},
+  {num:7, etapa:"Mampostería PB / Columnas / Encadenados", items:[
+    {desc:"Mampostería PB 100%",avance:0,monto:0},{desc:"Columnas PB 100%",avance:0,monto:0},{desc:"Armado de encadenados PB",avance:0,monto:0}
+  ]},
+  {num:8, etapa:"Losa entrepiso - Armado", items:[
+    {desc:"Puntalamiento",avance:0,monto:0},{desc:"Encofrado",avance:0,monto:0},{desc:"Armado de hierro",avance:0,monto:0},{desc:"Pases de instalaciones",avance:0,monto:0}
+  ]},
+  {num:9, etapa:"Losa entrepiso - Llenado", items:[
+    {desc:"Llenado de losa",avance:0,monto:0},{desc:"Nivelación",avance:0,monto:0},{desc:"Curado / desencofrado",avance:0,monto:0}
+  ]},
+  {num:10, etapa:"Planta alta - Replanteo / Mampostería", items:[
+    {desc:"Replanteo PA",avance:0,monto:0},{desc:"Arranque columnas PA",avance:0,monto:0},{desc:"Mampostería PA a 1,20 m",avance:0,monto:0}
+  ]},
+  {num:11, etapa:"Mampostería PA / Columnas", items:[
+    {desc:"Mampostería PA hasta 2 m",avance:0,monto:0},{desc:"Columnas PA 50%",avance:0,monto:0}
+  ]},
+  {num:12, etapa:"Mampostería PA / Columnas", items:[
+    {desc:"Mampostería PA 100%",avance:0,monto:0},{desc:"Columnas PA 100%",avance:0,monto:0}
+  ]},
+  {num:13, etapa:"Encadenados PA", items:[
+    {desc:"Armado de encadenados PA",avance:0,monto:0},{desc:"Llenado de encadenados PA",avance:0,monto:0},{desc:"Dinteles",avance:0,monto:0}
+  ]},
+  {num:14, etapa:"Escalera", items:[
+    {desc:"Armado de hierro",avance:0,monto:0},{desc:"Encofrado",avance:0,monto:0},{desc:"Llenado de escalera",avance:0,monto:0},{desc:"Desencofrado",avance:0,monto:0}
+  ]},
+  {num:15, etapa:"Losa techo - Armado", items:[
+    {desc:"Puntalamiento",avance:0,monto:0},{desc:"Encofrado",avance:0,monto:0},{desc:"Armado de hierro",avance:0,monto:0},{desc:"Pases de instalaciones",avance:0,monto:0}
+  ]},
+  {num:16, etapa:"Losa techo - Llenado", items:[
+    {desc:"Llenado de losa",avance:0,monto:0},{desc:"Nivelación",avance:0,monto:0},{desc:"Curado / desencofrado",avance:0,monto:0}
+  ]},
+  {num:17, etapa:"Tanques / Parapetos", items:[
+    {desc:"Base y sector tanques",avance:0,monto:0},{desc:"Parapetos",avance:0,monto:0},{desc:"Terminaciones de mampostería de azotea",avance:0,monto:0}
+  ]},
+  {num:18, etapa:"Techo / Pendientes / Impermeabilización", items:[
+    {desc:"Carga",avance:0,monto:0},{desc:"Formación de pendientes",avance:0,monto:0},{desc:"Lechinado",avance:0,monto:0},{desc:"Impermeabilización",avance:0,monto:0}
+  ]},
+  {num:19, etapa:"Revoque exterior PB", items:[
+    {desc:"Revoque PB 50%",avance:0,monto:0},{desc:"Revoque PB 100%",avance:0,monto:0},{desc:"Fretachado PB",avance:0,monto:0}
+  ]},
+  {num:20, etapa:"Revoque exterior PA / Frente", items:[
+    {desc:"Revoque PA",avance:0,monto:0},{desc:"Fretachado PA",avance:0,monto:0},{desc:"Frente",avance:0,monto:0}
+  ]},
+  {num:21, etapa:"Revoque interior PB", items:[
+    {desc:"Revoque PB 50%",avance:0,monto:0},{desc:"Nichos / placares PB",avance:0,monto:0}
+  ]},
+  {num:22, etapa:"Revoque interior PB / Premarcos", items:[
+    {desc:"Revoque PB 100%",avance:0,monto:0},{desc:"Colocación premarcos PB",avance:0,monto:0}
+  ]},
+  {num:23, etapa:"Revoque interior PA", items:[
+    {desc:"Revoque PA 50%",avance:0,monto:0},{desc:"Nichos placares dormitorios",avance:0,monto:0}
+  ]},
+  {num:24, etapa:"Revoque interior PA / Premarcos", items:[
+    {desc:"Revoque PA 100%",avance:0,monto:0},{desc:"Colocación premarcos PA",avance:0,monto:0}
+  ]},
+  {num:25, etapa:"Medianeras / Asador", items:[
+    {desc:"Excavación medianeras",avance:0,monto:0},{desc:"Fundaciones medianeras",avance:0,monto:0},{desc:"Mampostería medianeras",avance:0,monto:0},{desc:"Tapa medianeras",avance:0,monto:0},{desc:"Asador",avance:0,monto:0}
+  ]},
+  {num:26, etapa:"Contrapiso / Carpetas PB", items:[
+    {desc:"Contrapisos interiores PB",avance:0,monto:0},{desc:"Carpetas PB",avance:0,monto:0},{desc:"Contrapiso galería",avance:0,monto:0}
+  ]},
+  {num:27, etapa:"Carpetas PA / Escalera", items:[
+    {desc:"Carpetas PA",avance:0,monto:0},{desc:"Terminación gruesa escalera",avance:0,monto:0},{desc:"Carpetas baños PA",avance:0,monto:0}
+  ]},
+  {num:28, etapa:"Baños / Impermeabilización", items:[
+    {desc:"Impermeabilización baño 1",avance:0,monto:0},{desc:"Impermeabilización baño 2",avance:0,monto:0},{desc:"Impermeabilización baño 3",avance:0,monto:0},{desc:"Pruebas de estanqueidad",avance:0,monto:0}
+  ]},
+  {num:34, etapa:"Frente / Exteriores", items:[
+    {desc:"Banquinas",avance:0,monto:0},{desc:"Huellas ingreso",avance:0,monto:0},{desc:"Perimetrales",avance:0,monto:0},{desc:"Pilar / frente",avance:0,monto:0}
+  ]},
+  {num:35, etapa:"Revisión final / Entrega / Limpieza", items:[
+    {desc:"Repaso general",avance:0,monto:0},{desc:"Correcciones",avance:0,monto:0},{desc:"Limpieza final",avance:0,monto:0},{desc:"Conforme de obra",avance:0,monto:0}
+  ]}
+];
+
+
+// ─── FUNDACIONES ESPECÍFICAS PARA PROYECTOS DE 2 PLANTAS ────────────────
+// S1 a S4 cambian según el sistema elegido. Desde S5 continúa la misma
+// estructura de 2 plantas, por lo que no se altera la numeración restante.
+const SEMANAS_2P_PILOTES_INICIO = [
+  {num:1, etapa:"Pilotes - Replanteo / Preparación", items:[
+    {desc:"Replanteo general y ejes",avance:0,monto:0},{desc:"Cerramiento",avance:0,monto:0},{desc:"Pilar luz y gas",avance:0,monto:0},{desc:"Marcación de centros de pilotes y niveles",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Pilotes - Perforación / Armaduras", items:[
+    {desc:"Perforación de pilotes",avance:0,monto:0},{desc:"Control de profundidad y limpieza",avance:0,monto:0},{desc:"Armado y colocación de armaduras de pilotes",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Pilotes - Hormigonado", items:[
+    {desc:"Hormigonado de pilotes",avance:0,monto:0},{desc:"Arranques / esperas de columnas",avance:0,monto:0},{desc:"Descabezado y control de cotas",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Vigas de fundación / Nivelación", items:[
+    {desc:"Excavación y preparación de vigas de fundación",avance:0,monto:0},{desc:"Armado / encofrado de vigas de fundación",avance:0,monto:0},{desc:"Hormigonado de vigas de fundación",avance:0,monto:0},{desc:"Nivelación / capa aisladora / replanteo mampostería PB",avance:0,monto:0}
+  ]}
+];
+const SEMANAS_2P_PLATEA_INICIO = [
+  {num:1, etapa:"Platea - Replanteo / Excavación", items:[
+    {desc:"Replanteo general y niveles",avance:0,monto:0},{desc:"Cerramiento",avance:0,monto:0},{desc:"Pilar luz y gas",avance:0,monto:0},{desc:"Excavación / retiro de suelo",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Platea - Suelo / Base / Instalaciones", items:[
+    {desc:"Nivelación de subrasante",avance:0,monto:0},{desc:"Relleno y compactación de base",avance:0,monto:0},{desc:"Instalaciones y pases bajo platea",avance:0,monto:0},{desc:"Control de niveles y compactación",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Platea - Armado", items:[
+    {desc:"Membrana / barrera aislante",avance:0,monto:0},{desc:"Armado de mallas y hierros de platea",avance:0,monto:0},{desc:"Refuerzos y vigas integradas",avance:0,monto:0},{desc:"Arranques / esperas de columnas",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Platea - Hormigonado / Curado", items:[
+    {desc:"Hormigonado de platea",avance:0,monto:0},{desc:"Nivelación y terminación superficial",avance:0,monto:0},{desc:"Curado de platea",avance:0,monto:0},{desc:"Replanteo de mampostería PB",avance:0,monto:0}
+  ]}
+];
+
+// ─── CRONOGRAMA FIJO · 2 PLANTAS CON PLATEA ────────────────────────────
+// Fuente: cronograma tentativo.xlsx. Se aplica SOLO a obras nuevas creadas
+// como 2 plantas + Platea. Las obras existentes conservan su plantilla.
+const PLANTILLA_2P_PLATEA_EXCEL = '2p_platea_excel_v1';
+const SEMANAS_2P_PLATEA_CRONOGRAMA = [
+  {num:1, etapa:"Platea · Replanteo / Preparación", items:[
+    {desc:"Replanteo general de ubicación de Platea y niveles de la misma",avance:0,monto:0},{desc:"Cerramiento y ubicación de obrador, baño químico y material a recibir",avance:0,monto:0},{desc:"Pilar de luz para obra",avance:0,monto:0},{desc:"Armadura de vigas para platea",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Platea · Armado / Instalaciones", items:[
+    {desc:"Armado de plantillas y vigas",avance:0,monto:0},{desc:"Replanteo de vigas de Platea",avance:0,monto:0},{desc:"Colocación de barrera aislante.",avance:0,monto:0},{desc:"Instalación de malla posterior a ingreso de Plomero",avance:0,monto:0},{desc:"Refuerzos y replanteo de columnas de planta baja",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Platea · Hormigonado / Mampostería PB", items:[
+    {desc:"Hormigonado y curado de platea.",avance:0,monto:0},{desc:"Replanteo de mampostería y capa aisladora",avance:0,monto:0},{desc:"Mampostería de elevación interior 1,20 (Planta Baja)",avance:0,monto:0},{desc:"Mampostería de elevación exterior 1,20 (Planta Baja)",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Mampostería PB / Columnas", items:[
+    {desc:"Llenado de columnas al 1,20",avance:0,monto:0},{desc:"Mampostería de elevación hasta altura de losa y dinteles listos (planta baja) INTERIOR Y EXTERIOR",avance:0,monto:0}
+  ]},
+  {num:5, etapa:"Encadenados / Losa PB", items:[
+    {desc:"Encadenados, vigas (planta baja)",avance:0,monto:0},{desc:"Armado y apuntalamiento de losa (planta baja)",avance:0,monto:0}
+  ]},
+  {num:6, etapa:"Losa PB", items:[
+    {desc:"Armado de losa  (planta baja)",avance:0,monto:0},{desc:"Replanteo de Columnas de Planta Alta",avance:0,monto:0},{desc:"Llenado de losa (planta baja)",avance:0,monto:0}
+  ]},
+  {num:7, etapa:"Escalera / Instalaciones", items:[
+    {desc:"Escalera (replanteo, armado y llenado Hormigon IN SITU)",avance:0,monto:0},{desc:"1 Pilar de luz y 2 gabinetes de gas",avance:0,monto:0},{desc:"Terminaciónes de pendientes de planta baja",avance:0,monto:0}
+  ]},
+  {num:8, etapa:"Mampostería PA 1,20", items:[
+    {desc:"Mampostería de elevación exterior 1,20 (Planta Alta)",avance:0,monto:0},{desc:"Mampostería de elevación interior 1,20 (Planta Alta)",avance:0,monto:0}
+  ]},
+  {num:9, etapa:"Mampostería PA / Encadenados", items:[
+    {desc:"Mampostería de elevación exterior hasta encadenados (Planta Alta) al 80%",avance:0,monto:0},{desc:"Mampostería de elevación interior hasta encadenados (Planta Alta)",avance:0,monto:0}
+  ]},
+  {num:10, etapa:"Mampostería PA / Losa", items:[
+    {desc:"Mampostería de elevación exterior hasta encadenados (Planta Alta) al 100%",avance:0,monto:0},{desc:"Encadenados, vigas (planta alta)",avance:0,monto:0},{desc:"Armado y apuntalamiento de losa (Planta Alta)",avance:0,monto:0}
+  ]},
+  {num:11, etapa:"Losa PA · Armado / Apuntalamiento", items:[
+    {desc:"Armado y apuntalamiento de losa (Planta Alta)",avance:0,monto:0}
+  ]},
+  {num:12, etapa:"Losa PA / Parapetos", items:[
+    {desc:"Llenado de losa (Planta Alta)",avance:0,monto:0},{desc:"Curado y parapetos.",avance:0,monto:0},{desc:"Mampostería de base de tanques",avance:0,monto:0}
+  ]},
+  {num:13, etapa:"Tanque / Pendientes", items:[
+    {desc:"Losa de tanque y mampostería",avance:0,monto:0},{desc:"Revoque interior de tanque y parapetos",avance:0,monto:0},{desc:"Pintura de base de tanque con fijador y membrana fibrada",avance:0,monto:0},{desc:"Pintura asfáltica para losa",avance:0,monto:0},{desc:"Pendientes",avance:0,monto:0}
+  ]},
+  {num:14, etapa:"Pendientes / Bovedillas", items:[
+    {desc:"Pendientes y carga",avance:0,monto:0},{desc:"Bovedillas y lechinado",avance:0,monto:0},{desc:"Fratachado de tanque",avance:0,monto:0}
+  ]},
+  {num:15, etapa:"Impermeabilización / Revoques", items:[
+    {desc:"Impermeabilización de cubierta con fijador y membrana fibrada",avance:0,monto:0},{desc:"Revoque Baños y cocinas",avance:0,monto:0},{desc:"nichos de placares y banquinas",avance:0,monto:0}
+  ]},
+  {num:16, etapa:"Premarcos / Revoques", items:[
+    {desc:"Colocación de premarcos",avance:0,monto:0},{desc:"Revoque exterior PB 100%",avance:0,monto:0},{desc:"Revoque interior al 25%",avance:0,monto:0}
+  ]},
+  {num:17, etapa:"Asadores / Revoques", items:[
+    {desc:"Asadores y madianeras revocados",avance:0,monto:0},{desc:"Revoque interior al 50%",avance:0,monto:0}
+  ]},
+  {num:18, etapa:"Revoques", items:[
+    {desc:"Revoque exterior PA 50%",avance:0,monto:0},{desc:"Revoque interior al 75%",avance:0,monto:0}
+  ]},
+  {num:19, etapa:"Revoques", items:[
+    {desc:"Revoque intetior al 100%",avance:0,monto:0},{desc:"Revoque exterior PA 100%",avance:0,monto:0}
+  ]},
+  {num:20, etapa:"Carpetas / Escalera", items:[
+    {desc:"Carpetas PA y PB",avance:0,monto:0},{desc:"Terminacion gruesa de escalera",avance:0,monto:0},{desc:"Fratachado de fondo planta baja y planta alta al 50%",avance:0,monto:0}
+  ]},
+  {num:21, etapa:"Fratachados", items:[
+    {desc:"Fratachado de fondo planta baja y planta alta al 100%",avance:0,monto:0},{desc:"Fratachado de frente Planta baja y planta alta 50%",avance:0,monto:0}
+  ]},
+  {num:22, etapa:"Frente / Medianeras", items:[
+    {desc:"Medianeras de frente",avance:0,monto:0},{desc:"Fratachado de frente Planta baja y planta alta 100%",avance:0,monto:0}
+  ]},
+  {num:23, etapa:"Contrapiso frente", items:[
+    {desc:"Contrapiso frente",avance:0,monto:0}
+  ]},
+  {num:24, etapa:"Carpeta frente / Terminaciones", items:[
+    {desc:"Carpeta de frente",avance:0,monto:0},{desc:"Terminaciones",avance:0,monto:0},{desc:"Conforme de obra",avance:0,monto:0}
+  ]}
+];
+
+// ─── PERFIL FINANCIERO PARA EL CRONOGRAMA FIJO DE PLATEA ──────────────
+// El cronograma nuevo cambia tareas/semanas, pero debe conservar la lógica
+// financiera existente: una tarea con importe > 0 genera monto a certificar.
+// Para no copiar nombres/orden de otra obra, se toma únicamente el TOTAL por
+// semana de una referencia 2P con valores y se redistribuye entre las tareas
+// del cronograma nuevo. Si la referencia tenía más/menos semanas, se comprime
+// proporcionalmente manteniendo exactamente el total asignado.
+function cqCapturarPerfilFinancieroObra(meta){
+  if(!meta || !estadosObras || !estadosObras[meta.id]) return null;
+  const originalState=state;
+  const originalCur=curObraId;
+  try{
+    state=deepClone(estadosObras[meta.id]);
+    curObraId=meta.id;
+    const weeks=getSemanas();
+    const weekly=weeks.map(sem=>{
+      const sn=Number(sem.num);
+      const itemsSem=getItems(sn);
+      const tieneConforme=itemsSem.some(it=>esNombreConforme(it && it.desc));
+
+      // 1) Lectura normal según las tareas visibles de la obra.
+      let visible=0;
+      itemsSem.forEach((it,i)=>{
+        if(esNombreConforme(it && it.desc)) return;
+        visible += Math.max(0, Number(getMontoRaw(sn,i)) || 0);
+      });
+
+      // 2) Compatibilidad con importes guardados con claves históricas.
+      //    Toma las claves de tareas de esa semana aun si hoy la tarea cambió de índice/nombre.
+      let legacyMontos=0;
+      Object.entries(state.montos||{}).forEach(([k,v])=>{
+        if(k===sn+'-pagoMax') return;
+        if(k.startsWith(sn+'-m-') || k.startsWith(sn+'-mc-')){
+          legacyMontos += Math.max(0,Number(v)||0);
+        }
+      });
+
+      // 3) Overrides/custom antiguos con el importe embebido.
+      let embebidos=0;
+      Object.entries(state.taskOverrides||{}).forEach(([k,v])=>{
+        if(String(k).startsWith(sn+'-') && !esNombreConforme(v && v.desc)){
+          embebidos += Math.max(0,Number(v && v.monto)||0);
+        }
+      });
+      (state.customTasks?.[sn]||[]).forEach(it=>{
+        if(!esNombreConforme(it && it.desc)) embebidos += Math.max(0,Number(it && it.monto)||0);
+      });
+
+      let total=Math.max(visible,legacyMontos,embebidos);
+
+      // 4) Algunas versiones históricas guardaban el valor semanal consolidado.
+      //    No se usa en la semana de Conforme para evitar mezclar el residual.
+      if(!tieneConforme){
+        const pagoMax=Math.max(0,Number((state.montos||{})[sn+'-pagoMax'])||0);
+        total=Math.max(total,pagoMax);
+      }
+      return Math.round(total);
+    });
+    return {
+      weekly,
+      total:weekly.reduce((a,b)=>a+b,0),
+      acuerdo:Number(state.acuerdo)||0,
+      meta
+    };
+  }catch(e){
+    console.warn('No se pudo leer perfil financiero de referencia',e);
+    return null;
+  }finally{
+    state=originalState;
+    curObraId=originalCur;
+  }
+}
+function cqBuscarReferenciaFinanciera2P(excluirId){
+  const todas=[...obrasConfig].reverse().filter(o=>
+    o && o.id!==excluirId && estadosObras[o.id]
+  );
+  const candidatas=todas.filter(o=>Number(o.tipoPlantas)===2);
+  // Prioridad: 2P con platea → otra 2P → cualquier obra con importes reales.
+  // El último nivel permite que la PRIMERA obra 2P con platea también nazca
+  // certificable, tomando sólo el perfil porcentual de pagos de una obra real.
+  const ordenadas=[
+    ...candidatas.filter(o=>getObraCimentacion(o)==='platea'),
+    ...candidatas.filter(o=>getObraCimentacion(o)!=='platea'),
+    ...todas.filter(o=>Number(o.tipoPlantas)!==2)
+  ];
+  const vistos=new Set();
+  for(const meta of ordenadas){
+    if(vistos.has(meta.id)) continue;
+    vistos.add(meta.id);
+    const perfil=cqCapturarPerfilFinancieroObra(meta);
+    if(perfil && perfil.total>0.5) return perfil;
+  }
+  return null;
+}
+function cqAplicarPerfilFinancieroPlatea(target,targetMeta,perfil){
+  if(!target || !perfil || !(perfil.total>0.5)) return false;
+  const semanas=getBaseSemanasForProject(target,targetMeta)
+    .filter(s=>Number(s.num)>=1 && Number(s.num)<=24);
+  if(!semanas.length) return false;
+  const targetAcuerdo=Math.max(0,Number(target.acuerdo)||0);
+  const refAcuerdo=Math.max(0,Number(perfil.acuerdo)||0);
+  const escala=(targetAcuerdo>0 && refAcuerdo>0) ? (targetAcuerdo/refAcuerdo) : 1;
+  const src=(perfil.weekly||[]).map(v=>Math.max(0,Math.round((Number(v)||0)*escala)));
+  if(!src.length) return false;
+
+  const buckets=Array(semanas.length).fill(0);
+  src.forEach((m,j)=>{
+    const dest=Math.min(semanas.length-1, Math.floor(j*semanas.length/src.length));
+    buckets[dest]+=m;
+  });
+
+  if(!target.montos || typeof target.montos!=='object') target.montos={};
+  semanas.forEach((sem,si)=>{
+    const normales=(sem.items||[])
+      .map((it,i)=>({it,i}))
+      .filter(x=>!esNombreConforme(x.it && x.it.desc));
+    if(!normales.length) return;
+    const total=Math.max(0,Math.round(buckets[si]||0));
+    const base=Math.floor(total/normales.length);
+    let resto=total-(base*normales.length);
+    normales.forEach((x,pos)=>{
+      target.montos[`${sem.num}-m-${x.i}`]=base+(pos<resto?1:0);
+    });
+    target.montos[`${sem.num}-pagoMax`]=total;
+  });
+  target._plateaFinanceSeededV1=true;
+  target._plateaFinanceSource=perfil.meta?.id||'';
+  return true;
+}
+function cqAsegurarImportesCronogramaPlatea(){
+  const meta=currentObra && currentObra();
+  if(!state || !meta) return false;
+  const version=state.plantillaVersion || meta.plantillaVersion || '';
+  const cim=normalizeCimentacion2P(state.tipoCimentacion || meta.tipoCimentacion || '');
+  if(version!==PLANTILLA_2P_PLATEA_EXCEL || cim!=='platea') return false;
+
+  // Si ya existen importes reales, jamás los toca.
+  let totalActual=0;
+  getSemanas().forEach(sem=>getItems(sem.num).forEach((it,i)=>{
+    if(!esNombreConforme(it && it.desc)) totalActual+=Math.max(0,Number(getMontoRaw(sem.num,i))||0);
+  }));
+  if(totalActual>0.5){
+    state._plateaFinanceSeededV1=true;
+    return false;
+  }
+
+  const perfil=cqBuscarReferenciaFinanciera2P(meta.id);
+  if(!perfil) return false;
+  const ok=cqAplicarPerfilFinancieroPlatea(state,meta,perfil);
+  if(ok){
+    state._plateaFinanceRepairedV2=true;
+    try{ persist(); }catch(e){ console.warn('No se pudo persistir perfil financiero platea',e); }
+  }
+  return ok;
+}
+
+// Repara explícitamente las obras del cronograma nuevo DESPUÉS de que Firebase
+// terminó de cargar todas las obras modelo. Esto evita que el primer render,
+// que ocurre antes de completar la lectura remota, deje la obra con $0.
+async function cqRepararImportesPlateaPostFirebase(writeRemote=false){
+  const originalState=state;
+  const originalCur=curObraId;
+  const reparadas=[];
+  try{
+    for(const meta of obrasConfig){
+      const st=estadosObras[meta.id];
+      if(!st) continue;
+      const version=st.plantillaVersion || meta.plantillaVersion || '';
+      const cim=normalizeCimentacion2P(st.tipoCimentacion || meta.tipoCimentacion || '');
+      if(version!==PLANTILLA_2P_PLATEA_EXCEL || cim!=='platea') continue;
+
+      state=st;
+      curObraId=meta.id;
+      let totalActual=0;
+      getSemanas().forEach(sem=>getItems(sem.num).forEach((it,i)=>{
+        if(!esNombreConforme(it && it.desc)) totalActual+=Math.max(0,Number(getMontoRaw(sem.num,i))||0);
+      }));
+      if(totalActual>0.5) continue;
+
+      const perfil=cqBuscarReferenciaFinanciera2P(meta.id);
+      if(!perfil) continue;
+      if(cqAplicarPerfilFinancieroPlatea(st,meta,perfil)){
+        st._plateaFinanceRepairedV2=true;
+        estadosObras[meta.id]=st;
+        localStorage.setItem('mano_obra_'+meta.id,JSON.stringify(st));
+        reparadas.push(meta.id);
+      }
+    }
+
+    if(writeRemote && isFirebaseEnabled() && window._dbReady){
+      for(const id of reparadas){
+        try{
+          await window._setDoc(window._doc(window._db,'obras',id),JSON.parse(JSON.stringify(estadosObras[id])));
+        }catch(e){
+          console.warn('No se pudo guardar reparación financiera de platea',id,e);
+        }
+      }
+    }
+  }finally{
+    curObraId=originalCur;
+    state=estadosObras[originalCur] || originalState;
+  }
+  return reparadas.length;
+}
+
+// Evita repetir en cada render la búsqueda/lectura de perfiles financieros.
+// Cada obra se comprueba como máximo una vez por sesión; la reparación completa
+// sigue ejecutándose después de la carga inicial de Firebase.
+const cqPlateaImportCheckSession = new Set();
+function cqAsegurarImportesCronogramaPlateaUnaVez(){
+  const meta=currentObra && currentObra();
+  if(!meta || !state) return false;
+  const version=state.plantillaVersion || meta.plantillaVersion || '';
+  const cim=normalizeCimentacion2P(state.tipoCimentacion || meta.tipoCimentacion || '');
+  if(version!==PLANTILLA_2P_PLATEA_EXCEL || cim!=='platea') return false;
+  if(cqPlateaImportCheckSession.has(meta.id)) return false;
+  cqPlateaImportCheckSession.add(meta.id);
+  return cqAsegurarImportesCronogramaPlatea();
+}
+
+function getBaseSemanasForProject(st,meta){
+  const tipo=Number(st?.tipoPlantas || meta?.tipoPlantas || 1)===2?2:1;
+  if(tipo===2){
+    const cim=normalizeCimentacion2P(st?.tipoCimentacion || meta?.tipoCimentacion || '');
+    const version=st?.plantillaVersion || meta?.plantillaVersion || '';
+    // Las obras NUEVAS de 2 plantas con platea usan el cronograma fijo de 24 semanas
+    // del Excel. Las obras de platea ya existentes (2p_v1) conservan su esquema anterior.
+    if(cim==='platea' && version===PLANTILLA_2P_PLATEA_EXCEL){
+      return SEMANAS_2P_PLATEA_CRONOGRAMA;
+    }
+    if(cim){
+      const inicio=cim==='pilotes'?SEMANAS_2P_PILOTES_INICIO:SEMANAS_2P_PLATEA_INICIO;
+      return [...inicio, ...SEMANAS_DOS_PLANTAS.filter(x=>Number(x.num)>4)];
+    }
+    return SEMANAS_DOS_PLANTAS;
+  }
+  const version = st?.plantillaVersion || meta?.plantillaVersion || '';
+  return version === '1p_detallada_v1' ? SEMANAS : SEMANAS_UNA_PLANTA_LEGACY;
+}
+function getTipoPlantas(st=state, meta=(typeof currentObra==='function'?currentObra():null)){
+  return Number(st?.tipoPlantas || meta?.tipoPlantas || 1) === 2 ? 2 : 1;
+}
+function getBaseSemanas(st=state, meta=(typeof currentObra==='function'?currentObra():null)){
+  return getBaseSemanasForProject(st,meta);
+}
+
 const OBRA_ACORDADA_DEFAULT = 38000000;
 const ITEMS_CQ_DEFAULT = [
   { id:'elec', concepto:'Electricidad', monto:3000000 },
@@ -3422,14 +4640,25 @@ const DEFAULT_OBRAS = [
 ];
 function cloneDefaultCQ(){ return ITEMS_CQ_DEFAULT.map(x=>({...x})); }
 function createDefaultState(meta={}) {
-  const s = { items:{}, pagosFuera:[], acuerdo:OBRA_ACORDADA_DEFAULT, acuerdoComentario:'', itemsCQ:cloneDefaultCQ(), constructor:meta.constructor||'Constructor', obraNum:meta.obraNum||'', montos:{}, customTasks:{}, taskOverrides:{}, customWeeks:[], weekOverrides:{}, hiddenWeeks:[] };
-  SEMANAS.forEach(sem => (sem.items||[]).forEach((it,i) => { s.items[`${sem.num}-${i}`] = it.avance || 0; }));
+  const tipoPlantas = Number(meta.tipoPlantas) === 2 ? 2 : 1;
+  const plantillaVersion = meta.plantillaVersion || (tipoPlantas===2 ? '2p_v1' : '1p_detallada_v1');
+  const tipoCimentacion = tipoPlantas===2 ? normalizeCimentacion2P(meta.tipoCimentacion||'') : '';
+  const s = { items:{}, pagosFuera:[], acuerdo:OBRA_ACORDADA_DEFAULT, acuerdoComentario:'', itemsCQ:cloneDefaultCQ(), constructor:meta.constructor||'Constructor', obraNum:meta.obraNum||'', tipoPlantas, plantillaVersion, ...(tipoCimentacion?{tipoCimentacion}:{}), montos:{}, customTasks:{}, taskOverrides:{}, customWeeks:[], weekOverrides:{}, hiddenWeeks:[], weekOrder:[] };
+  const baseSemanas = getBaseSemanasForProject(s,meta);
+  baseSemanas.forEach(sem => (sem.items||[]).forEach((it,i) => { s.items[`${sem.num}-${i}`] = it.avance || 0; }));
   return s;
 }
 function normalizeState(s, meta={}) {
   s = s && typeof s === 'object' ? s : createDefaultState(meta);
+  if(!s.tipoPlantas) s.tipoPlantas = Number(meta.tipoPlantas) === 2 ? 2 : 1;
+  if(Number(s.tipoPlantas)===2 && !s.plantillaVersion) s.plantillaVersion='2p_v1';
+  if(Number(s.tipoPlantas)===2){
+    const cim=normalizeCimentacion2P(s.tipoCimentacion || meta.tipoCimentacion || '');
+    if(cim) s.tipoCimentacion=cim;
+  }else if(s.tipoCimentacion){ delete s.tipoCimentacion; }
   if(!s.items) s.items = {};
-  SEMANAS.forEach(sem => (sem.items||[]).forEach((it,i) => { const k=`${sem.num}-${i}`; if(s.items[k] == null) s.items[k] = it.avance || 0; }));
+  const baseSemanas = getBaseSemanasForProject(s,meta);
+  baseSemanas.forEach(sem => (sem.items||[]).forEach((it,i) => { const k=`${sem.num}-${i}`; if(s.items[k] == null) s.items[k] = it.avance || 0; }));
   if(!s.pagosFuera) s.pagosFuera = [];
   if(!s.constructor) s.constructor = meta.constructor || 'Constructor';
   if(!s.obraNum) s.obraNum = meta.obraNum || '';
@@ -3452,6 +4681,7 @@ function normalizeState(s, meta={}) {
   if(!s.customWeeks) s.customWeeks = [];
   if(!s.weekOverrides) s.weekOverrides = {};
   if(!s.hiddenWeeks) s.hiddenWeeks = [];
+  if(!Array.isArray(s.weekOrder)) s.weekOrder = [];
   if(!s.acuerdo || s.acuerdo === 53000000) s.acuerdo = OBRA_ACORDADA_DEFAULT;
   if(typeof s.acuerdoComentario !== 'string') s.acuerdoComentario = '';
   if(!s.itemsCQ) s.itemsCQ = cloneDefaultCQ();
@@ -3475,6 +4705,9 @@ obrasConfig.forEach((o,idx)=>{
   estadosObras[o.id] = normalizeState(saved, o);
 });
 let state = estadosObras[curObraId];
+// Etiqueta las referencias iniciales y prepara la obra de Cristian como primer modelo de 2 plantas.
+ensureProjectTypeTemplates(false);
+state = estadosObras[curObraId] || state;
 async function asegurarBanquinasInterioresNelson(){
   const afectadas = obrasConfig.filter(o=>{
     const ref=String(o.obraNum||o.label||'').toLowerCase()
@@ -3605,6 +4838,41 @@ function recordMutationForHistory(){
   lastCommittedSnapshot = current;
   refreshHistoryButtons();
 }
+// Ruta rápida para cambios normales dentro de la obra actual (avance, importes, etc.).
+// Antes snapshotApp() clonaba TODAS las obras en cada click. Con muchas obras eso
+// bloqueaba el hilo principal en tablet. Acá se conserva el mismo undo/redo, pero
+// sólo se clona el estado de la obra que realmente cambió.
+function recordCurrentObraMutationForHistory(){
+  if(suppressHistory) return;
+  if(!lastCommittedSnapshot){
+    lastCommittedSnapshot = snapshotApp();
+    refreshHistoryButtons();
+    return;
+  }
+  const prevState=(lastCommittedSnapshot.estadosObras||{})[curObraId];
+  let currentStateJson='';
+  try{ currentStateJson=JSON.stringify(state); }catch(e){ currentStateJson=''; }
+  let prevStateJson='';
+  try{ prevStateJson=JSON.stringify(prevState==null?null:prevState); }catch(e){ prevStateJson='__err__'; }
+  if(currentStateJson && currentStateJson===prevStateJson) return;
+
+  undoStack.push(lastCommittedSnapshot);
+  if(undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  redoStack = [];
+
+  const nextEstados={...(lastCommittedSnapshot.estadosObras||{})};
+  nextEstados[curObraId]=currentStateJson ? JSON.parse(currentStateJson) : deepClone(state);
+  lastCommittedSnapshot={
+    obrasConfig:lastCommittedSnapshot.obrasConfig || deepClone(obrasConfig||[]),
+    constructoresConfig:lastCommittedSnapshot.constructoresConfig || deepClone(constructoresConfig||[]),
+    curObraId,
+    estadosObras:nextEstados,
+    currentScreen,
+    currentConstructorId
+  };
+  refreshHistoryButtons();
+}
+
 function applySnapshot(snap, writeFirebase=true){
   if(!snap) return false;
   blockFirebaseHistoryRead(20000);
@@ -3698,7 +4966,7 @@ function persist() {
   localStorage.setItem('mano_obra_'+curObraId, JSON.stringify(state));
   // Mantiene compatibilidad con tu versión anterior para la primera obra.
   if(curObraId === obrasConfig[0].id) localStorage.setItem('simon_state', JSON.stringify(state));
-  recordMutationForHistory();
+  recordCurrentObraMutationForHistory();
   if(isFirebaseEnabled() && window._dbReady) {
     markSaving();
     window._setDoc(window._doc(window._db,'obras',curObraId), JSON.parse(JSON.stringify(state)))
@@ -3749,12 +5017,9 @@ function constructorStats(cid){
   const obs=getConstructorObras(cid);
   let pctSum=0, saldoSum=0;
   obs.forEach(o=>{
-    const st=estadosObras[o.id] || normalizeState(null,o);
-    const oldState=state; state=st;
-    const t=calcTotal(); const pf=calcPagosFuera(); const cert=sumCertificados();
-    pctSum += t.pctTotal || 0;
-    saldoSum += (st.acuerdo||0) - (cert + pf.neto);
-    state=oldState;
+    const os=obraStats(o);
+    pctSum += os.pct || 0;
+    saldoSum += os.saldo || 0;
   });
   return {count:obs.length, avg:obs.length ? pctSum/obs.length : 0, saldo:saldoSum};
 }
@@ -3857,7 +5122,7 @@ function moveObra(idx,dir){
 }
 
 function switchObra(id){
-  if(currentScreen==='obra') persist();
+  if(currentScreen==='obra') cqFlushAvancePersist();
   curObraId = id;
   localStorage.setItem('mano_obra_actual', curObraId);
   state = estadosObras[curObraId] || normalizeState(null, currentObra());
@@ -3865,33 +5130,145 @@ function switchObra(id){
   renderObraSwitch();
   updateHeaderTitle();
   showObraView();
+  cqAsegurarImportesCronogramaPlateaUnaVez();
   renderKPIs();
   renderSemanas();
+  // La vista abre con cache local al instante. Si esta obra todavía no se leyó
+  // en esta sesión, se actualiza desde Firebase sin bloquear la navegación.
+  cqEnsureObraRemoteFresh(id);
 }
-function getAv(snum,idx){ return state.items[`${snum}-${idx}`] ?? 0; }
+function getAv(snum,idx){
+  if(!state.items || typeof state.items!=='object') state.items={};
+  const it=getTask(snum,idx);
+  const stable=taskStateKey(snum,idx,it);
+  let actual;
+  if(state.items[stable] != null) actual = Number(state.items[stable]) || 0;
+  else {
+    // Compatibilidad con datos anteriores: los extras guardaban avance por índice visible.
+    const legacy=`${snum}-${idx}`;
+    if(legacy!==stable && state.items[legacy] != null) actual = Number(state.items[legacy]) || 0;
+    else actual = Number(it && it.avance) || 0;
+  }
+
+  // Una tarea nunca puede volver a computarse por debajo de lo ya certificado.
+  // En obras históricas, cambios de índices/ediciones podían dejar el avance actual
+  // menor que su bloqueo certificado y generar diferencias entre Finanzas y Avances.
+  let locked = 0;
+  try { locked = (typeof getLockedAv==='function') ? (Number(getLockedAv(snum,idx))||0) : 0; } catch(e) {}
+  return Math.max(0, Math.min(1, Math.max(actual, locked)));
+}
+
+// Rendimiento/sincronización: una obra tocada localmente nunca debe ser pisada
+// por una lectura remota que terminó después de la interacción del usuario.
+const _cqLocallyTouchedObras = new Set();
+const _cqRemoteLoadedObras = new Set();
+const _cqRemoteLoadingObras = new Set();
+let _cqPresenceStarted = false;
+let _cqInitialSyncRunning = false;
+let _cqForegroundSyncDone = false;
+let _cqBackgroundSyncRunning = false;
+function cqYieldUI(ms=0){ return new Promise(resolve=>setTimeout(resolve,ms)); }
+
+// ─── RENDIMIENTO AVANCES ──────────────────────────────────────────────────
+// El slider puede emitir decenas de eventos por segundo. Guardar en localStorage,
+// construir historial y escribir Firebase en cada uno bloqueaba la UI en tablet.
+// La pantalla cambia al instante y el guardado se consolida cuando termina la interacción.
+let _cqAvancePersistTimer=null;
+let _cqAvanceSummaryTimer=null;
+let _cqAvancePersistDirty=false;
+let _cqAvanceSummaryWeek=null;
+
+function cqScheduleAvancePersist(delay=750){
+  _cqLocallyTouchedObras.add(curObraId);
+  estadosObras[curObraId]=state;
+  _cqAvancePersistDirty=true;
+  if(_cqAvancePersistTimer) clearTimeout(_cqAvancePersistTimer);
+  _cqAvancePersistTimer=setTimeout(()=>{
+    _cqAvancePersistTimer=null;
+    cqFlushAvancePersist();
+  },delay);
+}
+function cqFlushAvancePersist(){
+  if(_cqAvancePersistTimer){ clearTimeout(_cqAvancePersistTimer); _cqAvancePersistTimer=null; }
+  if(!_cqAvancePersistDirty) return;
+  _cqAvancePersistDirty=false;
+  persist();
+}
+function cqScheduleAvanceSummary(snum,delay=35){
+  _cqAvanceSummaryWeek=snum;
+  if(_cqAvanceSummaryTimer) clearTimeout(_cqAvanceSummaryTimer);
+  _cqAvanceSummaryTimer=setTimeout(()=>{
+    _cqAvanceSummaryTimer=null;
+    const sem=_cqAvanceSummaryWeek;
+    _cqAvanceSummaryWeek=null;
+    const calcCtx=buildCalcContext();
+    if(sem!=null && document.getElementById('sb-'+sem)) refreshSemana(sem,calcCtx);
+    renderKPIs(calcCtx);
+    const vf=document.getElementById('view-finanzas');
+    if(vf && vf.style.display!=='none') renderFinanzas();
+  },delay);
+}
 function setAv(snum,idx,val){
   const min=getLockedAv ? getLockedAv(snum,idx) : 0;
   if(val < min){
     alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
     val=min;
   }
-  state.items[`${snum}-${idx}`]=val;
-  persist();
-  updateCertSticky && updateCertSticky();
+  if(!state.items || typeof state.items!=='object') state.items={};
+  const it=getTask(snum,idx);
+  state.items[taskStateKey(snum,idx,it)]=val;
+  estadosObras[curObraId]=state;
+  cqScheduleAvancePersist();
 }
 
 function fmt(n){ return '$ ' + Math.round(n).toLocaleString('es-AR'); }
 
 // ─── CÁLCULOS ─────────────────────────────────────────────────────────────
-function calcSemana(s){
-  let totalMonto=0, devengado=0;
-  getItems(s.num).forEach((it,i)=>{ const av=getAv(s.num,i); const m=getMonto(s.num,i); totalMonto+=m; devengado+=m*av; });
-  return { totalMonto, devengado, pctSem: totalMonto>0?devengado/totalMonto:0 };
-}
-function calcTotal(){
+function calcTotalRaw(){
   let totalDev=0, obraTotal=0;
-  getSemanas().forEach(s=>{ getItems(s.num).forEach((it,i)=>{ const av=getAv(s.num,i); const m=getMonto(s.num,i); totalDev+=m*av; obraTotal+=m; }); });
-  return { totalDev, obraTotal, pctTotal: obraTotal>0?totalDev/obraTotal:0 };
+  getSemanas().forEach(s=>{
+    getItems(s.num).forEach((it,i)=>{
+      const av=getAv(s.num,i);
+      const m=getMonto(s.num,i);
+      totalDev+=m*av;
+      obraTotal+=m;
+    });
+  });
+  return { totalDev, obraTotal };
+}
+function calcBrechaCertificada(rawPrecalculado){
+  // Si hay dinero ya certificado que la estructura histórica de tareas no logra
+  // reconstruir como devengado, esa diferencia NO puede volver a quedar pendiente.
+  // Se concilia contra Conforme de obra, que es el rubro residual del acuerdo.
+  const raw=rawPrecalculado || calcTotalRaw();
+  let certificado=0;
+  try { certificado=(typeof sumCertificados==='function') ? (Number(sumCertificados())||0) : 0; } catch(e) {}
+  return Math.max(0, certificado-raw.totalDev);
+}
+function buildCalcContext(){
+  const raw=calcTotalRaw();
+  const brecha=calcBrechaCertificada(raw);
+  return {raw,brecha};
+}
+function calcSemana(s, brechaPrecalculada){
+  let totalMonto=0, devengado=0;
+  let tieneConforme=false;
+  getItems(s.num).forEach((it,i)=>{
+    const av=getAv(s.num,i);
+    const m=getMonto(s.num,i);
+    totalMonto+=m;
+    devengado+=m*av;
+    if(isConformeTask(s.num,i)) tieneConforme=true;
+  });
+  if(tieneConforme) devengado += (brechaPrecalculada==null ? calcBrechaCertificada() : brechaPrecalculada);
+  const devSeguro=Math.min(totalMonto,devengado);
+  return { totalMonto, devengado:devSeguro, pctSem: totalMonto>0?devSeguro/totalMonto:0 };
+}
+function calcTotal(ctx){
+  const c=ctx || buildCalcContext();
+  const raw=c.raw;
+  const totalDev=Math.min(raw.obraTotal, raw.totalDev + c.brecha);
+  return { totalDev, obraTotal:raw.obraTotal, pctTotal: raw.obraTotal>0?totalDev/raw.obraTotal:0 };
 }
 
 // ─── CERTIFICADOS DE AVANCE ───────────────────────────────────────────────
@@ -3903,14 +5280,40 @@ function ensureCertLocks(){
   if(!state.certLocks || typeof state.certLocks!=='object') state.certLocks={};
   return state.certLocks;
 }
-function certKey(snum,idx){ return `${snum}-${idx}`; }
-function getLockedAv(snum,idx){ return ensureCertLocks()[certKey(snum,idx)] ?? 0; }
-function setLockedAv(snum,idx,val){ ensureCertLocks()[certKey(snum,idx)] = Math.max(0, Math.min(1, val)); }
+function certKey(snum,idx,taskRef){ return taskStateKey(snum,idx,taskRef); }
+function getLockedAv(snum,idx){
+  const locks=ensureCertLocks();
+  const it=getTask(snum,idx);
+  const stable=certKey(snum,idx,it);
+  if(locks[stable] != null) return Number(locks[stable]) || 0;
+  // Compatibilidad legacy para extras certificados antes de usar claves estables.
+  const legacy=`${snum}-${idx}`;
+  if(legacy!==stable && locks[legacy] != null) return Number(locks[legacy]) || 0;
+  return 0;
+}
+function setLockedAv(snum,idx,val){
+  const it=getTask(snum,idx);
+  ensureCertLocks()[certKey(snum,idx,it)] = Math.max(0, Math.min(1, val));
+}
+function certDetailTaskKey(det){
+  if(det && typeof det.taskKey==='string' && det.taskKey) return det.taskKey;
+  if(!det) return '';
+  const items=getItems(det.snum);
+  const nd=normalizarNombreTarea(det.desc||'');
+  if(nd){
+    const matches=items.map((it,i)=>({it,i})).filter(x=>normalizarNombreTarea(x.it&&x.it.desc)===nd);
+    if(matches.length===1) return taskStateKey(det.snum,matches[0].i,matches[0].it);
+  }
+  const byIdx=items[Number(det.idx)];
+  if(byIdx) return taskStateKey(det.snum,Number(det.idx),byIdx);
+  return `${det.snum}-${det.idx}`;
+}
 function rebuildCertLocks(){
   state.certLocks={};
   getCertificados().forEach(c=>{
     (c.detalleItems||[]).forEach(it=>{
-      const k=certKey(it.snum,it.idx);
+      const k=certDetailTaskKey(it);
+      if(!k) return;
       state.certLocks[k]=Math.max(state.certLocks[k]||0, parseFloat(it.to)||0);
     });
   });
@@ -3921,14 +5324,14 @@ function calcDetalleCertificacion(){
   getSemanas().forEach(s=>{
     getItems(s.num).forEach((it,i)=>{
       const from=getLockedAv(s.num,i), to=getAv(s.num,i), diff=Math.max(0,to-from), monto=getMonto(s.num,i), importe=monto*diff;
-      if(importe>0.5){ items.push({snum:s.num,idx:i,desc:it.desc,from,to,diff,monto,importe,etapa:s.etapa}); total+=importe; }
+      if(importe>0.5){ items.push({snum:s.num,idx:i,taskKey:taskStateKey(s.num,i,it),desc:it.desc,from,to,diff,monto,importe,etapa:s.etapa}); total+=importe; }
     });
   });
   return {items,total};
 }
 function detalleCertTexto(items){
   if(!items || !items.length) return 'Sin avances nuevos.';
-  return items.map(it=>`• S${it.snum} · ${it.desc}\n  ${Math.round((it.from||0)*100)}% → ${Math.round((it.to||0)*100)}% · ${fmt(it.importe||0)}`).join('\n\n');
+  return items.map(it=>`• S${getDisplayWeekNum(it.snum)} · ${it.desc}\n  ${Math.round((it.from||0)*100)}% → ${Math.round((it.to||0)*100)}% · ${fmt(it.importe||0)}`).join('\n\n');
 }
 function calcCertificacion(){
   const c=calcTotal(), certificado=sumCertificados(), det=calcDetalleCertificacion();
@@ -4098,80 +5501,87 @@ function calcPagosFuera(){
   return { afavor, encontra, neto: encontra - afavor }; // neto positivo = se pagó más (en contra)
 }
 
-function calcConformeObra(){
-  // Buscar "Conforme de obra" por su nombre real y no por una posición fija.
-  // Así evitamos que un monto histórico guardado en una clave como 23-m-0
-  // termine asociado por error a otro rubro.
-  const normalizar = v => String(v || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .toLowerCase().trim();
+function calcConformeObra(brechaPrecalculada){
+  const base = calcConformeBase();
+  const encontrado = base.ref;
+  let montoConforme = Number(base.montoConforme) || 0;
+  let avManual = 0;
+  if(encontrado) avManual = Number(getAv(encontrado.semNum, encontrado.idx)) || 0;
+  avManual = Math.max(0, Math.min(1, avManual));
 
-  let encontrado = null;
-
-  for (const sem of getSemanas()){
-    const items = getItems(sem.num);
-    for (let i=0;i<items.length;i++){
-      const it = items[i];
-      const nombre = normalizar(it && it.desc);
-      if(nombre === 'conforme de obra' || nombre.includes('conforme de obra')){
-        encontrado = { semNum:sem.num, idx:i, item:it };
-        break;
-      }
-    }
-    if(encontrado) break;
-  }
-
-  // Fallback compatible con obras viejas cuyo nombre pudiera haber sido editado.
-  if(!encontrado){
-    const sem23 = getSemanaByNum(23);
-    const items23 = sem23 ? getItems(23) : [];
-    if(items23.length){
-      const idxConforme = items23.findIndex(it =>
-        normalizar(it && it.desc).includes('conforme')
-      );
-      if(idxConforme >= 0){
-        encontrado = {
-          semNum:23,
-          idx:idxConforme,
-          item:items23[idxConforme]
-        };
-      }
-    }
-  }
-
-  let montoConforme = 0;
-  let avConforme = 0;
-
-  if(encontrado && encontrado.item){
-    // Usar el monto del rubro encontrado y no un monto posicional histórico.
-    montoConforme = Number(encontrado.item.monto) || 0;
-
-    // Usar la clave estable del ítem para el avance cuando esté disponible.
-    const key = String(encontrado.item.key || '');
-    if(key && state.items && state.items[key] != null){
-      avConforme = Number(state.items[key]) || 0;
-    }else{
-      avConforme = getAv(encontrado.semNum, encontrado.idx);
-    }
-  }
-
-  avConforme = Math.max(0, Math.min(1, avConforme));
-
-  const saldoConforme = Math.round(montoConforme * (1 - avConforme));
   const pf = calcPagosFuera();
-
-  // pf.neto > 0 = en contra (se descuenta del conforme)
-  // pf.neto < 0 = a favor (se suma al conforme)
-  const saldoAjustado = saldoConforme - pf.neto;
+  // neto > 0 = en contra del constructor: reduce Conforme.
+  // neto < 0 = a favor del constructor: aumenta Conforme.
+  const ajustePagos = Number(pf.neto) || 0;
+  const brechaCertificada = (brechaPrecalculada!=null) ? Number(brechaPrecalculada)||0 : ((typeof calcBrechaCertificada==='function') ? calcBrechaCertificada() : 0);
+  const devManual = montoConforme * avManual;
+  // Cualquier importe ya certificado pero no reconstruido por los avances históricos
+  // se imputa al Conforme para que no reaparezca como deuda.
+  const devAjustado = devManual + ajustePagos + brechaCertificada;
+  const saldoConforme = montoConforme - devManual;
+  const saldoAjustado = saldoConforme - ajustePagos - brechaCertificada;
+  const avEfectivo = montoConforme > 0 ? (devAjustado / montoConforme) : avManual;
 
   return {
     montoConforme,
-    avConforme,
+    montoBaseAutomatico:montoConforme,
+    acuerdo:base.acuerdo,
+    asignadoOtrasTareas:base.asignado,
+    avConforme: avManual,
+    avManual,
+    avEfectivo,
+    ajustePagos,
+    brechaCertificada,
+    devManual,
+    devAjustado,
     saldoConforme,
     saldoAjustado,
     semNum: encontrado ? encontrado.semNum : null,
+    idx: encontrado ? encontrado.idx : null,
     itemKey: encontrado && encontrado.item ? (encontrado.item.key || '') : ''
   };
+}
+
+function isConformeTask(snum, idx){
+  const ref = findConformeTaskRef();
+  return !!(ref && ref.semNum === snum && ref.idx === idx);
+}
+
+function taskDisplayMetrics(snum, idx){
+  const monto = Number(getMonto(snum, idx)) || 0;
+  const avManual = Number(getAv(snum, idx)) || 0;
+  if(!isConformeTask(snum, idx)){
+    return { monto, avManual, avDisplay:avManual, dev:monto*avManual, saldo:monto*(1-avManual), ajuste:0, conforme:false };
+  }
+  const co = calcConformeObra();
+  return {
+    monto,
+    avManual,
+    avDisplay:co.avEfectivo,
+    dev:co.devAjustado,
+    saldo:co.saldoAjustado,
+    ajuste:co.ajustePagos,
+    conforme:true
+  };
+}
+
+function setConformeEffectiveAv(snum, idx, effectiveAv){
+  const m = Number(getMonto(snum, idx)) || 0;
+  if(m <= 0){ setAv(snum, idx, 0); return 0; }
+  const ajustePct = (Number(calcPagosFuera().neto) || 0) / m;
+  const locked = getLockedAv ? getLockedAv(snum, idx) : 0;
+  let manual = Number(effectiveAv) - ajustePct;
+  manual = Math.max(locked, Math.min(1, manual));
+  setAv(snum, idx, manual);
+  return manual + ajustePct;
+}
+
+function refreshConformeTaskUI(){
+  const co = calcConformeObra();
+  if(co.semNum == null || co.idx == null) return;
+  updateItemRowUI(co.semNum, co.idx, getAv(co.semNum, co.idx));
+  const block=document.getElementById('sb-'+co.semNum);
+  if(block) refreshSemana(co.semNum);
 }
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────
@@ -4186,8 +5596,9 @@ function kpiIcon(tipo){
   return icons[tipo] || '';
 }
 
-function renderKPIs(){
-  const {totalDev, obraTotal, pctTotal} = calcTotal();
+function renderKPIs(ctx){
+  const calcCtx = ctx || buildCalcContext();
+  const {totalDev, obraTotal, pctTotal} = calcTotal(calcCtx);
   const pf = calcPagosFuera();
   const certData = calcCertificacion();
   const cert = sumCertificados();
@@ -4197,8 +5608,13 @@ function renderKPIs(){
   // Así una tarea incluida en un certificado (aunque su avance luego cambie)
   // continúa computándose como pagada.
   const totalPagado = cert + pf.neto;
-  const semComp = getSemanas().filter(s=>calcSemana(s).pctSem>=0.99).length;
-  const semParcial = getSemanas().filter(s=>{const p=calcSemana(s).pctSem;return p>0&&p<0.99;}).length;
+  let semComp=0, semParcial=0;
+  const semanasKpi=getSemanas();
+  semanasKpi.forEach(s=>{
+    const p=calcSemana(s,calcCtx.brecha).pctSem;
+    if(p>=0.99) semComp++;
+    else if(p>0) semParcial++;
+  });
 
   document.getElementById('pct-total').textContent = (pctTotal*100).toFixed(1)+'%';
   document.getElementById('prog-fill').style.width = (pctTotal*100).toFixed(1)+'%';
@@ -4206,7 +5622,7 @@ function renderKPIs(){
   document.getElementById('kpis').innerHTML = `
     <div class="kpi"><div class="kpi-card-row">${kpiIcon('avance')}<div class="kpi-content"><div class="kpi-label">Avance de obra</div><div class="kpi-val yellow">${(pctTotal*100).toFixed(1)}%</div><div class="kpi-sub">${semComp} sem. completas · ${semParcial} en curso</div></div></div></div>
     <div class="kpi"><div class="kpi-card-row">${kpiIcon('dev')}<div class="kpi-content"><div class="kpi-label">Devengado avances</div><div class="kpi-val">${fmt(totalDev)}</div><div class="kpi-sub">de ${fmt(obraTotal)} total</div></div></div></div>
-    <div class="kpi"><div class="kpi-card-row">${kpiIcon('pagos')}<div class="kpi-content"><div class="kpi-label">Pagos fuera de avance</div><div class="kpi-val ${pf.neto>0?'red':pf.neto<0?'green':''}">${pf.neto>=0?'+':''}${fmt(pf.neto)}</div><div class="kpi-sub">${pf.neto>0?'en contra del constructor':pf.neto<0?'a favor del constructor':'sin pagos fuera'}</div>${(()=>{ const co=calcConformeObra(); return `<div style="margin-top:6px;padding-top:5px;border-top:1px solid #EEF4EE;font-size:10px;color:#7A9E82;font-weight:700;letter-spacing:.02em">Conforme de obra: <span style="color:${co.saldoAjustado<0?'#C0392B':'#163D35'};font-size:11px">${fmt(co.saldoAjustado)}</span></div>`; })()}</div></div></div>
+    <div class="kpi"><div class="kpi-card-row">${kpiIcon('pagos')}<div class="kpi-content"><div class="kpi-label">Pagos fuera de avance</div><div class="kpi-val ${pf.neto>0?'red':pf.neto<0?'green':''}">${pf.neto>=0?'+':''}${fmt(pf.neto)}</div><div class="kpi-sub">${pf.neto>0?'en contra del constructor':pf.neto<0?'a favor del constructor':'sin pagos fuera'}</div>${(()=>{ const co=calcConformeObra(calcCtx.brecha); return `<div style="margin-top:6px;padding-top:5px;border-top:1px solid #EEF4EE;font-size:10px;color:#7A9E82;font-weight:700;letter-spacing:.02em">Conforme de obra: <span style="color:${co.saldoAjustado<0?'#C0392B':'#163D35'};font-size:11px">${fmt(co.saldoAjustado)}</span></div>`; })()}</div></div></div>
     <div class="kpi"><div class="kpi-card-row">${kpiIcon('saldo')}<div class="kpi-content"><div class="kpi-label">Saldo constructor</div><div class="kpi-val red">${fmt(state.acuerdo-totalPagado)}</div><div class="kpi-sub">sobre acuerdo ${fmt(state.acuerdo)}</div></div></div></div>
     ${renderCertificadosMini()}
     <div class="kpi" style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -4231,30 +5647,58 @@ function semanaTienePendiente(snum){
 }
 
 function renderSemanas(){
+  // IMPORTANTE: la reparación financiera de 2P + platea ya no se ejecuta acá.
+  // renderSemanas() corre en muchas interacciones; hacer esa revisión en cada render
+  // generaba demora perceptible al marcar tareas, especialmente en tablet.
   const cont=document.getElementById('semanas-container');
-  cont.innerHTML=getSemanas().map(s=>{
-    const {totalMonto,devengado,pctSem}=calcSemana(s);
+  const calcCtx=buildCalcContext();
+  const semanasActuales=getSemanas();
+  const globalInput=document.getElementById('all-weeks-total');
+  if(globalInput){
+    const totales=semanasActuales.filter(s=>getTareasAsignables(s.num).length>0).map(s=>Math.round(getMontoSemanaAsignable(s.num)));
+    globalInput.value=(totales.length && totales.every(v=>v===totales[0])) ? String(totales[0]) : '';
+  }
+  cont.innerHTML=semanasActuales.map(s=>{
+    const {totalMonto,devengado,pctSem}=calcSemana(s,calcCtx.brecha);
     const st=semStatus(pctSem);
     const hasPendingCert=semanaTienePendiente(s.num);
-    return `<div class="semana-block ${st.cls} ${grpClass(s.num)} ${hasPendingCert?'pending-cert-week':''}" id="sb-${s.num}">
+    return `<div class="semana-block ${st.cls} ${grpClass(s.displayNum||s.num)} ${hasPendingCert?'pending-cert-week':''}" id="sb-${s.num}">
       <div class="semana-header" onclick="toggleSemana(${s.num})">
-        <span class="semana-num">S${s.num}</span>
-        <span class="semana-etapa">${s.etapa}</span>
+        <span class="semana-num">S${s.displayNum||s.num}</span>
+        <span class="semana-title-wrap">
+          <span class="semana-etapa">${escHtml(s.etapa || '')}</span>
+          <span class="week-title-actions">
+            <button class="week-action-btn edit" title="Editar semana (número y título)" aria-label="Editar semana S${s.displayNum||s.num}" onclick="event.stopPropagation();editSemana(${s.num})">✏</button>
+            <button class="week-action-btn delete" title="Eliminar semana" aria-label="Eliminar semana S${s.displayNum||s.num}" onclick="event.stopPropagation();deleteSemana(${s.num})">🗑</button>
+          </span>
+        </span>
         ${hasPendingCert?'<span class="week-pending-badge">⏳ Para certificar</span>':''}
         <span class="semana-badge ${st.badgeCls}">${st.label}</span>
         <span class="semana-monto">${fmt(devengado)} / ${fmt(totalMonto)}</span>
-        <button class="task-mini" onclick="event.stopPropagation();editSemana(${s.num})">✏ Rubro</button>
-        <button class="task-mini del" onclick="event.stopPropagation();deleteSemana(${s.num})">✕ Rubro</button>
         <button class="task-mini" onclick="event.stopPropagation();marcarSemana(${s.num},1)">✓ Semana</button>
         <button class="task-mini del" onclick="event.stopPropagation();marcarSemana(${s.num},0)">↺</button>
         <span class="chevron" id="chev-${s.num}">▼</span>
       </div>
       <div class="semana-progbar"><div class="semana-progfill ${pctSem>=0.99?'completa':''}" style="width:${(pctSem*100).toFixed(0)}%"></div></div>
       <div class="semana-items" id="si-${s.num}">
+        <div class="week-value-row" onclick="event.stopPropagation()">
+          <div class="week-value-copy">
+            <span class="week-value-label">Valor de la semana</span>
+            <span class="week-value-help">Se divide por igual entre ${getTareasAsignables(s.num).length} tarea${getTareasAsignables(s.num).length===1?'':'s'} normal${getTareasAsignables(s.num).length===1?'':'es'}. Conforme de obra se calcula aparte como saldo.</span>
+          </div>
+          <div class="week-value-controls">
+            <div class="week-value-input-wrap"><span>$</span><input id="week-total-${s.num}" class="week-value-input" type="number" inputmode="numeric" min="0" step="1" value="${Math.round(getMontoSemanaAsignable(s.num))}" onfocus="this.select()" onkeydown="onWeekTotalKeydown(event,${s.num})"></div>
+            <button type="button" class="week-value-apply" onclick="event.stopPropagation();aplicarValorSemana(${s.num})">Dividir en tareas</button>
+          </div>
+        </div>
         ${getItems(s.num).map((it,i)=>{
-          const av=getAv(s.num,i); const done=av>=1;
+          const manualAv=getAv(s.num,i);
+          const dm=taskDisplayMetrics(s.num,i);
+          const av=dm.avDisplay;
+          const done=av>=0.999999;
           const locked=getLockedAv(s.num,i);
-          const pendingCert=av>locked+0.000001;
+          const pendingCert=manualAv>locked+0.000001;
+          const sliderVal=Math.max(0,Math.min(100,av*100));
           return `<div class="item-row ${pendingCert?'pending-cert':''}">
             <div class="item-row-top">
               <div class="item-check ${done?'on':av>0?'partial':''}" onclick="toggleCheck(${s.num},${i})">${done?'✓':av>0?'':''}</div>
@@ -4263,21 +5707,21 @@ function renderSemanas(){
             </div>
             <div class="item-row-bottom">
               <div class="item-avance">
-                <input type="range" id="av-sld-${s.num}-${i}" class="avance-slider ${getLockedAv(s.num,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(av*100)}"
+                <input type="range" id="av-sld-${s.num}-${i}" class="avance-slider ${getLockedAv(s.num,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(sliderVal)}"
                   oninput="onSlider(${s.num},${i},this.value)" onchange="onSlider(${s.num},${i},this.value)">
                 <div class="avance-input-wrap">
-                  <input type="number" id="av-inp-${s.num}-${i}" class="avance-input ${getLockedAv(s.num,i)>0?'locked-input':''}" min="0" max="100" step="0.01"
+                  <input type="number" id="av-inp-${s.num}-${i}" class="avance-input ${getLockedAv(s.num,i)>0?'locked-input':''}" min="${dm.conforme?'-999':'0'}" max="${dm.conforme?'999':'100'}" step="0.01"
                     value="${Math.round(av*10000)/100}" onfocus="this.select()" onchange="onAvanceInput(${s.num},${i},this.value)">
                   <span class="avance-pct-sign">%</span>
                 </div>
               </div>
               <div class="item-montos">
-                <span class="item-monto-total" onclick="editMonto(${s.num},${i})">${fmt(getMonto(s.num,i))} ✏</span>
+                <span class="item-monto-total${dm.conforme?' conforme-auto':''}" onclick="editMonto(${s.num},${i})">${fmt(getMonto(s.num,i))}${dm.conforme?'<small class="conforme-auto-label">saldo automático</small>':' ✏'}</span>
                 <div class="item-monto-detail">
-                  <span class="item-devengado" id="dev-${s.num}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(getMonto(s.num,i)*av)}</span>
+                  <span class="item-devengado" id="dev-${s.num}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(dm.dev)}</span>
                   <span class="item-saldo-sep">·</span>
                   <span class="item-saldo-lbl">saldo</span>
-                  <span class="item-saldo-val" id="saldo-${s.num}-${i}" style="color:${done?'#A8BFA8':'#C0392B'}">${fmt(getMonto(s.num,i)*(1-av))}</span>
+                  <span class="item-saldo-val" id="saldo-${s.num}-${i}" style="color:${done?'#A8BFA8':'#C0392B'}">${fmt(dm.saldo)}</span>
                 </div>
               </div>
             </div>
@@ -4295,66 +5739,105 @@ function toggleSemana(num){
 }
 function toggleCheck(snum,idx){
   const min=getLockedAv ? getLockedAv(snum,idx) : 0;
-  const cur=getAv(snum,idx);
-  const next=cur>=1?0:1;
-  if(next < min){
-    alert('Esta tarea ya fue certificada. Para destildarla o bajarla, eliminá primero el certificado.');
-    setAv(snum,idx,min);
+  if(isConformeTask(snum,idx)){
+    const dm=taskDisplayMetrics(snum,idx);
+    if(dm.avDisplay>=0.999999){
+      setAv(snum,idx,min); // al destildar, conserva lo ya certificado; el ajuste por pagos sigue visible
+    }else{
+      setConformeEffectiveAv(snum,idx,1);
+    }
   }else{
-    setAv(snum,idx,next);
+    const cur=getAv(snum,idx);
+    const next=cur>=1?0:1;
+    if(next < min){
+      alert('Esta tarea ya fue certificada. Para destildarla o bajarla, eliminá primero el certificado.');
+      setAv(snum,idx,min);
+    }else{
+      setAv(snum,idx,next);
+    }
   }
-  refreshAll();
+  // Respuesta visual inmediata; cálculos globales y guardado quedan fuera del click.
+  updateItemRowUI(snum,idx,getAv(snum,idx));
+  cqScheduleAvanceSummary(snum);
 }
 function updateItemRowUI(snum, idx, av){
+  const dm=taskDisplayMetrics(snum,idx);
+  const displayAv=dm.avDisplay;
+  const sliderDisplay=Math.max(0,Math.min(1,displayAv));
   const slider=document.getElementById(`av-sld-${snum}-${idx}`);
-  if(slider) slider.value=Math.round(av*100);
+  if(slider) slider.value=Math.round(sliderDisplay*100);
   const input=document.getElementById(`av-inp-${snum}-${idx}`);
-  if(input) input.value=Math.round(av*10000)/100;
+  if(input) input.value=Math.round(displayAv*10000)/100;
   const row=slider ? slider.closest('.item-row') : (input ? input.closest('.item-row') : null);
   if(row){
     const chk=row.querySelector('.item-check');
     const dsc=row.querySelector('.item-desc');
-    if(chk){ chk.className='item-check'+(av>=1?' on':av>0?' partial':''); chk.textContent=av>=1?'✓':''; }
-    if(dsc) dsc.className='item-desc'+(av>=1?' done':'');
+    if(chk){ chk.className='item-check'+(displayAv>=1?' on':displayAv>0?' partial':''); chk.textContent=displayAv>=1?'✓':''; }
+    if(dsc){
+      dsc.className='item-desc'+(displayAv>=1?' done':'');
+      const manualAv=getAv(snum,idx);
+      const locked=getLockedAv(snum,idx);
+      const pending=manualAv>locked+0.000001;
+      let badge=dsc.querySelector('.pending-cert-badge');
+      if(pending && !badge){
+        badge=document.createElement('span');
+        badge.className='pending-cert-badge';
+        badge.textContent='⏳ Pendiente';
+        dsc.appendChild(badge);
+      }else if(!pending && badge){
+        badge.remove();
+      }
+      row.classList.toggle('pending-cert',pending);
+    }
   }
-  const done=av>=1;
+  const done=displayAv>=1;
   const devEl=document.getElementById(`dev-${snum}-${idx}`);
   const saldoEl=document.getElementById(`saldo-${snum}-${idx}`);
-  if(devEl){ devEl.textContent=fmt(getMonto(snum,idx)*av); devEl.style.color=done?'#0A6E3A':'#2E7D5E'; }
-  if(saldoEl){ saldoEl.textContent=fmt(getMonto(snum,idx)*(1-av)); saldoEl.style.color=done?'#A8BFA8':'#C0392B'; }
+  if(devEl){ devEl.textContent=fmt(dm.dev); devEl.style.color=done?'#0A6E3A':'#2E7D5E'; }
+  if(saldoEl){ saldoEl.textContent=fmt(dm.saldo); saldoEl.style.color=done?'#A8BFA8':'#C0392B'; }
 }
 function onSlider(snum,idx,val){
-  const min=getLockedAv ? getLockedAv(snum,idx) : 0;
-  let av=parseInt(val)/100;
-  if(av < min){
-    av=min;
-    alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
+  if(isConformeTask(snum,idx)){
+    const target=Math.max(0,Math.min(100,parseFloat(val)||0))/100;
+    setConformeEffectiveAv(snum,idx,target);
+    updateItemRowUI(snum,idx,getAv(snum,idx));
+  }else{
+    const min=getLockedAv ? getLockedAv(snum,idx) : 0;
+    let av=parseInt(val)/100;
+    if(av < min){
+      av=min;
+      alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
+    }
+    setAv(snum,idx,av);
+    updateItemRowUI(snum,idx,av);
   }
-  setAv(snum,idx,av);
-  updateItemRowUI(snum,idx,av);
-  refreshSemana(snum);
-  renderKPIs();
-  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
+  cqScheduleAvanceSummary(snum);
 }
 function onAvanceInput(snum,idx,val){
-  const min=getLockedAv ? getLockedAv(snum,idx) : 0;
   let n=parseFloat(String(val).replace(',', '.'));
   if(isNaN(n)) n=0;
-  n=Math.max(0,Math.min(100,n));
-  let av=Math.round(n*100)/10000;
-  if(av < min){
-    av=min;
-    alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
+  if(isConformeTask(snum,idx)){
+    n=Math.max(-999,Math.min(999,n));
+    setConformeEffectiveAv(snum,idx,n/100);
+    updateItemRowUI(snum,idx,getAv(snum,idx));
+  }else{
+    const min=getLockedAv ? getLockedAv(snum,idx) : 0;
+    n=Math.max(0,Math.min(100,n));
+    let av=Math.round(n*100)/10000;
+    if(av < min){
+      av=min;
+      alert('Este avance ya fue certificado al '+Math.round(min*100)+'%. Para bajarlo, eliminá primero el certificado.');
+    }
+    setAv(snum,idx,av);
+    updateItemRowUI(snum,idx,av);
   }
-  setAv(snum,idx,av);
-  updateItemRowUI(snum,idx,av);
-  refreshSemana(snum);
-  renderKPIs();
-  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
+  cqScheduleAvanceSummary(snum);
 }
-function refreshSemana(snum){
+
+function refreshSemana(snum,ctx){
   const s=getSemanaByNum(snum);
-  const {totalMonto,devengado,pctSem}=calcSemana(s);
+  const calcCtx=ctx || buildCalcContext();
+  const {totalMonto,devengado,pctSem}=calcSemana(s,calcCtx.brecha);
   const st=semStatus(pctSem);
   const hasPendingCert=semanaTienePendiente(snum);
   const block=document.getElementById('sb-'+snum);
@@ -4386,9 +5869,13 @@ function refreshAll(){
     const snum=parseInt(el.id.replace('si-',''));
     const s=getSemanaByNum(snum);
     el.innerHTML=getItems(snum).map((it,i)=>{
-      const av=getAv(snum,i); const done=av>=1;
+      const manualAv=getAv(snum,i);
+      const dm=taskDisplayMetrics(snum,i);
+      const av=dm.avDisplay;
+      const done=av>=0.999999;
       const locked=getLockedAv(snum,i);
-      const pendingCert=av>locked+0.000001;
+      const pendingCert=manualAv>locked+0.000001;
+      const sliderVal=Math.max(0,Math.min(100,av*100));
       return `<div class="item-row ${pendingCert?'pending-cert':''}">
         <div class="item-row-top">
           <div class="item-check ${done?'on':av>0?'partial':''}" onclick="toggleCheck(${snum},${i})">${done?'✓':av>0?'':''}</div>
@@ -4397,21 +5884,21 @@ function refreshAll(){
         </div>
         <div class="item-row-bottom">
           <div class="item-avance">
-            <input type="range" id="av-sld-${snum}-${i}" class="avance-slider ${getLockedAv(snum,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(av*100)}"
+            <input type="range" id="av-sld-${snum}-${i}" class="avance-slider ${getLockedAv(snum,i)>0?'locked-slider':''}" min="0" max="100" value="${Math.round(sliderVal)}"
               oninput="onSlider(${snum},${i},this.value)" onchange="onSlider(${snum},${i},this.value)">
             <div class="avance-input-wrap">
-              <input type="number" id="av-inp-${snum}-${i}" class="avance-input ${getLockedAv(snum,i)>0?'locked-input':''}" min="0" max="100" step="0.01"
+              <input type="number" id="av-inp-${snum}-${i}" class="avance-input ${getLockedAv(snum,i)>0?'locked-input':''}" min="${dm.conforme?'-999':'0'}" max="${dm.conforme?'999':'100'}" step="0.01"
                 value="${Math.round(av*10000)/100}" onfocus="this.select()" onchange="onAvanceInput(${snum},${i},this.value)">
               <span class="avance-pct-sign">%</span>
             </div>
           </div>
           <div class="item-montos">
-            <span class="item-monto-total" onclick="editMonto(${snum},${i})">${fmt(getMonto(snum,i))} ✏</span>
+            <span class="item-monto-total${dm.conforme?' conforme-auto':''}" onclick="editMonto(${snum},${i})">${fmt(getMonto(snum,i))}${dm.conforme?'<small class="conforme-auto-label">saldo automático</small>':' ✏'}</span>
             <div class="item-monto-detail">
-              <span class="item-devengado" id="dev-${snum}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(getMonto(snum,i)*av)}</span>
+              <span class="item-devengado" id="dev-${snum}-${i}" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(dm.dev)}</span>
               <span class="item-saldo-sep">·</span>
               <span class="item-saldo-lbl">saldo</span>
-              <span class="item-saldo-val" id="saldo-${snum}-${i}" style="color:${done?'#A8BFA8':'#C0392B'}">${fmt(getMonto(snum,i)*(1-av))}</span>
+              <span class="item-saldo-val" id="saldo-${snum}-${i}" style="color:${done?'#A8BFA8':'#C0392B'}">${fmt(dm.saldo)}</span>
             </div>
           </div>
         </div>
@@ -4572,6 +6059,7 @@ function savePagoFuera(){
   closeModal();
   renderFinanzas();
   renderKPIs();
+  refreshConformeTaskUI();
 }
 function editPagoFuera(id){
   const p = state.pagosFuera.find(x => x.id === id);
@@ -4595,6 +6083,7 @@ function deletePagoFuera(id){
   persist();
   renderFinanzas();
   renderKPIs();
+  refreshConformeTaskUI();
 }
 
 // ─── FINANZAS ─────────────────────────────────────────────────────────────
@@ -4639,13 +6128,14 @@ function renderFinanzas(){
 
   // Tabla semanas
   const table = document.getElementById('pagos-table');
+  const finCalcCtx = buildCalcContext();
   const semanasFin = getSemanas();
   let totalPagoMaxSemanas = 0;
   let totalDevengadoSemanas = 0;
   let totalSaldoSemanas = 0;
 
   const filasSemanas = semanasFin.map(s=>{
-    const {totalMonto,devengado,pctSem}=calcSemana(s);
+    const {totalMonto,devengado,pctSem}=calcSemana(s,finCalcCtx.brecha);
     const pagoMax = getPagoMax(s.num);
     const saldo = pagoMax-devengado;
     totalPagoMaxSemanas += pagoMax;
@@ -4653,7 +6143,7 @@ function renderFinanzas(){
     totalSaldoSemanas += saldo;
     const done=pctSem>=0.99;
     return `<tr>
-      <td class="mono" style="color:#A8BFA8">S${s.num}</td>
+      <td class="mono" style="color:#A8BFA8">S${s.displayNum||s.num}</td>
       <td style="font-size:11px;color:#4A6A50">${s.etapa}</td>
       <td class="r mono">${fmt(pagoMax)}</td>
       <td class="r mono" style="color:${done?'#0A6E3A':'#2E7D5E'}">${fmt(devengado)}</td>
@@ -4687,6 +6177,132 @@ function renderFinanzas(){
 }
 
 
+// ─── COMPARTIR FINANZAS · DETALLE POR SEMANA COMO IMAGEN ────────────────
+function finanzasNombreSeguro(v){
+  return String(v||'obra').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'') || 'obra';
+}
+function finanzasFechaCorta(){
+  try{return new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return new Date().toLocaleDateString('es-AR');}
+}
+function construirDetalleSemanasShare(){
+  const meta=currentObra()||{};
+  const cons=currentConstructor()||{};
+  const semanas=getSemanas();
+  const shareCalcCtx=buildCalcContext();
+  let totalPagoMax=0,totalDev=0,totalSaldo=0;
+
+  const filas=semanas.map(s=>{
+    const c=calcSemana(s,shareCalcCtx.brecha);
+    const pagoMax=getPagoMax(s.num);
+    const saldo=pagoMax-c.devengado;
+    const pct=Math.max(0,Math.min(1,c.pctSem||0));
+    totalPagoMax+=pagoMax;
+    totalDev+=c.devengado;
+    totalSaldo+=saldo;
+    return {sem:'S'+(s.displayNum||s.num),etapa:s.etapa||'',pagoMax,devengado:c.devengado,saldo,pct};
+  });
+  const totalPct=totalPagoMax>0?Math.max(0,Math.min(1,totalDev/totalPagoMax)):0;
+
+  const hoja=document.createElement('div');
+  hoja.className='cq-fin-share-sheet';
+  hoja.setAttribute('aria-hidden','true');
+  hoja.innerHTML=`
+    <div class="cq-fin-share-head">
+      <div>
+        <div class="cq-fin-share-kicker">Finanzas</div>
+        <div class="cq-fin-share-title">Detalle por semana</div>
+        <div class="cq-fin-share-sub">${escHtml(meta.label||meta.obraNum||'Obra')}${cons.nombre?` · ${escHtml(cons.nombre)}`:''}</div>
+      </div>
+      <div class="cq-fin-share-date">Actualizado ${finanzasFechaCorta()}</div>
+    </div>
+    <div class="cq-fin-share-card">
+      <table class="cq-fin-share-table">
+        <colgroup><col><col><col><col><col><col></colgroup>
+        <thead><tr>
+          <th>Sem.</th><th>Etapa</th><th class="num">Pago máx.</th><th class="num">Devengado</th><th class="num">Saldo</th><th>Avance</th>
+        </tr></thead>
+        <tbody>${filas.map(f=>`<tr>
+          <td class="sem">${escHtml(f.sem)}</td>
+          <td class="etapa">${escHtml(f.etapa)}</td>
+          <td class="num money">${fmt(f.pagoMax)}</td>
+          <td class="num money dev">${fmt(f.devengado)}</td>
+          <td class="num money saldo">${fmt(f.saldo)}</td>
+          <td><div class="cq-fin-share-progress"><span class="cq-fin-share-pct">${Math.round(f.pct*100)}%</span><span class="cq-fin-share-bar"><span style="width:${Math.round(f.pct*100)}%"></span></span></div></td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr>
+          <td></td><td class="etapa">TOTAL</td>
+          <td class="num money">${fmt(totalPagoMax)}</td>
+          <td class="num money">${fmt(totalDev)}</td>
+          <td class="num money">${fmt(totalSaldo)}</td>
+          <td><div class="cq-fin-share-progress"><span class="cq-fin-share-pct">${Math.round(totalPct*100)}%</span><span class="cq-fin-share-bar"><span style="width:${Math.round(totalPct*100)}%"></span></span></div></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div class="cq-fin-share-foot"><span class="cq-fin-share-brand">CQ Desarrollos</span><span>Detalle financiero por semana</span></div>`;
+  document.body.appendChild(hoja);
+  return hoja;
+}
+async function asegurarHtml2CanvasFinanzas(){
+  if(window.html2canvas) return;
+  await cargarScriptReporte('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+}
+function canvasABlobFinanzas(canvas){
+  return new Promise((resolve,reject)=>{
+    canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('No se pudo crear la imagen.')),'image/png');
+  });
+}
+async function generarDetalleSemanasImagen(){
+  await asegurarHtml2CanvasFinanzas();
+  const hoja=construirDetalleSemanasShare();
+  try{
+    if(document.fonts && document.fonts.ready) await document.fonts.ready;
+    const canvas=await html2canvas(hoja,{
+      scale:1.6,
+      backgroundColor:'#F7F8F5',
+      useCORS:true,
+      logging:false,
+      scrollX:0,
+      scrollY:0,
+      windowWidth:1200,
+      windowHeight:hoja.scrollHeight
+    });
+    return await canvasABlobFinanzas(canvas);
+  }finally{
+    hoja.remove();
+  }
+}
+async function compartirDetalleSemanasImagen(){
+  const btn=document.getElementById('fin-share-btn');
+  const original=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.innerHTML='Generando…';}
+  try{
+    const blob=await generarDetalleSemanasImagen();
+    const meta=currentObra()||{};
+    const file=new File([blob],`detalle_semanas_${finanzasNombreSeguro(meta.label||meta.obraNum||curObraId)}.png`,{type:'image/png'});
+    const shareData={title:'Detalle por semana',text:`Detalle por semana · ${meta.label||meta.obraNum||'Obra'}`,files:[file]};
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share(shareData);
+      return;
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2500);
+    alert('Se descargó la imagen. Podés adjuntarla en WhatsApp.');
+  }catch(e){
+    if(e && e.name==='AbortError') return;
+    console.error('Error compartiendo detalle por semana',e);
+    alert('No se pudo generar la imagen para compartir.');
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML=original||'↗ WhatsApp';}
+  }
+}
+
+
 // ─── NAVEGACIÓN INICIO / CONSTRUCTORES ─────────────────────────────────
 let currentScreen = 'home';
 let currentConstructorId = null;
@@ -4700,6 +6316,7 @@ function setHeaderForHome(){
   document.title='CQ Desarrollos — Mano de obra';
 }
 function showHome(){
+  try{ cqFlushAvancePersist(); }catch(e){}
   document.body.classList.remove('cq-obra-mode','cq-constructor-mode');
   currentObraTab='avances';
   currentScreen='home'; currentConstructorId=null;
@@ -4937,15 +6554,20 @@ function reportCalcForObra(o){
   const oldState=state;
   const st=estadosObras[o.id] || normalizeState(null,o);
   state=st;
-  const total=calcTotal();
+  const reportCtx=buildCalcContext();
+  const total=calcTotal(reportCtx);
   const pf=calcPagosFuera();
   const cert=sumCertificados();
   const totalPagado=cert + pf.neto;
   const saldo=(st.acuerdo||0)-totalPagado;
   const semanas=getSemanas();
-  const completas=semanas.filter(s=>calcSemana(s).pctSem>=0.99).length;
+  let completas=0;
   const rubros=[];
-  semanas.forEach(s=>{const c=calcSemana(s); if(c.devengado>0)rubros.push({nombre:s.etapa||('Semana '+s.num),devengado:c.devengado,total:c.totalMonto,pct:c.pctSem});});
+  semanas.forEach(s=>{
+    const c=calcSemana(s,reportCtx.brecha);
+    if(c.pctSem>=0.99) completas++;
+    if(c.devengado>0) rubros.push({nombre:s.etapa||('Semana '+s.num),devengado:c.devengado,total:c.totalMonto,pct:c.pctSem});
+  });
   state=oldState;
   return {obra:o,state:st,totalDev:total.totalDev,obraTotal:total.obraTotal,pct:total.pctTotal||0,pf,totalPagado,saldo,completas,totalSemanas:semanas.length,rubros};
 }
@@ -5021,7 +6643,7 @@ function calcReporteConstructor(){
   const rows=[];
   let total=0, certificado=0, pendiente=0, contrato=0, pendienteHasta23=0;
   const semanasObra=getSemanas();
-  const semanaLimite = semanasObra.length ? Math.max(...semanasObra.map(s=>s.num)) : 0;
+  const semanaLimite = semanasObra.length;
   semanasObra.forEach(s=>{
     getItems(s.num).forEach((it,i)=>{
       const monto=getMonto(s.num,i);
@@ -5031,7 +6653,8 @@ function calcReporteConstructor(){
       const cert=monto*Math.min(lock,1);
       const totalAvance=monto*av;
       const pendAvance=Math.max(totalAvance-cert,0);
-      const pendHasta = s.num<=semanaLimite ? Math.max(monto-cert,0) : 0;
+      const dispNum=s.displayNum||getDisplayWeekNum(s.num);
+      const pendHasta = dispNum<=semanaLimite ? Math.max(monto-cert,0) : 0;
 
       contrato += monto;
       total += totalAvance;
@@ -5039,9 +6662,9 @@ function calcReporteConstructor(){
       pendiente += pendAvance;
       pendienteHasta23 += pendHasta;
 
-      if(s.num<=semanaLimite || totalAvance>0 || cert>0 || pendAvance>0){
+      if(dispNum<=semanaLimite || totalAvance>0 || cert>0 || pendAvance>0){
         rows.push({
-          sem:s.num,
+          sem:s.displayNum||getDisplayWeekNum(s.num),
           etapa:s.etapa||'',
           desc:it.desc||'',
           monto,
@@ -5050,7 +6673,7 @@ function calcReporteConstructor(){
           pendiente:pendAvance,
           pendienteHasta23:pendHasta,
           total:totalAvance,
-          incluidoHasta23:s.num<=semanaLimite
+          incluidoHasta23:(s.displayNum||getDisplayWeekNum(s.num))<=semanaLimite
         });
       }
     });
@@ -5129,7 +6752,37 @@ function renderReporteConstructor(){
   const pendientesHasta23 = r.rows.filter(x=>x.incluidoHasta23 && x.pendienteHasta23>0);
 
   const rowsPagadas = pagadas.length ? pagadas.map(x=>rowHtml(x,'paid')).join('') : `<tr><td colspan="5" class="rep-cons-empty">Sin actividades pagadas/certificadas</td></tr>`;
-  const rowsPendientes = pendientesHasta23.length ? pendientesHasta23.map(x=>rowHtml(x,'pending')).join('') : `<tr><td colspan="6" class="rep-cons-empty">Sin pendientes hasta S${r.semanaLimite}</td></tr>`;
+
+  // Pendientes agrupados por semana. Cada bloque comienza con una franja-resumen
+  // para separar visualmente S1, S2, S3, etc. en pantalla y en PDF/WhatsApp.
+  function rowsPendientesAgrupadas(rows){
+    if(!rows.length) return `<tr><td colspan="6" class="rep-cons-empty">Sin pendientes hasta S${r.semanaLimite}</td></tr>`;
+
+    const grupos=new Map();
+    rows.forEach(x=>{
+      const key=String(x.sem);
+      if(!grupos.has(key)) grupos.set(key,[]);
+      grupos.get(key).push(x);
+    });
+
+    return Array.from(grupos.entries()).map(([sem,items])=>{
+      const totalMonto=items.reduce((a,x)=>a+(Number(x.monto)||0),0);
+      const totalPagado=items.reduce((a,x)=>a+(Number(x.certificado)||0),0);
+      const totalPendiente=items.reduce((a,x)=>a+(Number(x.pendienteHasta23)||0),0);
+      return `
+        <tr class="rep-week-separator">
+          <td class="rep-week-num">S${escHtml(sem)}</td>
+          <td class="rep-week-label">TOTAL SEMANA ${escHtml(sem)}</td>
+          <td class="rep-week-av"></td>
+          <td class="rep-cons-money rep-week-money">${fmt(totalMonto)}</td>
+          <td class="rep-cons-money rep-cons-ok rep-week-money">${fmt(totalPagado)}</td>
+          <td class="rep-cons-money rep-cons-pending rep-week-money">${fmt(totalPendiente)}</td>
+        </tr>
+        ${items.map(x=>rowHtml(x,'pending')).join('')}`;
+    }).join('');
+  }
+
+  const rowsPendientes = rowsPendientesAgrupadas(pendientesHasta23);
 
   const tableHeadPaid = `<thead><tr>
     <th>Sem.</th><th>Actividad</th><th>Av.</th><th>Monto</th><th>Pagado</th>
@@ -5228,7 +6881,7 @@ async function generarBlobPDFReporteConstructor(){
 
   // Guardamos límites de filas antes de capturar para no cortar el PDF en medio de una actividad.
   const elRect=el.getBoundingClientRect();
-  const rowBreakCss=Array.from(el.querySelectorAll('.rep-cons-table tbody tr')).map(tr=>{
+  const rowBreakCss=Array.from(el.querySelectorAll('.rep-cons-table tbody tr:not(.rep-week-separator)')).map(tr=>{
     const r=tr.getBoundingClientRect();
     return Math.round((r.bottom - elRect.top) * 3.5);
   }).filter(v=>v>0).sort((a,b)=>a-b);
@@ -5252,15 +6905,32 @@ async function generarBlobPDFReporteConstructor(){
   if(close) close.style.display=oldClose;
 
   const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF('p','mm','a4');
-  const pageW=pdf.internal.pageSize.getWidth();
-  const pageH=pdf.internal.pageSize.getHeight();
+
+  // WhatsApp: generamos el reporte como UNA SOLA HOJA CONTINUA.
+  // Evita las franjas grises/cortes entre páginas del visor y garantiza que
+  // ninguna actividad quede tapada o partida por un salto de página.
   const margin=0.5;
+  const pageW=210; // ancho A4 en mm
   const imgW=pageW-margin*2;
   const pxPerMm=canvas.width/imgW;
-  const pageContentH=pageH-margin*2;
-  const sliceHpx=Math.floor(pageContentH*pxPerMm);
+  const imgH=canvas.height/pxPerMm;
+  const pageH=Math.max(20,imgH+margin*2);
 
+  // El límite práctico de PDF es muy superior al largo habitual de este reporte.
+  // Si alguna obra futura superara ese límite, usamos paginado seguro como respaldo.
+  const maxContinuousHmm=4900;
+  if(pageH<=maxContinuousHmm){
+    const pdf=new jsPDF({orientation:'p',unit:'mm',format:[pageW,pageH],compress:true});
+    const imgData=canvas.toDataURL('image/jpeg',0.95);
+    pdf.addImage(imgData,'JPEG',margin,margin,imgW,imgH,undefined,'FAST');
+    return pdf.output('blob');
+  }
+
+  // Respaldo para reportes excepcionalmente largos: páginas A4 sin cortar actividades.
+  const pdf=new jsPDF('p','mm','a4');
+  const a4H=pdf.internal.pageSize.getHeight();
+  const pageContentH=a4H-margin*2;
+  const sliceHpx=Math.floor(pageContentH*pxPerMm);
   const pageCanvas=document.createElement('canvas');
   const ctx=pageCanvas.getContext('2d');
   pageCanvas.width=canvas.width;
@@ -5268,29 +6938,27 @@ async function generarBlobPDFReporteConstructor(){
   let yPx=0;
   let page=0;
   while(yPx<canvas.height){
-    let currentSliceH=Math.min(sliceHpx, canvas.height-yPx);
+    const targetEnd=Math.min(yPx+sliceHpx,canvas.height);
+    let endPx=targetEnd;
 
-    // Ajuste anti-corte: si el final de página cae sobre una fila, movemos el corte
-    // al borde inferior de la fila anterior/cercana para que no se parta entre semanas.
-    const targetEnd=yPx+currentSliceH;
-    if(targetEnd < canvas.height-10){
-      const minEnd=yPx+Math.floor(sliceHpx*0.72);
-      const maxEnd=Math.min(canvas.height, yPx+sliceHpx+Math.floor(80*3.5));
-      const candidates=rowBreakCss.filter(b=>b>minEnd && b<maxEnd);
-      if(candidates.length){
-        const best=candidates.reduce((a,b)=>Math.abs(b-targetEnd)<Math.abs(a-targetEnd)?b:a,candidates[0]);
-        currentSliceH=Math.max(1,best-yPx);
-      }
+    if(targetEnd<canvas.height-10){
+      // Siempre cortamos hacia atrás, en el final de una actividad completa.
+      // Nunca extendemos la imagen más allá del alto A4 porque eso era lo que
+      // podía dejar una fila parcialmente oculta en el borde de página.
+      const minUseful=yPx+Math.floor(sliceHpx*0.60);
+      const candidates=rowBreakCss.filter(b=>b>minUseful && b<=targetEnd-2);
+      if(candidates.length) endPx=candidates[candidates.length-1];
     }
 
+    const currentSliceH=Math.max(1,endPx-yPx);
     pageCanvas.height=currentSliceH;
     ctx.clearRect(0,0,pageCanvas.width,pageCanvas.height);
     ctx.drawImage(canvas,0,yPx,canvas.width,currentSliceH,0,0,canvas.width,currentSliceH);
     const sliceData=pageCanvas.toDataURL('image/jpeg',0.95);
     const sliceHmm=currentSliceH/pxPerMm;
     if(page>0) pdf.addPage();
-    pdf.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHmm);
-    yPx+=currentSliceH;
+    pdf.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHmm,undefined,'FAST');
+    yPx=endPx;
     page++;
   }
   return pdf.output('blob');
@@ -5400,16 +7068,31 @@ async function getAvanceUsuariosConectados(){
   }catch(e){console.warn(e);return [];}
 }
 function startAvancePresence(){
+  if(_cqPresenceStarted) return;
+  _cqPresenceStarted=true;
   ensureAvanceUserName();
   heartbeatAvancePresence();
   readLastSyncAvance();
   setInterval(()=>{heartbeatAvancePresence();readLastSyncAvance();if(document.getElementById('view-reporte')?.style.display!=='none')renderAvanceUsuariosConectados();},30000);
 }
 const _persistAvanceOriginalForMeta = persist;
+let _cqMetaSyncTimer=null;
+let _cqMetaSyncAction='guardó cambios';
+function cqScheduleMetaSync(action='guardó cambios'){
+  _cqMetaSyncAction=action;
+  if(_cqMetaSyncTimer) clearTimeout(_cqMetaSyncTimer);
+  _cqMetaSyncTimer=setTimeout(()=>{
+    _cqMetaSyncTimer=null;
+    updateLastSyncAvance(_cqMetaSyncAction);
+    // La presencia ya tiene heartbeat periódico. Una sola actualización agrupada
+    // alcanza para reflejar actividad sin bombardear Firebase durante un slider.
+    heartbeatAvancePresence();
+  },1000);
+}
 persist = function(){
+  _cqLocallyTouchedObras.add(curObraId);
   _persistAvanceOriginalForMeta();
-  updateLastSyncAvance('guardó cambios');
-  heartbeatAvancePresence();
+  cqScheduleMetaSync('guardó cambios');
 };
 const _persistConfigAvanceOriginalForMeta = persistConfig;
 persistConfig = async function(){
@@ -5500,12 +7183,123 @@ refreshReporteAvanceFirebase = async function(){
   renderReporteAvance();
 };
 
+async function cqReadRemoteObra(meta, idx=0){
+  if(!meta || !window._dbReady || !isFirebaseEnabled()) return false;
+  const id=meta.id;
+  if(_cqRemoteLoadingObras.has(id)) return false;
+  _cqRemoteLoadingObras.add(id);
+  try{
+    let snap=await window._getDoc(window._doc(window._db,'obras',id));
+    if(!snap.exists() && idx===0) snap=await window._getDoc(window._doc(window._db,'obras','simon_state'));
+    if(isFirebaseHistoryBlocked()) return false;
+    // Si el usuario ya tocó esta obra durante la lectura, prevalece su cambio local.
+    if(_cqLocallyTouchedObras.has(id)){
+      _cqRemoteLoadedObras.add(id);
+      return false;
+    }
+    if(snap.exists()){
+      const remote=normalizeState(snap.data(),meta);
+      estadosObras[id]=remote;
+      try{ localStorage.setItem('mano_obra_'+id,JSON.stringify(remote)); }catch(e){}
+    }else if(!estadosObras[id]){
+      estadosObras[id]=normalizeState(null,meta);
+    }
+    _cqRemoteLoadedObras.add(id);
+    return true;
+  }catch(e){
+    console.warn('Firebase obra read error',id,e);
+    return false;
+  }finally{
+    _cqRemoteLoadingObras.delete(id);
+  }
+}
+
+function cqRefreshVisibleAfterRemote(updatedObraId=''){
+  // Nunca cambia currentScreen/currentConstructorId/currentObraTab. Sólo refresca
+  // lo que el usuario está mirando en ese instante.
+  try{
+    if(currentScreen==='obra'){
+      if(updatedObraId && updatedObraId!==curObraId) return;
+      const openWeeks=[...document.querySelectorAll('.semana-items.open')].map(el=>el.id);
+      const scrollY=window.scrollY;
+      state=estadosObras[curObraId] || state;
+      renderObraSwitch();
+      updateHeaderTitle();
+      const ctx=buildCalcContext();
+      renderKPIs(ctx);
+      renderSemanas();
+      openWeeks.forEach(id=>{
+        const el=document.getElementById(id);
+        if(!el) return;
+        el.classList.add('open');
+        const sn=id.replace('si-','');
+        const chev=document.getElementById('chev-'+sn);
+        if(chev) chev.textContent='▲';
+      });
+      requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+      if(currentObraTab==='finanzas') renderFinanzas();
+      else if(currentObraTab==='reporte') renderReporteAvance();
+    }else if(currentScreen==='constructor' && currentConstructorId){
+      openConstructor(currentConstructorId);
+    }else if(currentScreen==='terminadas'){
+      renderTerminadas();
+    }else if(currentScreen==='home'){
+      renderHome();
+    }
+  }catch(e){ console.warn('Refresh visible after remote',e); }
+}
+
+async function cqEnsureObraRemoteFresh(id){
+  if(!id || !window._dbReady || !isFirebaseEnabled()) return;
+  if(_cqRemoteLoadedObras.has(id) || _cqRemoteLoadingObras.has(id) || _cqLocallyTouchedObras.has(id)) return;
+  const meta=obrasConfig.find(o=>o.id===id);
+  if(!meta) return;
+  const idx=Math.max(0,obrasConfig.findIndex(o=>o.id===id));
+  const applied=await cqReadRemoteObra(meta,idx);
+  if(applied && curObraId===id) cqRefreshVisibleAfterRemote(id);
+}
+
+function cqStartBackgroundFullSync(skipId){
+  if(_cqBackgroundSyncRunning || !window._dbReady || !isFirebaseEnabled()) return;
+  _cqBackgroundSyncRunning=true;
+  setTimeout(async()=>{
+    try{
+      const pendientes=obrasConfig.filter(o=>o.id!==skipId && !_cqRemoteLoadedObras.has(o.id));
+      const batchSize=4;
+      for(let i=0;i<pendientes.length;i+=batchSize){
+        const lote=pendientes.slice(i,i+batchSize);
+        await Promise.all(lote.map(o=>cqReadRemoteObra(o,Math.max(0,obrasConfig.findIndex(x=>x.id===o.id)))));
+        // Cede el hilo entre lotes: botones, scroll y sliders siguen respondiendo.
+        await cqYieldUI(8);
+      }
+
+      // Estas migraciones/reparaciones necesitan todas las obras disponibles,
+      // pero ya no bloquean el inicio de la app.
+      await cqRepararImportesPlateaPostFirebase(true);
+      await cqYieldUI(0);
+      await ensureProjectTypeTemplates(true);
+      state=estadosObras[curObraId] || state;
+      firebaseInitialLoadDone=true;
+      ensureDailyBackup();
+
+      // Refresca sólo la vista vigente; jamás vuelve a Inicio por la fuerza.
+      cqRefreshVisibleAfterRemote('');
+      markSaved();
+    }catch(e){
+      console.warn('Firebase background sync error',e);
+      markError();
+    }finally{
+      _cqBackgroundSyncRunning=false;
+    }
+  },180);
+}
+
 async function initApp() {
   updateFirebaseModeUI();
   startAvancePresence();
 
-  // Arranque rápido: pinta la app con datos locales antes de esperar Firebase.
-  // Después, cuando Firebase responde, se actualiza y se vuelve a renderizar.
+  // FASE 1 — instantánea: siempre abre con el cache local. No se bloquea la UI
+  // esperando importaciones, Auth ni lecturas de Firestore.
   if(!appInitialized){
     try{
       state = estadosObras[curObraId] || normalizeState(null, currentObra());
@@ -5513,71 +7307,77 @@ async function initApp() {
       renderObraSwitch();
       renderKPIs();
       renderSemanas();
-      /* Si Firebase todavía no está listo, mantenemos ocultas las vistas para no mostrar datos viejos. */
-      if(!isFirebaseEnabled() || window._dbReady){
-        showHome();
-        if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
-      }
+      showHome();
+      if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
       resetHistoryBase();
       appInitialized = true;
-      if(isFirebaseEnabled()) setFirebaseStatus('Firebase: sincronizando…','sync');
+      if(isFirebaseEnabled()) setFirebaseStatus('Firebase: conectando…','sync');
+      else markLocal();
     }catch(e){ console.warn('Fast start error', e); }
   }
-  if(isFirebaseEnabled() && window._dbReady && !isFirebaseHistoryBlocked()) {
-    setFirebaseStatus('Firebase: leyendo…','sync');
-    try {
-      const confSnap = await window._getDoc(window._doc(window._db,'config','mano_obra_multiobra'));
-      if(isFirebaseHistoryBlocked()) throw new Error('Lectura Firebase cancelada por restauración local');
-      if(confSnap.exists() && Array.isArray(confSnap.data().obras) && confSnap.data().obras.length) {
-        const data = confSnap.data();
-        obrasConfig = data.obras;
-        if(Array.isArray(data.constructores)) constructoresConfig = data.constructores;
-        normalizeConstructoresConfig();
-        normalizeObrasConfig();
-        localStorage.setItem('mano_obra_config', JSON.stringify(obrasConfig));
-        localStorage.setItem('mano_obra_constructores', JSON.stringify(constructoresConfig));
-        if(!obrasConfig.find(o=>o.id===curObraId)) curObraId = obrasConfig[0].id;
+
+  // La primera llamada ocurre antes de que el módulo Firebase esté listo.
+  if(!isFirebaseEnabled() || !window._dbReady || isFirebaseHistoryBlocked()){
+    if(!isFirebaseEnabled()) markLocal();
+    return;
+  }
+  if(_cqInitialSyncRunning || _cqForegroundSyncDone) return;
+  _cqInitialSyncRunning=true;
+  setFirebaseStatus('Firebase: leyendo…','sync');
+
+  try{
+    // FASE 2 — prioritaria: configuración + obra que el usuario tiene seleccionada.
+    // El resto se deja para segundo plano.
+    const confSnap = await window._getDoc(window._doc(window._db,'config','mano_obra_multiobra'));
+    if(isFirebaseHistoryBlocked()) throw new Error('Lectura Firebase cancelada por restauración local');
+    if(confSnap.exists() && Array.isArray(confSnap.data().obras) && confSnap.data().obras.length){
+      const data=confSnap.data();
+      obrasConfig=data.obras;
+      if(Array.isArray(data.constructores)) constructoresConfig=data.constructores;
+      normalizeConstructoresConfig();
+      normalizeObrasConfig();
+      try{
+        localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
+        localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));
+      }catch(e){}
+      if(!obrasConfig.find(o=>o.id===curObraId)){
+        curObraId=obrasConfig[0].id;
+        localStorage.setItem('mano_obra_actual',curObraId);
       }
-      // Carga rápida: primero la obra abierta; el resto se lee en paralelo.
-      const readOneObra = async (o, idx)=>{
-        let snap = await window._getDoc(window._doc(window._db,'obras',o.id));
-        if(!snap.exists() && idx===0) snap = await window._getDoc(window._doc(window._db,'obras','simon_state'));
-        if(isFirebaseHistoryBlocked()) throw new Error('Lectura Firebase cancelada por restauración local');
-        if(snap.exists()) {
-          estadosObras[o.id] = normalizeState(snap.data(), o);
-          localStorage.setItem('mano_obra_'+o.id, JSON.stringify(estadosObras[o.id]));
-        } else if(!estadosObras[o.id]) {
-          estadosObras[o.id] = normalizeState(null, o);
-        }
-      };
-      const currentIdx = Math.max(0, obrasConfig.findIndex(o=>o.id===curObraId));
-      if(obrasConfig[currentIdx]){
-        await readOneObra(obrasConfig[currentIdx], currentIdx);
-        state = estadosObras[curObraId] || normalizeState(null, currentObra());
-        renderObraSwitch(); renderKPIs(); renderSemanas();
-      }
-      await Promise.all(obrasConfig.map((o,i)=> i===currentIdx ? Promise.resolve() : readOneObra(o,i)));
-      markSaved();
-    } catch(e) {
-      if(String(e && e.message || '').includes('restauración local')) { console.info(e.message); markSaved(); }
-      else { console.warn('Firebase read error', e); markError(); }
     }
-  } else {
-    markLocal();
+
+    // Prioriza la obra que esté seleccionada AHORA, no la que estaba al iniciar.
+    const priorityId=curObraId;
+    const priorityMeta=obrasConfig.find(o=>o.id===priorityId);
+    if(priorityMeta){
+      const idx=Math.max(0,obrasConfig.findIndex(o=>o.id===priorityId));
+      const applied=await cqReadRemoteObra(priorityMeta,idx);
+      if(applied && curObraId===priorityId){
+        state=estadosObras[priorityId] || state;
+        cqAsegurarImportesCronogramaPlateaUnaVez();
+      }
+      cqRefreshVisibleAfterRemote(priorityId);
+    }
+
+    _cqForegroundSyncDone=true;
+    markSaved();
+    // Auth ya está listo: actualiza presencia una vez sin crear otro intervalo.
+    heartbeatAvancePresence();
+    readLastSyncAvance();
+
+    // La app ya está usable. Todas las demás obras se sincronizan por lotes atrás.
+    cqStartBackgroundFullSync(priorityId);
+  }catch(e){
+    if(String(e && e.message || '').includes('restauración local')){
+      console.info(e.message); markSaved();
+    }else{
+      console.warn('Firebase read error',e); markError();
+    }
+  }finally{
+    _cqInitialSyncRunning=false;
   }
-  state = estadosObras[curObraId] || normalizeState(null, currentObra());
-  estadosObras[curObraId] = state;
-  renderObraSwitch();
-  renderKPIs();
-  renderSemanas();
-  /* Mostrar la pantalla recién cuando los datos iniciales ya están resueltos. */
-  if(!isFirebaseEnabled() || window._dbReady){
-    showHome();
-    if(window.cqRevealInitialScreen) window.cqRevealInitialScreen();
-  }
-  resetHistoryBase();
-  appInitialized = true;
 }
+
 // Inicia apenas el HTML está listo, sin esperar a Firebase.
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
@@ -5627,6 +7427,7 @@ setTimeout(() => {
       <div class="field"><label>Constructor</label><input type="text" id="eo-constructor" placeholder="Nombre del constructor"></div>
       <div class="field"><label>Asignar a constructor</label><select id="eo-constructor-id"></select></div>
       <div class="field"><label>Número de obra</label><input type="text" id="eo-num" placeholder="Ej: 2/99"></div>
+      <div class="field" id="eo-tipo-wrap" style="display:none"><label>Tipo de proyecto</label><select id="eo-tipo" onchange="updatePlantTemplateHint(true)"><option value="1">1 planta</option><option value="2">2 plantas</option></select><div class="field" id="eo-cimentacion-wrap" style="display:none;margin-top:10px"><label>Sistema de fundación</label><select id="eo-cimentacion" onchange="updatePlantTemplateHint(true)"><option value="pilotes">Pilotes</option><option value="platea">Platea</option></select></div><div class="hint" id="eo-template-hint" style="margin-top:6px;padding:7px 9px"></div></div>
       <div class="field"><label>Monto total acordado ($)</label><input type="number" id="eo-acuerdo" min="0" step="100000" placeholder="38000000"></div>
       <div class="field"><label>Color del botón</label><input type="color" id="eo-color" value="#E8A838"></div>
     </div>
@@ -5720,7 +7521,7 @@ document.dispatchEvent(new CustomEvent("cq-audit-writer-ready"));
   "use strict";
   var MODULO="Avances";
   var QUEUE_KEY="cq_audit_queue_v1_"+MODULO.replace(/\s+/g,"_").toLowerCase();
-  var WRAPS=[{"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
+  var WRAPS=[{"fn": "aplicarValorSemana", "accion": "modificar", "detalle": "Distribuyó un valor total entre las tareas de una semana"}, {"fn": "editSemana", "accion": "modificar", "detalle": "Modificó número/orden o título de una semana"}, {"fn": "deleteSemana", "accion": "eliminar", "detalle": "Eliminó una semana"}, {"fn": "deleteTarea", "accion": "eliminar", "detalle": "Eliminó una tarea"}, {"fn": "saveEditObra", "accion": "modificar", "detalle": "Modificó una obra"}, {"fn": "deleteCurrentObra", "accion": "eliminar", "detalle": "Eliminó una obra"}, {"fn": "editarCertificado", "accion": "modificar", "detalle": "Modificó un certificado"}, {"fn": "eliminarCertificado", "accion": "eliminar", "detalle": "Eliminó un certificado"}, {"fn": "saveAcuerdo", "accion": "modificar", "detalle": "Guardó un acuerdo"}, {"fn": "saveItemCQ", "accion": "modificar", "detalle": "Guardó un ítem de avance"}, {"fn": "deleteItemCQ", "accion": "eliminar", "detalle": "Eliminó un ítem de avance"}, {"fn": "savePagoFuera", "accion": "agregar", "detalle": "Agregó un pago fuera de avance"}, {"fn": "deletePagoFuera", "accion": "eliminar", "detalle": "Eliminó un pago fuera de avance"}, {"fn": "deleteConstructor", "accion": "eliminar", "detalle": "Eliminó un constructor"}];
   WRAPS=WRAPS.filter(function(x){return x.accion!=="agregar";});
   var flushing=false;
 
@@ -9286,6 +11087,87 @@ body.cq-constructor-mode #tab-reporte{
 }
 </style>
 
+
+<style id="cq-week-value-style">
+
+.all-weeks-value-bar{
+  margin:0 0 10px;border:1px solid #CFE0D2;border-radius:12px;background:#F8FBF8;overflow:hidden;
+}
+.all-weeks-value-toggle{
+  width:100%;min-height:42px;border:0;background:transparent;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;color:#163D35;font:inherit;text-align:left;
+}
+.all-weeks-toggle-left{display:flex;align-items:center;gap:7px;min-width:0;font-size:11px;font-weight:900}
+.all-weeks-toggle-icon{width:24px;height:24px;border-radius:7px;background:#EAF6EE;color:#2E7D5E;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:1000;flex:0 0 auto}
+.all-weeks-toggle-chevron{font-size:10px;color:#7A9E82;transition:transform .18s ease;flex:0 0 auto}
+.all-weeks-value-bar:not(.collapsed) .all-weeks-toggle-chevron{transform:rotate(180deg)}
+.all-weeks-value-body{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 10px 10px;border-top:1px solid #E6EFE7}
+.all-weeks-value-bar.collapsed .all-weeks-value-body{display:none}
+.all-weeks-value-copy{display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:9px}
+.all-weeks-value-help{font-size:8px;font-weight:700;color:#7A9E82;line-height:1.25}
+.all-weeks-value-controls{display:flex;align-items:center;gap:7px;flex:0 0 auto;padding-top:9px}
+.all-weeks-value-input-wrap{display:flex;align-items:center;gap:4px;height:32px;padding:0 7px;border:1px solid #CFE0D2;border-radius:8px;background:#fff;color:#2E7D5E;font-weight:900}
+.all-weeks-value-input{width:115px;border:0;outline:0;background:transparent;font-size:12px;font-weight:900;color:#163D35;text-align:right}
+.all-weeks-value-apply{height:32px;border:0;border-radius:8px;padding:0 11px;background:#2E7D5E;color:#fff;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap}
+
+@media(max-width:700px){
+  .all-weeks-value-toggle{min-height:40px;padding:7px 9px}
+  .all-weeks-toggle-left{font-size:10px}
+  .all-weeks-value-body{align-items:stretch;flex-direction:column;gap:7px;padding:0 8px 8px}
+  .all-weeks-value-copy{padding-top:7px}
+  .all-weeks-value-controls{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;padding-top:0}
+  .all-weeks-value-input-wrap{min-width:0}
+  .all-weeks-value-input{width:100%;min-width:0;font-size:16px}
+  .all-weeks-value-apply{height:36px;padding:0 10px}
+}
+
+.week-value-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 12px;margin:0;border-bottom:1px solid #E8EFE9;background:#F8FBF8;
+}
+.week-value-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.week-value-label{font-size:11px;font-weight:900;color:#163D35;letter-spacing:.01em}
+.week-value-help{font-size:9px;font-weight:600;color:#789184;line-height:1.25}
+.week-value-controls{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex:0 0 auto}
+.week-value-input-wrap{display:flex;align-items:center;gap:4px;height:34px;padding:0 8px;border:1px solid #CFE0D2;border-radius:8px;background:#fff;color:#527362;font-weight:900}
+.week-value-input{width:118px;border:0;outline:0;background:transparent;color:#163D35;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;text-align:right;padding:0}
+.week-value-input::-webkit-outer-spin-button,.week-value-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.week-value-input[type=number]{-moz-appearance:textfield}
+.week-value-apply{height:34px;border:0;border-radius:8px;padding:0 11px;background:#163D35;color:#fff;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap}
+.week-value-apply:active{transform:translateY(1px)}
+@media(max-width:700px){
+  .week-value-row{align-items:stretch;flex-direction:column;gap:7px;padding:8px}
+  .week-value-controls{width:100%;justify-content:stretch}
+  .week-value-input-wrap{flex:1;min-width:0}
+  .week-value-input{width:100%;min-width:0;font-size:11px}
+  .week-value-apply{flex:0 0 auto;padding:0 10px;font-size:9px}
+  .week-value-label{font-size:10px}.week-value-help{font-size:8px}
+}
+</style>
+
+
+<style id="cq-tablet-porcentaje-final-v3">
+/* Ajuste final SOLO TABLET. Va al final para no ser pisado por el CSS de teléfono horizontal. */
+@media (min-width:701px) and (max-width:1700px) and (pointer:coarse){
+  #view-avances .semana-items.open .avance-input{
+    width:58px!important;
+    min-width:58px!important;
+    font-size:14px!important;
+    line-height:1.1!important;
+    letter-spacing:-.035em!important;
+  }
+  #view-avances .semana-items.open .avance-pct-sign{
+    font-size:13px!important;
+  }
+}
+</style>
+
+<script id="cq-avance-fast-flush-v4">
+(function(){
+  function flush(){ try{ if(typeof cqFlushAvancePersist==='function') cqFlushAvancePersist(); }catch(e){} }
+  window.addEventListener('pagehide',flush);
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') flush(); });
+})();
+</script>
 </body>
 </html>
 
@@ -9787,3 +11669,66 @@ body.cq-constructor-mode #tab-reporte{
   #view-finanzas #pagos-table .pagos-total-pct{font-size:17px!important;}
 }
 </style>
+
+<style id="cq-reporte-semanas-separadas-v41">
+/* V41 - Separación visual por semana en Reporte Constructor / PDF WhatsApp */
+#reporte-constructor-print .pend-table .rep-week-separator td{
+  background:linear-gradient(90deg,#FFF1D9 0%,#FFF8EC 100%)!important;
+  border-top:2px solid #E9A34A!important;
+  border-bottom:1px solid #F1C98F!important;
+  padding-top:6px!important;
+  padding-bottom:6px!important;
+  vertical-align:middle!important;
+  font-weight:900!important;
+}
+#reporte-constructor-print .pend-table .rep-week-num{
+  color:#B85B08!important;
+  font-size:10px!important;
+  white-space:nowrap!important;
+}
+#reporte-constructor-print .pend-table .rep-week-label{
+  color:#B85B08!important;
+  font-size:8px!important;
+  text-transform:uppercase!important;
+  letter-spacing:.02em!important;
+  white-space:nowrap!important;
+}
+#reporte-constructor-print .pend-table .rep-week-money{
+  font-weight:900!important;
+}
+
+/* Reporte visible en celular/tablet */
+#reporte-constructor-container .reporte-constructor-wrap:not(.reporte-pdf-grande) .pend-table .rep-week-separator td{
+  padding-top:9px!important;
+  padding-bottom:9px!important;
+}
+#reporte-constructor-container .reporte-constructor-wrap:not(.reporte-pdf-grande) .pend-table .rep-week-num{
+  font-size:13px!important;
+}
+#reporte-constructor-container .reporte-constructor-wrap:not(.reporte-pdf-grande) .pend-table .rep-week-label{
+  font-size:10px!important;
+}
+#reporte-constructor-container .reporte-constructor-wrap:not(.reporte-pdf-grande) .pend-table .rep-week-money{
+  font-size:10.8px!important;
+}
+
+/* PDF / WhatsApp ampliado */
+#reporte-constructor-print.reporte-pdf-grande .pend-table .rep-week-separator td{
+  padding-top:7px!important;
+  padding-bottom:7px!important;
+  border-top-width:2px!important;
+}
+#reporte-constructor-print.reporte-pdf-grande .pend-table .rep-week-num{
+  font-size:16px!important;
+  line-height:1!important;
+}
+#reporte-constructor-print.reporte-pdf-grande .pend-table .rep-week-label{
+  font-size:10.5px!important;
+  line-height:1!important;
+}
+#reporte-constructor-print.reporte-pdf-grande .pend-table .rep-week-money{
+  font-size:12.2px!important;
+  line-height:1!important;
+}
+</style>
+
