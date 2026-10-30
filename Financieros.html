@@ -2067,7 +2067,10 @@ function findObraByCode(code){
 }
 
 const CQ_HISTORICAL_BACKFILL = [
-  {code:'14.66', inicio:['2023',2], fin:['2023',9], ventas:{A:['2023',9,'vendida_terminada'],B:['2023',9,'vendida_terminada']}},
+    // Tramo inicial del histórico. Sólo fuente operativa: no tocar ventas/unidades existentes.
+  {code:'Comarca', inicio:['2020',11], fin:['2021',7], operationalOnly:true},
+  {code:'6.44', inicio:['2022',7], fin:['2022',12], operationalOnly:true},
+{code:'14.66', inicio:['2023',2], fin:['2023',9], ventas:{A:['2023',9,'vendida_terminada'],B:['2023',9,'vendida_terminada']}},
   {code:'26.59', inicio:['2023',5], fin:['2023',12], ventas:{A:['2023',12,'vendida_terminada'],B:['2023',12,'vendida_terminada']}},
   {code:'10.15', inicio:['2023',9], fin:['2024',7], ventas:{A:['2024',7,'vendida_terminada'],B:['2024',7,'vendida_terminada']}},
   {code:'17.55', inicio:['2024',5], fin:['2024',12], ventas:{A:['2024',12,'vendida_terminada'],B:['2025',3,'vendida_terminada']}},
@@ -2095,38 +2098,34 @@ function cqHistoricalMeses(def, venta){
   if(!origen)return 0;
   return Math.max(0, ordOf(sy,sm)-ordOf(origen[0],origen[1]));
 }
-function cqEnsureHistoricalObra(code, archived){
+function cqEnsureHistoricalObra(code, archived, operationalOnly){
   let ob=findObraByCode(code), changed=false;
   const shouldArchive = archived!==false;
   if(!ob){
     let base='hist_'+normalizeCodeCQ(code).replace(/[^0-9A-Za-z]+/g,'_');
     let id=base, n=2;
     while(state.obras.some(x=>x.id===id)){id=base+'_'+(n++);}
-    ob={id,code,casas:['A','B'],archived:shouldArchive};
+    ob={id,code,casas:operationalOnly?[]:['A','B'],archived:shouldArchive};
     state.obras.push(ob); changed=true;
   }
-  if(!Array.isArray(ob.casas) || !ob.casas.includes('A') || !ob.casas.includes('B')){
+  if(!operationalOnly && (!Array.isArray(ob.casas) || !ob.casas.includes('A') || !ob.casas.includes('B'))){
     ob.casas=['A','B']; changed=true;
   }
   if(!!ob.archived!==shouldArchive){ob.archived=shouldArchive;changed=true;}
   return {ob,changed};
 }
 function cqDeleteYear2020(){
-  let changed=false;
-  ['data','casas','obraEstados'].forEach(k=>{
-    if(state[k] && Object.prototype.hasOwnProperty.call(state[k],'2020')){delete state[k]['2020'];changed=true;}
-  });
-  if(String(state.year)==='2020'){state.year=String(new Date().getFullYear());changed=true;}
-  return changed;
+  // 2020 vuelve a ser parte del histórico real: Comarca inició en noviembre de 2020.
+  return false;
 }
 function applyCQHistoricalBackfill(){
-  let changed=cqDeleteYear2020();
+  let changed=false;
   if(!state.obras)state.obras=[];
   if(!state.casas)state.casas={};
   if(!state.obraEstados)state.obraEstados={};
 
   CQ_HISTORICAL_BACKFILL.forEach(def=>{
-    const ensured=cqEnsureHistoricalObra(def.code,def.archived), ob=ensured.ob;
+    const ensured=cqEnsureHistoricalObra(def.code,def.archived,!!def.operationalOnly), ob=ensured.ob;
     if(ensured.changed)changed=true;
 
     const desiredObra={};
@@ -2154,7 +2153,7 @@ function applyCQHistoricalBackfill(){
     });
 
     const desiredCasas={};
-    Object.keys(def.ventas).forEach(letra=>{
+    Object.keys(def.ventas||{}).forEach(letra=>{
       const v=def.ventas[letra], y=String(v[0]), m=Number(v[1]);
       const obraStatus = ordOf(y,m)>=ordOf(def.fin[0],def.fin[1]) ? 'terminada' : (ordOf(y,m)>=ordOf(def.inicio[0],def.inicio[1]) ? 'construccion' : 'no_iniciada');
       desiredCasas[y+'-'+m+'-'+letra]={
@@ -2164,6 +2163,7 @@ function applyCQHistoricalBackfill(){
       };
     });
 
+    if(def.ventas){
     // Para estas obras históricas la venta real es conocida: quitar duplicados/arrastres explícitos.
     Object.keys(state.casas||{}).forEach(y=>{
       Object.keys(state.casas[y]||{}).forEach(m=>{
@@ -2197,6 +2197,7 @@ function applyCQHistoricalBackfill(){
         state.casas[y][m][casaKey]=Object.assign({},desiredCasas[dk]); changed=true;
       }
     });
+    }
   });
   return changed;
 }
@@ -2431,30 +2432,69 @@ function normalizeCasa(c){
   return {obraStatus, saleStatus, meses:c.meses, carried:!!c.carried, saleCarried:!!c.saleCarried || !!c._saleInherited, _saleInherited:!!c._saleInherited};
 }
 function isConstruccionStatus(c){ return normalizeCasa(c).obraStatus==='construccion'; }
+function cqHistoricalOperationalDef(ob){
+  if(!ob)return null;
+  const code=normalizeCodeCQ(ob.code);
+  return CQ_HISTORICAL_BACKFILL.find(def=>normalizeCodeCQ(def.code)===code) || null;
+}
+function cqOperationalStartedThisMonth(ob,year,month){
+  const def=cqHistoricalOperationalDef(ob);
+  if(def){
+    return String(def.inicio[0])===String(year) && Number(def.inicio[1])===Number(month);
+  }
+  const targetOrd=ordOf(year,month);
+  const entries=getObraEntriesUntil(ob.id,targetOrd);
+  return !!entries.find(e=>e.ord===targetOrd && e.status==='construccion');
+}
+function cqOperationalIsActive(ob,year,month){
+  const def=cqHistoricalOperationalDef(ob);
+  if(def){
+    const t=ordOf(year,month);
+    const ini=ordOf(def.inicio[0],def.inicio[1]);
+    const fin=ordOf(def.fin[0],def.fin[1]);
+    // La obra está activa desde el mes de inicio hasta el mes anterior a quedar Finalizada.
+    return t>=ini && t<fin;
+  }
+  const e=getObraEffectiveStatus(ob.id,year,month);
+  return !!(e && e.status==='construccion');
+}
 function countObrasEnConstruccion(year,month){
-  let count = 0;
+  let count=0;
   state.obras.forEach(ob=>{
-    const e = getObraEffectiveStatus(ob.id, year, month);
-    if(e && e.status==='construccion') count++;
+    if(cqOperationalIsActive(ob,year,month))count++;
   });
   return count;
 }
 function countObrasIniciadasAuto(year,month){
-  // Excepción histórica:
-  // Enero 2026 fue el primer mes del informe. Había obras ya iniciadas de antes,
-  // por eso no corresponde contar todos los cambios cargados en enero.
-  // Para ese mes se fija el indicador en 2.
+  // Excepción histórica vigente del informe original.
   if(String(year)==='2026' && parseInt(month)===1) return 2;
 
-  const targetOrd = ordOf(year,month);
-  let count = 0;
+  let count=0;
   state.obras.forEach(ob=>{
-    const entries = getObraEntriesUntil(ob.id, targetOrd);
-    const exact = entries.find(e=>e.ord===targetOrd && e.status==='construccion');
-    if(exact) count++;
+    if(cqOperationalStartedThisMonth(ob,year,month))count++;
   });
   return count;
 }
+// Histórico operativo incorporado:
+ // 2020: Comarca inicia Nov; activa Nov-Dic.
+ // 2021: Comarca activa Ene-Jun; finaliza Jul.
+ // 2022: 6.44 inicia Jul; activa Jul-Nov; finaliza Dic.
+function cqOperationalAudit(year){
+  const y=String(year);
+  return Array.from({length:12},(_,i)=>{
+    const m=i+1;
+    return {
+      year:y,
+      month:m,
+      iniciadas:countObrasIniciadasAuto(y,m),
+      activas:countObrasEnConstruccion(y,m),
+      detalleIniciadas:cqTrendStartedObras(y,m),
+      detalleActivas:cqTrendActiveObras(y,m)
+    };
+  });
+}
+window.cqOperationalAudit=cqOperationalAudit;
+
 function cqOperationalYearHasHistory(year){
   const y=String(year);
   // Si existe cualquier cambio constructivo en el año, o alguna obra está activa
@@ -3640,20 +3680,13 @@ function cqTrendWrapTokens(tokens,perLine){
 }
 function cqTrendActiveObras(year,month){
   return state.obras
-    .filter(ob=>{
-      const e=getObraEffectiveStatus(ob.id,year,month);
-      return e&&e.status==='construccion';
-    })
+    .filter(ob=>cqOperationalIsActive(ob,year,month))
     .map(ob=>ob.code||'')
     .filter(Boolean);
 }
 function cqTrendStartedObras(year,month){
-  const targetOrd=ordOf(year,month);
   return state.obras
-    .filter(ob=>{
-      const entries=getObraEntriesUntil(ob.id,targetOrd);
-      return !!entries.find(e=>e.ord===targetOrd && e.status==='construccion');
-    })
+    .filter(ob=>cqOperationalStartedThisMonth(ob,year,month))
     .map(ob=>ob.code||'')
     .filter(Boolean);
 }
