@@ -5125,7 +5125,7 @@ function moveObra(idx,dir){
 }
 
 function switchObra(id){
-  if(currentScreen==='obra') persist();
+  if(currentScreen==='obra') cqFlushAvancePersist();
   curObraId = id;
   localStorage.setItem('mano_obra_actual', curObraId);
   state = estadosObras[curObraId] || normalizeState(null, currentObra());
@@ -5157,6 +5157,43 @@ function getAv(snum,idx){
   try { locked = (typeof getLockedAv==='function') ? (Number(getLockedAv(snum,idx))||0) : 0; } catch(e) {}
   return Math.max(0, Math.min(1, Math.max(actual, locked)));
 }
+// ─── RENDIMIENTO AVANCES ──────────────────────────────────────────────────
+// El slider puede emitir decenas de eventos por segundo. Guardar en localStorage,
+// construir historial y escribir Firebase en cada uno bloqueaba la UI en tablet.
+// La pantalla cambia al instante y el guardado se consolida cuando termina la interacción.
+let _cqAvancePersistTimer=null;
+let _cqAvanceSummaryTimer=null;
+let _cqAvancePersistDirty=false;
+let _cqAvanceSummaryWeek=null;
+
+function cqScheduleAvancePersist(delay=750){
+  estadosObras[curObraId]=state;
+  _cqAvancePersistDirty=true;
+  if(_cqAvancePersistTimer) clearTimeout(_cqAvancePersistTimer);
+  _cqAvancePersistTimer=setTimeout(()=>{
+    _cqAvancePersistTimer=null;
+    cqFlushAvancePersist();
+  },delay);
+}
+function cqFlushAvancePersist(){
+  if(_cqAvancePersistTimer){ clearTimeout(_cqAvancePersistTimer); _cqAvancePersistTimer=null; }
+  if(!_cqAvancePersistDirty) return;
+  _cqAvancePersistDirty=false;
+  persist();
+}
+function cqScheduleAvanceSummary(snum,delay=35){
+  _cqAvanceSummaryWeek=snum;
+  if(_cqAvanceSummaryTimer) clearTimeout(_cqAvanceSummaryTimer);
+  _cqAvanceSummaryTimer=setTimeout(()=>{
+    _cqAvanceSummaryTimer=null;
+    const sem=_cqAvanceSummaryWeek;
+    _cqAvanceSummaryWeek=null;
+    if(sem!=null && document.getElementById('sb-'+sem)) refreshSemana(sem);
+    renderKPIs();
+    const vf=document.getElementById('view-finanzas');
+    if(vf && vf.style.display!=='none') renderFinanzas();
+  },delay);
+}
 function setAv(snum,idx,val){
   const min=getLockedAv ? getLockedAv(snum,idx) : 0;
   if(val < min){
@@ -5166,8 +5203,8 @@ function setAv(snum,idx,val){
   if(!state.items || typeof state.items!=='object') state.items={};
   const it=getTask(snum,idx);
   state.items[taskStateKey(snum,idx,it)]=val;
-  persist();
-  updateCertSticky && updateCertSticky();
+  estadosObras[curObraId]=state;
+  cqScheduleAvancePersist();
 }
 
 function fmt(n){ return '$ ' + Math.round(n).toLocaleString('es-AR'); }
@@ -5692,11 +5729,9 @@ function toggleCheck(snum,idx){
       setAv(snum,idx,next);
     }
   }
-  // Actualización puntual: no reconstruir todas las semanas abiertas por un solo click.
+  // Respuesta visual inmediata; cálculos globales y guardado quedan fuera del click.
   updateItemRowUI(snum,idx,getAv(snum,idx));
-  refreshSemana(snum);
-  renderKPIs();
-  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
+  cqScheduleAvanceSummary(snum);
 }
 function updateItemRowUI(snum, idx, av){
   const dm=taskDisplayMetrics(snum,idx);
@@ -5749,9 +5784,7 @@ function onSlider(snum,idx,val){
     setAv(snum,idx,av);
     updateItemRowUI(snum,idx,av);
   }
-  refreshSemana(snum);
-  renderKPIs();
-  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
+  cqScheduleAvanceSummary(snum);
 }
 function onAvanceInput(snum,idx,val){
   let n=parseFloat(String(val).replace(',', '.'));
@@ -5771,9 +5804,7 @@ function onAvanceInput(snum,idx,val){
     setAv(snum,idx,av);
     updateItemRowUI(snum,idx,av);
   }
-  refreshSemana(snum);
-  renderKPIs();
-  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
+  cqScheduleAvanceSummary(snum);
 }
 
 function refreshSemana(snum){
@@ -6255,6 +6286,7 @@ function setHeaderForHome(){
   document.title='CQ Desarrollos — Mano de obra';
 }
 function showHome(){
+  try{ cqFlushAvancePersist(); }catch(e){}
   document.body.classList.remove('cq-obra-mode','cq-constructor-mode');
   currentObraTab='avances';
   currentScreen='home'; currentConstructorId=null;
@@ -7007,10 +7039,22 @@ function startAvancePresence(){
   setInterval(()=>{heartbeatAvancePresence();readLastSyncAvance();if(document.getElementById('view-reporte')?.style.display!=='none')renderAvanceUsuariosConectados();},30000);
 }
 const _persistAvanceOriginalForMeta = persist;
+let _cqMetaSyncTimer=null;
+let _cqMetaSyncAction='guardó cambios';
+function cqScheduleMetaSync(action='guardó cambios'){
+  _cqMetaSyncAction=action;
+  if(_cqMetaSyncTimer) clearTimeout(_cqMetaSyncTimer);
+  _cqMetaSyncTimer=setTimeout(()=>{
+    _cqMetaSyncTimer=null;
+    updateLastSyncAvance(_cqMetaSyncAction);
+    // La presencia ya tiene heartbeat periódico. Una sola actualización agrupada
+    // alcanza para reflejar actividad sin bombardear Firebase durante un slider.
+    heartbeatAvancePresence();
+  },1000);
+}
 persist = function(){
   _persistAvanceOriginalForMeta();
-  updateLastSyncAvance('guardó cambios');
-  heartbeatAvancePresence();
+  cqScheduleMetaSync('guardó cambios');
 };
 const _persistConfigAvanceOriginalForMeta = persistConfig;
 persistConfig = async function(){
@@ -10967,6 +11011,14 @@ body.cq-constructor-mode #tab-reporte{
   }
 }
 </style>
+
+<script id="cq-avance-fast-flush-v4">
+(function(){
+  function flush(){ try{ if(typeof cqFlushAvancePersist==='function') cqFlushAvancePersist(); }catch(e){} }
+  window.addEventListener('pagehide',flush);
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') flush(); });
+})();
+</script>
 </body>
 </html>
 
