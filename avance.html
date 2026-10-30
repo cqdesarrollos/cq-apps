@@ -3741,16 +3741,32 @@ function resetFoundationWeeksForNewTwoStory(st,cimentacion){
 function createStateFromLatestTemplate(newMeta,tipo){
   tipo=Number(tipo)===2?2:1;
   const cim=tipo===2 ? normalizeCimentacion2P(newMeta.tipoCimentacion) : '';
-  const metaConVersion = {...newMeta, plantillaVersion: tipo===2 ? '2p_v1' : '1p_detallada_v1', ...(tipo===2?{tipoCimentacion:cim}:{})};
+  const plantillaVersion = (tipo===2 && cim==='platea')
+    ? PLANTILLA_2P_PLATEA_EXCEL
+    : (tipo===2 ? '2p_v1' : '1p_detallada_v1');
+  const metaConVersion = {...newMeta, plantillaVersion, ...(tipo===2?{tipoCimentacion:cim}:{})};
 
-  // Para 2 plantas, primero busca la última obra del MISMO sistema de fundación.
+  // 2 plantas + Platea: cronograma fijo del Excel, sin heredar cambios de semanas,
+  // tareas, orden o importes de otra obra. Solo conserva parámetros generales útiles.
+  if(tipo===2 && cim==='platea'){
+    const nuevo=createDefaultState(metaConVersion);
+    const refMeta=findLatestObraByTipo(2,'platea') || findLatestTwoStoryAny();
+    const ref=refMeta ? estadosObras[refMeta.id] : null;
+    if(ref){
+      nuevo.acuerdo=Number(ref.acuerdo)>0?Number(ref.acuerdo):nuevo.acuerdo;
+      nuevo.acuerdoComentario=ref.acuerdoComentario||'';
+      nuevo.itemsCQ=deepClone(ref.itemsCQ||nuevo.itemsCQ);
+    }
+    return normalizeState(nuevo,metaConVersion);
+  }
+
+  // Para 2 plantas con pilotes, mantiene la lógica existente de tomar la última
+  // obra del mismo sistema como modelo.
   if(tipo===2 && cim){
     const exactMeta=findLatestObraByTipo(2,cim);
     const exact=exactMeta ? estadosObras[exactMeta.id] : null;
     if(exact) return cloneStateAsNewProject(exact,metaConVersion,2);
 
-    // Si todavía no existe una obra de ese sistema, toma la última de 2 plantas
-    // como referencia para las semanas comunes y reemplaza S1-S4 por Pilotes/Platea.
     const commonMeta=findLatestTwoStoryAny();
     const common=commonMeta ? estadosObras[commonMeta.id] : null;
     if(common){
@@ -3795,11 +3811,13 @@ function updatePlantTemplateHint(setAgreement=false){
       hint.innerHTML=meta
         ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
         : `<strong>Modelo inicial:</strong> plantilla detallada de 1 planta con zapata corrida.`;
+    }else if(cim==='platea'){
+      hint.innerHTML=`<strong>2 plantas · Platea:</strong> usa el cronograma fijo de 24 semanas definido para este sistema. No copia modificaciones de otra obra.`;
     }else if(meta){
-      hint.innerHTML=`<strong>Modelo ${cim==='pilotes'?'Pilotes':'Platea'}:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia las últimas modificaciones de ese mismo sistema.`;
+      hint.innerHTML=`<strong>Modelo Pilotes:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia las últimas modificaciones de ese mismo sistema.`;
     }else{
       const common=findLatestTwoStoryAny();
-      hint.innerHTML=`<strong>Primer proyecto 2 plantas · ${cim==='pilotes'?'Pilotes':'Platea'}:</strong> S1–S4 se crean con este sistema de fundación${common ? ` y desde S5 toma como referencia ${escHtml(common.label||common.obraNum||common.id)}.` : '.'}`;
+      hint.innerHTML=`<strong>Primer proyecto 2 plantas · Pilotes:</strong> S1–S4 se crean con este sistema de fundación${common ? ` y desde S5 toma como referencia ${escHtml(common.label||common.obraNum||common.id)}.` : '.'}`;
     }
   }
   if(setAgreement){
@@ -3867,7 +3885,7 @@ function saveEditObra() {
   if (obraModalMode === 'new') {
     const tipoPlantas = Number(document.getElementById('eo-tipo')?.value || 1) === 2 ? 2 : 1;
     const tipoCimentacion = tipoPlantas===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value || 'pilotes') : '';
-    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, ...(tipoPlantas===2?{tipoCimentacion}:{}), plantillaVersion: tipoPlantas===2?'2p_v1':'1p_detallada_v1', createdAt:new Date().toISOString() };
+    const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, ...(tipoPlantas===2?{tipoCimentacion}:{}), plantillaVersion: tipoPlantas===2 ? (tipoCimentacion==='platea' ? PLANTILLA_2P_PLATEA_EXCEL : '2p_v1') : '1p_detallada_v1', createdAt:new Date().toISOString() };
     obrasConfig.push(newMeta);
     estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
     estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
@@ -4233,10 +4251,95 @@ const SEMANAS_2P_PLATEA_INICIO = [
     {desc:"Hormigonado de platea",avance:0,monto:0},{desc:"Nivelación y terminación superficial",avance:0,monto:0},{desc:"Curado de platea",avance:0,monto:0},{desc:"Replanteo de mampostería PB",avance:0,monto:0}
   ]}
 ];
+
+// ─── CRONOGRAMA FIJO · 2 PLANTAS CON PLATEA ────────────────────────────
+// Fuente: cronograma tentativo.xlsx. Se aplica SOLO a obras nuevas creadas
+// como 2 plantas + Platea. Las obras existentes conservan su plantilla.
+const PLANTILLA_2P_PLATEA_EXCEL = '2p_platea_excel_v1';
+const SEMANAS_2P_PLATEA_CRONOGRAMA = [
+  {num:1, etapa:"Platea · Replanteo / Preparación", items:[
+    {desc:"Replanteo general de ubicación de Platea y niveles de la misma",avance:0,monto:0},{desc:"Cerramiento y ubicación de obrador, baño químico y material a recibir",avance:0,monto:0},{desc:"Pilar de luz para obra",avance:0,monto:0},{desc:"Armadura de vigas para platea",avance:0,monto:0}
+  ]},
+  {num:2, etapa:"Platea · Armado / Instalaciones", items:[
+    {desc:"Armado de plantillas y vigas",avance:0,monto:0},{desc:"Replanteo de vigas de Platea",avance:0,monto:0},{desc:"Colocación de barrera aislante.",avance:0,monto:0},{desc:"Instalación de malla posterior a ingreso de Plomero",avance:0,monto:0},{desc:"Refuerzos y replanteo de columnas de planta baja",avance:0,monto:0}
+  ]},
+  {num:3, etapa:"Platea · Hormigonado / Mampostería PB", items:[
+    {desc:"Hormigonado y curado de platea.",avance:0,monto:0},{desc:"Replanteo de mampostería y capa aisladora",avance:0,monto:0},{desc:"Mampostería de elevación interior 1,20 (Planta Baja)",avance:0,monto:0},{desc:"Mampostería de elevación exterior 1,20 (Planta Baja)",avance:0,monto:0}
+  ]},
+  {num:4, etapa:"Mampostería PB / Columnas", items:[
+    {desc:"Llenado de columnas al 1,20",avance:0,monto:0},{desc:"Mampostería de elevación hasta altura de losa y dinteles listos (planta baja) INTERIOR Y EXTERIOR",avance:0,monto:0}
+  ]},
+  {num:5, etapa:"Encadenados / Losa PB", items:[
+    {desc:"Encadenados, vigas (planta baja)",avance:0,monto:0},{desc:"Armado y apuntalamiento de losa (planta baja)",avance:0,monto:0}
+  ]},
+  {num:6, etapa:"Losa PB", items:[
+    {desc:"Armado de losa  (planta baja)",avance:0,monto:0},{desc:"Replanteo de Columnas de Planta Alta",avance:0,monto:0},{desc:"Llenado de losa (planta baja)",avance:0,monto:0}
+  ]},
+  {num:7, etapa:"Escalera / Instalaciones", items:[
+    {desc:"Escalera (replanteo, armado y llenado Hormigon IN SITU)",avance:0,monto:0},{desc:"1 Pilar de luz y 2 gabinetes de gas",avance:0,monto:0},{desc:"Terminaciónes de pendientes de planta baja",avance:0,monto:0}
+  ]},
+  {num:8, etapa:"Mampostería PA 1,20", items:[
+    {desc:"Mampostería de elevación exterior 1,20 (Planta Alta)",avance:0,monto:0},{desc:"Mampostería de elevación interior 1,20 (Planta Alta)",avance:0,monto:0}
+  ]},
+  {num:9, etapa:"Mampostería PA / Encadenados", items:[
+    {desc:"Mampostería de elevación exterior hasta encadenados (Planta Alta) al 80%",avance:0,monto:0},{desc:"Mampostería de elevación interior hasta encadenados (Planta Alta)",avance:0,monto:0}
+  ]},
+  {num:10, etapa:"Mampostería PA / Losa", items:[
+    {desc:"Mampostería de elevación exterior hasta encadenados (Planta Alta) al 100%",avance:0,monto:0},{desc:"Encadenados, vigas (planta alta)",avance:0,monto:0},{desc:"Armado y apuntalamiento de losa (Planta Alta)",avance:0,monto:0}
+  ]},
+  {num:11, etapa:"Losa PA · Armado / Apuntalamiento", items:[
+    {desc:"Armado y apuntalamiento de losa (Planta Alta)",avance:0,monto:0}
+  ]},
+  {num:12, etapa:"Losa PA / Parapetos", items:[
+    {desc:"Llenado de losa (Planta Alta)",avance:0,monto:0},{desc:"Curado y parapetos.",avance:0,monto:0},{desc:"Mampostería de base de tanques",avance:0,monto:0}
+  ]},
+  {num:13, etapa:"Tanque / Pendientes", items:[
+    {desc:"Losa de tanque y mampostería",avance:0,monto:0},{desc:"Revoque interior de tanque y parapetos",avance:0,monto:0},{desc:"Pintura de base de tanque con fijador y membrana fibrada",avance:0,monto:0},{desc:"Pintura asfáltica para losa",avance:0,monto:0},{desc:"Pendientes",avance:0,monto:0}
+  ]},
+  {num:14, etapa:"Pendientes / Bovedillas", items:[
+    {desc:"Pendientes y carga",avance:0,monto:0},{desc:"Bovedillas y lechinado",avance:0,monto:0},{desc:"Fratachado de tanque",avance:0,monto:0}
+  ]},
+  {num:15, etapa:"Impermeabilización / Revoques", items:[
+    {desc:"Impermeabilización de cubierta con fijador y membrana fibrada",avance:0,monto:0},{desc:"Revoque Baños y cocinas",avance:0,monto:0},{desc:"nichos de placares y banquinas",avance:0,monto:0}
+  ]},
+  {num:16, etapa:"Premarcos / Revoques", items:[
+    {desc:"Colocación de premarcos",avance:0,monto:0},{desc:"Revoque exterior PB 100%",avance:0,monto:0},{desc:"Revoque interior al 25%",avance:0,monto:0}
+  ]},
+  {num:17, etapa:"Asadores / Revoques", items:[
+    {desc:"Asadores y madianeras revocados",avance:0,monto:0},{desc:"Revoque interior al 50%",avance:0,monto:0}
+  ]},
+  {num:18, etapa:"Revoques", items:[
+    {desc:"Revoque exterior PA 50%",avance:0,monto:0},{desc:"Revoque interior al 75%",avance:0,monto:0}
+  ]},
+  {num:19, etapa:"Revoques", items:[
+    {desc:"Revoque intetior al 100%",avance:0,monto:0},{desc:"Revoque exterior PA 100%",avance:0,monto:0}
+  ]},
+  {num:20, etapa:"Carpetas / Escalera", items:[
+    {desc:"Carpetas PA y PB",avance:0,monto:0},{desc:"Terminacion gruesa de escalera",avance:0,monto:0},{desc:"Fratachado de fondo planta baja y planta alta al 50%",avance:0,monto:0}
+  ]},
+  {num:21, etapa:"Fratachados", items:[
+    {desc:"Fratachado de fondo planta baja y planta alta al 100%",avance:0,monto:0},{desc:"Fratachado de frente Planta baja y planta alta 50%",avance:0,monto:0}
+  ]},
+  {num:22, etapa:"Frente / Medianeras", items:[
+    {desc:"Medianeras de frente",avance:0,monto:0},{desc:"Fratachado de frente Planta baja y planta alta 100%",avance:0,monto:0}
+  ]},
+  {num:23, etapa:"Contrapiso frente", items:[
+    {desc:"Contrapiso frente",avance:0,monto:0}
+  ]},
+  {num:24, etapa:"Carpeta frente / Terminaciones", items:[
+    {desc:"Carpeta de frente",avance:0,monto:0},{desc:"Terminaciones",avance:0,monto:0}
+  ]}
+];
 function getBaseSemanasForProject(st,meta){
   const tipo=Number(st?.tipoPlantas || meta?.tipoPlantas || 1)===2?2:1;
   if(tipo===2){
     const cim=normalizeCimentacion2P(st?.tipoCimentacion || meta?.tipoCimentacion || '');
+    const version=st?.plantillaVersion || meta?.plantillaVersion || '';
+    // Las obras NUEVAS de 2 plantas con platea usan el cronograma fijo de 24 semanas
+    // del Excel. Las obras de platea ya existentes (2p_v1) conservan su esquema anterior.
+    if(cim==='platea' && version===PLANTILLA_2P_PLATEA_EXCEL){
+      return SEMANAS_2P_PLATEA_CRONOGRAMA;
+    }
     if(cim){
       const inicio=cim==='pilotes'?SEMANAS_2P_PILOTES_INICIO:SEMANAS_2P_PLATEA_INICIO;
       return [...inicio, ...SEMANAS_DOS_PLANTAS.filter(x=>Number(x.num)>4)];
