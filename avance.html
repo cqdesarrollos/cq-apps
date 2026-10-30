@@ -2551,6 +2551,20 @@ window.cqRevealInitialScreen=function(){
   }
 }
 </style>
+
+<style id="cq-ajuste-porcentaje-tablet-2dec">
+/* Ajuste solicitado: SOLO TABLET. En teléfono se conserva el tamaño actual. */
+@media (min-width:701px) and (max-width:1700px) and (pointer:coarse){
+  #view-avances .semana-items.open .avance-input{
+    width:58px!important;
+    font-size:15px!important;
+    letter-spacing:-.025em!important;
+  }
+  #view-avances .semana-items.open .avance-pct-sign{
+    font-size:14px!important;
+  }
+}
+</style>
 </head>
 <body>
 
@@ -3596,7 +3610,10 @@ function marcarSemana(snum, val) {
     state.items[taskStateKey(snum,i,it)] = Math.max(min, Number(val)||0);
   });
   persist();
-  refreshAll();
+  getItems(snum).forEach((it,i)=>updateItemRowUI(snum,i,getAv(snum,i)));
+  refreshSemana(snum);
+  renderKPIs();
+  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
 }
 
 function marcarTodo(val) {
@@ -4379,11 +4396,46 @@ function cqCapturarPerfilFinancieroObra(meta){
     curObraId=meta.id;
     const weeks=getSemanas();
     const weekly=weeks.map(sem=>{
-      let total=0;
-      getItems(sem.num).forEach((it,i)=>{
+      const sn=Number(sem.num);
+      const itemsSem=getItems(sn);
+      const tieneConforme=itemsSem.some(it=>esNombreConforme(it && it.desc));
+
+      // 1) Lectura normal según las tareas visibles de la obra.
+      let visible=0;
+      itemsSem.forEach((it,i)=>{
         if(esNombreConforme(it && it.desc)) return;
-        total += Math.max(0, Number(getMontoRaw(sem.num,i)) || 0);
+        visible += Math.max(0, Number(getMontoRaw(sn,i)) || 0);
       });
+
+      // 2) Compatibilidad con importes guardados con claves históricas.
+      //    Toma las claves de tareas de esa semana aun si hoy la tarea cambió de índice/nombre.
+      let legacyMontos=0;
+      Object.entries(state.montos||{}).forEach(([k,v])=>{
+        if(k===sn+'-pagoMax') return;
+        if(k.startsWith(sn+'-m-') || k.startsWith(sn+'-mc-')){
+          legacyMontos += Math.max(0,Number(v)||0);
+        }
+      });
+
+      // 3) Overrides/custom antiguos con el importe embebido.
+      let embebidos=0;
+      Object.entries(state.taskOverrides||{}).forEach(([k,v])=>{
+        if(String(k).startsWith(sn+'-') && !esNombreConforme(v && v.desc)){
+          embebidos += Math.max(0,Number(v && v.monto)||0);
+        }
+      });
+      (state.customTasks?.[sn]||[]).forEach(it=>{
+        if(!esNombreConforme(it && it.desc)) embebidos += Math.max(0,Number(it && it.monto)||0);
+      });
+
+      let total=Math.max(visible,legacyMontos,embebidos);
+
+      // 4) Algunas versiones históricas guardaban el valor semanal consolidado.
+      //    No se usa en la semana de Conforme para evitar mezclar el residual.
+      if(!tieneConforme){
+        const pagoMax=Math.max(0,Number((state.montos||{})[sn+'-pagoMax'])||0);
+        total=Math.max(total,pagoMax);
+      }
       return Math.round(total);
     });
     return {
@@ -4478,9 +4530,74 @@ function cqAsegurarImportesCronogramaPlatea(){
   if(!perfil) return false;
   const ok=cqAplicarPerfilFinancieroPlatea(state,meta,perfil);
   if(ok){
+    state._plateaFinanceRepairedV2=true;
     try{ persist(); }catch(e){ console.warn('No se pudo persistir perfil financiero platea',e); }
   }
   return ok;
+}
+
+// Repara explícitamente las obras del cronograma nuevo DESPUÉS de que Firebase
+// terminó de cargar todas las obras modelo. Esto evita que el primer render,
+// que ocurre antes de completar la lectura remota, deje la obra con $0.
+async function cqRepararImportesPlateaPostFirebase(writeRemote=false){
+  const originalState=state;
+  const originalCur=curObraId;
+  const reparadas=[];
+  try{
+    for(const meta of obrasConfig){
+      const st=estadosObras[meta.id];
+      if(!st) continue;
+      const version=st.plantillaVersion || meta.plantillaVersion || '';
+      const cim=normalizeCimentacion2P(st.tipoCimentacion || meta.tipoCimentacion || '');
+      if(version!==PLANTILLA_2P_PLATEA_EXCEL || cim!=='platea') continue;
+
+      state=st;
+      curObraId=meta.id;
+      let totalActual=0;
+      getSemanas().forEach(sem=>getItems(sem.num).forEach((it,i)=>{
+        if(!esNombreConforme(it && it.desc)) totalActual+=Math.max(0,Number(getMontoRaw(sem.num,i))||0);
+      }));
+      if(totalActual>0.5) continue;
+
+      const perfil=cqBuscarReferenciaFinanciera2P(meta.id);
+      if(!perfil) continue;
+      if(cqAplicarPerfilFinancieroPlatea(st,meta,perfil)){
+        st._plateaFinanceRepairedV2=true;
+        estadosObras[meta.id]=st;
+        localStorage.setItem('mano_obra_'+meta.id,JSON.stringify(st));
+        reparadas.push(meta.id);
+      }
+    }
+
+    if(writeRemote && isFirebaseEnabled() && window._dbReady){
+      for(const id of reparadas){
+        try{
+          await window._setDoc(window._doc(window._db,'obras',id),JSON.parse(JSON.stringify(estadosObras[id])));
+        }catch(e){
+          console.warn('No se pudo guardar reparación financiera de platea',id,e);
+        }
+      }
+    }
+  }finally{
+    curObraId=originalCur;
+    state=estadosObras[originalCur] || originalState;
+  }
+  return reparadas.length;
+}
+
+// Evita repetir en cada render la búsqueda/lectura de perfiles financieros.
+// Cada obra se comprueba como máximo una vez por sesión; la reparación completa
+// sigue ejecutándose después de la carga inicial de Firebase.
+const cqPlateaImportCheckSession = new Set();
+function cqAsegurarImportesCronogramaPlateaUnaVez(){
+  const meta=currentObra && currentObra();
+  if(!meta || !state) return false;
+  const version=state.plantillaVersion || meta.plantillaVersion || '';
+  const cim=normalizeCimentacion2P(state.tipoCimentacion || meta.tipoCimentacion || '');
+  if(version!==PLANTILLA_2P_PLATEA_EXCEL || cim!=='platea') return false;
+  if(cqPlateaImportCheckSession.has(meta.id)) return false;
+  cqPlateaImportCheckSession.add(meta.id);
+  return cqAsegurarImportesCronogramaPlatea();
 }
 
 function getBaseSemanasForProject(st,meta){
@@ -4721,6 +4838,41 @@ function recordMutationForHistory(){
   lastCommittedSnapshot = current;
   refreshHistoryButtons();
 }
+// Ruta rápida para cambios normales dentro de la obra actual (avance, importes, etc.).
+// Antes snapshotApp() clonaba TODAS las obras en cada click. Con muchas obras eso
+// bloqueaba el hilo principal en tablet. Acá se conserva el mismo undo/redo, pero
+// sólo se clona el estado de la obra que realmente cambió.
+function recordCurrentObraMutationForHistory(){
+  if(suppressHistory) return;
+  if(!lastCommittedSnapshot){
+    lastCommittedSnapshot = snapshotApp();
+    refreshHistoryButtons();
+    return;
+  }
+  const prevState=(lastCommittedSnapshot.estadosObras||{})[curObraId];
+  let currentStateJson='';
+  try{ currentStateJson=JSON.stringify(state); }catch(e){ currentStateJson=''; }
+  let prevStateJson='';
+  try{ prevStateJson=JSON.stringify(prevState==null?null:prevState); }catch(e){ prevStateJson='__err__'; }
+  if(currentStateJson && currentStateJson===prevStateJson) return;
+
+  undoStack.push(lastCommittedSnapshot);
+  if(undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  redoStack = [];
+
+  const nextEstados={...(lastCommittedSnapshot.estadosObras||{})};
+  nextEstados[curObraId]=currentStateJson ? JSON.parse(currentStateJson) : deepClone(state);
+  lastCommittedSnapshot={
+    obrasConfig:lastCommittedSnapshot.obrasConfig || deepClone(obrasConfig||[]),
+    constructoresConfig:lastCommittedSnapshot.constructoresConfig || deepClone(constructoresConfig||[]),
+    curObraId,
+    estadosObras:nextEstados,
+    currentScreen,
+    currentConstructorId
+  };
+  refreshHistoryButtons();
+}
+
 function applySnapshot(snap, writeFirebase=true){
   if(!snap) return false;
   blockFirebaseHistoryRead(20000);
@@ -4814,7 +4966,7 @@ function persist() {
   localStorage.setItem('mano_obra_'+curObraId, JSON.stringify(state));
   // Mantiene compatibilidad con tu versión anterior para la primera obra.
   if(curObraId === obrasConfig[0].id) localStorage.setItem('simon_state', JSON.stringify(state));
-  recordMutationForHistory();
+  recordCurrentObraMutationForHistory();
   if(isFirebaseEnabled() && window._dbReady) {
     markSaving();
     window._setDoc(window._doc(window._db,'obras',curObraId), JSON.parse(JSON.stringify(state)))
@@ -4981,6 +5133,7 @@ function switchObra(id){
   renderObraSwitch();
   updateHeaderTitle();
   showObraView();
+  cqAsegurarImportesCronogramaPlateaUnaVez();
   renderKPIs();
   renderSemanas();
 }
@@ -5431,9 +5584,9 @@ function semanaTienePendiente(snum){
 }
 
 function renderSemanas(){
-  // Migra también obras de prueba creadas con la primera versión del cronograma
-  // fijo, donde todas las tareas habían quedado accidentalmente en $0.
-  cqAsegurarImportesCronogramaPlatea();
+  // IMPORTANTE: la reparación financiera de 2P + platea ya no se ejecuta acá.
+  // renderSemanas() corre en muchas interacciones; hacer esa revisión en cada render
+  // generaba demora perceptible al marcar tareas, especialmente en tablet.
   const cont=document.getElementById('semanas-container');
   const semanasActuales=getSemanas();
   const globalInput=document.getElementById('all-weeks-total');
@@ -5539,7 +5692,11 @@ function toggleCheck(snum,idx){
       setAv(snum,idx,next);
     }
   }
-  refreshAll();
+  // Actualización puntual: no reconstruir todas las semanas abiertas por un solo click.
+  updateItemRowUI(snum,idx,getAv(snum,idx));
+  refreshSemana(snum);
+  renderKPIs();
+  if(document.getElementById('view-finanzas').style.display!=='none') renderFinanzas();
 }
 function updateItemRowUI(snum, idx, av){
   const dm=taskDisplayMetrics(snum,idx);
@@ -5554,7 +5711,22 @@ function updateItemRowUI(snum, idx, av){
     const chk=row.querySelector('.item-check');
     const dsc=row.querySelector('.item-desc');
     if(chk){ chk.className='item-check'+(displayAv>=1?' on':displayAv>0?' partial':''); chk.textContent=displayAv>=1?'✓':''; }
-    if(dsc) dsc.className='item-desc'+(displayAv>=1?' done':'');
+    if(dsc){
+      dsc.className='item-desc'+(displayAv>=1?' done':'');
+      const manualAv=getAv(snum,idx);
+      const locked=getLockedAv(snum,idx);
+      const pending=manualAv>locked+0.000001;
+      let badge=dsc.querySelector('.pending-cert-badge');
+      if(pending && !badge){
+        badge=document.createElement('span');
+        badge.className='pending-cert-badge';
+        badge.textContent='⏳ Pendiente';
+        dsc.appendChild(badge);
+      }else if(!pending && badge){
+        badge.remove();
+      }
+      row.classList.toggle('pending-cert',pending);
+    }
   }
   const done=displayAv>=1;
   const devEl=document.getElementById(`dev-${snum}-${idx}`);
@@ -6986,6 +7158,9 @@ async function initApp() {
         renderObraSwitch(); renderKPIs(); renderSemanas();
       }
       await Promise.all(obrasConfig.map((o,i)=> i===currentIdx ? Promise.resolve() : readOneObra(o,i)));
+      // Recién aquí están disponibles todas las obras modelo con sus importes reales.
+      // Repara cualquier 2P + Platea nuevo que haya nacido con tareas en $0.
+      await cqRepararImportesPlateaPostFirebase(true);
       await ensureProjectTypeTemplates(true);
       state = estadosObras[curObraId] || normalizeState(null,currentObra());
       markSaved();
@@ -6998,6 +7173,7 @@ async function initApp() {
   }
   state = estadosObras[curObraId] || normalizeState(null, currentObra());
   estadosObras[curObraId] = state;
+  cqAsegurarImportesCronogramaPlateaUnaVez();
   renderObraSwitch();
   renderKPIs();
   renderSemanas();
@@ -10775,6 +10951,22 @@ body.cq-constructor-mode #tab-reporte{
 }
 </style>
 
+
+<style id="cq-tablet-porcentaje-final-v3">
+/* Ajuste final SOLO TABLET. Va al final para no ser pisado por el CSS de teléfono horizontal. */
+@media (min-width:701px) and (max-width:1700px) and (pointer:coarse){
+  #view-avances .semana-items.open .avance-input{
+    width:58px!important;
+    min-width:58px!important;
+    font-size:14px!important;
+    line-height:1.1!important;
+    letter-spacing:-.035em!important;
+  }
+  #view-avances .semana-items.open .avance-pct-sign{
+    font-size:13px!important;
+  }
+}
+</style>
 </body>
 </html>
 
