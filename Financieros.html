@@ -2455,6 +2455,17 @@ function countObrasIniciadasAuto(year,month){
   });
   return count;
 }
+function cqOperationalYearHasHistory(year){
+  const y=String(year);
+  // Si existe cualquier cambio constructivo en el año, o alguna obra está activa
+  // en alguno de sus meses, conocemos el historial operativo de ese año.
+  const slots=state.obraEstados && state.obraEstados[y];
+  if(slots && Object.keys(slots).some(m=>Object.keys(slots[m]||{}).length)) return true;
+  for(let m=1;m<=12;m++){
+    if(countObrasEnConstruccion(y,m)>0 || countObrasIniciadasAuto(y,m)>0) return true;
+  }
+  return false;
+}
 function obraEstadoGeneral(ob,year,month){
   const e = getObraEffectiveStatus(ob.id, year, month);
   const key = statusClassObra(e.status);
@@ -2568,7 +2579,14 @@ function monthHasData(year,month){
   const obraSlot = state.obraEstados && state.obraEstados[year] && state.obraEstados[year][month];
   const hasObraStatus = !!(obraSlot && Object.keys(obraSlot).length);
 
-  return manualFilled || agg.stock>0 || agg.vt>0 || agg.vp>0 || hasObraStatus;
+  const obrasActivas = countObrasEnConstruccion(year,month);
+  const obrasIniciadas = countObrasIniciadasAuto(year,month);
+
+  // La actividad constructiva también es información histórica.
+  // Antes un mes intermedio (sin venta/carga/cambio puntual) quedaba vacío aunque
+  // hubiera obras en construcción.
+  return manualFilled || agg.stock>0 || agg.vt>0 || agg.vp>0 || hasObraStatus ||
+         obrasActivas>0 || obrasIniciadas>0;
 }
 
 function pick(manualVal, autoVal, fallbackZero){
@@ -3740,6 +3758,8 @@ function buildIndicatorSeries(ind){
     const c = calc(inp, agg);
     calcs.push(c);
     const has = monthHasData(state.year,m);
+    const operationalKnown = ['obrasActivas','obrasIniciadas'].includes(ind.key) &&
+                             cqOperationalYearHasHistory(state.year);
     let raw = ind.get(c);
     let ns = cqTrendNoSalesMode(ind,c,raw);
     const detail=cqTrendDetailFor(ind,agg,state.year,m,m===lastMonth);
@@ -3754,7 +3774,7 @@ function buildIndicatorSeries(ind){
       continue;
     }
 
-    let v = has ? raw : null;
+    let v = (has || operationalKnown) ? raw : null;
     if(v===999) v=null;
     values.push(v);
     colors.push(v===null ? '#DCD8CC' : zColor(ind.z(c)));
@@ -3843,11 +3863,13 @@ function cqTrendYearModeLabel(ind){
   const m=cqTrendYearAggregationMode(ind);
   return m==='sum'?'Suma anual':(m==='ratio'?'Pozo / ventas':'Promedio anual');
 }
-function cqTrendRowsForYear(year){
+function cqTrendRowsForYear(year,ind){
   const rows=[];
   const lastMonth=cqTrendMonthCountForYear(year);
+  const operational = ind && ['obrasActivas','obrasIniciadas'].includes(ind.key);
+  const operationalKnown = operational && cqOperationalYearHasHistory(year);
   for(let m=1;m<=lastMonth;m++){
-    if(!monthHasData(year,m)) continue;
+    if(!monthHasData(year,m) && !operationalKnown) continue;
     const inp=(state.data[year] && state.data[year][m]) || DEFAULT_INPUT();
     const agg=computeCasasAgg(year,m);
     const c=calc(inp,agg);
@@ -3999,11 +4021,11 @@ function cqTrendAggregateRows(ind,rows){
   };
 }
 function cqTrendYearValue(ind,year){
-  return cqTrendAggregateRows(ind,cqTrendRowsForYear(year));
+  return cqTrendAggregateRows(ind,cqTrendRowsForYear(year,ind));
 }
 function cqTrendHistoricalValue(ind,years){
   const rows=[];
-  (years||[]).forEach(y=>rows.push(...cqTrendRowsForYear(y)));
+  (years||[]).forEach(y=>rows.push(...cqTrendRowsForYear(y,ind)));
   return cqTrendAggregateRows(ind,rows);
 }
 function cqTrendHistoricalModeLabel(ind){
