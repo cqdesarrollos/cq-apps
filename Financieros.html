@@ -1822,6 +1822,7 @@ const SEED_OBRAS_CODES = ['25.82','3.85','25100','19.99','5.94','27.77','4.100',
 let state = { year:'2026', month:6, data:{}, obras:[], casas:{}, obraEstados:{}, indicatorConfig:{} };
 let tendenciaChartInstances = [];
 let cqTrendAllYears = false;
+let cqTrendSelectedYears = new Set();
 let carteraOpen = {};
 let showArchivedObras = false;
 
@@ -2698,6 +2699,15 @@ function autoRawFor(key, agg){
 }
 
 // ---------- chips ----------
+function cqTrendSortedSelectedYears(){
+  return Array.from(cqTrendSelectedYears)
+    .map(String)
+    .filter(y=>/^\d{4}$/.test(y))
+    .sort();
+}
+function cqTrendEnsureSingleSelection(){
+  if(cqTrendSelectedYears.size===0) cqTrendSelectedYears.add(String(state.year));
+}
 function renderChips(){
   const years = new Set(Object.keys(state.data||{}));
   Object.keys(state.casas||{}).forEach(y=>years.add(y));
@@ -2705,23 +2715,56 @@ function renderChips(){
   years.add(state.year);
   const sorted = Array.from(years).filter(y=>/^\d{4}$/.test(String(y))).sort();
   const yc = document.getElementById('yearChips');
+  const trendActive=!!(document.getElementById('tab-tendencia') && document.getElementById('tab-tendencia').classList.contains('active'));
   yc.innerHTML='';
+
   sorted.forEach(y=>{
     const b=document.createElement('button');
-    b.className='chip'+(!cqTrendAllYears && y===state.year?' active':'');
-    b.textContent=y;
-    b.onclick=()=>{ cqTrendAllYears=false; state.year=y; saveState(); renderAll(); };
+    const multiSelected=trendActive && !cqTrendAllYears && cqTrendSelectedYears.has(String(y));
+    const singleSelected=!trendActive && String(y)===String(state.year);
+    const trendFallback=trendActive && !cqTrendAllYears && cqTrendSelectedYears.size===0 && String(y)===String(state.year);
+    b.className='chip'+((multiSelected||singleSelected||trendFallback)?' active':'')+(multiSelected?' cq-year-multi-selected':'');
+    b.innerHTML=String(y)+(multiSelected && cqTrendSelectedYears.size>1?'<span class="cq-year-check">✓</span>':'');
+    b.title=trendActive?'Tocar para agregar/quitar este año de Tendencia':'Seleccionar '+y;
+    b.onclick=()=>{
+      if(trendActive){
+        cqTrendAllYears=false;
+        cqTrendEnsureSingleSelection();
+        const sy=String(y);
+        if(cqTrendSelectedYears.has(sy)){
+          if(cqTrendSelectedYears.size>1){
+            cqTrendSelectedYears.delete(sy);
+            const left=cqTrendSortedSelectedYears();
+            state.year=left[left.length-1]||state.year;
+          }
+          // Nunca dejamos la selección vacía: un año sigue siendo vista mensual.
+        }else{
+          cqTrendSelectedYears.add(sy);
+          state.year=sy;
+        }
+        saveState();
+        renderChips();
+        renderTendenciaCharts();
+      }else{
+        cqTrendAllYears=false;
+        cqTrendSelectedYears.clear();
+        cqTrendSelectedYears.add(String(y));
+        state.year=y;
+        saveState();
+        renderAll();
+      }
+    };
     yc.appendChild(b);
   });
 
-  // Vista histórica exclusiva de Tendencia. No se guarda como "año" para no
-  // interferir con Cartera, Carga o Indicadores.
+  // Todos selecciona de una vez todo el historial exclusivamente para Tendencia.
   const allY=document.createElement('button');
   allY.className='chip cq-all-years-chip'+(cqTrendAllYears?' active':'');
   allY.textContent='Todos';
-  allY.title='Comparar todos los años en Tendencia';
+  allY.title='Consolidar todos los años en Tendencia';
   allY.onclick=()=>{
     cqTrendAllYears=true;
+    cqTrendSelectedYears.clear();
     renderChips();
     const trendBtn=document.querySelector('nav.tabs button[data-tab="tendencia"]');
     if(trendBtn && !trendBtn.classList.contains('active')) trendBtn.click();
@@ -2731,12 +2774,12 @@ function renderChips(){
 
   const addY=document.createElement('button');
   addY.className='chip'; addY.textContent='+ año';
-  addY.onclick=()=>{ const y=prompt('Año (ej. 2027):'); if(y && /^\d{4}$/.test(y)){ cqTrendAllYears=false; state.year=y; if(!state.data[y]) state.data[y]={}; saveState(); renderAll(); } };
+  addY.onclick=()=>{ const y=prompt('Año (ej. 2027):'); if(y && /^\d{4}$/.test(y)){ cqTrendAllYears=false; cqTrendSelectedYears.clear(); cqTrendSelectedYears.add(String(y)); state.year=y; if(!state.data[y]) state.data[y]={}; saveState(); renderAll(); } };
   yc.appendChild(addY);
 
   const mc = document.getElementById('monthChips');
-  const trendActive=!!(document.getElementById('tab-tendencia') && document.getElementById('tab-tendencia').classList.contains('active'));
-  mc.classList.toggle('cq-trend-all-hidden', cqTrendAllYears && trendActive);
+  const multiYearTrend=trendActive && !cqTrendAllYears && cqTrendSelectedYears.size>1;
+  mc.classList.toggle('cq-trend-all-hidden', trendActive && (cqTrendAllYears || multiYearTrend));
   mc.innerHTML='';
   MESES_C.forEach((m,i)=>{
     const mn=i+1;
@@ -2748,7 +2791,7 @@ function renderChips(){
     if(locked){
       b.disabled = true;
     } else {
-      b.onclick=()=>{ cqTrendAllYears=false; state.month=mn; saveState(); renderAll(); };
+      b.onclick=()=>{ cqTrendAllYears=false; cqTrendSelectedYears.clear(); cqTrendSelectedYears.add(String(state.year)); state.month=mn; saveState(); renderAll(); };
     }
     mc.appendChild(b);
   });
@@ -3981,28 +4024,32 @@ function cqTrendZoneAnnual(ind,v){
   if(v===null||v===undefined||!Number.isFinite(Number(v))) return 'n';
   return cqZone(ind.key,Number(v));
 }
-function renderTendenciaAllYears(){
+function renderTendenciaYearSelection(years, aggregateLabel, isAll){
   const wrap=document.getElementById('tendenciaCharts');
   const hint=document.querySelector('#tab-tendencia>.hint');
-  if(hint) hint.textContent='Todos consolida todo el historial: ventas y obras iniciadas se suman; los indicadores de nivel, tiempo y riesgo se promedian; % venta pozo se calcula sobre todas las ventas. El último punto “Todos” abre el detalle completo.';
-  const years=cqTrendYears();
+  years=(years||[]).map(String).filter(y=>/^\d{4}$/.test(y)).sort();
   if(!years.length){
-    wrap.innerHTML='<div class="empty">Todavía no hay años cargados para comparar.</div>';
+    wrap.innerHTML='<div class="empty">Seleccioná al menos un año para comparar.</div>';
     return;
+  }
+
+  if(hint){
+    hint.textContent=isAll
+      ? 'Todos consolida todo el historial. Tocá cualquier año para ver su detalle o el punto “Todos” para ver el consolidado completo.'
+      : 'Comparación de años seleccionados: '+years.join(' · ')+'. Tocá un año para ver su detalle o “Selección” para ver el consolidado.';
   }
 
   const all=[{key:'indiceCQ',em:'🧠',name:'Índice CQ',get:c=>c.indiceCQ,z:c=>zIndiceCQ(c.indiceCQ),fmt:c=>fmtNum(c.indiceCQ)}].concat(INDICATORS);
   const hasDatalabels=typeof ChartDataLabels!=='undefined';
-  const periodLabel=years.length>1?(years[0]+'–'+years[years.length-1]):years[0];
+  const periodLabel=isAll
+    ? (years.length>1?(years[0]+'–'+years[years.length-1]):years[0])
+    : years.join(' · ');
 
   all.forEach(ind=>{
     const yearData=years.map(y=>cqTrendYearValue(ind,y));
-    const historical=cqTrendHistoricalValue(ind,years);
-
-    // Se conservan los años como referencia y se agrega un último punto "Todos",
-    // que es el valor realmente consolidado de todo el historial.
-    const graphLabels=years.concat(['Todos']);
-    const allData=yearData.concat([historical]);
+    const aggregate=cqTrendHistoricalValue(ind,years);
+    const graphLabels=years.concat([aggregateLabel]);
+    const allData=yearData.concat([aggregate]);
     const values=allData.map(x=>x.value);
     const labels=values.map(v=>cqTrendFormatYearValue(ind,v));
     const zoneValues=allData.map(x=>x.zoneValue);
@@ -4012,6 +4059,8 @@ function renderTendenciaAllYears(){
     const curIdx=graphLabels.length-1;
     const currentLabel=labels[curIdx]||'Sin dato';
     const currentZone=cqTrendZoneAnnual(ind,zoneValues[curIdx]);
+    const mode=cqTrendYearAggregationMode(ind);
+    const modeLabel=(mode==='sum'?'Suma ':(mode==='ratio'?'% ':'Promedio '))+(isAll?'histórico':'selección');
 
     const card=document.createElement('div');
     card.className='chartcard cq-trend-card';
@@ -4019,22 +4068,22 @@ function renderTendenciaAllYears(){
       <div class="cq-trend-head">
         <div class="cq-trend-title">
           <span class="cq-trend-icon">${ind.em}</span>
-          <div><h2>${ind.name}</h2><small>Histórico completo · Todos</small></div>
+          <div><h2>${ind.name}</h2><small>${isAll?'Histórico completo':'Años seleccionados'} · ${years.join(' · ')}</small></div>
         </div>
         <div class="cq-trend-head-right">
-          <button type="button" class="cq-trend-current cq-trend-history-btn ${currentZone}" title="Ver detalle de todo el historial"><span>Todos</span><b>${currentLabel}</b></button>
+          <button type="button" class="cq-trend-current cq-trend-history-btn ${currentZone}" title="Ver detalle consolidado"><span>${aggregateLabel}</span><b>${currentLabel}</b></button>
         </div>
       </div>
       <div class="cq-trend-stats">
-        <div class="cq-trend-stat mode"><span>${cqTrendHistoricalModeLabel(ind)}</span><b>${currentLabel}</b></div>
-        <div class="cq-trend-stat avg"><span>Período</span><b>${periodLabel}</b></div>
+        <div class="cq-trend-stat mode"><span>${modeLabel}</span><b>${currentLabel}</b></div>
+        <div class="cq-trend-stat avg"><span>${isAll?'Período':'Años'}</span><b>${periodLabel}</b></div>
       </div>
       <div class="cq-trend-canvas"><canvas></canvas></div>`;
     wrap.appendChild(card);
 
     const historyBtn=card.querySelector('.cq-trend-history-btn');
     if(historyBtn){
-      historyBtn.onclick=()=>cqTrendShowPointPopup(card,ind,'Todos',currentLabel,historical.detail);
+      historyBtn.onclick=()=>cqTrendShowPointPopup(card,ind,aggregateLabel,currentLabel,aggregate.detail);
     }
 
     const canvas=card.querySelector('canvas');
@@ -4043,7 +4092,7 @@ function renderTendenciaAllYears(){
     const pointBorderColor=values.map((v,i)=>v===null?'#FFFFFF':(i===curIdx?'#173D33':'#90AA9F'));
 
     const ctx2d=canvas.getContext('2d');
-    const areaGradient=ctx2d.createLinearGradient(0,0,0,190);
+    const areaGradient=ctx2d.createLinearGradient(0,0,0,220);
     areaGradient.addColorStop(0,'rgba(47,143,91,.20)');
     areaGradient.addColorStop(.60,'rgba(47,143,91,.055)');
     areaGradient.addColorStop(1,'rgba(47,143,91,0)');
@@ -4067,7 +4116,7 @@ function renderTendenciaAllYears(){
       data:{labels:graphLabels,datasets:[{
         data:values,borderColor:'#2F6C58',backgroundColor:areaGradient,fill:true,tension:.34,
         cubicInterpolationMode:'monotone',spanGaps:true,borderWidth:2.35,
-        pointBackgroundColor:colors,pointBorderColor,pointBorderWidth,pointRadius,pointHoverRadius:pointRadius,pointHitRadius:8
+        pointBackgroundColor:colors,pointBorderColor,pointBorderWidth,pointRadius,pointHoverRadius:pointRadius,pointHitRadius:10
       }]},
       plugins:[currentBand],
       options:{
@@ -4083,23 +4132,30 @@ function renderTendenciaAllYears(){
         plugins:Object.assign({legend:{display:false},tooltip:{enabled:false}},hasDatalabels?{
           datalabels:{labels:{value:{
             anchor:'end',align:'top',offset:5,clamp:true,clip:false,color:'#29483E',
-            font:{family:"'JetBrains Mono', monospace",size:7.6,weight:'800'},
+            font:{family:"'JetBrains Mono', monospace",size:8.5,weight:'800'},
             formatter:(val,ctx)=>labels[ctx.dataIndex]||''
           }}}
         }:{}),
         scales:{
-          x:{offset:true,grid:{display:false},border:{display:false},ticks:{
-            font:{family:"'Space Grotesk', sans-serif",size:8,weight:'700'},
-            color:(ctx)=>ctx.index===curIdx?'#9B671F':'#8A9891',
-            maxRotation:0,minRotation:0,padding:6
-          }},
+          x:{
+            display:true,offset:true,grid:{display:false},border:{display:false},
+            ticks:{
+              display:true,autoSkip:false,
+              font:{family:"'Space Grotesk', sans-serif",size:10.5,weight:'800'},
+              color:(ctx)=>ctx.index===curIdx?'#7D531B':'#40544B',
+              maxRotation:0,minRotation:0,padding:10
+            }
+          },
           y:{display:true,beginAtZero:true,grace:'18%',border:{display:false},grid:{color:'rgba(28,61,53,.055)',drawTicks:false,lineWidth:1},ticks:{display:false}}
         },
-        layout:{padding:{top:32,left:7,right:7,bottom:12}}
+        layout:{padding:{top:32,left:8,right:8,bottom:24}}
       }
     });
     tendenciaChartInstances.push(ch);
   });
+}
+function renderTendenciaAllYears(){
+  renderTendenciaYearSelection(cqTrendYears(),'Todos',true);
 }
 
 function renderTendenciaCharts(){
@@ -4117,6 +4173,12 @@ function renderTendenciaCharts(){
     renderTendenciaAllYears();
     return;
   }
+  const selectedYears=cqTrendSortedSelectedYears();
+  if(selectedYears.length>1){
+    renderTendenciaYearSelection(selectedYears,'Selección',false);
+    return;
+  }
+  if(selectedYears.length===1 && String(state.year)!==selectedYears[0]) state.year=selectedYears[0];
   const hint=document.querySelector('#tab-tendencia>.hint');
   if(hint) hint.textContent='Todos los indicadores del año, mes a mes. El borde oscuro marca el mes seleccionado.';
 
@@ -4272,7 +4334,7 @@ function renderTendenciaCharts(){
             offset:true,
             grid:{display:false},
             border:{display:false},
-            ticks:{font:{family:"'Space Grotesk', sans-serif",size:8,weight:'700'},color:(ctx)=>ctx.index===curIdx?'#173D33':'#8A9891',maxRotation:0,minRotation:0,padding:6}
+            ticks:{display:true,autoSkip:false,font:{family:"'Space Grotesk', sans-serif",size:10.5,weight:'800'},color:(ctx)=>ctx.index===curIdx?'#173D33':'#40544B',maxRotation:0,minRotation:0,padding:10}
           },
           y:{
             display:true,
@@ -4283,7 +4345,7 @@ function renderTendenciaCharts(){
             ticks:{display:false}
           }
         },
-        layout:{padding:{top:32,left:7,right:7,bottom:12}}
+        layout:{padding:{top:32,left:8,right:8,bottom:24}}
       }
     });
     tendenciaChartInstances.push(ch);
@@ -4426,7 +4488,11 @@ function bindTabs(){
       document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
-      if(btn.dataset.tab!=='tendencia' && cqTrendAllYears) cqTrendAllYears=false;
+      if(btn.dataset.tab==='tendencia'){
+        if(!cqTrendAllYears && cqTrendSelectedYears.size===0) cqTrendSelectedYears.add(String(state.year));
+      }else if(cqTrendAllYears){
+        cqTrendAllYears=false;
+      }
       renderChips();
       if(btn.dataset.tab==='tendencia') renderTendenciaCharts();
       if(btn.dataset.tab==='presentacion') renderPresentacion();
@@ -5915,6 +5981,29 @@ setTimeout(startAuto,700);
   .selector .cq-config-top-wrap{right:20px!important}
   nav.tabs{width:calc(100% - 40px)!important;margin-left:20px!important;margin-right:20px!important}
   main{padding-left:20px!important;padding-right:20px!important}
+}
+</style>
+
+
+<style id="cq-multianio-axis-tablet-v2">
+.cq-year-check{
+  display:inline-grid!important;place-items:center!important;
+  width:14px!important;height:14px!important;margin-left:5px!important;
+  border-radius:50%!important;background:rgba(255,255,255,.22)!important;
+  font-size:9px!important;font-weight:950!important;line-height:1!important;
+}
+#yearChips .chip.cq-year-multi-selected.active{
+  box-shadow:0 8px 18px rgba(28,61,53,.22),inset 0 1px 0 rgba(255,255,255,.25)!important;
+}
+@media (min-width:700px) and (max-width:1600px){
+  #tendenciaCharts .chartcard.cq-trend-card{height:300px!important;overflow:visible!important}
+  #tendenciaCharts .cq-trend-canvas{
+    height:225px!important;min-height:225px!important;max-height:none!important;
+    overflow:visible!important;padding-bottom:4px!important;
+  }
+  #tendenciaCharts .cq-trend-canvas canvas{
+    height:225px!important;min-height:225px!important;max-height:225px!important;
+  }
 }
 </style>
 
