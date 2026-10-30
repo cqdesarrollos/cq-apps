@@ -1924,12 +1924,16 @@ function loadState(){
       repairStateConsistency();
       if(migrateObraEstadosFromCasaHistory()) saveState();
       repairJulioErroresPuntuales();
-      repair25100MesesVenta();
+      applyCQHistoricalBackfill();
+      repairSaleMonthsConsistency();
     } else {
       freshInstallSeed();
       repairJulioErroresPuntuales();
+      applyCQHistoricalBackfill();
+      repairSaleMonthsConsistency();
     }
-  }catch(e){ freshInstallSeed(); repairJulioErroresPuntuales(); repair25100MesesVenta(); }
+  }catch(e){ freshInstallSeed(); repairJulioErroresPuntuales(); applyCQHistoricalBackfill();
+      repairSaleMonthsConsistency(); }
 }
 let __cqFinApplyingRemote=false;
 function cqFinSnapshot(){
@@ -1983,9 +1987,13 @@ window.__cqFinApplyRemote=function(data){
     repairStateConsistency();
     migrateObraEstadosFromCasaHistory();
     repairJulioErroresPuntuales();
-    repair25100MesesVenta();
+    const cqHistChanged=applyCQHistoricalBackfill();
+    const cqMesesChanged=repairSaleMonthsConsistency();
     localStorage.setItem(STORAGE_KEY,JSON.stringify(cqFinSnapshot()));
     if(typeof renderAll==="function")renderAll();
+    if(cqHistChanged || cqMesesChanged){
+      setTimeout(function(){ if(!__cqFinApplyingRemote) saveState(); },0);
+    }
     return true;
   }finally{
     __cqFinApplyingRemote=false;
@@ -2045,28 +2053,152 @@ function findObraByCode(code){
   return state.obras.find(o=>normalizeCodeCQ(o.code)===target);
 }
 
-function repair25100MesesVenta(){
-  const ob = state.obras.find(o=>{
-    const c=normalizeCodeCQ(o.code);
-    return c==='25.100' || c==='25100';
-  });
-  if(!ob || !state.casas)return;
+const CQ_HISTORICAL_BACKFILL = [
+  {code:'14.66', inicio:['2023',2], fin:['2023',9], ventas:{A:['2023',9,'vendida_terminada'],B:['2023',9,'vendida_terminada']}},
+  {code:'26.59', inicio:['2023',5], fin:['2023',12], ventas:{A:['2023',12,'vendida_terminada'],B:['2023',12,'vendida_terminada']}},
+  {code:'10.15', inicio:['2023',9], fin:['2024',7], ventas:{A:['2024',7,'vendida_terminada'],B:['2024',7,'vendida_terminada']}},
+  {code:'17.55', inicio:['2024',5], fin:['2024',12], ventas:{A:['2024',12,'vendida_terminada'],B:['2025',3,'vendida_terminada']}},
+  {code:'8.54', inicio:['2024',8], fin:['2025',4], ventas:{A:['2025',4,'vendida_terminada'],B:['2025',4,'vendida_terminada']}},
+  {code:'20.89', inicio:['2024',11], fin:['2025',7], ventas:{A:['2025',7,'vendida_terminada'],B:['2025',7,'vendida_terminada']}},
+  {code:'19.83', inicio:['2025',2], fin:['2025',10], ventas:{A:['2025',8,'vendida_pozo'],B:['2025',8,'vendida_pozo']}},
+  {code:'11.93', inicio:['2025',5], fin:['2025',11], ventas:{A:['2025',6,'vendida_pozo'],B:['2025',7,'vendida_pozo']}},
+  {code:'8.86', inicio:['2025',6], fin:['2025',12], ventas:{A:['2025',7,'vendida_pozo'],B:['2025',9,'vendida_pozo']}},
+  {code:'4.86', inicio:['2025',6], fin:['2025',12], ventas:{A:['2025',12,'vendida_terminada'],B:['2025',12,'vendida_terminada']}},
+  // Preventa: se vendió en octubre y la construcción comenzó en noviembre.
+  {code:'25.85', inicio:['2025',11], fin:['2026',5], ventas:{A:['2025',10,'vendida_pozo'],B:['2025',10,'vendida_pozo']}}
+];
+
+function cqSameCasaPayload(a,b){
+  const na=normalizeCasa(a||{}), nb=normalizeCasa(b||{});
+  return na.obraStatus===nb.obraStatus && na.saleStatus===nb.saleStatus && String(na.meses??'')===String(nb.meses??'') && !!na._saleInherited===!!nb._saleInherited;
+}
+function cqHistoricalMeses(def, venta){
+  const sy=String(venta[0]), sm=Number(venta[1]), status=venta[2];
+  const origen = status==='vendida_terminada' ? def.fin : def.inicio;
+  if(!origen)return 0;
+  return Math.max(0, ordOf(sy,sm)-ordOf(origen[0],origen[1]));
+}
+function cqEnsureHistoricalObra(code){
+  let ob=findObraByCode(code), changed=false;
+  if(!ob){
+    let base='hist_'+normalizeCodeCQ(code).replace(/[^0-9A-Za-z]+/g,'_');
+    let id=base, n=2;
+    while(state.obras.some(x=>x.id===id)){id=base+'_'+(n++);}
+    ob={id,code,casas:['A','B'],archived:true};
+    state.obras.push(ob); changed=true;
+  }
+  if(!Array.isArray(ob.casas) || !ob.casas.includes('A') || !ob.casas.includes('B')){
+    ob.casas=['A','B']; changed=true;
+  }
+  if(ob.archived!==true){ob.archived=true;changed=true;}
+  return {ob,changed};
+}
+function cqDeleteYear2020(){
   let changed=false;
+  ['data','casas','obraEstados'].forEach(k=>{
+    if(state[k] && Object.prototype.hasOwnProperty.call(state[k],'2020')){delete state[k]['2020'];changed=true;}
+  });
+  if(String(state.year)==='2020'){state.year=String(new Date().getFullYear());changed=true;}
+  return changed;
+}
+function applyCQHistoricalBackfill(){
+  let changed=cqDeleteYear2020();
+  if(!state.obras)state.obras=[];
+  if(!state.casas)state.casas={};
+  if(!state.obraEstados)state.obraEstados={};
+
+  CQ_HISTORICAL_BACKFILL.forEach(def=>{
+    const ensured=cqEnsureHistoricalObra(def.code), ob=ensured.ob;
+    if(ensured.changed)changed=true;
+
+    const desiredObra={};
+    desiredObra[def.inicio[0]+'-'+def.inicio[1]]='construccion';
+    desiredObra[def.fin[0]+'-'+def.fin[1]]='terminada';
+
+    // Sincronizar exactamente los cambios constructivos históricos de esta obra.
+    Object.keys(state.obraEstados||{}).forEach(y=>{
+      Object.keys(state.obraEstados[y]||{}).forEach(m=>{
+        const slot=state.obraEstados[y][m]||{};
+        if(!slot[ob.id])return;
+        const k=String(y)+'-'+Number(m), wanted=desiredObra[k];
+        const cur=normalizeObraStatus(typeof slot[ob.id]==='string'?slot[ob.id]:slot[ob.id].status);
+        if(!wanted){delete slot[ob.id];changed=true;}
+        else if(cur!==wanted){slot[ob.id]={status:wanted};changed=true;}
+      });
+    });
+    Object.keys(desiredObra).forEach(k=>{
+      const [y,mRaw]=k.split('-'), m=Number(mRaw), wanted=desiredObra[k];
+      if(!state.obraEstados[y])state.obraEstados[y]={};
+      if(!state.obraEstados[y][m])state.obraEstados[y][m]={};
+      const cur=state.obraEstados[y][m][ob.id];
+      const curSt=cur?normalizeObraStatus(typeof cur==='string'?cur:cur.status):'';
+      if(curSt!==wanted){state.obraEstados[y][m][ob.id]={status:wanted};changed=true;}
+    });
+
+    const desiredCasas={};
+    Object.keys(def.ventas).forEach(letra=>{
+      const v=def.ventas[letra], y=String(v[0]), m=Number(v[1]);
+      const obraStatus = ordOf(y,m)>=ordOf(def.fin[0],def.fin[1]) ? 'terminada' : (ordOf(y,m)>=ordOf(def.inicio[0],def.inicio[1]) ? 'construccion' : 'no_iniciada');
+      desiredCasas[y+'-'+m+'-'+letra]={
+        obraStatus,
+        saleStatus:v[2],
+        meses:cqHistoricalMeses(def,v)
+      };
+    });
+
+    // Para estas obras históricas la venta real es conocida: quitar duplicados/arrastres explícitos.
+    Object.keys(state.casas||{}).forEach(y=>{
+      Object.keys(state.casas[y]||{}).forEach(m=>{
+        const slot=state.casas[y][m]||{};
+        ['A','B'].forEach(letra=>{
+          const casaKey=ob.id+'_'+letra;
+          if(!Object.prototype.hasOwnProperty.call(slot,casaKey))return;
+          const dk=String(y)+'-'+Number(m)+'-'+letra;
+          const wanted=desiredCasas[dk];
+          if(!wanted){delete slot[casaKey];changed=true;}
+          else if(!cqSameCasaPayload(slot[casaKey],wanted)){slot[casaKey]=Object.assign({},wanted);changed=true;}
+        });
+      });
+    });
+    Object.keys(desiredCasas).forEach(dk=>{
+      const parts=dk.split('-'), y=parts[0], m=Number(parts[1]), letra=parts[2], casaKey=ob.id+'_'+letra;
+      if(!state.casas[y])state.casas[y]={};
+      if(!state.casas[y][m])state.casas[y][m]={};
+      if(!cqSameCasaPayload(state.casas[y][m][casaKey],desiredCasas[dk])){
+        state.casas[y][m][casaKey]=Object.assign({},desiredCasas[dk]); changed=true;
+      }
+    });
+  });
+  return changed;
+}
+
+// Recalcula el tiempo de venta desde el origen real. No inventa 0 si falta el origen.
+function repairSaleMonthsConsistency(){
+  if(!state.casas)return false;
+  let changed=false;
+  const firstSales={};
   Object.keys(state.casas).forEach(y=>{
     Object.keys(state.casas[y]||{}).forEach(m=>{
-      obraCasas(ob).forEach(letra=>{
-        const key=ob.id+'_'+letra;
-        const raw=state.casas[y][m][key];
-        if(!raw)return;
-        const n=normalizeCasa(raw);
-        if(n.saleStatus && raw.meses!==0 && raw.meses!=='0'){
-          raw.meses=0;
-          changed=true;
-        }
+      const slot=state.casas[y][m]||{};
+      Object.keys(slot).forEach(casaKey=>{
+        const n=normalizeCasa(slot[casaKey]);
+        if(!n.saleStatus)return;
+        const ord=ordOf(y,m);
+        if(!firstSales[casaKey] || ord<firstSales[casaKey].ord) firstSales[casaKey]={y:String(y),m:Number(m),ord,raw:slot[casaKey],status:n.saleStatus};
       });
     });
   });
-  if(changed)saveState();
+  Object.keys(firstSales).forEach(casaKey=>{
+    const e=firstSales[casaKey];
+    const obraId=String(casaKey).split('_')[0];
+    const origen=e.status==='vendida_terminada'
+      ? getObraFinalizadaOrigin(obraId,e.y,e.m)
+      : getObraInicioConstruccionOrigin(obraId,e.y,e.m);
+    if(!origen)return;
+    const wanted=Math.max(0,e.ord-origen.ord);
+    if(Number(e.raw.meses)!==wanted || e.raw.meses==='' || e.raw.meses===null || e.raw.meses===undefined){e.raw.meses=wanted;changed=true;}
+  });
+  return changed;
 }
 
 function repairJulioErroresPuntuales(){
@@ -2334,6 +2466,7 @@ function obraResumenBadges(ob,year,month){
 
 function computeCasasAgg(year,month){
   const stockList=[], vtList=[], vpList=[], stockDetail=[], vtDetail=[], vpDetail=[];
+  let vtCount=0, vpCount=0;
   let hasCartera = false;
   const targetOrd = ordOf(year,month);
 
@@ -2350,8 +2483,8 @@ function computeCasasAgg(year,month){
       // pero NO debe volver a computarse como venta del mes.
       if(c.saleStatus || estadoObra!=='no_iniciada') hasCartera = true;
 
-      const meses = (c.meses===''||c.meses===null||c.meses===undefined) ? 0 : Number(c.meses);
-      const ventaAnterior = c.saleStatus && meses < 0;
+      const meses = (c.meses===''||c.meses===null||c.meses===undefined || !Number.isFinite(Number(c.meses))) ? null : Number(c.meses);
+      const ventaAnterior = c.saleStatus && meses!==null && meses < 0;
       const ventaDelMes = !!(c.saleStatus && c.saleOrigin && c.saleOrigin.ord===targetOrd && !c.saleCarried && !ventaAnterior);
 
       // Stock = casas de una obra terminada y todavía no vendidas.
@@ -2370,10 +2503,12 @@ function computeCasasAgg(year,month){
       // Venta del mes = únicamente la primera marca real de venta en este mes.
       // Las ventas heredadas desde meses anteriores no se trasladan a julio ni a meses posteriores.
       if(ventaDelMes && c.saleStatus==='vendida_terminada'){
-        vtList.push(meses);
+        vtCount++;
+        if(meses!==null)vtList.push(meses);
         vtDetail.push({code:ob.code,letra,meses});
       } else if(ventaDelMes && c.saleStatus==='vendida_pozo'){
-        vpList.push(meses);
+        vpCount++;
+        if(meses!==null)vpList.push(meses);
         vpDetail.push({code:ob.code,letra,meses});
       }
     });
@@ -2387,8 +2522,8 @@ function computeCasasAgg(year,month){
     stockProm: avg(stockList),
     diasTerminadaMeses: avg(vtList),
     diasPozoMeses: avg(vpList),
-    vt: vtList.length,
-    vp: vpList.length,
+    vt: vtCount,
+    vp: vpCount,
     stockDetail, vtDetail, vpDetail
   };
 }
@@ -2902,7 +3037,7 @@ function calcMesesVentaAuto(casaKey, year, month, saleStatusOverride){
     ? getObraFinalizadaOrigin(obraId, ventaOrigin.year, ventaOrigin.month)
     : getObraInicioConstruccionOrigin(obraId, ventaOrigin.year, ventaOrigin.month);
 
-  if(!origen) return 0;
+  if(!origen) return '';
   return Math.max(0, ventaOrigin.ord - origen.ord);
 }
 function pdfEscape(s){
@@ -4243,7 +4378,8 @@ function importBackup(file){
       repairStateConsistency();
       migrateObraEstadosFromCasaHistory();
       repairJulioErroresPuntuales();
-      repair25100MesesVenta();
+      applyCQHistoricalBackfill();
+      repairSaleMonthsConsistency();
       saveState();
       renderAll();
       alert('Datos importados correctamente ✅');
