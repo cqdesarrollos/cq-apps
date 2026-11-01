@@ -7479,7 +7479,7 @@ body{overflow-x:hidden!important;background:#061f49!important}
 </style>
 
 
-<script id="cq-click-sound-v1">
+<script id="cq-click-sound-v2">
 (function(){
   let audioCtx = null;
 
@@ -7487,15 +7487,11 @@ body{overflow-x:hidden!important;background:#061f49!important}
     const AC = window.AudioContext || window.webkitAudioContext;
     if(!AC) return null;
     if(!audioCtx) audioCtx = new AC();
-    if(audioCtx.state === 'suspended') audioCtx.resume().catch(function(){});
     return audioCtx;
   }
 
-  function playCQClick(){
+  function emitCQClick(ctx){
     try{
-      const ctx = getAudioContext();
-      if(!ctx) return;
-
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -7515,11 +7511,28 @@ body{overflow-x:hidden!important;background:#061f49!important}
     }catch(e){}
   }
 
+  function playCQClick(){
+    try{
+      const ctx = getAudioContext();
+      if(!ctx) return;
+
+      if(ctx.state === 'suspended'){
+        ctx.resume().then(function(){
+          emitCQClick(ctx);
+        }).catch(function(){});
+      }else{
+        emitCQClick(ctx);
+      }
+    }catch(e){}
+  }
+
+  /* Captura temprana: el primer toque desbloquea y reproduce el audio
+     antes de que el click abra el menú correspondiente. */
   document.addEventListener('pointerdown', function(e){
     const target = e.target.closest('button, a, [role="button"], .btn, .cq-ia-fab, .cq-alertas-fab');
     if(!target || target.matches('[disabled], [aria-disabled="true"]') || target.closest('[data-no-click-sound]')) return;
     playCQClick();
-  }, {passive:true});
+  }, {capture:true, passive:true});
 })();
 </script>
 
