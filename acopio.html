@@ -1532,6 +1532,23 @@ button[onclick*="crearBackupManual"]{
   border-color:rgba(46,125,94,.55);
   box-shadow:0 0 0 4px rgba(46,125,94,.10);
 }
+.bulk-sub-auto-note{
+  margin-top:12px;padding:10px 12px;border:1px solid rgba(46,125,94,.16);border-radius:12px;
+  background:#F2F8F4;color:#557864;font-size:10.5px;font-weight:700;line-height:1.4;
+}
+.bulk-sub-auto-note b{color:var(--green)}
+.bulk-sub-clasificar{display:none;margin-top:12px;border:1px solid #E5C680;border-radius:14px;background:#FFF9EC;overflow:hidden}
+.bulk-sub-clasificar.open{display:block}
+.bulk-sub-clasificar-hd{padding:10px 12px;background:#FFF2D5;border-bottom:1px solid #E9D4A3}
+.bulk-sub-clasificar-ttl{font-size:11px;font-weight:900;color:#7A5317}
+.bulk-sub-clasificar-sub{font-size:9.5px;color:#9A7843;margin-top:3px;line-height:1.35}
+.bulk-sub-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(180px,.9fr);gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid #F0DFC0}
+.bulk-sub-row:last-child{border-bottom:none}
+.bulk-sub-prod{min-width:0}
+.bulk-sub-prod strong{display:block;font-size:11px;color:var(--green);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bulk-sub-prod small{display:block;font-family:var(--mono);font-size:8.5px;color:#9A8A68;margin-top:2px}
+.bulk-sub-row select{width:100%;background:#fff;border:1px solid #D9C28E;border-radius:9px;padding:8px 9px;font-size:11px;font-weight:750;color:var(--green);outline:none}
+.bulk-sub-row select:focus{border-color:var(--green2);box-shadow:0 0 0 3px rgba(46,125,94,.09)}
 @media(max-width:620px){
   .bulk-mat-modal{max-width:96vw!important}
   .bulk-mat-grid{
@@ -1551,6 +1568,7 @@ button[onclick*="crearBackupManual"]{
     padding:8px;
     font-size:10px;
   }
+  .bulk-sub-row{grid-template-columns:1fr;gap:6px;padding:9px 10px}
 }
 </style>
 
@@ -3330,6 +3348,17 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
     <div class="modal-hd"><span class="modal-ttl">Nuevo acopio</span><button class="modal-x" onclick="closeModal('modal-nuevo-acopio')">×</button></div>
     <div class="mbody">
       <div class="fld"><label>Nombre del acopio</label><input type="text" id="na-nombre" placeholder="ej: Acopio Junio 2026"></div>
+      <div class="fld cq-acopio-tipo-fld">
+        <label>Rubro / icono del acopio</label>
+        <input type="hidden" id="na-tipo" value="grueso">
+        <div class="cq-acopio-tipo-grid" id="na-tipo-grid">
+          <button type="button" class="cq-acopio-tipo-btn active" data-tipo="grueso" onclick="cqSeleccionarTipoAcopio('grueso')"><span>🧱</span><b>Grueso</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="terminaciones" onclick="cqSeleccionarTipoAcopio('terminaciones')"><span>🖌️</span><b>Terminaciones</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="instalaciones" onclick="cqSeleccionarTipoAcopio('instalaciones')"><span>💧</span><b>Instalaciones</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="electricidad" onclick="cqSeleccionarTipoAcopio('electricidad')"><span>⚡</span><b>Electricidad</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="pisos" onclick="cqSeleccionarTipoAcopio('pisos')"><span>▦</span><b>Pisos</b></button>
+        </div>
+      </div>
       <div class="fld"><label>Tipo de cambio inicial</label><input type="number" id="na-tc" min="1" step="1" placeholder="1210"></div>
       <div class="fld">
         <label>Materiales iniciales</label>
@@ -3346,6 +3375,28 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
       </div>
     </div>
     <div class="mfooter" style="justify-content:flex-end"><button class="btn btn-s btn-sm" onclick="closeModal('modal-nuevo-acopio')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarNuevoAcopio()">Crear acopio</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-editar-acopio">
+  <div class="modal">
+    <div class="modal-hd"><span class="modal-ttl">Editar acopio</span><button class="modal-x" onclick="closeModal('modal-editar-acopio')">×</button></div>
+    <div class="mbody">
+      <input type="hidden" id="ea-id">
+      <div class="fld"><label>Nombre del acopio</label><input type="text" id="ea-nombre"></div>
+      <div class="fld cq-acopio-tipo-fld">
+        <label>Rubro / icono del acopio</label>
+        <input type="hidden" id="ea-tipo" value="grueso">
+        <div class="cq-acopio-tipo-grid" id="ea-tipo-grid">
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="grueso" onclick="cqSeleccionarTipoAcopioEditar('grueso')"><span>🧱</span><b>Grueso</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="terminaciones" onclick="cqSeleccionarTipoAcopioEditar('terminaciones')"><span>🖌️</span><b>Terminaciones</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="instalaciones" onclick="cqSeleccionarTipoAcopioEditar('instalaciones')"><span>💧</span><b>Instalaciones</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="electricidad" onclick="cqSeleccionarTipoAcopioEditar('electricidad')"><span>⚡</span><b>Electricidad</b></button>
+          <button type="button" class="cq-acopio-tipo-btn" data-tipo="pisos" onclick="cqSeleccionarTipoAcopioEditar('pisos')"><span>▦</span><b>Pisos</b></button>
+        </div>
+      </div>
+    </div>
+    <div class="mfooter" style="justify-content:flex-end"><button class="btn btn-s btn-sm" onclick="closeModal('modal-editar-acopio')">Cancelar</button><button class="btn btn-p btn-sm" onclick="guardarEdicionAcopio()">Guardar cambios</button></div>
   </div>
 </div>
 
@@ -3429,16 +3480,24 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
         </div>
       </div>
 
-      <div class="fld" style="margin-top:12px">
-        <label>Categoría compartida</label>
-        <select id="bulk-mat-cat"></select>
+      <div class="bulk-sub-auto-note">
+        <b>Subrubro automático:</b> se busca primero por código y luego por nombre exacto en los acopios anteriores.
+        Si el artículo ya fue clasificado, se reutiliza ese subrubro. Si es nuevo, te lo va a pedir antes de guardar.
       </div>
 
-      <div id="bulk-mat-preview" style="font-size:11px;color:#7A9E82;font-weight:700"></div>
+      <div id="bulk-sub-clasificar" class="bulk-sub-clasificar">
+        <div class="bulk-sub-clasificar-hd">
+          <div class="bulk-sub-clasificar-ttl">Clasificar artículos nuevos</div>
+          <div class="bulk-sub-clasificar-sub">Estos artículos no tienen una clasificación anterior. Elegí el subrubro de cada uno para poder grabarlos.</div>
+        </div>
+        <div id="bulk-sub-clasificar-list"></div>
+      </div>
+
+      <div id="bulk-mat-preview" style="font-size:11px;color:#7A9E82;font-weight:700;margin-top:10px"></div>
     </div>
     <div class="mfooter" style="justify-content:flex-end">
       <button class="btn btn-s btn-sm" onclick="closeModal('modal-carga-masiva-mat')">Cancelar</button>
-      <button class="btn btn-p btn-sm" onclick="guardarCargaMasivaMateriales()">Agregar materiales</button>
+      <button id="bulk-mat-guardar-btn" class="btn btn-p btn-sm" onclick="guardarCargaMasivaMateriales()">Agregar materiales</button>
     </div>
   </div>
 </div>
@@ -4282,6 +4341,45 @@ function loadDB(){
   try{var s=JSON.parse(localStorage.getItem(DB_KEY)||'null');if(s)return sanitizeDB(s);}catch(e){}
   return {acopios:[],backups:[],cats:CATS_BASE.slice()}; // each acopio: {id,nombre,creado,tc,obras,mats,pagos,retiros}
 }
+var CQ_ACOPIO_TIPOS={
+  grueso:{nombre:'Grueso',icono:'🧱'},
+  terminaciones:{nombre:'Terminaciones',icono:'🖌️'},
+  instalaciones:{nombre:'Instalaciones',icono:'💧'},
+  electricidad:{nombre:'Electricidad',icono:'⚡'},
+  pisos:{nombre:'Pisos',icono:'▦'}
+};
+function cqNormalizarTipoAcopio(v){
+  var k=String(v||'').toLowerCase().trim();
+  return CQ_ACOPIO_TIPOS[k]?k:'grueso';
+}
+function cqInferirTipoAcopio(nombre){
+  var n=String(nombre||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if(n.indexOf('termin')>=0)return 'terminaciones';
+  if(n.indexOf('electric')>=0)return 'electricidad';
+  if(n.indexOf('instal')>=0)return 'instalaciones';
+  if(n.indexOf('piso')>=0)return 'pisos';
+  return 'grueso';
+}
+function cqTipoAcopioInfo(v){
+  return CQ_ACOPIO_TIPOS[cqNormalizarTipoAcopio(v)]||CQ_ACOPIO_TIPOS.grueso;
+}
+function cqSeleccionarTipoAcopio(tipo){
+  tipo=cqNormalizarTipoAcopio(tipo);
+  var h=document.getElementById('na-tipo');
+  if(h)h.value=tipo;
+  document.querySelectorAll('#na-tipo-grid .cq-acopio-tipo-btn').forEach(function(b){
+    b.classList.toggle('active',b.getAttribute('data-tipo')===tipo);
+  });
+}
+function cqSeleccionarTipoAcopioEditar(tipo){
+  tipo=cqNormalizarTipoAcopio(tipo);
+  var h=document.getElementById('ea-tipo');
+  if(h)h.value=tipo;
+  document.querySelectorAll('#ea-tipo-grid .cq-acopio-tipo-btn').forEach(function(b){
+    b.classList.toggle('active',b.getAttribute('data-tipo')===tipo);
+  });
+}
+
 function sanitizeDB(s){
   s=s||{};
   if(!Array.isArray(s.acopios)) s.acopios=[];
@@ -4309,6 +4407,7 @@ function sanitizeDB(s){
       creado:a.creado||todayISO(),
       tc:parseFloat(a.tc)||TC_DEFAULT,
       color:a.color||pickAcopioColor(i||0),
+      tipoAcopio:cqNormalizarTipoAcopio(a.tipoAcopio||cqInferirTipoAcopio(a.nombre)),
       archived:!!a.archived,
       order:(typeof a.order==='number'?a.order:i),
       obras:Array.isArray(a.obras)?a.obras:OBRAS_BASE.slice(),
@@ -5899,18 +5998,32 @@ function showArchivados(){
 }
 
 function editarNombreAcopio(id){
-  var a=DB.acopios.find(function(x){return x.id===id;});
+  var a=DB.acopios.find(function(x){return String(x&&x.id)===String(id);});
   if(!a)return;
-  var nombre=prompt('Nuevo nombre del acopio:',a.nombre||'');
-  if(nombre===null)return;
-  nombre=String(nombre).trim();
+  var idEl=document.getElementById('ea-id'),nomEl=document.getElementById('ea-nombre');
+  if(idEl)idEl.value=String(a.id);
+  if(nomEl)nomEl.value=a.nombre||'';
+  cqSeleccionarTipoAcopioEditar(a.tipoAcopio||cqInferirTipoAcopio(a.nombre));
+  openModal('modal-editar-acopio');
+  setTimeout(function(){if(nomEl){nomEl.focus();nomEl.select();}},80);
+}
+function guardarEdicionAcopio(){
+  var id=document.getElementById('ea-id')?document.getElementById('ea-id').value:'';
+  var a=DB.acopios.find(function(x){return String(x&&x.id)===String(id);});
+  if(!a){alert('No se encontró el acopio.');return;}
+  var nombre=String(document.getElementById('ea-nombre')?document.getElementById('ea-nombre').value:'').trim();
+  var tipo=cqNormalizarTipoAcopio(document.getElementById('ea-tipo')?document.getElementById('ea-tipo').value:a.tipoAcopio);
   if(!nombre){alert('El nombre no puede estar vacío.');return;}
-  if(nombre===a.nombre)return;
+  var cambioNombre=nombre!==a.nombre;
+  var cambioTipo=tipo!==cqNormalizarTipoAcopio(a.tipoAcopio||cqInferirTipoAcopio(a.nombre));
+  if(!cambioNombre&&!cambioTipo){closeModal('modal-editar-acopio');return;}
   pushUndo();
   a.nombre=nombre;
+  a.tipoAcopio=tipo;
   persist();
-  toast('✓ Nombre actualizado');
-  if(curAcopioId===id){
+  closeModal('modal-editar-acopio');
+  toast('✓ Acopio actualizado · '+cqTipoAcopioInfo(tipo).nombre);
+  if(String(curAcopioId)===String(a.id)){
     var h=document.getElementById('hdr-acopio-name');
     if(h)h.textContent=nombre;
   }
@@ -5940,13 +6053,14 @@ function renderHome(){
     /* Color visual distinto por acopio en la pantalla inicial. No modifica los datos guardados. */
     var cqHomePalette=['#238B68','#2B7BE0','#C8882A','#7B3FA0','#C65A45','#1E8DB4'];
     var col=saldoCero?'#8A8F87':cqHomePalette[idx%cqHomePalette.length];
+    var tipo=cqTipoAcopioInfo(a.tipoAcopio);
     return '<div class="acopio-card'+(saldoCero?' saldo-cero':'')+'" style="--cq-acopio-accent:'+col+';border-left:6px solid '+col+'" onclick="abrirAcopio('+a.id+')">'
       +'<div class="acopio-card-top">'
-      +'<div class="acopio-card-ident"><span class="acopio-card-icon">🏗</span><div class="acopio-card-ttl">'+a.nombre+'</div></div>'
+      +'<div class="acopio-card-ident"><span class="acopio-card-icon">'+tipo.icono+'</span><div class="cq-acopio-card-copy"><div class="acopio-card-ttl">'+a.nombre+'</div><div class="cq-acopio-rubro">'+tipo.nombre+'</div></div></div>'
       +'<div class="acopio-actions">'
       +'<button class="acopio-card-btn" title="Subir" onclick="event.stopPropagation();moverAcopio('+a.id+',-1)">↑</button>'
       +'<button class="acopio-card-btn" title="Bajar" onclick="event.stopPropagation();moverAcopio('+a.id+',1)">↓</button>'
-      +'<button class="acopio-card-btn" title="Renombrar" onclick="event.stopPropagation();editarNombreAcopio('+a.id+')">✎</button>'
+      +'<button class="acopio-card-btn" title="Editar nombre y rubro" onclick="event.stopPropagation();editarNombreAcopio('+a.id+')">✎</button>'
       +'<button class="acopio-card-btn" title="Archivar" onclick="event.stopPropagation();toggleArchivarAcopio('+a.id+')">📦</button>'
       +'<button class="acopio-card-btn danger" title="Eliminar" onclick="event.stopPropagation();confirmarBorrarAcopio('+a.id+')">🗑</button>'
       +'</div>'
@@ -5979,7 +6093,7 @@ function renderArchivados(){
       +'<div class="archivo-card-ttl">'+a.nombre+'</div>'
       +'<div class="archivo-card-sub">Archivado: '+fmtFecha((a.archivedAt||a.creado||'').split("T")[0])+' · Creado '+fmtFecha(a.creado)+' · Saldo '+fmtP(t.saldo)+'</div>'
       +'<div class="archivo-actions">'
-      +'<button class="btn btn-s btn-sm" onclick="event.stopPropagation();editarNombreAcopio('+a.id+')">✎ Nombre</button>'
+      +'<button class="btn btn-s btn-sm" onclick="event.stopPropagation();editarNombreAcopio('+a.id+')">✎ Editar</button>'
       +'<button class="btn btn-s btn-sm" onclick="event.stopPropagation();toggleArchivarAcopio('+a.id+')">↺ Restaurar</button>'
       +'<button class="btn btn-d btn-sm" onclick="event.stopPropagation();confirmarBorrarAcopio('+a.id+')">Eliminar</button>'
       +'</div>'
@@ -6057,6 +6171,7 @@ function openNuevoAcopio(){
   document.getElementById('na-tc').value=(ultimo&&Number(ultimo.tc)>0)?Number(ultimo.tc):TC_DEFAULT;
   cqCargarReferenciasNuevoAcopio();
   document.getElementById('na-copiar').value='base';
+  cqSeleccionarTipoAcopio('grueso');
   if(document.getElementById('na-color')) document.getElementById('na-color').value=pickAcopioColor(DB.acopios.length);
   renderColorPicker();
   openModal('modal-nuevo-acopio');
@@ -6082,6 +6197,7 @@ function guardarNuevoAcopio(){
     creado:todayISO(),
     tc:tc,
     color:(document.getElementById('na-color')?document.getElementById('na-color').value:pickAcopioColor(DB.acopios.length)),
+    tipoAcopio:cqNormalizarTipoAcopio(document.getElementById('na-tipo')?document.getElementById('na-tipo').value:'grueso'),
     archived:false,
     order:DB.acopios.length,
     obras:OBRAS_BASE.slice(),
@@ -6324,15 +6440,17 @@ function cqBulkPrecioAcordado(precio){
   return precio/1.21;
 }
 function openCargaMasivaMateriales(){
-  var cat=getLastMatCat();
-  var sel=document.getElementById('bulk-mat-cat');
-  sel.innerHTML=renderMatCatOptions(cat);
-  if(cat)sel.value=cat;
   document.getElementById('bulk-mat-codigos').value='';
   document.getElementById('bulk-mat-articulos').value='';
   document.getElementById('bulk-mat-precios').value='';
   document.getElementById('bulk-mat-cantidades').value='';
   document.getElementById('bulk-mat-preview').textContent='';
+  var clas=document.getElementById('bulk-sub-clasificar');
+  var lista=document.getElementById('bulk-sub-clasificar-list');
+  if(clas)clas.classList.remove('open');
+  if(lista)lista.innerHTML='';
+  var btn=document.getElementById('bulk-mat-guardar-btn');
+  if(btn)btn.textContent='Agregar materiales';
   cqBulkElegirRegla('ferro');
   var d=document.getElementById('bulk-regla-dividir'),m=document.getElementById('bulk-regla-multiplicar');
   if(d)d.value='1';if(m)m.value='1';
@@ -6366,15 +6484,127 @@ document.addEventListener('keydown',function(e){
   }
 });
 
+function cqNormBulkMaterial(v){
+  return String(v||'').trim().toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+}
+function cqSubrubrosCargaMasiva(){
+  var arr=[];
+  try{arr=subrubrosMaterialesAcopio();}catch(_e){arr=[];}
+  if(!Array.isArray(arr)||!arr.length){
+    try{arr=getCats().slice();}catch(_e2){arr=[];}
+  }
+  return arr.filter(function(x){return String(x||'').trim();});
+}
+function cqSubrubroValidoCargaMasiva(sub){
+  var key=cqNormBulkMaterial(sub);
+  if(!key)return '';
+  var validos=cqSubrubrosCargaMasiva();
+  return validos.find(function(x){return cqNormBulkMaterial(x)===key;})||'';
+}
+function cqBuscarSubrubroHistoricoCargaMasiva(cod,nom){
+  var codKey=cqNormBulkMaterial(cod);
+  var nomKey=cqNormBulkMaterial(nom);
+  var acopios=(DB&&Array.isArray(DB.acopios)?DB.acopios:[]).filter(function(ac){
+    return String(ac&&ac.id)!==String(curAcopioId);
+  }).slice().sort(function(a,b){
+    var oa=Number(a&&a.order),ob=Number(b&&b.order);
+    if(isFinite(oa)&&isFinite(ob)&&oa!==ob)return ob-oa;
+    return Number(b&&b.id||0)-Number(a&&a.id||0);
+  });
+
+  // 1) El código exacto manda. Es la coincidencia más segura.
+  if(codKey){
+    for(var i=0;i<acopios.length;i++){
+      var mats=Array.isArray(acopios[i]&&acopios[i].mats)?acopios[i].mats:[];
+      for(var j=0;j<mats.length;j++){
+        if(cqNormBulkMaterial(mats[j]&&mats[j].cod)!==codKey)continue;
+        var porCodigo=cqSubrubroValidoCargaMasiva(mats[j]&&mats[j].cat);
+        if(porCodigo)return porCodigo;
+      }
+    }
+  }
+
+  // 2) Si el código nunca apareció, aceptar solamente nombre EXACTO normalizado.
+  if(nomKey){
+    for(var x=0;x<acopios.length;x++){
+      var matsNom=Array.isArray(acopios[x]&&acopios[x].mats)?acopios[x].mats:[];
+      for(var y=0;y<matsNom.length;y++){
+        if(cqNormBulkMaterial(matsNom[y]&&matsNom[y].nom)!==nomKey)continue;
+        var porNombre=cqSubrubroValidoCargaMasiva(matsNom[y]&&matsNom[y].cat);
+        if(porNombre)return porNombre;
+      }
+    }
+  }
+  return '';
+}
+function cqEscBulk(v){
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function cqBulkClasifKey(m){
+  return String(m&&m.fila||0)+'|'+cqNormBulkMaterial(m&&m.cod)+'|'+cqNormBulkMaterial(m&&m.nom);
+}
+function cqRenderClasificacionBulk(pendientes){
+  var wrap=document.getElementById('bulk-sub-clasificar');
+  var list=document.getElementById('bulk-sub-clasificar-list');
+  var btn=document.getElementById('bulk-mat-guardar-btn');
+  if(!wrap||!list)return;
+  var subs=cqSubrubrosCargaMasiva();
+  var opts='<option value="">Elegir subrubro…</option>'+subs.map(function(s){
+    return '<option value="'+cqEscBulk(s)+'">'+cqEscBulk(s)+'</option>';
+  }).join('');
+  list.innerHTML=pendientes.map(function(m){
+    return '<div class="bulk-sub-row">'
+      +'<div class="bulk-sub-prod"><strong>'+cqEscBulk(m.nom)+'</strong>'
+      +'<small>'+(m.cod?('Código '+cqEscBulk(m.cod)):'Sin código')+'</small></div>'
+      +'<select class="bulk-sub-select" data-bulk-key="'+cqEscBulk(cqBulkClasifKey(m))+'">'+opts+'</select>'
+      +'</div>';
+  }).join('');
+  wrap.classList.add('open');
+  if(btn)btn.textContent='Guardar materiales';
+  var preview=document.getElementById('bulk-mat-preview');
+  if(preview)preview.textContent='Falta clasificar '+pendientes.length+' artículo'+(pendientes.length===1?'':'s')+' nuevo'+(pendientes.length===1?'':'s')+'. Todavía no se guardó nada.';
+  setTimeout(function(){
+    var first=list.querySelector('.bulk-sub-select');
+    if(first)first.focus();
+    try{wrap.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(_e){}
+  },50);
+}
+function cqClasificacionManualBulkPorFila(){
+  var out={};
+  document.querySelectorAll('#bulk-sub-clasificar-list .bulk-sub-select').forEach(function(sel){
+    var key=String(sel.getAttribute('data-bulk-key')||'');
+    var sub=cqSubrubroValidoCargaMasiva(sel.value);
+    if(key&&sub)out[key]=sub;
+  });
+  return out;
+}
+function cqOcultarClasificacionBulk(){
+  var wrap=document.getElementById('bulk-sub-clasificar');
+  var list=document.getElementById('bulk-sub-clasificar-list');
+  var btn=document.getElementById('bulk-mat-guardar-btn');
+  if(wrap)wrap.classList.remove('open');
+  if(list)list.innerHTML='';
+  if(btn)btn.textContent='Agregar materiales';
+}
+
 function guardarCargaMasivaMateriales(){
-  var cat=document.getElementById('bulk-mat-cat').value;
+  var clasWrap=document.getElementById('bulk-sub-clasificar');
+  if(clasWrap&&clasWrap.classList.contains('open')){
+    var faltante=Array.from(document.querySelectorAll('#bulk-sub-clasificar-list .bulk-sub-select')).find(function(sel){
+      return !cqSubrubroValidoCargaMasiva(sel.value);
+    });
+    if(faltante){
+      alert('Elegí el subrubro de todos los artículos nuevos antes de guardar.');
+      faltante.focus();
+      return;
+    }
+  }
   try{cqBulkPrecioAcordado(1);}catch(e){alert(e.message||e);return;}
   var codigos=(document.getElementById('bulk-mat-codigos').value||'').split(/\r?\n/);
   var articulos=(document.getElementById('bulk-mat-articulos').value||'').split(/\r?\n/);
   var precios=(document.getElementById('bulk-mat-precios').value||'').split(/\r?\n/);
   var cantidades=(document.getElementById('bulk-mat-cantidades').value||'').split(/\r?\n/);
-
-  if(!cat){alert('Elegí una categoría.');return;}
 
   var maxLen=Math.max(codigos.length,articulos.length,precios.length,cantidades.length);
   var parsed=[];
@@ -6396,6 +6626,7 @@ function guardarCargaMasivaMateriales(){
     }
 
     parsed.push({
+      fila:i+1,
       cod:cod,
       nom:nom,
       precioUnit:pu,
@@ -6417,6 +6648,40 @@ function guardarCargaMasivaMateriales(){
     if(String(m.cod||'').trim())existingCodes[catKey(m.cod)]=true;
   });
 
+  // No pedir clasificación para códigos que igualmente se van a omitir por duplicados.
+  var seenCodes=Object.assign({},existingCodes);
+  parsed.forEach(function(m){
+    if(m.cod && seenCodes[catKey(m.cod)]){
+      m.omitirDuplicado=true;
+    }else if(m.cod){
+      seenCodes[catKey(m.cod)]=true;
+    }
+  });
+
+  var manuales=cqClasificacionManualBulkPorFila();
+  var pendientes=[];
+  var heredados=0;
+  parsed.forEach(function(m){
+    if(m.omitirDuplicado)return;
+    var sub=cqBuscarSubrubroHistoricoCargaMasiva(m.cod,m.nom);
+    if(sub){
+      m.cat=sub;
+      heredados++;
+      return;
+    }
+    var manual=manuales[cqBulkClasifKey(m)]||'';
+    if(manual){
+      m.cat=manual;
+      return;
+    }
+    pendientes.push(m);
+  });
+
+  if(pendientes.length){
+    cqRenderClasificacionBulk(pendientes);
+    return;
+  }
+
   var agregados=[];
   var duplicados=[];
   var maxId=1;
@@ -6433,33 +6698,56 @@ function guardarCargaMasivaMateriales(){
     }
   });
 
+  // Revalidar duplicados justo antes de grabar.
+  existingCodes={};
+  (a.mats||[]).forEach(function(m){
+    if(String(m.cod||'').trim())existingCodes[catKey(m.cod)]=true;
+  });
+
+  var hayParaAgregar=parsed.some(function(m){
+    return !m.omitirDuplicado && !!m.cat && !(m.cod && existingCodes[catKey(m.cod)]);
+  });
+  if(!hayParaAgregar){
+    alert('No se agregó ningún producto. Los códigos ingresados ya existen.');
+    return;
+  }
+
+  // Guardar el estado ANTERIOR para que Deshacer vuelva realmente atrás.
+  pushUndo();
+
   parsed.forEach(function(m){
     if(m.cod && existingCodes[catKey(m.cod)]){
       duplicados.push(m.cod);
       return;
     }
+    if(!m.cat)return;
     m.id=maxId++;
-    m.cat=cat;
+    m.cat=ensureCat(m.cat);
+    delete m.fila;
+    delete m.omitirDuplicado;
     a.mats.push(m);
     if(m.cod)existingCodes[catKey(m.cod)]=true;
     agregados.push(m);
   });
 
   if(!agregados.length){
+    // Caso extremadamente raro (por ejemplo, cambio concurrente justo antes de grabar).
+    undoStack.pop();
+    updateUndoBtn();
     alert('No se agregó ningún producto. Los códigos ingresados ya existen.');
     return;
   }
-
-  pushUndo();
-  cat=ensureCat(cat);
-  agregados.forEach(function(m){m.cat=cat;});
-  setLastMatCat(cat);
+  if(agregados.length)setLastMatCat(agregados[agregados.length-1].cat);
   persist();
+  cqOcultarClasificacionBulk();
   closeModal('modal-carga-masiva-mat');
   renderMateriales();
 
   var controlados=agregados.filter(function(m){return m.controlStock==='limitado';}).length;
-  var msg='✓ '+agregados.length+' materiales agregados en '+cat;
+  var nuevosClasificados=agregados.length-heredados;
+  var msg='✓ '+agregados.length+' materiales agregados';
+  if(heredados>0)msg+=' · '+heredados+' subrubros recuperados';
+  if(nuevosClasificados>0)msg+=' · '+nuevosClasificados+' clasificados ahora';
   if(controlados)msg+=' · '+controlados+' con cantidad específica';
   if(duplicados.length)msg+=' · '+duplicados.length+' códigos repetidos omitidos';
   if(invalidas.length)msg+=' · '+invalidas.length+' líneas incompletas';
@@ -7071,6 +7359,9 @@ function cqIdentidadCannesTripoli(nombreA,nombreB){
 }
 function cqMaterialRetiroCompatibleEstricto(nomRet,codRet,nomCarga,codCarga){
   if(cqCruceCodoDuratopAdicionalAcopio(nomRet,nomCarga))return false;
+  var retTechi=cqEsTechiCauNombreAcopio(nomRet), cargaTechi=cqEsTechiCauNombreAcopio(nomCarga);
+  if((retTechi||cargaTechi) && !(retTechi&&cargaTechi))return false;
+  if(retTechi&&cargaTechi)return true;
   var retWeber=cqEsWeberMembranaNombreAcopio(nomRet), cargaWeber=cqEsWeberMembranaNombreAcopio(nomCarga);
   if((retWeber||cargaWeber) && !(retWeber&&cargaWeber))return false;
   if((codRet===cqNormVerifMat(CQ_WEBER_MEMBRANA_CODIGO)||codCarga===cqNormVerifMat(CQ_WEBER_MEMBRANA_CODIGO))
@@ -7851,6 +8142,13 @@ function cqEsAdicionalNombreAcopio(v){
 function cqEsWeberMembranaNombreAcopio(v){
   return cqMatNormDirecto(v||'')===cqMatNormDirecto(CQ_WEBER_MEMBRANA_NOMBRE);
 }
+// CQ 28/10/2026 — TECHI CAU aparece con nombres distintos entre Acopio y Materiales
+// (ej. "TECHI CAU EMAPI CAJA X 18 KGR" / "Techi Cau emuls. Asf.").
+// Tratar ambos como el mismo producto evita crear una ficha dinámica duplicada.
+function cqEsTechiCauNombreAcopio(v){
+  var n=cqMatNormDirecto(v||'');
+  return n.indexOf('techi')>=0 && n.indexOf('cau')>=0;
+}
 function cqCruceCodoDuratopAdicionalAcopio(a,b){
   return (cqEsCodoDuratop45HH63NombreAcopio(a)&&cqEsAdicionalNombreAcopio(b))
       || (cqEsCodoDuratop45HH63NombreAcopio(b)&&cqEsAdicionalNombreAcopio(a));
@@ -8004,6 +8302,9 @@ function cqMatResolverMaterialDirecto(data,ev){
   if(!mat&&cqEsWeberMembranaNombreAcopio(nombre)){
     mat=mats.find(function(x){return cqEsWeberMembranaNombreAcopio(x.mat||'');})||null;
   }
+  if(!mat&&cqEsTechiCauNombreAcopio(nombre)){
+    mat=mats.find(function(x){return cqEsTechiCauNombreAcopio(x.mat||'');})||null;
+  }
 
   if(!mat&&nk){
     mat=mats.find(function(x){return cqMatNormDirecto(x.mat)===nk;})||null;
@@ -8036,8 +8337,14 @@ function cqMatResolverMaterialDirecto(data,ev){
   }
 
   if(!mat){
+    // CQ 28/10/2026 — nunca reutilizar IDs eliminados (deletedMatIds).
+    // Antes un material dinámico podía recrearse con un ID tombstone: la carga quedaba
+    // escrita pero Catálogo/Reportes la ocultaba, y el punto de Materiales volvía a rojo.
+    var idsOcupados=new Set();
+    cqMatTodosDirecto(data).forEach(function(x){if(x&&x.id!=null)idsOcupados.add(String(x.id));});
+    (Array.isArray(data.deletedMatIds)?data.deletedMatIds:[]).forEach(function(id){idsOcupados.add(String(id));});
     var maxId=10000;
-    mats.forEach(function(x){if(Number(x.id)>=maxId)maxId=Number(x.id)+1;});
+    while(idsOcupados.has(String(maxId)))maxId++;
     var cat=cqMatCategoriaFinalDirecto(
       data,
       {id:maxId,mat:nombre||('Material '+String(ev.materialCode||'')),codigo:cqCodigoMaterialSeguro(ev.materialCode)},
@@ -8194,8 +8501,24 @@ function cqMatAplicarEventoDirecto(data,ev){
 
   if(mismo)return {data:data,cambio:false};
 
+  var matIdAnterior=prev&&prev.matId!=null?String(prev.matId):'';
   if(idx>=0)data.cargas[idx]=entry;
   else data.cargas.push(entry);
+
+  // Si una reparación remapea una carga huérfana/duplicada a la ficha correcta,
+  // limpiar la ficha dinámica anterior cuando ya no la usa ningún otro movimiento.
+  if(matIdAnterior && matIdAnterior!==String(entry.matId)){
+    var sigueUsadoAnterior=data.cargas.some(function(c){return String(c&&c.matId)===matIdAnterior;});
+    if(!sigueUsadoAnterior){
+      var extraAnterior=(data.extraMats||[]).find(function(x){return String(x&&x.id)===matIdAnterior;});
+      if(extraAnterior&&(extraAnterior.autoCreated===true||String(extraAnterior.comentarios||'').indexOf('Creado automáticamente desde ')===0)){
+        data.extraMats=(data.extraMats||[]).filter(function(x){return String(x&&x.id)!==matIdAnterior;});
+        delete data.matCodigos[matIdAnterior];
+        delete data.matCategorias[matIdAnterior];
+        if(data.matNombres)delete data.matNombres[matIdAnterior];
+      }
+    }
+  }
 
   // Sólo deduplicar por integrationId real.
   var vistos={};
@@ -9680,12 +10003,31 @@ async function cqRepararMaterialesPendientes(){
   var f=window._cqFirebase, ref=f.doc(f.db,'materiales','data_planilla_exacta_v4');
   try{
     var snap=await f.getDoc(ref), data=snap.exists()?(snap.data()||{}):{}, cargas=Array.isArray(data.cargas)?data.cargas:[];
+
+    // CQ 28/10/2026 — Reparar no debe considerar válida una carga sólo porque
+    // exista su integrationId. También tiene que apuntar a una ficha visible del catálogo.
+    var borradosReparar=new Set((Array.isArray(data.deletedMatIds)?data.deletedMatIds:[]).map(function(id){return String(id);}));
+    var catalogoReparar=new Set();
+    function registrarMatReparar(m){
+      if(!m||m.id==null)return;
+      var id=String(m.id);
+      if(!borradosReparar.has(id))catalogoReparar.add(id);
+    }
+    try{(Array.isArray(CQ_MAT_BASE_DIRECTO)?CQ_MAT_BASE_DIRECTO:[]).forEach(registrarMatReparar);}catch(_e){}
+    (Array.isArray(data.extraMats)?data.extraMats:[]).forEach(registrarMatReparar);
+    function cargaTieneFichaReparar(c){
+      return !!(c&&c.matId!=null&&catalogoReparar.has(String(c.matId)));
+    }
+
     var faltantes=candidatos.filter(function(x){
       var iid=integracionRetiroId(x.acopio.id,x.retiro.id);
-      // Primero ID canónico; luego huella segura ya existente en esta app para históricos.
-      if(cargas.some(function(c){return String(c&&c.integracionId||'')===String(iid);})){return false;}
+      // ID canónico + ficha real. Si el ID existe pero la ficha fue borrada/queda huérfana,
+      // forzar el upsert para remapear el movimiento a una ficha válida.
+      var canon=cargas.find(function(c){return String(c&&c.integracionId||'')===String(iid);});
+      if(canon)return !cargaTieneFichaReparar(canon);
       try{
-        return !cargas.some(function(c){return cqCargaMaterialesCoincideRetiroUnico(c,x.retiro,x.acopio);});
+        var historica=cargas.find(function(c){return cqCargaMaterialesCoincideRetiroUnico(c,x.retiro,x.acopio);});
+        return !historica || !cargaTieneFichaReparar(historica);
       }catch(_e){return true;}
     });
 
@@ -14200,8 +14542,7 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
     openCargaMasivaMateriales=function(){
       asegurarConfig(function(){
         cqOrigOpenMasiva();
-        var s=document.getElementById('bulk-mat-cat');
-        if(s)s.innerHTML=options(getLastMatCat?getLastMatCat():'',false);
+        // El subrubro masivo ya no es compartido; se resuelve por artículo.
       });
     };
   }
@@ -14240,21 +14581,16 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
     };
   }
   if(cqOrigGuardarMasiva){
+    // La carga masiva ya resuelve el subrubro artículo por artículo:
+    // hereda desde acopios anteriores y sólo pregunta por los productos nuevos.
     guardarCargaMasivaMateriales=function(){
-      var cat=validarSelect('bulk-mat-cat');
-      if(!cat){
-        alert('Elegí un subrubro válido de Gastos antes de cargar.');
-        return;
-      }
-      document.getElementById('bulk-mat-cat').value=cat;
       return cqOrigGuardarMasiva();
     };
   }
 
   function rotular(){
     [
-      ['mat-cat','Subrubro (Gastos)'],
-      ['bulk-mat-cat','Subrubro compartido (Gastos)']
+      ['mat-cat','Subrubro (Gastos)']
     ].forEach(function(p){
       var el=document.getElementById(p[0]);
       if(!el)return;
@@ -14271,8 +14607,7 @@ document.addEventListener('DOMContentLoaded',function(){cqToggleReporteFiltros(f
     try{
       var s=document.getElementById('mat-cat');
       if(s&&!document.getElementById('modal-mat').classList.contains('open'))s.innerHTML=options('',false);
-      var b=document.getElementById('bulk-mat-cat');
-      if(b&&!document.getElementById('modal-carga-masiva-mat').classList.contains('open'))b.innerHTML=options('',false);
+      // Sin selector compartido en carga masiva.
     }catch(e){}
   }
 
@@ -15298,6 +15633,60 @@ document.addEventListener('click',function(e){
     white-space:nowrap!important;
     overflow:visible!important;
     text-overflow:clip!important;
+  }
+}
+</style>
+
+
+<style id="cq-acopio-rubros-y-alineacion-v1">
+/* CQ 28/10/2026 — rubro/icono editable (incluye Pisos) + obras justificadas + botones de retiro iguales */
+.cq-acopio-tipo-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.cq-acopio-tipo-btn{min-width:0;min-height:68px;border:1px solid rgba(28,61,53,.14);border-radius:12px;background:linear-gradient(180deg,#fff,#F7F8F5);color:var(--green);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:7px 4px;font-family:'Space Grotesk',sans-serif;cursor:pointer;box-shadow:0 4px 11px rgba(28,61,53,.055)}
+.cq-acopio-tipo-btn span{font-size:22px;line-height:1}
+.cq-acopio-tipo-btn b{font-size:8px;line-height:1.1;white-space:normal;text-align:center}
+.cq-acopio-tipo-btn.active{border-color:#248B68;box-shadow:0 0 0 2px rgba(36,139,104,.13),0 6px 14px rgba(36,139,104,.10);background:linear-gradient(180deg,#F7FFFB,#EAF7F0)}
+.cq-acopio-tipo-btn[data-tipo="terminaciones"].active{border-color:#2B7BE0;background:linear-gradient(180deg,#FAFDFF,#EDF5FF);box-shadow:0 0 0 2px rgba(43,123,224,.11)}
+.cq-acopio-tipo-btn[data-tipo="instalaciones"].active{border-color:#C8882A;background:linear-gradient(180deg,#FFFDF9,#FFF4E2);box-shadow:0 0 0 2px rgba(200,136,42,.11)}
+.cq-acopio-tipo-btn[data-tipo="electricidad"].active{border-color:#7B3FA0;background:linear-gradient(180deg,#FFFCFF,#F5EEFF);box-shadow:0 0 0 2px rgba(123,63,160,.11)}
+.cq-acopio-tipo-btn[data-tipo="pisos"].active{border-color:#1E8DB4;background:linear-gradient(180deg,#FBFEFF,#EAF8FC);box-shadow:0 0 0 2px rgba(30,141,180,.11)}
+.cq-acopio-card-copy{display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1 1 auto}
+.cq-acopio-card-copy .acopio-card-ttl{width:100%}
+.cq-acopio-rubro{margin-top:3px;padding:2px 6px;border-radius:999px;background:color-mix(in srgb,var(--cq-acopio-accent) 9%,white);border:1px solid color-mix(in srgb,var(--cq-acopio-accent) 18%,transparent);color:var(--cq-acopio-accent);font-size:7px;font-weight:900;line-height:1.1}
+
+/* Obras: columnas iguales para que todas queden alineadas/justificadas. */
+#retirar-obra-chips{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(112px,1fr))!important;gap:7px!important;align-items:stretch!important}
+#retirar-obra-chips .chip{width:100%!important;min-width:0!important;height:100%!important;min-height:36px!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;white-space:normal!important;line-height:1.15!important;padding:6px 7px!important}
+
+/* Carga masiva exactamente con la misma caja/tamaño que Registrar retiro. */
+#btn-carga-masiva-retiros{min-height:50px!important;height:auto!important;padding:12px!important;border-radius:14px!important;font-size:13px!important}
+
+@media(max-width:560px){
+  .cq-acopio-tipo-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+  .cq-acopio-tipo-btn{min-height:58px;padding:6px 2px;border-radius:10px}
+  .cq-acopio-tipo-btn span{font-size:18px}
+  .cq-acopio-tipo-btn b{font-size:6.4px}
+  .cq-acopio-rubro{font-size:6.5px;margin-top:2px;padding:2px 5px}
+  #retirar-obra-chips{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px!important;margin-bottom:8px!important}
+  #retirar-obra-chips .chip{min-height:34px!important;padding:5px 4px!important;font-size:8.5px!important;line-height:1.15!important}
+  #btn-carga-masiva-retiros,
+  #btn-registrar-retiro{min-height:32px!important;height:32px!important;padding:5px 8px!important;border-radius:8px!important;font-size:9px!important}
+}
+@media(max-width:360px){
+  #retirar-obra-chips{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .cq-acopio-tipo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+</style>
+
+<style id="cq-fix-obras-tablet-cuadradas-20261031">
+/* CQ 31/10/2026 — Retirar: obras con la misma forma rectangular del teléfono también en tablet/horizontal. */
+#retirar-obra-chips .chip{
+  border-radius:10px !important;
+}
+
+/* En tablet horizontal conservar la grilla existente, pero evitar el aspecto de cápsula. */
+@media (min-width:561px){
+  #retirar-obra-chips .chip{
+    border-radius:10px !important;
   }
 }
 </style>

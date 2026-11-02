@@ -363,7 +363,7 @@ body.modal-open{overflow:hidden!important;}
 </style>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, query, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, query, orderBy, limit, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   const firebaseConfig = {
     apiKey: "AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
     authDomain: "cq-mano-de-obra.firebaseapp.com",
@@ -374,7 +374,7 @@ body.modal-open{overflow:hidden!important;}
   };
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  window._db = db; window._doc = doc; window._setDoc = setDoc; window._getDoc = getDoc; window._onSnapshot = onSnapshot; window._collection = collection; window._getDocs = getDocs; window._query = query; window._orderBy = orderBy; window._limit = limit; window._deleteDoc = deleteDoc; window._dbReady = true;
+  window._db = db; window._doc = doc; window._setDoc = setDoc; window._getDoc = getDoc; window._onSnapshot = onSnapshot; window._collection = collection; window._getDocs = getDocs; window._query = query; window._orderBy = orderBy; window._limit = limit; window._deleteDoc = deleteDoc; window._runTransaction = runTransaction; window._dbReady = true;
   document.dispatchEvent(new Event('firebase-ready'));
 </script>
 
@@ -2146,7 +2146,39 @@ function inferCatBySubrubro(subrubro,currentCat){
   if(matches.length===1 && matches[0]!==currentCat)return matches[0];
   return currentCat;
 }
-function migrateState(s){s=s||emptyState();s.gastos=s.gastos||[];s.financiero=s.financiero||{};const f=s.financiero;if(f.cobrado&&!f.venta)f.venta=f.cobrado;if(!('ventaMes'in f))f.ventaMes='';if(!('cuotas'in f))f.cuotas=0;if(!Array.isArray(f.cuotasDetalle))f.cuotasDetalle=(parseFloat(f.cuotas)||0)?[{monto:parseFloat(f.cuotas)||0,mes:''}]:[];f.cuotasDetalle=f.cuotasDetalle.map(v=>{if(v&&typeof v==='object')return{monto:parseFloat(v.monto)||0,mes:String(v.mes||'')};return{monto:parseFloat(v)||0,mes:''}}).filter(v=>v.monto>0);f.cuotas=f.cuotasDetalle.reduce((a,v)=>a+(parseFloat(v.monto)||0),0);if(!('comision'in f))f.comision=0;if(!('comisionPct'in f))f.comisionPct=2.5;if(!('comisionManual'in f))f.comisionManual=parseFloat(f.comision)||0;if(!('comisionModo'in f))f.comisionModo=(parseFloat(f.comision)||0)>0?'manual':'auto';if(!f.unidades||typeof f.unidades!=='object')f.unidades={};['A','B'].forEach(k=>{if(!f.unidades[k]||typeof f.unidades[k]!=='object')f.unidades[k]={};f.unidades[k].etapa=String(f.unidades[k].etapa||'');f.unidades[k].fechaVenta=String(f.unidades[k].fechaVenta||'')});if(!f.acuerdosMO)f.acuerdosMO={mo:0,ext:{}};if(!f.acuerdosMO.ext)f.acuerdosMO.ext={};s.gastos=s.gastos.map(g=>{const sub=g.subrubro||g.concepto||'Sin subrubro';return{...g,subrubro:sub,cat:inferCatBySubrubro(sub,g.cat)}});return s}
+function migrateState(s){
+  s=s||emptyState();
+  const legacy=Array.isArray(s.gastos)?s.gastos:[];
+  const items=(s.gastosItems&&typeof s.gastosItems==='object')?s.gastosItems:{};
+  const byId=new Map();
+  legacy.forEach(g=>{if(g&&g.id!=null)byId.set(String(g.id),g);});
+  Object.values(items).forEach(g=>{
+    if(!g||g.id==null)return;
+    const id=String(g.id);
+    if(g.activo===false)byId.delete(id);
+    else byId.set(id,g);
+  });
+  s.gastos=[...byId.values()];
+  s.gastosItems=items;
+  s.financiero=s.financiero||{};
+  const f=s.financiero;
+  if(f.cobrado&&!f.venta)f.venta=f.cobrado;
+  if(!('ventaMes'in f))f.ventaMes='';
+  if(!('cuotas'in f))f.cuotas=0;
+  if(!Array.isArray(f.cuotasDetalle))f.cuotasDetalle=(parseFloat(f.cuotas)||0)?[{monto:parseFloat(f.cuotas)||0,mes:''}]:[];
+  f.cuotasDetalle=f.cuotasDetalle.map(v=>{if(v&&typeof v==='object')return{monto:parseFloat(v.monto)||0,mes:String(v.mes||'')};return{monto:parseFloat(v)||0,mes:''}}).filter(v=>v.monto>0);
+  f.cuotas=f.cuotasDetalle.reduce((a,v)=>a+(parseFloat(v.monto)||0),0);
+  if(!('comision'in f))f.comision=0;
+  if(!('comisionPct'in f))f.comisionPct=2.5;
+  if(!('comisionManual'in f))f.comisionManual=parseFloat(f.comision)||0;
+  if(!('comisionModo'in f))f.comisionModo=(parseFloat(f.comision)||0)>0?'manual':'auto';
+  if(!f.unidades||typeof f.unidades!=='object')f.unidades={};
+  ['A','B'].forEach(k=>{if(!f.unidades[k]||typeof f.unidades[k]!=='object')f.unidades[k]={};f.unidades[k].etapa=String(f.unidades[k].etapa||'');f.unidades[k].fechaVenta=String(f.unidades[k].fechaVenta||'')});
+  if(!f.acuerdosMO)f.acuerdosMO={mo:0,ext:{}};
+  if(!f.acuerdosMO.ext)f.acuerdosMO.ext={};
+  s.gastos=s.gastos.map(g=>{const sub=g.subrubro||g.concepto||'Sin subrubro';return{...g,subrubro:sub,cat:inferCatBySubrubro(sub,g.cat)}});
+  return s;
+}
 
 function setSyncStatus(txt,cls=''){const el=document.getElementById('sync-status');if(el){el.title=txt;el.className='sync-dot '+(cls==='ok'?'ok':cls==='err'?'err':'')}}
 function persistConfig(){
@@ -2163,11 +2195,61 @@ function persist(){
   localStorage.setItem(dbKey(curObra),JSON.stringify(s));
   if(window._dbReady&&modoFirebase){
     setSyncStatus('Firebase: guardando...');
-    const payload=JSON.parse(JSON.stringify({...s,updatedAt:new Date().toISOString()}));
-    window._setDoc(window._doc(window._db,'gastos',curObra),payload).then(()=>setSyncStatus('Firebase: guardado','ok')).catch(e=>{console.warn(e);setSyncStatus('Firebase: error','err')});
+    // IMPORTANTE: los gastos pueden ser modificados desde Caja Chica, Caja Gerencia,
+    // Pañol, Acopio u otro dispositivo. Un guardado financiero/configurativo de Gastos
+    // NO debe volver a escribir el array completo desde una copia local potencialmente vieja.
+    const {gastos:_gastosLocales,gastosItems:_gastosItemsLocales,...resto}=s;
+    const payload=JSON.parse(JSON.stringify({...resto,updatedAt:new Date().toISOString()}));
+    window._setDoc(window._doc(window._db,'gastos',curObra),payload,{merge:true})
+      .then(()=>setSyncStatus('Firebase: guardado','ok'))
+      .catch(e=>{console.warn(e);setSyncStatus('Firebase: error','err')});
   } else {
     setSyncStatus('Firebase: local');
   }
+}
+
+// CQ 22/10/2026 — escritura concurrente por ID, sin transacciones.
+// El documento conserva el array histórico "gastos", pero todo alta/edición nueva se
+// guarda además en gastosItems[id]. migrateState fusiona ambos orígenes y una baja lógica
+// en gastosItems impide que reaparezca un registro histórico eliminado.
+async function cqPersistGastoUpsert(obraId,gasto){
+  if(!obraId||!gasto)return;
+  if(!(window._dbReady&&modoFirebase)){
+    setSyncStatus('Firebase: local');
+    return;
+  }
+  const id=String(gasto.id||'').trim();
+  if(!id)throw new Error('Movimiento sin ID');
+  const ref=window._doc(window._db,'gastos',obraId);
+  const limpio=JSON.parse(JSON.stringify({...gasto,activo:true,updatedAt:gasto.updatedAt||new Date().toISOString()}));
+  setSyncStatus('Firebase: guardando...');
+  await window._setDoc(ref,{gastosItems:{[id]:limpio},updatedAtIntegraciones:new Date().toISOString()},{merge:true});
+  if(!state[obraId])state[obraId]=emptyState();
+  state[obraId].gastosItems=(state[obraId].gastosItems&&typeof state[obraId].gastosItems==='object')?state[obraId].gastosItems:{};
+  state[obraId].gastosItems[id]=limpio;
+  state[obraId]=migrateState(state[obraId]);
+  localStorage.setItem(dbKey(obraId),JSON.stringify(state[obraId]));
+  setSyncStatus('Firebase: guardado','ok');
+}
+
+async function cqPersistGastoDelete(obraId,id){
+  if(!obraId||!id)return;
+  if(!(window._dbReady&&modoFirebase)){
+    setSyncStatus('Firebase: local');
+    return;
+  }
+  id=String(id);
+  const ref=window._doc(window._db,'gastos',obraId);
+  const now=new Date().toISOString();
+  const tomb={id,activo:false,deletedAt:now,updatedAt:now};
+  setSyncStatus('Firebase: guardando...');
+  await window._setDoc(ref,{gastosItems:{[id]:tomb},updatedAtIntegraciones:now},{merge:true});
+  if(!state[obraId])state[obraId]=emptyState();
+  state[obraId].gastosItems=(state[obraId].gastosItems&&typeof state[obraId].gastosItems==='object')?state[obraId].gastosItems:{};
+  state[obraId].gastosItems[id]=tomb;
+  state[obraId]=migrateState(state[obraId]);
+  localStorage.setItem(dbKey(obraId),JSON.stringify(state[obraId]));
+  setSyncStatus('Firebase: guardado','ok');
 }
 async function loadFromFirebase(){
   if(!window._dbReady||!modoFirebase)return;
@@ -3111,10 +3193,10 @@ function updateMasivoSummary(){
   document.getElementById('gm-summary').textContent=n?`${n} obra${n===1?'':'s'} · ${moneda} ${Math.abs(monto).toLocaleString('es-AR')} por obra`:'Seleccioná una o más obras.';
 }
 ['gm-monto','gm-moneda'].forEach(id=>document.addEventListener('input',e=>{if(e.target&&e.target.id===id)updateMasivoSummary()}));
-async function persistObraMasiva(obraId){
+async function persistObraMasiva(obraId,gasto){
   const s=state[obraId]||emptyState(); state[obraId]=s;
   localStorage.setItem(dbKey(obraId),JSON.stringify(s));
-  if(window._dbReady&&modoFirebase){const payload=JSON.parse(JSON.stringify({...s,updatedAt:new Date().toISOString()}));await window._setDoc(window._doc(window._db,'gastos',obraId),payload);}
+  if(gasto)await cqPersistGastoUpsert(obraId,gasto);
 }
 async function saveGastoMasivo(){
   const fecha=document.getElementById('gm-fecha').value;
@@ -3143,13 +3225,14 @@ async function saveGastoMasivo(){
   const detalleConfirmacion=nota?`“${nota}”`:`${subrubro}`;
   if(!confirm(`Se cargará ${detalleConfirmacion} por ${moneda==='usd'?'U$S':'$'} ${Math.abs(monto).toLocaleString('es-AR')} en ${obras.length} obra${obras.length===1?'':'s'}. ¿Continuar?`))return;
   setDefaultTC(tc); const nowISO=new Date().toISOString();
-  obras.forEach((obraId,i)=>{if(!state[obraId])state[obraId]=emptyState();state[obraId].gastos.push({id:Date.now().toString()+'_'+i+'_'+Math.random().toString(36).slice(2,6),createdAt:nowISO,createdBy:usuarioActual,fecha,cat,subrubro,moneda,monto,tc,nota,updatedAt:nowISO,updatedBy:usuarioActual,cargaMasiva:true});});
-  try{setSyncStatus('Firebase: guardando carga masiva...');await Promise.all(obras.map(persistObraMasiva));setSyncStatus('Firebase: guardado','ok');closeModal('modal-gasto-masivo');renderAll();alert(`Carga realizada en ${obras.length} obra${obras.length===1?'':'s'}.`);}catch(e){console.warn(e);setSyncStatus('Firebase: error','err');alert('Los datos quedaron guardados localmente, pero hubo un problema al sincronizar con Firebase.');renderAll();}
+  const nuevos=[];
+  obras.forEach((obraId,i)=>{if(!state[obraId])state[obraId]=emptyState();const g={id:Date.now().toString()+'_'+i+'_'+Math.random().toString(36).slice(2,6),createdAt:nowISO,createdBy:usuarioActual,fecha,cat,subrubro,moneda,monto,tc,nota,updatedAt:nowISO,updatedBy:usuarioActual,cargaMasiva:true};state[obraId].gastos.push(g);nuevos.push([obraId,g]);});
+  try{setSyncStatus('Firebase: guardando carga masiva...');await Promise.all(nuevos.map(([obraId,g])=>persistObraMasiva(obraId,g)));setSyncStatus('Firebase: guardado','ok');closeModal('modal-gasto-masivo');renderAll();alert(`Carga realizada en ${obras.length} obra${obras.length===1?'':'s'}.`);}catch(e){console.warn(e);setSyncStatus('Firebase: error','err');alert('Los datos quedaron guardados localmente, pero hubo un problema al sincronizar con Firebase.');renderAll();}
 }
 
-function saveGasto(){const fecha=document.getElementById('g-fecha').value,cat=document.getElementById('g-cat').value,subrubro=document.getElementById('g-subrubro-sel').value,moneda=document.getElementById('g-moneda').value,montoIngresado=parseFloat(document.getElementById('g-monto').value),tc=parseFloat(document.getElementById('g-tc').value)||getDefaultTC(),nota=document.getElementById('g-nota').value.trim(),editId=document.getElementById('gasto-edit-id')?.value||'',esIngreso=document.getElementById('gasto-tipo')?.value==='ingreso';const usuarioActual=ensureUserName();if(!usuarioActual){openUserSelector();alert('Primero elegí quién está usando la app.');return;}const permiteNegativo=permiteMontoNegativo(cat,subrubro);if(!fecha||!subrubro||isNaN(montoIngresado)||montoIngresado===0||(esIngreso&&montoIngresado<0)||(!esIngreso&&!permiteNegativo&&montoIngresado<0)){alert(esIngreso?'Completá fecha, subrubro y un monto positivo. El sistema lo guardará automáticamente en negativo.':(permiteNegativo?'Completá fecha, subrubro y un monto distinto de cero. En Materiales podés usar negativo para que sume como crédito/devolución.':'Completá fecha, subrubro y monto positivo'));return}const monto=esIngreso?-Math.abs(montoIngresado):montoIngresado;setDefaultTC(tc);const nowISO=new Date().toISOString();const gastoData={fecha,cat,subrubro,moneda,monto,tc,nota,tipoMovimiento:esIngreso?'ingreso':'gasto',updatedAt:nowISO,updatedBy:usuarioActual};if(editId){const arr=getS().gastos;const idx=arr.findIndex(g=>g.id===editId);if(idx>=0){arr[idx]={...arr[idx],...gastoData};}else{arr.push({id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData});}}else{getS().gastos.push({id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData});}document.getElementById('gasto-edit-id').value='';persist();closeModal('modal-gasto');renderAll()}
+async function saveGasto(){const fecha=document.getElementById('g-fecha').value,cat=document.getElementById('g-cat').value,subrubro=document.getElementById('g-subrubro-sel').value,moneda=document.getElementById('g-moneda').value,montoIngresado=parseFloat(document.getElementById('g-monto').value),tc=parseFloat(document.getElementById('g-tc').value)||getDefaultTC(),nota=document.getElementById('g-nota').value.trim(),editId=document.getElementById('gasto-edit-id')?.value||'',esIngreso=document.getElementById('gasto-tipo')?.value==='ingreso';const usuarioActual=ensureUserName();if(!usuarioActual){openUserSelector();alert('Primero elegí quién está usando la app.');return;}const permiteNegativo=permiteMontoNegativo(cat,subrubro);if(!fecha||!subrubro||isNaN(montoIngresado)||montoIngresado===0||(esIngreso&&montoIngresado<0)||(!esIngreso&&!permiteNegativo&&montoIngresado<0)){alert(esIngreso?'Completá fecha, subrubro y un monto positivo. El sistema lo guardará automáticamente en negativo.':(permiteNegativo?'Completá fecha, subrubro y un monto distinto de cero. En Materiales podés usar negativo para que sume como crédito/devolución.':'Completá fecha, subrubro y monto positivo'));return}const monto=esIngreso?-Math.abs(montoIngresado):montoIngresado;setDefaultTC(tc);const nowISO=new Date().toISOString();const gastoData={fecha,cat,subrubro,moneda,monto,tc,nota,tipoMovimiento:esIngreso?'ingreso':'gasto',updatedAt:nowISO,updatedBy:usuarioActual};let guardado=null;if(editId){const arr=getS().gastos;const idx=arr.findIndex(g=>g.id===editId);if(idx>=0){arr[idx]={...arr[idx],...gastoData};guardado=arr[idx];}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};arr.push(guardado);}}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};getS().gastos.push(guardado);}document.getElementById('gasto-edit-id').value='';localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));closeModal('modal-gasto');renderAll();try{await cqPersistGastoUpsert(curObra,guardado);}catch(e){console.warn('Guardar gasto por ID',e);setSyncStatus('Firebase: error','err');}}
 function editGasto(id){const g=getS().gastos.find(x=>x.id===id);if(!g)return;const esIngreso=g.tipoMovimiento==='ingreso';document.getElementById('gasto-edit-id').value=g.id;document.getElementById('gasto-tipo').value=esIngreso?'ingreso':'gasto';document.getElementById('g-fecha').value=g.fecha||today();document.getElementById('g-cat').value=g.cat||(curObra==='oficina'?'ofi':'mat');updateSubrubroOptions();const sub=g.subrubro||g.concepto||'';const sel=document.getElementById('g-subrubro-sel');const opts=[...sel.options].map(o=>o.value);if(sub&&!opts.includes(sub)){const opt=document.createElement('option');opt.value=sub;opt.textContent=sub+' (actual)';sel.appendChild(opt);}sel.value=sub;const ss=document.getElementById('g-subrubro-search');if(ss)ss.value=sub||'';document.getElementById('g-moneda').value=g.moneda||'ars';document.getElementById('g-monto').value=esIngreso?Math.abs(parseFloat(g.monto)||0):(g.monto||'');document.getElementById('g-tc').value=g.tc||getDefaultTC();document.getElementById('g-nota').value=g.nota||'';setGastoModalTipo(esIngreso?'ingreso':'gasto');document.getElementById('modal-gasto').classList.add('open');}
-function deleteGasto(id){const g=getS().gastos.find(x=>x.id===id);const nombre=g?.tipoMovimiento==='ingreso'?'ingreso':'gasto';if(!confirm('¿Eliminar este '+nombre+'?'))return;getS().gastos=getS().gastos.filter(g=>g.id!==id);persist();renderAll()}
+async function deleteGasto(id){const g=getS().gastos.find(x=>x.id===id);const nombre=g?.tipoMovimiento==='ingreso'?'ingreso':'gasto';if(!confirm('¿Eliminar este '+nombre+'?'))return;getS().gastos=getS().gastos.filter(g=>g.id!==id);localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));renderAll();try{await cqPersistGastoDelete(curObra,id);}catch(e){console.warn('Eliminar gasto por ID',e);setSyncStatus('Firebase: error','err');}}
 function toggleAmoTc(kind){return;}
 function openModalAcuerdos(){const acuerdos=ensureAcuerdosMO();const mo=normalizeAcuerdo(acuerdos.mo);document.getElementById('amo-general').value=mo.monto||'';document.getElementById('amo-general-comentario').value=mo.comentario||'';document.getElementById('amo-general-moneda').value='ars';document.getElementById('amo-general-tc').value='';toggleAmoTc('general');const extras=Object.entries(acuerdos.ext);document.getElementById('amo-extras').innerHTML=extras.map(([nombre,acuerdo])=>acuerdoExtraRowHTML(nombre,acuerdo)).join('')||'<div class="muted" id="amo-empty">Sin extras cargados. Usá “Agregar extra”.</div>';openModal('modal-acuerdos')}
 function acuerdoExtraRowHTML(nombre='',acuerdo={monto:0,moneda:'usd',tc:1400,comentario:''}){acuerdo=normalizeAcuerdo(acuerdo);const id='x'+Date.now()+Math.floor(Math.random()*1000);const opts=[...(config.subrubros.ext||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<option value="${s}" ${s===nombre?'selected':''}>${s}</option>`).join('');return`<div data-extra-row="1" data-extra-row-id="${id}" style="border:1px solid #DDE8DE;border-radius:9px;padding:10px;margin-bottom:8px;background:#F8FBF8"><div class="fld-row"><div class="fld"><label>Extra</label><select class="amo-extra-nombre"><option value="">-- Seleccionar --</option>${opts}</select></div><div class="fld"><label>Acordado</label><input class="amo-extra-monto" type="number" min="0" step="0.01" value="${acuerdo.monto||''}"></div></div><div class="fld"><label>Comentario del extra</label><textarea class="amo-extra-comentario" rows="2" placeholder="Agregar comentario u observación">${escComentario(acuerdo.comentario||'')}</textarea></div><div class="fld-row"><div class="fld"><label>Moneda</label><select class="amo-extra-moneda" onchange="toggleAmoTc('${id}')"><option value="ars" selected>$ ARS</option></select></div></div><div style="display:flex;justify-content:flex-end"><button class="btn-del" type="button" onclick="this.closest('[data-extra-row]').remove()">Eliminar</button></div></div>`}
@@ -10430,7 +10513,7 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
       localStorage.setItem('gastos_cur_obra',curObra);
       persist();
     }
-    persistConfig();
+    if(!window.CQ_DEFER_OBRA_CONFIG_SAVE)persistConfig();
     closeModal('modal-obra');
     renderAll();
     if(typeof renderConfig==='function' && document.getElementById('view-config')?.classList.contains('active'))renderConfig();
@@ -10479,6 +10562,10 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     ['panol','Pañol'],
     ['pedidos','Solicitud de pedidos']
   ];
+  /* Materiales ya no se administra desde Gastos: todas las obras se muestran allí
+     y el usuario decide cuáles ocultar usando Archivar dentro de Materiales.
+     Se conserva la clave interna por compatibilidad con versiones anteriores. */
+  const MODULOS_OBRA_UI=MODULOS_OBRA.filter(([id])=>id!=='materiales');
   window.CQ_MODULOS_OBRA=MODULOS_OBRA.map(([id,label])=>({id,label}));
 
   function defaultMap(value=true){
@@ -10528,8 +10615,8 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
               <button type="button" onclick="cqSetObraModulos('ninguno')">Ninguno</button>
             </div>
           </div>
-          <div class="obra-modulos-grid">${MODULOS_OBRA.map(([id,label])=>`<label class="obra-modulo-opt"><input type="checkbox" data-obra-modulo="${id}" checked><span>${label}</span></label>`).join('')}</div>
-          <div class="obra-modulos-note"><strong>Gastos siempre conserva la obra.</strong> Desmarcar un módulo sólo evita que esa obra aparezca allí. “Solo financiero” deja Caja Chica y Caja Gerencia activas.</div>
+          <div class="obra-modulos-grid">${MODULOS_OBRA_UI.map(([id,label])=>`<label class="obra-modulo-opt"><input type="checkbox" data-obra-modulo="${id}" checked><span>${label}</span></label>`).join('')}</div>
+          <div class="obra-modulos-note"><strong>Gastos siempre conserva la obra.</strong> Desmarcar un módulo sólo evita que esa obra aparezca allí. “Solo financiero” deja Caja Chica y Caja Gerencia activas. <strong>Materiales se administra desde su propio botón Archivar.</strong></div>
         </div>`;
       anchor.insertAdjacentElement('afterend',wrap);
     }
@@ -10545,8 +10632,15 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     actions.forEach(b=>b.disabled=disabled);
   }
   function getChecks(){
-    const out={};
-    MODULOS_OBRA.forEach(([id])=>{const el=document.querySelector(`[data-obra-modulo="${id}"]`);out[id]=el?!!el.checked:true});
+    /* Preserva permisos internos no visibles (especialmente materiales) para no
+       alterar datos históricos al editar una obra desde Gastos. */
+    const editId=document.getElementById('obra-id-edit')?.value||'';
+    const obra=editId?(config.obras||[]).find(o=>o.id===editId):null;
+    const out=obra?normalizedMap(obra):defaultMap(true);
+    MODULOS_OBRA_UI.forEach(([id])=>{
+      const el=document.querySelector(`[data-obra-modulo="${id}"]`);
+      out[id]=el?!!el.checked:true;
+    });
     return out;
   }
   window.cqSetObraModulos=function(mode){
@@ -10576,20 +10670,37 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
     /* Dejamos que la validación visual original muestre el mensaje, pero no tocamos permisos si el alta no es válida. */
     if(!label||!short){if(typeof oldSave==='function')oldSave();return;}
     if(!editId&&targetId&&(config.obras||[]).some(o=>o.id===targetId)){if(typeof oldSave==='function')oldSave();return;}
-    if(typeof oldSave==='function')oldSave();
+
+    /*
+      CQ 22/10/2026 — un único guardado de config por edición de obra.
+      v40 guardaba config ANTES de que v41 aplicara los permisos individuales.
+      Eso disparaba dos setDoc seguidos y Firebase podía terminar conservando el
+      primero (sin el cambio de Materiales) si las respuestas llegaban invertidas.
+    */
+    window.CQ_DEFER_OBRA_CONFIG_SAVE=true;
+    try{
+      if(typeof oldSave==='function')oldSave();
+    }finally{
+      window.CQ_DEFER_OBRA_CONFIG_SAVE=false;
+    }
+
     if(!targetId)return;
     const obra=(config.obras||[]).find(o=>o.id===targetId);
     if(!obra)return;
     obra.modulos=(String(obra.id)==='oficina')?defaultMap(true):selected;
     /* Mantiene funcionando el esquema viejo durante la transición: sólo false si no queda ningún módulo activo. */
     obra.integrarModulos=(String(obra.id)==='oficina')?true:Object.values(obra.modulos).some(Boolean);
+
+    /* Ahora sí: se guarda una sola versión con los permisos editables actualizados. */
     if(typeof persistConfig==='function')persistConfig();
     if(typeof renderConfig==='function'&&document.getElementById('view-config')?.classList.contains('active'))renderConfig();
   };
 
   function vinculoSummary(obra){
     if(String(obra?.id)==='oficina')return '<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Sistema</span>';
-    const map=normalizedMap(obra);const total=MODULOS_OBRA.length;const on=Object.values(map).filter(Boolean).length;
+    const map=normalizedMap(obra);
+    const total=MODULOS_OBRA_UI.length;
+    const on=MODULOS_OBRA_UI.filter(([id])=>map[id]!==false).length;
     if(on===total)return `<span class="obra-vinculo-badge all">Todos (${on}/${total})</span>`;
     if(on===0)return '<span class="obra-vinculo-badge none">Solo Gastos</span>';
     return `<span class="obra-vinculo-badge partial">${on}/${total} módulos</span>`;
@@ -14228,5 +14339,557 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
   try{ renderRepFinChart=window.renderRepFinChart; }catch(e){}
 
   normalizeSelection();
+})();
+</script>
+
+<!-- CQ FINAL · Post obras prorrateadas por año -->
+<style id="cq-post-obras-prorrateadas-style">
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-post-prorrateado th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-post-prorrateado td{font-weight:850!important;}
+#view-reporte-financiero .rep-fin-post-note{margin-top:7px!important;}
+</style>
+<script id="cq-post-obras-prorrateadas-final">
+(function(){
+  /* ================================================================
+     CQ · POST OBRAS PRORRATEADAS
+     Misma lógica anual que OFICINA:
+     gasto de cada año / todas las unidades vendidas ese mismo año.
+     ================================================================ */
+  function normPostObra(o){
+    return `${o?.id||''} ${o?.label||''} ${o?.short||''}`
+      .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function isPostObra(o){
+    const t=normPostObra(o);
+    return t.includes('post obra') || t.includes('postobra');
+  }
+  function postObraConfig(){
+    try{return (config.obras||[]).find(isPostObra)||null;}catch(e){return null;}
+  }
+  function postObraSelected(){
+    try{
+      const post=postObraConfig();
+      const ids=typeof window.getReporteFinObrasSel==='function'?window.getReporteFinObrasSel():null;
+      if(post&&Array.isArray(ids))return ids.includes(post.id);
+    }catch(e){}
+    try{return (repSelectedObras()||[]).some(isPostObra);}catch(e){return false;}
+  }
+  function selectedYears(){
+    try{
+      const p=window.CQ_MULTI_MONTH_V31?.['reporte-financiero'];
+      if(Array.isArray(p)&&p.length)return [...new Set(p.map(v=>String(v).slice(0,4)).filter(y=>/^\d{4}$/.test(y)))].sort();
+    }catch(e){}
+    try{
+      if(typeof availableYears==='function')return availableYears('reporte-financiero').map(String).filter(y=>/^\d{4}$/.test(y)).sort();
+    }catch(e){}
+    return [String(new Date().getFullYear())];
+  }
+  function soldDates(fin){
+    let u={};
+    try{u=typeof cqFinUnits==='function'?cqFinUnits(fin||{}):unidadesFin(fin||{});}catch(e){u={};}
+    return ['A','B'].map(k=>u?.[k]).filter(x=>x&&x.etapa&&/^\d{4}-\d{2}/.test(String(x.fechaVenta||''))).map(x=>String(x.fechaVenta));
+  }
+  function soldCounts(fin,info){
+    const counts={};
+    soldDates(fin).forEach(d=>{const y=d.slice(0,4);if(info?.yearData?.[y])counts[y]=(counts[y]||0)+1;});
+    return counts;
+  }
+  function sourceInfo(sourceObra,enabled){
+    const years=selectedYears(),yearData={};
+    years.forEach(y=>yearData[y]={year:y,total:0,units:0,perUnit:0,byMonth:{}});
+    if(!sourceObra||!enabled)return {total:0,byMonth:{},units:0,perUnit:0,enabled:false,years,yearData};
+
+    const gastos=repGetState(sourceObra.id).gastos||[];
+    gastos.forEach(g=>{
+      const y=String(g.fecha||'').slice(0,4);
+      if(!yearData[y])return;
+      const usd=toUSD(g.monto,g.moneda,g.tc)||0;
+      yearData[y].total+=usd;
+      const ym=String(g.fecha||'').slice(0,7);
+      if(/^\d{4}-\d{2}$/.test(ym))yearData[y].byMonth[ym]=(yearData[y].byMonth[ym]||0)+usd;
+    });
+
+    /* Denominador: todas las unidades vendidas en ESE año. */
+    (config.obras||[]).forEach(o=>{
+      if(isPostObra(o))return;
+      try{if(typeof isObraSimple==='function'&&isObraSimple(o.id))return;}catch(e){}
+      const fin=repGetState(o.id).financiero||{};
+      soldDates(fin).forEach(d=>{const y=d.slice(0,4);if(yearData[y])yearData[y].units++;});
+    });
+
+    Object.values(yearData).forEach(d=>d.perUnit=d.units?d.total/d.units:0);
+    const costYears=Object.values(yearData).filter(d=>Math.abs(d.total)>0.000001);
+    const total=costYears.reduce((a,d)=>a+d.total,0);
+    const units=costYears.reduce((a,d)=>a+d.units,0);
+    const byMonth={};
+    costYears.forEach(d=>Object.entries(d.byMonth).forEach(([ym,v])=>byMonth[ym]=(byMonth[ym]||0)+v));
+    return {total,byMonth,units,perUnit:units?total/units:0,enabled:true,years,yearData};
+  }
+  function allocatedCost(info,counts){
+    let total=0;
+    Object.entries(counts||{}).forEach(([y,n])=>{const yd=info?.yearData?.[y];if(yd&&yd.units)total+=yd.perUnit*n;});
+    return total;
+  }
+  function allocatedEntries(sourceObra,info,counts,prefix,label){
+    const out=[];
+    if(!sourceObra||!info?.enabled)return out;
+    (repGetState(sourceObra.id).gastos||[]).forEach((g,i)=>{
+      const y=String(g.fecha||'').slice(0,4),yd=info.yearData?.[y],own=counts?.[y]||0;
+      if(!yd||!yd.total||!yd.units||!own)return;
+      const share=own/yd.units;
+      const usd=(toUSD(g.monto,g.moneda,g.tc)||0)*share;
+      if(!usd)return;
+      out.push({id:`${prefix}_${y}_${i}`,fecha:g.fecha,cat:'ofi',subrubro:label,moneda:'usd',monto:usd,tc:1,tipoMovimiento:g.tipoMovimiento||'gasto'});
+    });
+    return out;
+  }
+
+  window.cqPostObraProrrateoInfo=function(){return sourceInfo(postObraConfig(),postObraSelected());};
+
+  /* Filas financieras: sumar Post obra al ajuste y excluir la propia solapa como proyecto. */
+  const prevRows=window.repFinRowsData;
+  if(typeof prevRows==='function'){
+    window.repFinRowsData=function(){
+      const base=(prevRows.apply(this,arguments)||[]).filter(r=>!isPostObra(r?.o));
+      const postObra=postObraConfig();
+      const postInfo=sourceInfo(postObra,postObraSelected());
+      let officeInfo={enabled:false,yearData:{}};
+      try{officeInfo=typeof officeFixedCostInfo==='function'?officeFixedCostInfo():officeInfo;}catch(e){}
+      let officeObra=null;
+      try{officeObra=(config.obras||[]).find(o=>String(o.id)==='oficina')||{id:'oficina'};}catch(e){officeObra={id:'oficina'};}
+
+      return base.map(r=>{
+        const postCounts=soldCounts(r.fin||{},postInfo);
+        const postCost=allocatedCost(postInfo,postCounts);
+        const officeCounts=soldCounts(r.fin||{},officeInfo);
+        const fixedEntries=allocatedEntries(officeObra,officeInfo,officeCounts,'fixed_year','Costos fijos prorrateados');
+        const postEntries=allocatedEntries(postObra,postInfo,postCounts,'post_year','Post obras prorrateadas');
+        const adjusted=calcularMetricasFinancieras(r.fin||{},[...(r.s?.gastos||[]),...fixedEntries,...postEntries]);
+        const net=(Number(r.direct?.margen)||0)-(Number(r.fixedCost)||0)-postCost;
+        return {...r,postCost,postCounts,postInfo,adjusted,net};
+      });
+    };
+    try{repFinRowsData=window.repFinRowsData;}catch(e){}
+  }
+
+  /* Métrica/botón superior, colocada justo debajo de Costos fijos en el orden lógico. */
+  const metrics=window.REP_FIN_METRICS||{};
+  if(!metrics.postObras){
+    const ordered={};
+    Object.entries(metrics).forEach(([k,v])=>{
+      ordered[k]=v;
+      if(k==='costosFijos')ordered.postObras={label:'Post obras prorrateadas',type:'usd'};
+    });
+    if(!ordered.postObras)ordered.postObras={label:'Post obras prorrateadas',type:'usd'};
+    window.REP_FIN_METRICS=ordered;
+  }
+  const prevMetricValue=window.repFinMetricValueRow;
+  window.repFinMetricValueRow=function(r,key){
+    if(key==='postObras')return Number(r?.postCost)||0;
+    return typeof prevMetricValue==='function'?prevMetricValue(r,key):0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow;}catch(e){}
+
+  /* Nueva fila debajo de Costos fijos prorrateados. */
+  const prevPivot=window.repFinPivot;
+  if(typeof prevPivot==='function'){
+    window.repFinPivot=function(rows){
+      let html=prevPivot.apply(this,arguments);
+      if(!Array.isArray(rows)||!rows.length)return html;
+      const vals=rows.map(r=>Number(r?.postCost)||0),sum=vals.reduce((a,v)=>a+v,0);
+      const money=v=>fmt(v,'usd');
+      const cells=vals.map(v=>`<td class="${v<0?'bad':v>0?'good':''}">${money(v)}</td>`).join('');
+      const row=`<tr class="rep-row-post-prorrateado"><th>Post obras prorrateadas</th>${cells}<td class="rep-total-col">${money(sum)}</td></tr>`;
+      const re=/(<tr[^>]*>\s*<th>Costos fijos prorrateados<\/th>[\s\S]*?<\/tr>)/i;
+      if(re.test(html))html=html.replace(re,'$1'+row);
+      return html;
+    };
+    try{repFinPivot=window.repFinPivot;}catch(e){}
+  }
+
+  /* Detalle anual y texto explicativo final. */
+  const prevRender=window.renderReporteFinancieroComparativo;
+  if(typeof prevRender==='function'){
+    window.renderReporteFinancieroComparativo=function(){
+      const out=prevRender.apply(this,arguments);
+      try{
+        const el=document.getElementById('reporte-financiero');if(!el)return out;
+        const info=sourceInfo(postObraConfig(),postObraSelected());
+        el.querySelector('.rep-fin-post-note')?.remove();
+        if(info.enabled){
+          const parts=Object.values(info.yearData||{}).filter(d=>Math.abs(d.total)>0.000001).sort((a,b)=>a.year.localeCompare(b.year)).map(d=>`<strong>${d.year}:</strong> ${fmt(d.total,'usd')} ÷ ${d.units} un. = ${d.units?fmt(d.perUnit,'usd'):'U$S 0'} por unidad`);
+          const anchor=el.querySelector('.rep-fin-fixed-note');
+          if(parts.length){
+            const n=document.createElement('div');n.className='rep-fin-fixed-note rep-fin-post-note';n.innerHTML=`<strong>Post obras prorrateadas por año:</strong> ${parts.join(' &nbsp;·&nbsp; ')}. Cada gasto de Post obra se imputa únicamente a unidades vendidas en su mismo año.`;
+            if(anchor)anchor.insertAdjacentElement('afterend',n);else el.prepend(n);
+          }
+        }else{
+          el.querySelectorAll('.rep-fin-pivot tbody tr').forEach(tr=>{
+            const t=(tr.querySelector('th')?.textContent||'').trim().toLowerCase();
+            if(t==='post obras prorrateadas')tr.remove();
+          });
+        }
+        const note=el.querySelector('.rep-mini-note');
+        if(note){
+          const officeOn=(()=>{
+            try{
+              const ids=typeof window.getReporteFinObrasSel==='function'?window.getReporteFinObrasSel():null;
+              if(Array.isArray(ids))return ids.includes('oficina');
+            }catch(e){}
+            try{return (repSelectedObras()||[]).some(o=>String(o?.id)==='oficina');}catch(e){return false;}
+          })();
+          const postOn=info.enabled;
+          if(officeOn&&postOn)note.textContent='Capital máximo, ROE, TIR, Payback y Capital/Costo incluyen costos fijos de Oficina y Post obras prorrateadas. Ganancia proyectos se muestra antes de ambos; Resultado neto descuenta ambos.';
+          else if(postOn)note.textContent='Capital máximo, ROE, TIR, Payback y Capital/Costo incluyen Post obras prorrateadas. Ganancia proyectos se muestra antes de ese prorrateo; Resultado neto lo descuenta.';
+        }
+      }catch(e){console.warn('Post obras prorrateadas:',e);}
+      return out;
+    };
+    try{renderReporteFinancieroComparativo=window.renderReporteFinancieroComparativo;}catch(e){}
+  }
+})();
+
+</script>
+
+
+<!-- CQ FINAL · Ingreso neto + Rentabilidad en Reporte financiero -->
+<style id="cq-final-ingreso-neto-rentabilidad-style">
+#view-reporte-financiero .rep-fin-metric-btn.metric-ingresoNeto{background:#EEF8F7!important;border-color:#B8DDD8!important;color:#2C756E!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-rentabilidad{background:#F5F1FA!important;border-color:#D7C6E6!important;color:#73578A!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-ingresoNeto.active{background:linear-gradient(135deg,#2F7F77,#55A79D)!important;border-color:#2F7F77!important;color:#fff!important;}
+#view-reporte-financiero .rep-fin-metric-btn.metric-rentabilidad.active{background:linear-gradient(135deg,#73578A,#9877AE)!important;border-color:#73578A!important;color:#fff!important;}
+#view-reporte-financiero .rep-fin-chart-shell.metric-ingresoNeto .rep-fin-fill{background:linear-gradient(90deg,#62B8AE,#2F7F77)!important;}
+#view-reporte-financiero .rep-fin-chart-shell.metric-rentabilidad .rep-fin-fill{background:linear-gradient(90deg,#A98AC0,#73578A)!important;}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-ingreso-neto th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-ingreso-neto td{font-weight:850!important;color:#2C756E!important;}
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-rentabilidad th,
+#view-reporte-financiero .rep-fin-pivot tr.rep-row-rentabilidad td{font-weight:900!important;color:#73578A!important;}
+</style>
+<script id="cq-final-ingreso-neto-rentabilidad-js">
+(function(){
+  /* Botones del comparativo: Ingreso neto después de Comisión y Rentabilidad después de Margen %. */
+  const metrics=window.REP_FIN_METRICS||{};
+  const ordered={};
+  let ingresoInserted=false, rentInserted=false;
+  Object.entries(metrics).forEach(([k,v])=>{
+    if(k==='ingresoNeto'||k==='rentabilidad')return;
+    ordered[k]=v;
+    if(k==='comision'){
+      ordered.ingresoNeto={label:'Ingreso neto',type:'usd'};
+      ingresoInserted=true;
+    }
+    if(k==='margenPct'){
+      ordered.rentabilidad={label:'Rentabilidad',type:'pct'};
+      rentInserted=true;
+    }
+  });
+  if(!ingresoInserted)ordered.ingresoNeto={label:'Ingreso neto',type:'usd'};
+  if(!rentInserted)ordered.rentabilidad={label:'Rentabilidad',type:'pct'};
+  window.REP_FIN_METRICS=ordered;
+
+  const prevMetricValue=window.repFinMetricValueRow;
+  window.repFinMetricValueRow=function(r,key){
+    const direct=r?.direct||{};
+    if(key==='ingresoNeto')return (Number(direct.totalIngresos)||0)-(Number(direct.comision)||0);
+    if(key==='rentabilidad'){
+      const costo=Number(direct.costoTotal)||0;
+      return costo>0?(Number(direct.margen)||0)/costo:NaN;
+    }
+    return typeof prevMetricValue==='function'?prevMetricValue(r,key):0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow;}catch(e){}
+
+  /* Filas de la tabla principal. */
+  const prevPivot=window.repFinPivot;
+  if(typeof prevPivot==='function'){
+    window.repFinPivot=function(rows){
+      let html=prevPivot.apply(this,arguments);
+      if(!Array.isArray(rows)||!rows.length)return html;
+
+      const money=v=>fmt(v,'usd');
+      const pct=v=>fmtPctFin(v);
+      const ingresoNeto=rows.map(r=>(Number(r?.direct?.totalIngresos)||0)-(Number(r?.direct?.comision)||0));
+      const rentabilidad=rows.map(r=>{
+        const costo=Number(r?.direct?.costoTotal)||0;
+        return costo>0?(Number(r?.direct?.margen)||0)/costo:NaN;
+      });
+      const sum=a=>a.reduce((acc,v)=>acc+(Number(v)||0),0);
+      const avg=a=>{
+        const vals=a.filter(v=>Number.isFinite(Number(v))).map(Number);
+        return vals.length?vals.reduce((x,v)=>x+v,0)/vals.length:NaN;
+      };
+      const moneyCells=ingresoNeto.map(v=>`<td class="${v<0?'bad':v>0?'good':''}">${money(v)}</td>`).join('');
+      const rentCells=rentabilidad.map(v=>`<td class="${Number.isFinite(v)?(v<0?'bad':v>0?'good':''):''}">${pct(v)}</td>`).join('');
+      const ingresoRow=`<tr class="rep-row-ingreso-neto"><th>Ingreso neto</th>${moneyCells}<td class="rep-total-col">${money(sum(ingresoNeto))}</td></tr>`;
+      const rentRow=`<tr class="rep-row-rentabilidad"><th>Rentabilidad</th>${rentCells}<td class="rep-total-col avg">${pct(avg(rentabilidad))}</td></tr>`;
+
+      const reCom=/(<tr[^>]*>\s*<th>Comisión total<\/th>[\s\S]*?<\/tr>)/i;
+      const reMarg=/(<tr[^>]*>\s*<th>Margen %<\/th>[\s\S]*?<\/tr>)/i;
+      if(reCom.test(html))html=html.replace(reCom,'$1'+ingresoRow);
+      if(reMarg.test(html))html=html.replace(reMarg,'$1'+rentRow);
+      return html;
+    };
+    try{repFinPivot=window.repFinPivot;}catch(e){}
+  }
+})();
+</script>
+
+<!-- CQ FINAL · Margen % + Rentabilidad después de Resultado neto -->
+<script id="cq-final-margen-rentabilidad-netos-js">
+(function(){
+  /*
+    Margen % y Rentabilidad pasan a ser métricas posteriores al Resultado neto.
+    - Margen % = Resultado neto / Ingreso neto (Ingreso total - Comisión).
+    - Rentabilidad = Resultado neto / (Costo total + Costos fijos + Post obras).
+  */
+  function neto(r){
+    return Number(r?.net)||0;
+  }
+  function ingresoNeto(r){
+    return (Number(r?.direct?.totalIngresos)||0) - (Number(r?.direct?.comision)||0);
+  }
+  function costoTotalAjustado(r){
+    return (Number(r?.direct?.costoTotal)||0)
+      + (Number(r?.fixedCost)||0)
+      + (Number(r?.postCost)||0);
+  }
+  function margenNetoPct(r){
+    const ingreso=ingresoNeto(r);
+    return ingreso>0 ? neto(r)/ingreso : NaN;
+  }
+  function rentabilidadNeta(r){
+    const costo=costoTotalAjustado(r);
+    return costo>0 ? neto(r)/costo : NaN;
+  }
+
+  /* Orden de botones: Resultado neto → Margen % → Rentabilidad. */
+  const metrics=window.REP_FIN_METRICS||{};
+  const ordered={};
+  let inserted=false;
+  Object.entries(metrics).forEach(([k,v])=>{
+    if(k==='margenPct'||k==='rentabilidad')return;
+    ordered[k]=v;
+    if(k==='resultadoNeto'){
+      ordered.margenPct={label:'Margen %',type:'pct'};
+      ordered.rentabilidad={label:'Rentabilidad',type:'pct'};
+      inserted=true;
+    }
+  });
+  if(!inserted){
+    ordered.margenPct={label:'Margen %',type:'pct'};
+    ordered.rentabilidad={label:'Rentabilidad',type:'pct'};
+  }
+  window.REP_FIN_METRICS=ordered;
+
+  /* Gráficos/botones: usar las fórmulas netas nuevas. */
+  const prevMetricValue=window.repFinMetricValueRow;
+  window.repFinMetricValueRow=function(r,key){
+    if(key==='margenPct')return margenNetoPct(r);
+    if(key==='rentabilidad')return rentabilidadNeta(r);
+    return typeof prevMetricValue==='function'?prevMetricValue(r,key):0;
+  };
+  try{repFinMetricValueRow=window.repFinMetricValueRow;}catch(e){}
+
+  /* Tabla: quitar Margen % y Rentabilidad de su posición anterior y ponerlas
+     inmediatamente después de Resultado neto. */
+  const prevPivot=window.repFinPivot;
+  if(typeof prevPivot==='function'){
+    window.repFinPivot=function(rows){
+      let html=prevPivot.apply(this,arguments);
+      if(!Array.isArray(rows)||!rows.length)return html;
+
+      /* Quitar las filas anteriores para evitar duplicados y posición vieja. */
+      html=html.replace(/<tr[^>]*>\s*<th>Margen %<\/th>[\s\S]*?<\/tr>/ig,'');
+      html=html.replace(/<tr[^>]*>\s*<th>Rentabilidad<\/th>[\s\S]*?<\/tr>/ig,'');
+
+      const pct=v=>fmtPctFin(v);
+      const marginVals=rows.map(margenNetoPct);
+      const rentVals=rows.map(rentabilidadNeta);
+      const cell=v=>`<td class="${Number.isFinite(v)?(v<0?'bad':v>0?'good':''):''}">${pct(v)}</td>`;
+      const marginCells=marginVals.map(cell).join('');
+      const rentCells=rentVals.map(cell).join('');
+
+      const totalNeto=rows.reduce((a,r)=>a+neto(r),0);
+      const totalIngreso=rows.reduce((a,r)=>a+ingresoNeto(r),0);
+      const totalCosto=rows.reduce((a,r)=>a+costoTotalAjustado(r),0);
+      const totalMargen=totalIngreso>0?totalNeto/totalIngreso:NaN;
+      const totalRent=totalCosto>0?totalNeto/totalCosto:NaN;
+
+      const marginRow=`<tr class="rep-row-soft-margen rep-row-margen-neto"><th>Margen %</th>${marginCells}<td class="rep-total-col avg">${pct(totalMargen)}</td></tr>`;
+      const rentRow=`<tr class="rep-row-rentabilidad rep-row-rentabilidad-neta"><th>Rentabilidad</th>${rentCells}<td class="rep-total-col avg">${pct(totalRent)}</td></tr>`;
+
+      const reNeto=/(<tr[^>]*>\s*<th>Resultado neto<\/th>[\s\S]*?<\/tr>)/i;
+      if(reNeto.test(html))html=html.replace(reNeto,'$1'+marginRow+rentRow);
+      return html;
+    };
+    try{repFinPivot=window.repFinPivot;}catch(e){}
+  }
+
+  /* Aclaración de lectura del reporte. */
+  const prevRender=window.renderReporteFinancieroComparativo;
+  if(typeof prevRender==='function'){
+    window.renderReporteFinancieroComparativo=function(){
+      const out=prevRender.apply(this,arguments);
+      try{
+        const el=document.getElementById('reporte-financiero');
+        const note=el?.querySelector('.rep-mini-note');
+        if(note){
+          const base=note.textContent||'';
+          const extra=' Margen % y Rentabilidad se calculan sobre el Resultado neto, por lo que incluyen el impacto de Costos fijos y Post obras prorrateadas cuando están seleccionados.';
+          if(!base.includes('Margen % y Rentabilidad se calculan'))note.textContent=base+extra;
+        }
+      }catch(e){}
+      return out;
+    };
+    try{renderReporteFinancieroComparativo=window.renderReporteFinancieroComparativo;}catch(e){}
+  }
+})();
+</script>
+
+<!-- CQ FINAL · Reporte financiero: gráfico de líneas por obra -->
+<style id="cq-fin-line-chart-final-style">
+#view-reporte-financiero .cq-fin-line-card{
+  background:#fff;
+  border:1px solid #DDE6EA;
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 3px 14px rgba(6,30,85,.07);
+}
+#view-reporte-financiero .cq-fin-line-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  padding:13px 15px 8px;
+}
+#view-reporte-financiero .cq-fin-line-title{
+  font-size:12px;
+  font-weight:950;
+  color:#102033;
+  letter-spacing:-.01em;
+}
+#view-reporte-financiero .cq-fin-line-sub{
+  margin-top:2px;
+  font-size:10px;
+  font-weight:700;
+  color:#81909D;
+}
+#view-reporte-financiero .cq-fin-line-scroll{
+  width:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  padding:0 6px 8px;
+}
+#view-reporte-financiero .cq-fin-line-svg{
+  display:block;
+  width:100%;
+  min-width:760px;
+  height:auto;
+  overflow:visible;
+}
+#view-reporte-financiero .cq-fin-line-grid{stroke:#DDE6EA;stroke-width:1;stroke-dasharray:4 5;}
+#view-reporte-financiero .cq-fin-line-zero{stroke:#81909D;stroke-width:1.35;}
+#view-reporte-financiero .cq-fin-line-axis{fill:#718190;font-size:11px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+#view-reporte-financiero .cq-fin-line-xlbl{fill:#425466;font-size:11px;font-weight:850;font-family:'Space Grotesk',sans-serif;}
+#view-reporte-financiero .cq-fin-line-path{fill:none;stroke:#169466;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;}
+#view-reporte-financiero .cq-fin-line-area{fill:url(#cqFinLineArea);opacity:.16;}
+#view-reporte-financiero .cq-fin-line-point{fill:#169466;stroke:#fff;stroke-width:2.6;}
+#view-reporte-financiero .cq-fin-line-point.neg{fill:#D64C4C;}
+#view-reporte-financiero .cq-fin-line-value{fill:#167A59;font-size:10.5px;font-weight:950;font-family:'JetBrains Mono',monospace;paint-order:stroke;stroke:#fff;stroke-width:3.5px;stroke-linejoin:round;}
+#view-reporte-financiero .cq-fin-line-value.neg{fill:#C53E3E;}
+#view-reporte-financiero .cq-fin-line-empty{padding:28px;text-align:center;color:#81909D;font-size:12px;font-weight:700;}
+#view-reporte-financiero .cq-fin-line-axis-title{fill:#617485;font-size:10px;font-weight:850;font-family:'Space Grotesk',sans-serif;letter-spacing:.02em;}
+@media(max-width:650px){
+  #view-reporte-financiero .cq-fin-line-head{padding:11px 12px 6px;}
+  #view-reporte-financiero .cq-fin-line-svg{min-width:680px;}
+}
+</style>
+<script id="cq-fin-line-chart-final-js">
+(function(){
+  function esc(v){
+    return String(v??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]});
+  }
+  function metricOrder(){return Object.keys(window.REP_FIN_METRICS||{});}
+  function selectedMetrics(){
+    const order=metricOrder();
+    let sel=Array.isArray(window.repFinMetricKeys)?window.repFinMetricKeys.filter(k=>order.includes(k)):[];
+    if(!sel.length){
+      const k=order.includes(window.repFinMetricKey)?window.repFinMetricKey:(order.includes('resultadoNeto')?'resultadoNeto':order[0]);
+      if(k)sel=[k];
+    }
+    return order.filter(k=>sel.includes(k));
+  }
+  function axisLabel(v,key){
+    const type=window.REP_FIN_METRICS?.[key]?.type;
+    if(!Number.isFinite(Number(v)))return '';
+    if(type==='pct')return (Number(v)*100).toLocaleString('es-AR',{maximumFractionDigits:1})+'%';
+    if(type==='payback')return Number(v).toLocaleString('es-AR',{maximumFractionDigits:1});
+    return Number(v).toLocaleString('es-AR',{maximumFractionDigits:0});
+  }
+  function lineChart(rows,key){
+    const meta=window.REP_FIN_METRICS?.[key]||{};
+    const raw=rows.map(r=>Number(window.repFinMetricValueRow(r,key)));
+    const valid=raw.filter(Number.isFinite);
+    if(!valid.length){
+      return `<div class="cq-fin-line-card metric-${esc(key)}"><div class="cq-fin-line-head"><div><div class="cq-fin-line-title">Comparativo · ${esc(meta.label||key)}</div><div class="cq-fin-line-sub">Obras seleccionadas</div></div></div><div class="cq-fin-line-empty">No hay datos para graficar.</div></div>`;
+    }
+
+    const W=Math.max(820,rows.length*132+115),H=360;
+    const L=86,R=30,T=48,B=72;
+    const PW=W-L-R,PH=H-T-B;
+    let min=Math.min(...valid,0),max=Math.max(...valid,0);
+    if(min===max){const bump=Math.max(Math.abs(min)*.15,1);min-=bump;max+=bump;}
+    const range=max-min||1;
+    const pad=range*.10;
+    min-=pad; max+=pad;
+    if(valid.every(v=>v>=0))min=0;
+    if(valid.every(v=>v<=0))max=0;
+    const yr=max-min||1;
+    const y=v=>T+(max-v)/yr*PH;
+    const step=rows.length>1?PW/(rows.length-1):0;
+    const x=i=>rows.length>1?L+i*step:L+PW/2;
+    const zeroY=y(0);
+
+    const ticks=5;
+    let grid='',yt='';
+    for(let i=0;i<=ticks;i++){
+      const val=max-(yr/ticks)*i;
+      const yy=T+(PH/ticks)*i;
+      grid+=`<line class="cq-fin-line-grid" x1="${L}" y1="${yy.toFixed(2)}" x2="${W-R}" y2="${yy.toFixed(2)}"/>`;
+      yt+=`<text class="cq-fin-line-axis" x="${L-12}" y="${(yy+4).toFixed(2)}" text-anchor="end">${esc(axisLabel(val,key))}</text>`;
+    }
+
+    const points=raw.map((v,i)=>Number.isFinite(v)?[x(i),y(v),v,i]:null).filter(Boolean);
+    const path=points.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
+    let area='';
+    if(points.length>1){
+      const first=points[0],last=points[points.length-1];
+      const base=Math.min(Math.max(zeroY,T),T+PH);
+      area=`M ${first[0].toFixed(2)} ${base.toFixed(2)} L ${points.map(p=>p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' L ')} L ${last[0].toFixed(2)} ${base.toFixed(2)} Z`;
+    }
+
+    const xlabels=rows.map((r,i)=>`<text class="cq-fin-line-xlbl" x="${x(i).toFixed(2)}" y="${H-34}" text-anchor="middle">${esc(r.o.short||r.o.label)}</text>`).join('');
+    const dots=points.map(p=>{
+      const [xx,yy,v]=p,neg=v<0;
+      const labelY=yy < T+24 ? yy+24 : yy-13;
+      return `<circle class="cq-fin-line-point ${neg?'neg':''}" cx="${xx.toFixed(2)}" cy="${yy.toFixed(2)}" r="5.7"><title>${esc(rows[p[3]].o.short||rows[p[3]].o.label)} · ${esc(window.repFinMetricTextRow(v,key))}</title></circle><text class="cq-fin-line-value ${neg?'neg':''}" x="${xx.toFixed(2)}" y="${labelY.toFixed(2)}" text-anchor="middle">${esc(window.repFinMetricTextRow(v,key))}</text>`;
+    }).join('');
+
+    return `<div class="cq-fin-line-card metric-${esc(key)} cq-fin-metric-panel"><div class="cq-fin-line-head"><div><div class="cq-fin-line-title">Comparativo · ${esc(meta.label||key)}</div><div class="cq-fin-line-sub">Obras seleccionadas · eje horizontal por obra</div></div></div><div class="cq-fin-line-scroll"><svg class="cq-fin-line-svg" viewBox="0 0 ${W} ${H}" style="min-width:${W}px" role="img" aria-label="${esc(meta.label||key)} por obra"><defs><linearGradient id="cqFinLineArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#169466" stop-opacity=".9"/><stop offset="100%" stop-color="#169466" stop-opacity=".08"/></linearGradient></defs>${grid}${zeroY>=T&&zeroY<=T+PH?`<line class="cq-fin-line-zero" x1="${L}" y1="${zeroY.toFixed(2)}" x2="${W-R}" y2="${zeroY.toFixed(2)}"/>`:''}${yt}${area?`<path class="cq-fin-line-area" d="${area}"/>`:''}${path?`<path class="cq-fin-line-path" d="${path}"/>`:''}${dots}${xlabels}<text class="cq-fin-line-axis-title" x="${(L+PW/2).toFixed(2)}" y="${H-8}" text-anchor="middle">OBRAS</text></svg></div></div>`;
+  }
+
+  window.renderRepFinChart=function(rows){
+    const metrics=window.REP_FIN_METRICS||{};
+    const selected=selectedMetrics();
+    const tabs=Object.entries(metrics).map(([k,info])=>{
+      const active=selected.includes(k);
+      return `<button type="button" class="rep-fin-metric-btn metric-${esc(k)} ${active?'active':''}" aria-pressed="${active?'true':'false'}" onclick="setReporteFinMetric('${esc(k)}')">${esc(info.label)}</button>`;
+    }).join('');
+    const charts=selected.map(k=>lineChart(rows,k)).join('');
+    return `<div class="cq-fin-multi-shell"><div class="rep-fin-metric-tabs">${tabs}</div><div class="cq-fin-selected-charts">${charts}</div></div>`;
+  };
+  try{renderRepFinChart=window.renderRepFinChart;}catch(e){}
 })();
 </script>

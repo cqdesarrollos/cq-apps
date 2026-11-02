@@ -5335,12 +5335,13 @@ function obrasGastosTodasMateriales(){
     ? obrasGastosMateriales.filter(function(o){return o&&o.id&&o.id!=='oficina';})
     : [];
 }
+// CQ 22/10/2026 — Materiales muestra TODAS las obras de Gastos.
+// El tilde/modulo "Materiales" y el estado archived de Gastos ya no filtran esta planilla.
+// La visibilidad del Reporte se administra exclusivamente con Archivar/Restaurar dentro de Materiales.
 function obraModuloMaterialesHabilitado(o){
-  if(!o||o.archived===true)return false;
+  if(!o)return false;
   if(String(o.id)==='oficina')return false;
-  var legacyDefault=(o.integrarModulos!==false);
-  var mods=(o.modulos&&typeof o.modulos==='object'&&!Array.isArray(o.modulos))?o.modulos:null;
-  return mods&&mods.materiales!==undefined ? mods.materiales!==false : legacyDefault;
+  return true;
 }
 function obrasGastosActivasMateriales(){
   return obrasGastosTodasMateriales().filter(function(o){
@@ -5349,8 +5350,8 @@ function obrasGastosActivasMateriales(){
 }
 function obraGastosPorClaveMateriales(clave){
   if(!clave)return null;
-  // Para resolver históricos se consulta también una obra marcada "Solo Gastos".
-  // Esa obra no se inyecta como nueva selección, pero sus registros viejos conservan nombre.
+  // Todas las obras de Gastos participan del catálogo de Materiales; esta búsqueda también
+  // conserva el nombre correcto de registros históricos.
   return obrasGastosTodasMateriales().find(function(o){
     return [o.label,o.short,o.id].some(function(v){return claveLoteMz(v)===clave;});
   })||null;
@@ -7647,6 +7648,12 @@ if(!state.obraNombres) state.obraNombres={};
 if(!state.obraOrder) state.obraOrder=[];
 if(!state.extraCats) state.extraCats=[];
 if(!state.deletedMatIds) state.deletedMatIds=[];
+// CQ 26/10/2026 — lápidas persistentes por identidad. Evitan que una integración
+// vuelva a crear con otro ID un material que el usuario eliminó expresamente.
+if(!state.deletedMaterialKeys) state.deletedMaterialKeys=[];
+// CQ 26/10/2026 — tombstones de cargas automáticas por identidad lógica.
+// Un integrationId puede cambiar al republicarse desde Caja; el movimiento de origen no.
+if(!state.ignoredIntegrationKeys) state.ignoredIntegrationKeys=[];
 if(!state.deletedCatNames) state.deletedCatNames=[];
 if(!state.matNombres) state.matNombres={};
 if(!state.matCodigos) state.matCodigos={};
@@ -7709,7 +7716,37 @@ function aplicarNombresMateriales(){
   });
 }
 
-function isMatDeleted(id){ return (state.deletedMatIds||[]).indexOf(id)>=0; }
+function isMatDeleted(id){
+  // Tolerar IDs numéricos/string provenientes de distintas versiones/Firebase.
+  return (state.deletedMatIds||[]).some(function(x){return String(x)===String(id);});
+}
+function cqDeletedMaterialNameKey(nombre){
+  var k=claveMaterialUnificar(nombre||'');
+  return k?'name:'+k:'';
+}
+function cqMaterialNameBloqueado(nombre){
+  var k=cqDeletedMaterialNameKey(nombre);
+  return !!k && (state.deletedMaterialKeys||[]).indexOf(k)>=0;
+}
+function cqBloquearNombreMaterialEliminado(nombre){
+  var k=cqDeletedMaterialNameKey(nombre);
+  if(!k)return;
+  if(!Array.isArray(state.deletedMaterialKeys))state.deletedMaterialKeys=[];
+  if(state.deletedMaterialKeys.indexOf(k)<0)state.deletedMaterialKeys.push(k);
+}
+function cqDesbloquearNombreMaterial(nombre){
+  var k=cqDeletedMaterialNameKey(nombre);
+  if(!k)return;
+  state.deletedMaterialKeys=(state.deletedMaterialKeys||[]).filter(function(x){return x!==k;});
+}
+function cqHayOtroMaterialActivoMismoNombre(mat){
+  if(!mat)return false;
+  var k=claveMaterialUnificar(mat.mat||'');
+  if(!k)return false;
+  return getAllMats().some(function(x){
+    return x && String(x.id)!==String(mat.id) && !isMatDeleted(x.id) && claveMaterialUnificar(x.mat||'')===k;
+  });
+}
 function isCatDeleted(name){ return (state.deletedCatNames||[]).indexOf(name)>=0; }
 
 var EXTRA_CAT_COLORS=['#7B3FA0','#2B7BE0','#C8882A','#1E8DB4','#3A8A20','#C0392B','#6D5BD0','#8A6D2B','#00A6A6','#B8690A'];
@@ -7806,6 +7843,7 @@ function promptNuevaCategoria(targetSelectId){
 
 var modoFirebase=true;
 var unsubMateriales=null;
+var unsubConfigMateriales=null;
 var unsubIntegraciones=null;
 var procesandoIntegraciones=false;
 var suppressRemoteUntil=0;
@@ -7926,6 +7964,32 @@ function cqIgnorarIntegracion(iid){
   if(!iid)return;
   if(!Array.isArray(state.ignoredIntegrationIds))state.ignoredIntegrationIds=[];
   if(!cqIntegracionIgnorada(iid))state.ignoredIntegrationIds.push(iid);
+}
+
+// Identidad estable de una carga automática. Caja Gerencia puede volver a publicar
+// el mismo movimiento con otro integrationId; sourceMovementId + obra siguen siendo
+// la identidad real del vínculo. Para Acopio/Pañol/Caja Chica también es segura.
+function cqClaveIntegracionLogica(x){
+  if(!x)return '';
+  var origen=cqOrigenCargaNormalizado(x);
+  var mov=String(x.sourceMovementId||'').trim();
+  if(!origen||!mov)return '';
+  var obra=cqClaveObraIntegracion(x.obraNameOrigen||x.obraName||'');
+  return 'src:'+origen+'|mov:'+mov+'|obra:'+obra;
+}
+function cqIntegracionLogicaIgnorada(x){
+  var k=cqClaveIntegracionLogica(x);
+  return !!k && Array.isArray(state.ignoredIntegrationKeys)
+    && state.ignoredIntegrationKeys.some(function(v){return String(v)===k;});
+}
+function cqIgnorarIntegracionLogica(x){
+  var k=cqClaveIntegracionLogica(x);
+  if(!k)return '';
+  if(!Array.isArray(state.ignoredIntegrationKeys))state.ignoredIntegrationKeys=[];
+  if(!state.ignoredIntegrationKeys.some(function(v){return String(v)===k;})){
+    state.ignoredIntegrationKeys.push(k);
+  }
+  return k;
 }
 
 
@@ -8058,6 +8122,9 @@ function cqCrearMaterialOrigenSeguroMateriales(nombre,codigo,categoria,origen){
   if(!limpio)return null;
   var existe=cqBuscarMaterialExactoPorNombreMateriales(limpio);
   if(existe)return existe;
+  // Si el usuario borró expresamente este nombre del catálogo, una integración
+  // no puede recrearlo con un ID nuevo. Las cargas históricas se conservan.
+  if(cqMaterialNameBloqueado(limpio))return null;
 
   var maxId=10000;
   getAllMats().forEach(function(m){
@@ -8285,6 +8352,8 @@ function normalizeState(){
   if(!state.obraOrder)state.obraOrder=[];
   if(!state.extraCats)state.extraCats=[];
   if(!state.deletedMatIds)state.deletedMatIds=[];
+  if(!state.deletedMaterialKeys)state.deletedMaterialKeys=[];
+  if(!state.ignoredIntegrationKeys)state.ignoredIntegrationKeys=[];
   if(!state.deletedCatNames)state.deletedCatNames=[];
   if(!state.matNombres)state.matNombres={};
   if(!state.matCodigos)state.matCodigos={};
@@ -8293,6 +8362,17 @@ function normalizeState(){
   if(!state.categoriaMemoria)state.categoriaMemoria={};
   if(!state.ignoredIntegrationIds)state.ignoredIntegrationIds=[];
   if(!state.reporteComentarios)state.reporteComentarios={};
+
+  // Defensa adicional: si Firebase contiene todavía una copia vieja de una carga
+  // que ya tiene tombstone, ni siquiera dejarla entrar al estado visible.
+  state.cargas=(state.cargas||[]).filter(function(c){
+    if(!c)return false;
+    var esAuto=c.automatico===true||!!c.integracionId;
+    if(!esAuto)return true;
+    if(c.integracionId&&cqIntegracionIgnorada(c.integracionId))return false;
+    if(cqIntegracionLogicaIgnorada(c))return false;
+    return true;
+  });
 
   // Normaliza el origen de cargas automáticas viejas y nuevas.
   // Esto hace que cualquier filtro por origen reconozca siempre Acopio/Pañol,
@@ -8556,10 +8636,22 @@ async function cqGuardarMaterialesSeguro(extra){
     // dando prioridad a la versión que ya está en Firebase para no borrar altas externas.
     var manuales=locCargas.filter(function(c){return !esAuto(c);});
     var mapa={};
-    locCargas.filter(esAuto).filter(function(c){return !cqEsAcopioAnteriorAlLinkeo(c);}).forEach(function(c){
+    var idsIgnorados=(Array.isArray(local.ignoredIntegrationIds)?local.ignoredIntegrationIds:[]).map(String);
+    var clavesIgnoradas=(Array.isArray(local.ignoredIntegrationKeys)?local.ignoredIntegrationKeys:[]).map(String);
+    function autoPermitida(c){
+      if(!c||cqEsAcopioAnteriorAlLinkeo(c))return false;
+      var iid=String(c.integracionId||'');
+      if(iid && idsIgnorados.indexOf(iid)>=0)return false;
+      var lk=cqClaveIntegracionLogica(c);
+      if(lk && clavesIgnoradas.indexOf(String(lk))>=0)return false;
+      return true;
+    }
+    locCargas.filter(esAuto).filter(autoPermitida).forEach(function(c){
       var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
     });
-    remCargas.filter(esAuto).filter(function(c){return !cqEsAcopioAnteriorAlLinkeo(c);}).forEach(function(c){
+    // CRÍTICO: una carga borrada no puede volver desde la copia remota del documento
+    // principal. Antes este merge la reinsertaba inmediatamente después de borrarla.
+    remCargas.filter(esAuto).filter(autoPermitida).forEach(function(c){
       var k=String(c.integracionId||('legacy_'+c.id)); mapa[k]=c;
     });
     local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
@@ -9016,6 +9108,8 @@ function buscarMaterialIntegracion(codigo,nombre,origen,materialId,categoriaOrig
   }
 
   // 3. Si no hay coincidencia segura, crear el producto recibido.
+  // Pero respetar un borrado manual persistente: no resucitar el mismo nombre con otro ID.
+  if(cqMaterialNameBloqueado(nombre))return null;
   // Es preferible un material nuevo a cargar cantidad sobre un producto incorrecto.
   var maxId=10000;
   mats.forEach(function(mat){if(mat.id>=maxId)maxId=mat.id+1;});
@@ -9124,8 +9218,10 @@ function aplicarIntegracion(ev){
   }
 
   // Si el usuario eliminó expresamente una carga automática desde Materiales,
-  // no permitir que el listener de Firebase la vuelva a crear.
-  if(ev.active!==false && cqIntegracionIgnorada(ev.integrationId)) return false;
+  // no permitir que el listener de Firebase la vuelva a crear. Se bloquea tanto
+  // el integrationId actual como la identidad lógica del movimiento, porque Caja
+  // Gerencia puede republicarlo con un integrationId distinto.
+  if(ev.active!==false && (cqIntegracionIgnorada(ev.integrationId)||cqIntegracionLogicaIgnorada(ev))) return false;
 
   if(cqEsTechiCau29_77Integracion(ev)){
     var idxBloq=(state.cargas||[]).findIndex(function(c){return c.integracionId===ev.integrationId;});
@@ -9340,7 +9436,19 @@ async function procesarSnapshotIntegraciones(snapshot){
 
       docsActuales.forEach(function(docSnap){
         try{
-          if(aplicarIntegracion(docSnap.data()))cambio=true;
+          var ev=docSnap.data()||{};
+          var origenEv=cqOrigenCargaNormalizado({
+            origen:ev.source||ev.origen||'',
+            sourceLabel:ev.sourceLabel||'',
+            integrationId:ev.integrationId||''
+          });
+
+          // Caja Gerencia ya materializa sus cargas directamente en data_planilla_exacta_v4.
+          // materiales_integraciones queda sólo como auditoría. Reprocesarla acá generaba una
+          // segunda escritura y podía regrabar un snapshot parcial cuando un gasto tenía varias obras.
+          if(origenEv==='caja_gerencia')return;
+
+          if(aplicarIntegracion(ev))cambio=true;
         }catch(e){
           console.warn('Integración omitida',e);
         }
@@ -9512,6 +9620,36 @@ async function startFirebase(){
         );
       }
 
+      // 2b. Escuchar también config/app en tiempo real.
+      // Gastos sigue siendo la fuente del listado y nombres de obras. El tilde "Materiales"
+      // ya no decide la visibilidad: toda obra recibida queda disponible en Materiales.
+      if(window._onSnapshot){
+        if(unsubConfigMateriales){unsubConfigMateriales();unsubConfigMateriales=null;}
+        unsubConfigMateriales=window._onSnapshot(
+          window._doc(window._db,'config','app'),
+          function(snap){
+            if(!snap.exists())return;
+            try{
+              var cfg=snap.data()||{};
+              obrasGastosMateriales=Array.isArray(cfg.obras)?cfg.obras:[];
+              var migroCfg=estabilizarObrasGastosMateriales();
+              migroCfg=renombrarExtrasSegunGastos()||migroCfg;
+              migroCfg=consolidarExtrasDuplicadasConGastos()||migroCfg;
+              migroCfg=reubicarEstadoIndexadoPorCargasMateriales()||migroCfg;
+              migroCfg=reubicarCargasPorNombreEstableMateriales()||migroCfg;
+              migroCfg=normalizarNombresObraCargasMateriales()||migroCfg;
+              if(migroCfg)localStorage.setItem(DB_KEY,JSON.stringify(state));
+              renderActive();
+            }catch(e){
+              console.warn('No se pudo aplicar config/app en Materiales',e);
+            }
+          },
+          function(e){
+            console.warn('Error escuchando permisos de obras desde Gastos',e);
+          }
+        );
+      }
+
       // 3. Recién con la base principal cargada escuchar Acopio/Pañol/Cajas.
       startIntegracionesFirebase();
 
@@ -9538,6 +9676,7 @@ function toggleModoFirebase(){
     startFirebase();
   }else{
     if(unsubMateriales){unsubMateriales();unsubMateriales=null;}
+    if(unsubConfigMateriales){unsubConfigMateriales();unsubConfigMateriales=null;}
     if(unsubIntegraciones){unsubIntegraciones();unsubIntegraciones=null;}
     firebaseStarted=false;
     firebaseStartPromise=null;
@@ -9578,7 +9717,17 @@ window.addEventListener('focus',function(){
   }
 });
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='visible'&&modoFirebase&&!firebaseStarted)startFirebase();
+  if(document.visibilityState!=='visible')return;
+  if(modoFirebase&&!firebaseStarted)startFirebase();
+  /* Respaldo móvil: aunque el listener haya quedado suspendido en segundo plano,
+     al volver se fuerza una lectura fresca de los permisos de obra. */
+  if(window._dbReady){
+    cargarObrasGastosMateriales(true).then(function(){
+      var migro=estabilizarObrasGastosMateriales();
+      if(migro)localStorage.setItem(DB_KEY,JSON.stringify(state));
+      renderActive();
+    }).catch(function(e){console.warn('Actualización permisos Materiales al volver visible',e);});
+  }
 });
 
 function getObras(){
@@ -9589,9 +9738,9 @@ function getObras(){
   });
   var obras=base.concat(extras);
 
-  // Completa la lista visible con las obras activas creadas en Gastos.
-  // No modifica ni guarda state.extraObras: solamente evita que una obra nueva
-  // de config/app quede fuera de Reporte/Cargar mientras todavía no tenga cargas.
+  // Completa la lista visible con TODAS las obras creadas en Gastos (excepto Oficina).
+  // No depende del tilde "Materiales" ni del archivo de Gastos.
+  // El archivo visible se controla dentro del Reporte de Materiales.
   obrasGastosActivasMateriales().forEach(function(g){
     var nombre=g.label||g.short||g.id||'';
     if(!nombre)return;
@@ -10908,18 +11057,36 @@ window.openReporteArchivarObras=openReporteArchivarObras;
 window.closeReporteArchivarObras=closeReporteArchivarObras;
 window.cqToggleArchivoObraReporte=cqToggleArchivoObraReporte;
 
+function cqReporteMantenerScroll(fn){
+  var sx=window.scrollX||0, sy=window.scrollY||document.documentElement.scrollTop||0;
+  try{
+    var ae=document.activeElement;
+    if(ae&&ae.blur&&ae.closest&&ae.closest('#compare-obra-chips'))ae.blur();
+  }catch(e){}
+  fn();
+  function volver(){
+    try{window.scrollTo(sx,sy);}catch(e){}
+  }
+  volver();
+  requestAnimationFrame(volver);
+  setTimeout(volver,40);
+}
 function selectTodasObras(){
-  var visibles=cqReporteObrasActivas().map(function(x){return x.i;});
-  var todas=visibles.length>0 && compareObrasSel.length===visibles.length
-    && visibles.every(function(i){return compareObrasSel.indexOf(i)>=0;});
-  compareObrasSel=todas?[]:visibles.slice();
-  renderCompareObras();
+  cqReporteMantenerScroll(function(){
+    var visibles=cqReporteObrasActivas().map(function(x){return x.i;});
+    var todas=visibles.length>0 && compareObrasSel.length===visibles.length
+      && visibles.every(function(i){return compareObrasSel.indexOf(i)>=0;});
+    compareObrasSel=todas?[]:visibles.slice();
+    renderCompareObras();
+  });
 }
 function toggleCompareObra(idx){
-  var pos=compareObrasSel.indexOf(idx);
-  if(pos>=0) compareObrasSel.splice(pos,1);
-  else compareObrasSel.push(idx);
-  renderCompareObras();
+  cqReporteMantenerScroll(function(){
+    var pos=compareObrasSel.indexOf(idx);
+    if(pos>=0) compareObrasSel.splice(pos,1);
+    else compareObrasSel.push(idx);
+    renderCompareObras();
+  });
 }
 function renderCompareObras(){
   var obras=getObras();
@@ -10936,9 +11103,7 @@ function renderCompareObras(){
   cqActualizarBotonArchivoReporte();
   var chipsEl=document.getElementById('compare-obra-chips');
   if(chipsEl){
-    chipsEl.style.setProperty('display','grid','important');
-    chipsEl.style.setProperty('grid-template-columns','repeat(6,minmax(0,1fr))','important');
-    chipsEl.style.setProperty('gap','10px','important');
+    /* La grilla se dimensiona sólo por CSS. Evita cambios transitorios de alto/gap al seleccionar en móvil. */
     chipsEl.innerHTML=obrasRev.length?obrasRev.map(function(x){
       var sel=compareObrasSel.indexOf(x.i)>=0;
       return cqReporteObraTile(x.o,x.i,sel);
@@ -11170,6 +11335,8 @@ function guardarNombreMat(){
     state.extraMats.forEach(function(m){if(m.id===mat.id){m.mat=nuevo;m.comentarios=comentarios;m.codigo=codigo;}});
   }
 
+  // Un renombre manual también es una restauración deliberada de ese nombre.
+  cqDesbloquearNombreMaterial(nuevo);
   // Aprende esta categoría por código y por nombre para futuras integraciones automáticas.
   guardarMemoriaCategoriaMaterial(mat,nuevaCategoria);
 
@@ -11194,26 +11361,47 @@ function guardarNombreMat(){
   renderActive();
 }
 function eliminarMaterialSeleccionado(){
-  var mat=ALL_MATS.find(function(m){return m.id===selectedCargaMat;});
+  var mat=getAllMats().find(function(m){return String(m.id)===String(selectedCargaMat);});
   if(!mat){closeEditarNombreMat();return;}
   if(CALCULATED_MATS[mat.id]){alert('Este material es calculado automáticamente y no se puede eliminar.');return;}
-  var nCargas=state.cargas.filter(function(c){return c.matId===mat.id;}).length;
+  var nCargas=(state.cargas||[]).filter(function(c){return String(c.matId)===String(mat.id);}).length;
   var msg=nCargas
-    ? 'Hay '+nCargas+' carga'+(nCargas===1?'':'s')+' registrada'+(nCargas===1?'':'s')+' con "'+mat.mat+'". Esas cargas quedan en el historial igual, pero el material ya no se va a poder elegir para cargas nuevas. ¿Eliminar igual?'
-    : '¿Eliminar el material "'+mat.mat+'"? No se podrá elegir para cargas nuevas.';
+    ? 'Hay '+nCargas+' carga'+(nCargas===1?'':'s')+' registrada'+(nCargas===1?'':'s')+' con "'+mat.mat+'". Las cargas quedan en el historial, pero este material se elimina del catálogo y no volverá a aparecer por una sincronización automática. ¿Eliminar igual?'
+    : '¿Eliminar el material "'+mat.mat+'" del catálogo? No volverá a aparecer por una sincronización automática.';
   if(!confirm(msg)) return;
-  state.deletedMatIds.push(mat.id);
-  if(selectedCargaMat===mat.id){
+
+  if(!Array.isArray(state.deletedMatIds))state.deletedMatIds=[];
+  if(!isMatDeleted(mat.id))state.deletedMatIds.push(mat.id);
+
+  // Si no queda otro producto activo con exactamente el mismo nombre, guardar también
+  // una lápida por nombre. Esto impide que Pañol/Acopio/Cajas lo recreen con otro ID.
+  if(!cqHayOtroMaterialActivoMismoNombre(mat))cqBloquearNombreMaterialEliminado(mat.mat);
+
+  // Los materiales agregados/automáticos sí se quitan físicamente del catálogo persistido.
+  // Los materiales base quedan ocultos por deletedMatIds porque forman parte de la plantilla.
+  var eraExtra=(state.extraMats||[]).some(function(m){return String(m.id)===String(mat.id);});
+  if(eraExtra){
+    state.extraMats=(state.extraMats||[]).filter(function(m){return String(m.id)!==String(mat.id);});
+    CATS.forEach(function(c){c.items=(c.items||[]).filter(function(m){return String(m.id)!==String(mat.id);});});
+    ALL_MATS=ALL_MATS.filter(function(m){return String(m.id)!==String(mat.id);});
+    if(state.matNombres)delete state.matNombres[mat.id];
+    if(state.matCodigos)delete state.matCodigos[mat.id];
+    if(state.matCategorias)delete state.matCategorias[mat.id];
+    if(state.categoriaManual)delete state.categoriaManual[mat.id];
+    if(state.catalogoManual)delete state.catalogoManual[mat.id];
+  }
+
+  if(String(selectedCargaMat)===String(mat.id)){
     var next=null;
     CATS.forEach(function(c){
       if(next||isCatDeleted(c.name)) return;
-      c.items.forEach(function(m){ if(!next && !CALCULATED_MATS[m.id] && !isMatDeleted(m.id)) next=m.id; });
+      (c.items||[]).forEach(function(m){ if(!next && !CALCULATED_MATS[m.id] && !isMatDeleted(m.id)) next=m.id; });
     });
     selectedCargaMat=next;
   }
   persist();
   closeEditarNombreMat();
-  showToast('✓ Material "'+mat.mat+'" eliminado');
+  showToast('✓ Material "'+mat.mat+'" eliminado definitivamente del catálogo');
   renderActive();
 }
 function openGestionarCats(){
@@ -11330,6 +11518,9 @@ function guardarNuevoMat(){
 
   var maxId=10000;
   getAllMats().forEach(function(m){if(m.id>=maxId)maxId=m.id+1;});
+  // Alta manual explícita: si ese nombre había sido borrado antes, se lo restaura
+  // deliberadamente y vuelve a poder recibir integraciones.
+  cqDesbloquearNombreMaterial(nombre);
   var newMat={id:maxId, mat:nombre, codigo:codigo, prom:prom, data:[], catName:cat, comentarios:comentarios};
   if(!state.matCodigos) state.matCodigos={};
   if(codigo) state.matCodigos[maxId]=codigo;
@@ -11449,6 +11640,7 @@ function procesarCargaMasivaCatalogo(){
       return;
     }
 
+    cqDesbloquearNombreMaterial(nombre);
     var nuevo={
       id:maxId++,
       mat:nombre,
@@ -11604,6 +11796,7 @@ function procesarCargaMasiva(){
     }
 
     if(!mat){
+      cqDesbloquearNombreMaterial(nombre);
       mat={id:maxId++,mat:nombre,codigo:codigo,prom:0,data:[],catName:catDefault};
       state.extraMats.push(mat);
       if(!state.matCategorias)state.matCategorias={};
@@ -12403,10 +12596,11 @@ async function borrarCarga(id){
   // Antes se borraba sólo de state.cargas; el listener veía la integración aún
   // activa y la volvía a crear. Ahora se guarda un "tombstone" compartido y,
   // además, se desactiva el documento de integración en Firebase.
-  if(carga && carga.automatico && carga.integracionId){
-    cqIgnorarIntegracion(carga.integracionId);
+  if(carga && carga.automatico){
+    if(carga.integracionId)cqIgnorarIntegracion(carga.integracionId);
+    var claveLogicaBorrada=cqIgnorarIntegracionLogica(carga);
 
-    if(window._dbReady && window._setDoc && window._doc){
+    if(carga.integracionId && window._dbReady && window._setDoc && window._doc){
       try{
         await window._setDoc(
           window._doc(window._db,'materiales_integraciones',String(carga.integracionId)),
@@ -12424,7 +12618,15 @@ async function borrarCarga(id){
     }
   }
 
-  state.cargas=state.cargas.filter(function(c){return c.id!==id;});
+  // Quitar la carga elegida. Si el mismo vínculo lógico ya había quedado duplicado
+  // con otro integrationId, quitar esas copias también; no afecta movimientos distintos.
+  state.cargas=state.cargas.filter(function(c){
+    if(c.id===id)return false;
+    if(carga && carga.automatico && claveLogicaBorrada && c && c.automatico){
+      return cqClaveIntegracionLogica(c)!==claveLogicaBorrada;
+    }
+    return true;
+  });
   editingCargaId=null;
   pendingDeleteId=null;
   await persist();
@@ -15998,6 +16200,7 @@ window.abrirGraficoDirecto = function(){
 /* 15/10/2026 — móvil aprobado: 6 obras por fila, pero con altura suficiente para leer el nombre completo. */
 @media (max-width:620px){
   #compare-obra-chips.cq-report-obras-grid{
+    overflow-anchor:none!important;
     grid-template-columns:repeat(6,minmax(0,1fr))!important;
     gap:4px!important;
   }
@@ -18348,37 +18551,544 @@ body:has(#modal-reporte.open) #modal-reporte{
   window.__cqFitReporteObrasMovil=schedule;
 })();
 </script>
-
-
-
-<script id="cq-forzar-altura-movil-obras-v15">
-(function(){
-  if(window.__cqForzarAlturaMovilObrasV15)return;
-  window.__cqForzarAlturaMovilObrasV15=true;
-  function aplicar(){
-    if(!window.matchMedia || !window.matchMedia('(max-width:620px)').matches)return;
-    var root=document.getElementById('compare-obra-chips');
-    if(!root)return;
-    root.style.setProperty('grid-template-columns','repeat(6,minmax(0,1fr))','important');
-    root.style.setProperty('gap','4px','important');
-    root.querySelectorAll('.cq-report-obra-tile').forEach(function(btn){
-      btn.style.setProperty('height','68px','important');
-      btn.style.setProperty('min-height','68px','important');
-      btn.style.setProperty('max-height','68px','important');
-      btn.style.setProperty('padding-top','5px','important');
-      btn.style.setProperty('padding-bottom','5px','important');
-      btn.style.setProperty('align-items','center','important');
-      btn.style.setProperty('justify-content','center','important');
-    });
+<style id="cq-reporte-botones-movil-compactos-v2">
+@media (max-width:620px){
+  #view-obras .cq-report-obras-panel{
+    padding:12px 10px 13px!important;
+    border-radius:17px!important;
   }
-  function programar(){requestAnimationFrame(function(){aplicar();setTimeout(aplicar,40);setTimeout(aplicar,180);});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',programar,{once:true});else programar();
-  window.addEventListener('resize',programar,{passive:true});
-  document.addEventListener('click',function(e){
-    if(e.target&&e.target.closest&&e.target.closest('#view-obras'))setTimeout(programar,0);
-  },true);
-  var obs=new MutationObserver(function(){programar();});
-  function observar(){var root=document.getElementById('compare-obra-chips');if(root)obs.observe(root,{childList:true,subtree:true});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',observar,{once:true});else observar();
+  #view-obras .cq-report-obras-head{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:9px!important;
+    margin-bottom:10px!important;
+  }
+  #view-obras .sec-ttl{
+    font-size:11px!important;
+    letter-spacing:.075em!important;
+  }
+  #view-obras .cq-report-obras-sub{
+    font-size:10px!important;
+    line-height:1.25!important;
+    margin-top:4px!important;
+  }
+  #view-obras .cq-report-obras-actions{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:5px!important;
+    width:100%!important;
+    margin-top:0!important;
+  }
+  #view-obras .cq-report-head-btn{
+    width:100%!important;
+    min-width:0!important;
+    min-height:34px!important;
+    height:34px!important;
+    padding:5px 4px!important;
+    border-radius:9px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:3px!important;
+    text-align:center!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    font-size:9.2px!important;
+    line-height:1!important;
+    font-weight:900!important;
+    box-shadow:0 3px 8px rgba(28,61,53,.055)!important;
+  }
+  #view-obras .cq-report-head-btn.primary{
+    background:linear-gradient(135deg,#173e34,#1f9a68)!important;
+    border-color:#1c7b56!important;
+    color:#fff!important;
+  }
+  #view-obras .cq-report-archive-count{
+    min-width:17px!important;
+    height:17px!important;
+    padding:0 4px!important;
+    margin-left:2px!important;
+    font-size:8px!important;
+    font-weight:900!important;
+  }
+
+  #compare-obra-chips.cq-report-obras-grid{
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    gap:5px!important;
+    align-items:stretch!important;
+  }
+  #compare-obra-chips .cq-report-obra-tile{
+    box-sizing:border-box!important;
+    width:100%!important;
+    min-width:0!important;
+    min-height:56px!important;
+    height:56px!important;
+    max-height:56px!important;
+    padding:4px 3px!important;
+    border-radius:9px!important;
+    border:1px solid #c9bc96!important;
+    background:linear-gradient(180deg,#fffefb,#f7f4eb)!important;
+    box-shadow:0 3px 8px rgba(28,61,53,.045)!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    text-align:center!important;
+    font-size:7.8px!important;
+    line-height:1.06!important;
+    letter-spacing:-.01em!important;
+    overflow:hidden!important;
+  }
+  #compare-obra-chips .cq-report-obra-name{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:0!important;
+    width:100%!important;
+    min-width:0!important;
+    max-height:none!important;
+    overflow:visible!important;
+    line-height:1.06!important;
+  }
+  #compare-obra-chips .cq-report-line{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    text-align:center!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:clip!important;
+    line-height:1.06!important;
+  }
+  #compare-obra-chips .cq-report-line-generic{
+    white-space:normal!important;
+    overflow-wrap:anywhere!important;
+    word-break:normal!important;
+    line-height:1.04!important;
+  }
+  #compare-obra-chips .cq-report-line-extra{
+    font-size:.92em!important;
+  }
+  #compare-obra-chips .cq-report-obra-tile.active{
+    padding-right:11px!important;
+    background:linear-gradient(135deg,#178f60,#20be7b)!important;
+    border-color:#168c5d!important;
+    color:#fff!important;
+    box-shadow:0 5px 10px rgba(23,143,96,.18)!important;
+  }
+  #compare-obra-chips .cq-report-obra-check{
+    position:absolute!important;
+    top:3px!important;
+    right:2px!important;
+    transform:none!important;
+    width:10px!important;
+    height:10px!important;
+    min-width:10px!important;
+    border-radius:50%!important;
+    font-size:6px!important;
+    line-height:10px!important;
+    box-shadow:none!important;
+  }
+}
+@media (max-width:360px){
+  #compare-obra-chips.cq-report-obras-grid{
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  }
+  #view-obras .cq-report-head-btn{
+    font-size:8.3px!important;
+  }
+}
+</style>
+
+<style id="cq-reporte-scroll-estable-v1">
+@media (max-width:620px){
+  #view-obras .cq-report-obras-panel,
+  #view-obras #compare-obra-chips,
+  #view-obras #obras-content{overflow-anchor:none!important;}
+}
+</style>
+
+<!-- CQ 27/10/2026 — subrubro seguro: nombre > código + edición manual definitiva -->
+<script id="cq-subrubro-manual-definitivo-v7">
+(function(){
+  if(window.__cqSubrubroManualDefinitivoV7)return;
+  window.__cqSubrubroManualDefinitivoV7=true;
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]+/g,' ')
+      .replace(/\s+/g,' ').trim();
+  }
+  function codeKey(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,'');}
+  function nameKey(v){return norm(v);}
+  function ensure(){
+    if(!window.state)return false;
+    if(!state.categoriaMemoria||typeof state.categoriaMemoria!=='object')state.categoriaMemoria={};
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.categoriaManualIdentidad||typeof state.categoriaManualIdentidad!=='object')state.categoriaManualIdentidad={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+    return true;
+  }
+  function mats(){
+    try{
+      if(typeof getAllMats==='function')return getAllMats()||[];
+      return window.ALL_MATS||[];
+    }catch(e){return window.ALL_MATS||[];}
+  }
+  function matById(id){
+    return mats().find(function(m){return Number(m&&m.id)===Number(id);})||null;
+  }
+  function codigoDe(m){
+    if(!m)return '';
+    try{if(typeof getMatCodigo==='function')return String(getMatCodigo(m)||'').trim();}catch(e){}
+    return String((state.matCodigos&&state.matCodigos[m.id])||m.codigo||m.cod||'').trim();
+  }
+  function categoriaCanon(v){
+    var k=norm(v); if(!k)return '';
+    var cs=Array.isArray(window.CATS)?window.CATS:[];
+    var c=cs.find(function(x){
+      if(!x||!x.name)return false;
+      try{if(typeof isCatDeleted==='function'&&isCatDeleted(x.name))return false;}catch(e){}
+      return norm(x.name)===k;
+    });
+    return c?c.name:'';
+  }
+  function categoriaPisosRevestimientos(){
+    var cs=Array.isArray(window.CATS)?window.CATS:[];
+    var c=cs.find(function(x){
+      var n=norm(x&&x.name);
+      return n.indexOf('piso')>=0 && n.indexOf('revest')>=0;
+    });
+    return c?c.name:'';
+  }
+  function esSilvermoon(m){
+    var n=nameKey(m&&m.mat);
+    return n.indexOf('silvermoon')>=0 && n.indexOf('out')>=0 &&
+      n.indexOf('57')>=0 && n.indexOf('117')>=0;
+  }
+  function identidadKeys(nombre,codigo){
+    var out=[],nk=nameKey(nombre),ck=codeKey(codigo);
+    if(nk)out.push('name:'+nk);
+    if(ck)out.push('code:'+ck);
+    return out;
+  }
+  function manualPorMaterial(m){
+    if(!m||!ensure())return '';
+    var id=Number(m.id);
+    var cm=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
+    var can=categoriaCanon(cm); if(can)return can;
+    var reg=state.catalogoManual[id]||state.catalogoManual[String(id)]||null;
+    can=reg&&reg.manual!==false?categoriaCanon(reg.categoria):'';
+    if(can)return can;
+    var nk='name:'+nameKey(m.mat), ck='code:'+codeKey(codigoDe(m));
+    var l=(nk!=='name:'?state.categoriaManualIdentidad[nk]:null)||null;
+    can=l&&l.manual!==false?categoriaCanon(l.categoria):'';
+    if(can)return can;
+    l=(ck!=='code:'?state.categoriaManualIdentidad[ck]:null)||null;
+    if(l&&l.manual!==false&&nameKey(l.nombre)===nameKey(m.mat)){
+      can=categoriaCanon(l.categoria); if(can)return can;
+    }
+    return '';
+  }
+  function fijarManual(m,categoria,opts){
+    opts=opts||{};
+    if(!m||!ensure())return false;
+    var cat=categoriaCanon(categoria); if(!cat)return false;
+    var id=Number(m.id),codigo=codigoDe(m),ahora=new Date().toISOString();
+    var antes=String((state.matCategorias&&state.matCategorias[id])||m.catName||'');
+    var cambio=norm(antes)!==norm(cat) || norm(manualPorMaterial(m))!==norm(cat);
+
+    state.categoriaManual[id]=cat;
+    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{}, {
+      nombre:String(m.mat||'').trim(),
+      codigo:codigo,
+      categoria:cat,
+      manual:true,
+      updatedAt:ahora
+    });
+    identidadKeys(m.mat,codigo).forEach(function(k){
+      state.categoriaManualIdentidad[k]={
+        nombre:String(m.mat||'').trim(),codigo:codigo,categoria:cat,manual:true,updatedAt:ahora
+      };
+    });
+
+    state.matCategorias[id]=cat;
+    m.catName=cat;
+    (state.extraMats||[]).forEach(function(x){if(Number(x&&x.id)===id)x.catName=cat;});
+    (state.materialesNuevos||[]).forEach(function(x){if(Number(x&&x.id)===id)x.catName=cat;});
+
+    // La memoria por NOMBRE es la identidad segura para clasificar.
+    var nk=nameKey(m.mat);
+    if(nk)state.categoriaMemoria['name:'+nk]=cat;
+
+    try{
+      (CATS||[]).forEach(function(c){
+        c.items=(c.items||[]).filter(function(x){return Number(x&&x.id)!==id;});
+      });
+      var dest=(CATS||[]).find(function(c){return c&&norm(c.name)===norm(cat);});
+      if(dest&&!dest.items.some(function(x){return Number(x&&x.id)===id;}))dest.items.push(m);
+    }catch(e){}
+    return cambio;
+  }
+
+  /*
+    CORRECCIÓN 1:
+    La memoria de subrubro ya no puede clasificar un producto distinto solamente
+    porque comparte/reutiliza el mismo código. Primero manda el nombre exacto.
+    El código sólo se acepta como apoyo si YA existe ese mismo nombre con ese código.
+  */
+  var categoriaAprendidaAnterior=(typeof window.categoriaAprendidaPara==='function')?window.categoriaAprendidaPara:null;
+  window.categoriaAprendidaPara=categoriaAprendidaPara=function(codigo,nombre){
+    if(!ensure())return categoriaAprendidaAnterior?categoriaAprendidaAnterior.apply(this,arguments):'';
+    var nk=nameKey(nombre), ck=codeKey(codigo);
+
+    // 1) Decisión manual por identidad/nombre.
+    if(nk){
+      var l=state.categoriaManualIdentidad['name:'+nk];
+      var lc=l&&l.manual!==false?categoriaCanon(l.categoria):'';
+      if(lc)return lc;
+      var porNombre=state.categoriaMemoria['name:'+nk];
+      var cn=categoriaCanon(porNombre);
+      if(cn)return cn;
+    }
+
+    // 2) Código sólo si corresponde al MISMO nombre; nunca cruza productos diferentes.
+    if(ck){
+      var mismo=mats().find(function(m){
+        if(!m)return false;
+        try{if(typeof isMatDeleted==='function'&&isMatDeleted(m.id))return false;}catch(e){}
+        return codeKey(codigoDe(m))===ck && (!nk || nameKey(m.mat)===nk);
+      })||null;
+      if(mismo){
+        var manual=manualPorMaterial(mismo); if(manual)return manual;
+        // No usar categoriaMemoria por código: un código puede estar repetido/reutilizado.
+        // Sólo heredar la categoría REAL del mismo producto (mismo nombre + mismo código).
+        var actual=categoriaCanon((state.matCategorias&&state.matCategorias[mismo.id])||mismo.catName||'');
+        if(actual && norm(actual)!=='varios' && actual.indexOf('⚠')!==0)return actual;
+      }
+    }
+    return '';
+  };
+
+  /* CORRECCIÓN 2: una edición manual queda bloqueada por ID + nombre + código. */
+  var guardarAnterior=(typeof window.guardarNombreMat==='function')?window.guardarNombreMat:null;
+  if(guardarAnterior){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      var idAntes=Number(window.selectedCargaMat!=null?window.selectedCargaMat:selectedCargaMat);
+      var matAntes=matById(idAntes);
+      var sel=document.getElementById('editar-mat-cat');
+      var catElegida=categoriaCanon(sel&&sel.value);
+      var nombreInput=document.getElementById('editar-mat-nombre-input');
+      var nombreElegido=String(nombreInput&&nombreInput.value||'').trim();
+
+      var r=await guardarAnterior.apply(this,arguments);
+
+      // Reubicar el material incluso si la rutina anterior lo unificó con otro ID.
+      var m=matById(window.selectedCargaMat!=null?window.selectedCargaMat:selectedCargaMat) || matById(idAntes);
+      if(!m && nombreElegido){
+        m=mats().find(function(x){return nameKey(x&&x.mat)===nameKey(nombreElegido);})||null;
+      }
+      if(m&&catElegida){
+        fijarManual(m,catElegida);
+        try{
+          if(typeof persist==='function')await persist();
+        }catch(e){console.warn('CQ subrubro manual definitivo: persist',e);}
+        // Si el merge remoto intentó restaurar la categoría vieja, volver a imponer la decisión local.
+        fijarManual(m,catElegida);
+        try{if(typeof renderActive==='function')renderActive();}catch(e){}
+        try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
+        try{if(typeof renderReporte==='function')renderReporte();}catch(e){}
+      }
+      return r;
+    };
+  }
+
+  // Blindaje adicional: normalizaciones/sincronizaciones respetan siempre lo manual.
+  var moverAnterior=(typeof window.moverMaterialACategoria==='function')?window.moverMaterialACategoria:null;
+  if(moverAnterior){
+    window.moverMaterialACategoria=moverMaterialACategoria=function(id,nuevaCat){
+      var m=matById(id),manual=m?manualPorMaterial(m):'';
+      return moverAnterior.call(this,id,manual||nuevaCat);
+    };
+  }
+
+  var normalizarAnterior=(typeof window.normalizeState==='function')?window.normalizeState:null;
+  if(normalizarAnterior){
+    window.normalizeState=normalizeState=function(){
+      var r=normalizarAnterior.apply(this,arguments);
+      if(ensure())mats().forEach(function(m){
+        var manual=manualPorMaterial(m);
+        if(manual)fijarManual(m,manual);
+      });
+      return r;
+    };
+  }
+
+  // Migración puntual pedida: SILVERMOON OUT 57,5×117 → Pisos y Revestimientos.
+  var corrigiendoSilvermoon=false;
+  async function corregirSilvermoon(){
+    if(corrigiendoSilvermoon||!ensure())return false;
+    var destino=categoriaPisosRevestimientos();
+    if(!destino)return false;
+    var encontrados=mats().filter(esSilvermoon);
+    if(!encontrados.length)return false;
+    var cambio=false;
+    encontrados.forEach(function(m){cambio=fijarManual(m,destino)||cambio;});
+    if(cambio){
+      corrigiendoSilvermoon=true;
+      try{
+        if(typeof persist==='function')await persist();
+        encontrados.forEach(function(m){fijarManual(m,destino);});
+        try{if(typeof renderActive==='function')renderActive();}catch(e){}
+        try{if(typeof renderCatalogo==='function')renderCatalogo();}catch(e){}
+        try{if(typeof renderReporte==='function')renderReporte();}catch(e){}
+        console.info('CQ Materiales: SILVERMOON OUT 57,5×117 fijado en '+destino+'.');
+      }catch(e){console.warn('CQ corrección SILVERMOON',e);}
+      finally{corrigiendoSilvermoon=false;}
+    }
+    return cambio;
+  }
+
+  document.addEventListener('firebase-ready',function(){setTimeout(corregirSilvermoon,500);});
+  document.addEventListener('cq-firebase-ready',function(){setTimeout(corregirSilvermoon,500);});
+  document.addEventListener('DOMContentLoaded',function(){
+    setTimeout(corregirSilvermoon,900);
+    setTimeout(corregirSilvermoon,2200);
+  });
+  setTimeout(corregirSilvermoon,3500);
 })();
 </script>
+
+<!-- CQ 27/10/2026 — edición manual gana al shadow local anterior -->
+<script id="cq-manual-gana-shadow-v8">
+(function(){
+  if(window.__cqManualGanaShadowV8)return;
+  window.__cqManualGanaShadowV8=true;
+
+  var SHADOW_KEY='cq_materiales_manual_shadow_v1';
+
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]+/g,' ')
+      .replace(/\s+/g,' ').trim();
+  }
+  function codeKey(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,'');}
+  function readShadow(){
+    try{return JSON.parse(localStorage.getItem(SHADOW_KEY)||'{}')||{};}catch(e){return {};}
+  }
+  function writeShadow(s){
+    try{localStorage.setItem(SHADOW_KEY,JSON.stringify(s||{}));return true;}catch(e){console.warn('CQ shadow manual v8',e);return false;}
+  }
+  function matById(id){
+    try{return (window.ALL_MATS||[]).find(function(m){return Number(m&&m.id)===Number(id);})||null;}catch(e){return null;}
+  }
+
+  /*
+    El shadow existe para recuperar ediciones manuales ante snapshots remotos.
+    Pero una edición manual NUEVA tiene que reemplazar al shadow anterior antes
+    de que persist() ejecute applyShadow(); de lo contrario la copia vieja gana.
+  */
+  function adelantarDecisionManualAlShadow(){
+    if(!window.state)return false;
+
+    var id=Number(window.selectedCargaMat!=null?window.selectedCargaMat:selectedCargaMat);
+    if(!Number.isFinite(id))return false;
+
+    var catEl=document.getElementById('editar-mat-cat');
+    var nomEl=document.getElementById('editar-mat-nombre-input');
+    var codEl=document.getElementById('editar-mat-codigo');
+    var cat=String(catEl&&catEl.value||'').trim();
+    if(!cat)return false;
+
+    var mat=matById(id);
+    var nombre=String(nomEl&&nomEl.value || (mat&&mat.mat) || '').trim();
+    var codigo=String(codEl&&codEl.value || (mat&&((state.matCodigos&&state.matCodigos[id])||mat.codigo||mat.cod)) || '').trim();
+    if(!nombre)return false;
+
+    var s=readShadow();
+    if(!s.catalogoManual||typeof s.catalogoManual!=='object')s.catalogoManual={};
+    if(!s.categoriaManual||typeof s.categoriaManual!=='object')s.categoriaManual={};
+    if(!s.categoriaManualIdentidad||typeof s.categoriaManualIdentidad!=='object')s.categoriaManualIdentidad={};
+
+    var ahora=new Date().toISOString();
+    var nk=norm(nombre), ck=codeKey(codigo);
+    var ids={}; ids[String(id)]=1;
+
+    // Si hay IDs duplicados del mismo nombre, todos reciben la decisión nueva.
+    try{
+      (window.ALL_MATS||[]).forEach(function(m){
+        if(m&&norm(m.mat)===nk)ids[String(m.id)]=1;
+      });
+    }catch(e){}
+
+    Object.keys(ids).forEach(function(k){
+      s.categoriaManual[k]=cat;
+      s.catalogoManual[k]=Object.assign({},s.catalogoManual[k]||{}, {
+        nombre:nombre,
+        codigo:codigo,
+        categoria:cat,
+        manual:true,
+        updatedAt:ahora
+      });
+    });
+
+    var lock={nombre:nombre,codigo:codigo,categoria:cat,manual:true,updatedAt:ahora};
+    if(nk)s.categoriaManualIdentidad['name:'+nk]=Object.assign({},lock);
+    if(ck)s.categoriaManualIdentidad['code:'+ck]=Object.assign({},lock);
+
+    // Neutraliza locks viejos por código/ID del mismo producto que todavía digan VARIOS.
+    Object.keys(s.categoriaManualIdentidad).forEach(function(k){
+      var l=s.categoriaManualIdentidad[k];
+      if(l&&norm(l.nombre)===nk){
+        s.categoriaManualIdentidad[k]=Object.assign({},l,lock);
+      }
+    });
+    Object.keys(s.catalogoManual).forEach(function(k){
+      var l=s.catalogoManual[k];
+      if(l&&norm(l.nombre)===nk){
+        s.catalogoManual[k]=Object.assign({},l,lock);
+        s.categoriaManual[k]=cat;
+      }
+    });
+
+    s.savedAt=ahora;
+    writeShadow(s);
+
+    // Dejar también el estado actual alineado antes de entrar a cualquier persist/normalize.
+    if(!state.categoriaManual||typeof state.categoriaManual!=='object')state.categoriaManual={};
+    if(!state.catalogoManual||typeof state.catalogoManual!=='object')state.catalogoManual={};
+    if(!state.categoriaManualIdentidad||typeof state.categoriaManualIdentidad!=='object')state.categoriaManualIdentidad={};
+    if(!state.matCategorias||typeof state.matCategorias!=='object')state.matCategorias={};
+
+    Object.keys(ids).forEach(function(k){
+      state.categoriaManual[k]=cat;
+      state.catalogoManual[k]=Object.assign({},state.catalogoManual[k]||{}, {
+        nombre:nombre,codigo:codigo,categoria:cat,manual:true,updatedAt:ahora
+      });
+      state.matCategorias[k]=cat;
+    });
+    if(nk)state.categoriaManualIdentidad['name:'+nk]=Object.assign({},lock);
+    if(ck)state.categoriaManualIdentidad['code:'+ck]=Object.assign({},lock);
+
+    return true;
+  }
+
+  var guardarPrev=(typeof window.guardarNombreMat==='function')?window.guardarNombreMat:null;
+  if(guardarPrev){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      // CRÍTICO: actualizar shadow ANTES de que cualquier persist() pueda aplicar el shadow viejo.
+      adelantarDecisionManualAlShadow();
+      var r=await guardarPrev.apply(this,arguments);
+      // Repetir con el ID/canónico resultante por si hubo unificación de duplicados.
+      adelantarDecisionManualAlShadow();
+      return r;
+    };
+  }
+
+  console.log('CQ Materiales: edición manual > shadow anterior (v8) activa');
+})();
+</script>
+

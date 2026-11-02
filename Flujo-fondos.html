@@ -7924,4 +7924,1895 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 })();
 </script>
+
+<style id="cq-v80-project-formula-style">
+/* v80 · fórmula visible y editable en tarjetas de proyectos */
+#projectsHeaderCards .cq-project-formula-box{
+  margin-top:6px;padding-top:5px;border-top:1px dashed rgba(82,105,95,.22);min-width:0;
+}
+#projectsHeaderCards .cq-project-formula-head{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px;
+}
+#projectsHeaderCards .cq-project-formula-head span{
+  font-size:7px;text-transform:uppercase;letter-spacing:.06em;font-weight:850;color:#718078;
+}
+#projectsHeaderCards .cq-project-formula-head em{
+  font-style:normal;font-size:6px;line-height:1;padding:2px 5px;border-radius:999px;font-weight:900;letter-spacing:.04em;
+  background:#f1f4f2;color:#7a8781;border:1px solid #e0e6e3;
+}
+#projectsHeaderCards .cq-project-formula-box.is-auto .cq-project-formula-head em{
+  background:#e5f1eb;color:#3f6d59;border-color:#cfe2d8;
+}
+#projectsHeaderCards .cq-project-formula{
+  width:100%;height:27px;border:1px solid #d9e3de;border-radius:7px;background:rgba(255,255,255,.82);
+  color:#40584e;padding:3px 6px;font:700 9px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;outline:none;
+  min-width:0;
+}
+#projectsHeaderCards .cq-project-formula:focus{
+  background:#fff;border-color:#89aa9a;box-shadow:0 0 0 2px rgba(137,170,154,.14);
+}
+#projectsHeaderCards .cq-head-project-card.new .cq-project-formula{color:#587990}
+#projectsHeaderCards .cq-head-project-card.prev .cq-project-formula{color:#876b47}
+#projectsHeaderCards .cq-head-project-card.extra .cq-project-formula{color:#625f80}
+@media(max-width:600px){
+  #projectsHeaderCards .cq-project-formula-box{margin-top:4px;padding-top:4px}
+  #projectsHeaderCards .cq-project-formula-head{margin-bottom:2px}
+  #projectsHeaderCards .cq-project-formula-head span{font-size:5.5px}
+  #projectsHeaderCards .cq-project-formula-head em{font-size:5px;padding:1px 3px}
+  #projectsHeaderCards .cq-project-formula{height:22px;font-size:7px;padding:2px 4px;border-radius:6px}
+}
+</style>
+
+<script id="cq-v80-project-formulas">
+(function(){
+  /* CQ v80 · Fórmulas visibles/editables en tarjetas de proyectos */
+  function cqV80EscAttr(v){
+    return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function cqV80NormalizeFormula(v){
+    const s=String(v??'').trim();
+    if(!s)return null;
+    return s.startsWith('=')?s:'='+s;
+  }
+  function cqV80EnsureExtras(){
+    if(typeof projectsState==='undefined')return;
+    const n=projectsState.months?.length||0;
+    projectsState.extraProjects=projectsState.extraProjects||[];
+    projectsState.extraProjects.forEach(p=>{
+      p.values=Array.isArray(p.values)?p.values:[];
+      p.formulas=Array.isArray(p.formulas)?p.formulas:[];
+      p.overrides=Array.isArray(p.overrides)?p.overrides:[];
+      while(p.values.length<n)p.values.push(p.values.at(-1)||0);
+      while(p.formulas.length<n)p.formulas.push(null);
+      while(p.overrides.length<n)p.overrides.push(false);
+      if(p.formulas.length>n)p.formulas.length=n;
+      if(p.overrides.length>n)p.overrides.length=n;
+    });
+  }
+  function cqV80Eval(formula,mi){
+    if(!formula || typeof pEvalFormula!=='function')return null;
+    const v=pEvalFormula(formula,mi);
+    return v!==null && Number.isFinite(Number(v))?Number(v):null;
+  }
+  function cqV80RecalcExtras(){
+    cqV80EnsureExtras();
+    if(typeof projectsState==='undefined')return;
+    projectsState.extraProjects.forEach(p=>{
+      for(let mi=0;mi<projectsState.months.length;mi++){
+        const f=p.formulas?.[mi];
+        if(f && !p.overrides?.[mi]){
+          const v=cqV80Eval(f,mi);
+          if(v!==null)p.values[mi]=v;
+        }
+      }
+    });
+  }
+  function cqV80FormulaHtml(kind,index,mi,formula,active){
+    const attr=kind==='row'?`data-v80-row-formula="${index}"`:`data-v80-extra-formula="${index}"`;
+    const status=formula?(active?'AUTO':'MANUAL'):'MANUAL';
+    return `<div class="cq-project-formula-box ${formula&&active?'is-auto':'is-manual'}">
+      <div class="cq-project-formula-head"><span>Fórmula</span><em>${status}</em></div>
+      <input class="cq-project-formula" ${attr} data-v80-mi="${mi}" value="${cqV80EscAttr(formula||'')}" placeholder="Ej. =S12+5000" autocomplete="off" spellcheck="false">
+    </div>`;
+  }
+  function cqV80InjectFormulaFields(){
+    const target=document.getElementById('projectsHeaderCards');
+    if(!target || typeof projectsState==='undefined')return;
+    const activePage=document.querySelector('.page-tab.active')?.dataset.page;
+    if(activePage!=='projectsPage')return;
+    cqV80EnsureExtras();
+    const mi=Math.max(0,Math.min(typeof projectsMonth==='number'?projectsMonth:0,projectsState.months.length-1));
+
+    target.querySelectorAll('[data-v40-row]').forEach(valueInput=>{
+      const row=+valueInput.dataset.v40Row;
+      if(row!==14 && row!==15)return;
+      const card=valueInput.closest('.cq-head-project-card');
+      if(!card || card.querySelector('[data-v80-row-formula]'))return;
+      const obj=projectsState.rows?.[String(row)];
+      if(!obj)return;
+      const formula=obj.formulas?.[mi]||'';
+      const active=!!formula && !obj.overrides?.[mi];
+      const net=card.querySelector('.cq-cost-net');
+      const holder=document.createElement('div');
+      holder.innerHTML=cqV80FormulaHtml('row',row,mi,formula,active);
+      card.insertBefore(holder.firstElementChild,net||null);
+    });
+
+    target.querySelectorAll('[data-v79-extra-value]').forEach(valueInput=>{
+      const pi=+valueInput.dataset.v79ExtraValue;
+      const card=valueInput.closest('.cq-head-project-card');
+      if(!card || card.querySelector('[data-v80-extra-formula]'))return;
+      const p=projectsState.extraProjects?.[pi];
+      if(!p)return;
+      const formula=p.formulas?.[mi]||'';
+      const active=!!formula && !p.overrides?.[mi];
+      const net=card.querySelector('.cq-cost-net');
+      const holder=document.createElement('div');
+      holder.innerHTML=cqV80FormulaHtml('extra',pi,mi,formula,active);
+      card.insertBefore(holder.firstElementChild,net||null);
+
+      /* Si hay fórmula, editar el importe lo convierte en valor manual. */
+      valueInput.onchange=()=>{
+        const project=projectsState.extraProjects?.[pi];
+        if(!project)return;
+        project.values[mi]=pParseInput(valueInput.value,'usd')||0;
+        if(project.formulas?.[mi])project.overrides[mi]=true;
+        pPersist();
+        cqV40RenderProjectCards();
+      };
+    });
+
+    target.querySelectorAll('[data-v80-row-formula]').forEach(inp=>{
+      inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
+      inp.onchange=()=>{
+        const row=+inp.dataset.v80RowFormula;
+        const idx=+inp.dataset.v80Mi;
+        const obj=projectsState.rows?.[String(row)];
+        if(!obj)return;
+        const f=cqV80NormalizeFormula(inp.value);
+        if(f){
+          const test=cqV80Eval(f,idx);
+          if(test===null){
+            alert('No se pudo calcular esa fórmula. Revisá la sintaxis y las referencias.');
+            inp.value=obj.formulas?.[idx]||'';
+            return;
+          }
+          obj.formulas[idx]=f;
+          obj.overrides[idx]=false;
+        }else{
+          obj.formulas[idx]=null;
+          obj.overrides[idx]=true;
+        }
+        if(typeof pRecalc==='function')pRecalc();
+        pPersist();
+        if(typeof projectsRender==='function')projectsRender();
+        cqV40RenderProjectCards();
+      };
+    });
+
+    target.querySelectorAll('[data-v80-extra-formula]').forEach(inp=>{
+      inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
+      inp.onchange=()=>{
+        const pi=+inp.dataset.v80ExtraFormula;
+        const idx=+inp.dataset.v80Mi;
+        const p=projectsState.extraProjects?.[pi];
+        if(!p)return;
+        const f=cqV80NormalizeFormula(inp.value);
+        if(f){
+          const test=cqV80Eval(f,idx);
+          if(test===null){
+            alert('No se pudo calcular esa fórmula. Revisá la sintaxis y las referencias.');
+            inp.value=p.formulas?.[idx]||'';
+            return;
+          }
+          p.formulas[idx]=f;
+          p.overrides[idx]=false;
+          p.values[idx]=test;
+        }else{
+          p.formulas[idx]=null;
+          p.overrides[idx]=true;
+        }
+        pPersist();
+        cqV40RenderProjectCards();
+      };
+    });
+  }
+
+  /* Extender las fórmulas de proyectos agregados cuando se agregan/eliminan meses. */
+  if(typeof pAddMonth==='function' && !pAddMonth.__cqV80Wrapped){
+    const oldAddMonth=pAddMonth;
+    const wrappedAddMonth=function(){
+      cqV80EnsureExtras();
+      const src=typeof projectsMonth==='number'?projectsMonth:0;
+      const before=projectsState.months.length;
+      const srcFormulas=(projectsState.extraProjects||[]).map(p=>p.formulas?.[src]||null);
+      oldAddMonth.apply(this,arguments);
+      if(projectsState.months.length>before){
+        const newMi=projectsState.months.length-1;
+        cqV80EnsureExtras();
+        (projectsState.extraProjects||[]).forEach((p,pi)=>{
+          const sf=srcFormulas[pi];
+          p.formulas[newMi]=sf && typeof pTranslateFormula==='function'?pTranslateFormula(sf,src,newMi):sf;
+          p.overrides[newMi]=false;
+          if(p.formulas[newMi]){
+            const v=cqV80Eval(p.formulas[newMi],newMi);
+            if(v!==null)p.values[newMi]=v;
+          }
+        });
+        pPersist();
+        if(typeof projectsRender==='function')projectsRender();
+      }
+    };
+    wrappedAddMonth.__cqV80Wrapped=true;
+    pAddMonth=wrappedAddMonth;
+  }
+
+  if(typeof pDeleteMonth==='function' && !pDeleteMonth.__cqV80Wrapped){
+    const oldDeleteMonth=pDeleteMonth;
+    const wrappedDeleteMonth=function(){
+      cqV80EnsureExtras();
+      const idx=typeof projectsMonth==='number'?projectsMonth:0;
+      const before=projectsState.months.length;
+      oldDeleteMonth.apply(this,arguments);
+      if(projectsState.months.length<before){
+        (projectsState.extraProjects||[]).forEach(p=>{
+          if(Array.isArray(p.formulas))p.formulas.splice(idx,1);
+          if(Array.isArray(p.overrides))p.overrides.splice(idx,1);
+        });
+        cqV80EnsureExtras();
+        pPersist();
+        if(typeof projectsRender==='function')projectsRender();
+      }
+    };
+    wrappedDeleteMonth.__cqV80Wrapped=true;
+    pDeleteMonth=wrappedDeleteMonth;
+  }
+
+  /* Mantener fórmulas de extras recalculadas y agregar la UI después de cada render. */
+  if(typeof cqV40RenderProjectCards==='function' && !cqV40RenderProjectCards.__cqV80Wrapped){
+    const oldCards=cqV40RenderProjectCards;
+    const wrappedCards=function(){
+      cqV80RecalcExtras();
+      const r=oldCards.apply(this,arguments);
+      cqV80InjectFormulaFields();
+      return r;
+    };
+    wrappedCards.__cqV80Wrapped=true;
+    cqV40RenderProjectCards=wrappedCards;
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{
+    cqV80RecalcExtras();
+    if(typeof cqV40RenderProjectCards==='function')cqV40RenderProjectCards();
+  },80));
+})();
+
+</script>
+
+<style id="cq-flow-main-and-sheet-excel-v1">
+/* v81 · Flujo: check verde en obras/egresos + orden + planilla estilo Excel */
+.flow-entry.has-check .flow-entry-name{display:flex;align-items:center;gap:6px}
+.flow-entry.cell-checked{background:#f3f9f6;border-radius:8px;padding-left:5px}
+.flow-entry.cell-checked .flow-entry-name{color:#3e6857}
+.flow-check-cell{display:grid;grid-template-columns:minmax(0,1fr) 27px;gap:5px;align-items:center}
+.flow-check-btn{width:25px;height:25px;border:1px solid #cfdcd6;border-radius:7px;background:#fff;display:grid;place-items:center;cursor:pointer;color:transparent;font-size:14px;font-weight:900;padding:0;transition:.15s}
+.flow-check-btn:hover{background:#f4f8f6;border-color:#b9cdc3}
+.flow-check-btn.checked{background:#dcece4;border-color:#a9c9b9;color:#35634f;box-shadow:0 2px 6px rgba(53,99,79,.08)}
+.flow-check-btn.checked::before{content:'✓'}
+.flow-entry-actions .move-up,.flow-entry-actions .move-down{font-size:10px}
+.flow-entry-actions .move-up{background:#f5f8f7}
+.flow-entry-actions .move-down{background:#f5f8f7}
+@media(max-width:600px){.flow-check-cell{grid-template-columns:minmax(0,1fr) 25px;gap:3px}.flow-check-btn{width:23px;height:23px;font-size:13px}}
+
+#flowSheetModal .flow-sheet-toolbar{display:grid;grid-template-columns:140px 52px minmax(0,1fr) 58px 58px;gap:8px;padding:10px 12px;background:#f7faf8;border-bottom:1px solid #d6e2dd}
+#flowSheetModal .flow-sheet-cellref,#flowSheetModal .flow-sheet-toolbar button,#flowSheetModal .flow-sheet-formula{height:36px;border:1px solid #d2ddd8;border-radius:10px;background:#fff}
+#flowSheetModal .flow-sheet-cellref{display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-weight:800;color:#40594f}
+#flowSheetModal .flow-sheet-cellref:after{content:'▼';font-size:10px;color:#6a7e74}
+#flowSheetModal .flow-sheet-fx{display:flex;align-items:center;justify-content:center;font-style:italic;font-size:20px;font-weight:900;color:#2d4f42}
+#flowSheetModal .flow-sheet-formula{width:100%;padding:0 12px;font-size:14px;outline:none}
+#flowSheetModal .flow-sheet-toolbar button{font-size:18px;font-weight:900;cursor:pointer;color:#335246}
+#flowSheetModal .flow-sheet-toolbar button:hover{background:#f3f7f5}
+#flowSheetModal .flow-sheet-wrap{background:#eef3f0!important;padding:0!important}
+#flowSheetModal .flow-sheet-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:14px!important;background:#fff!important}
+#flowSheetModal .flow-sheet-table th,#flowSheetModal .flow-sheet-table td{border-right:1px solid #d7dfdc;border-bottom:1px solid #d7dfdc;height:44px;padding:0!important;background:#fff!important}
+#flowSheetModal .flow-sheet-table thead th{position:sticky;top:0;z-index:2}
+#flowSheetModal .flow-sheet-table .sheet-corner{min-width:56px;background:#f1f5f3!important;color:#6c7c75;text-align:center;font-weight:800}
+#flowSheetModal .flow-sheet-table .sheet-col-letter{min-width:128px;background:#f3f6f5!important;color:#455c52;font-weight:800;text-align:center}
+#flowSheetModal .flow-sheet-table .sheet-col-letter.active{background:#d9ede3!important;color:#2e5d48}
+#flowSheetModal .flow-sheet-table .sheet-row-num{min-width:56px;background:#f7faf8!important;color:#4e625a;text-align:center;font-weight:800}
+#flowSheetModal .flow-sheet-table .sheet-row-num.active{background:#dff0e7!important;color:#2e5d48}
+#flowSheetModal .flow-sheet-table .sheet-label-cell{min-width:230px;max-width:270px;padding:0 12px!important;background:#fbfcfc!important;color:#2e473d;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#flowSheetModal .flow-sheet-table .sheet-header-label{font-weight:900;background:#f5f8f7!important}
+#flowSheetModal .flow-sheet-table .sheet-month-head{font-weight:900;text-align:center;background:#f6faf8!important;color:#304d42}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-0,#flowSheetModal .flow-sheet-table th.sheet-month-col-0{background:#eef7f3!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-1,#flowSheetModal .flow-sheet-table th.sheet-month-col-1{background:#eef4fa!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-2,#flowSheetModal .flow-sheet-table th.sheet-month-col-2{background:#fbf5e9!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-3,#flowSheetModal .flow-sheet-table th.sheet-month-col-3{background:#f8f0f6!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-4,#flowSheetModal .flow-sheet-table th.sheet-month-col-4{background:#f1f7ec!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-5,#flowSheetModal .flow-sheet-table th.sheet-month-col-5{background:#f2f0fa!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-6,#flowSheetModal .flow-sheet-table th.sheet-month-col-6{background:#fbf0ed!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-7,#flowSheetModal .flow-sheet-table th.sheet-month-col-7{background:#edf7f7!important}
+#flowSheetModal .flow-sheet-table .sheet-cell-wrap{position:relative;min-width:128px}
+#flowSheetModal .flow-sheet-table .sheet-cell-input{width:100%;height:44px;border:0;background:transparent;padding:0 12px;text-align:right;font-size:16px;font-weight:850;color:#1d3e32;outline:none}
+#flowSheetModal .flow-sheet-table .sheet-cell-input::placeholder{color:#adbab4}
+#flowSheetModal .flow-sheet-table td.sheet-selected{box-shadow:inset 0 0 0 3px #2ea56c;position:relative;z-index:1}
+#flowSheetModal .flow-sheet-table td.sheet-selected::after{content:'';position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;background:#2ea56c;border:2px solid #fff}
+#flowSheetModal .flow-sheet-table tr.sheet-total-row td{background:#eef4f1!important;font-weight:900;color:#294d3e}
+#flowSheetModal .flow-sheet-table tr.sheet-total-row td:first-of-type{background:#e5efea!important}
+#flowSheetModal .flow-sheet-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#flowSheetModal .flow-sheet-foot .sheet-formula-status{font-size:10px;color:#6f8079}
+@media(max-width:720px){
+  #flowSheetModal .flow-sheet-toolbar{grid-template-columns:110px 42px minmax(0,1fr) 46px 46px;padding:8px}
+  #flowSheetModal .flow-sheet-cellref,#flowSheetModal .flow-sheet-toolbar button,#flowSheetModal .flow-sheet-formula{height:34px}
+  #flowSheetModal .flow-sheet-formula{font-size:13px}
+  #flowSheetModal .flow-sheet-table .sheet-row-num{min-width:40px}
+  #flowSheetModal .flow-sheet-table .sheet-col-letter{min-width:110px}
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{min-width:155px;max-width:165px;padding:0 8px!important;font-size:12px}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{min-width:110px}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{font-size:14px;padding:0 8px}
+}
+</style>
+<script id="cq-flow-sheet-excel-logic-v1">
+(function(){
+  if(window.__cqFlowExcelV1)return;
+  window.__cqFlowExcelV1=true;
+
+  const FLOW_TYPES=['works','others','incomes'];
+  const monthColorClass=(idx)=>'sheet-month-col-'+(idx%8);
+  let cqSheetState={selected:null, rangeStart:null, rangeEnd:null, coordMap:new Map(), months:[], rows:[], actualToCoord:new Map(), lastDisplayInput:'', draggingRange:false};
+
+  function ensureFlowExtras(){
+    if(!window.flowState)return;
+    FLOW_TYPES.forEach(type=>{
+      if(!Array.isArray(flowState[type]))flowState[type]=[];
+      flowState[type].forEach(row=>{
+        if(!Array.isArray(row.months))row.months=[];
+        while(row.months.length<flowState.months.length)row.months.push(0);
+        if(type==='incomes'){
+          if(!Array.isArray(row.received))row.received=Array(flowState.months.length).fill(false);
+          while(row.received.length<flowState.months.length)row.received.push(false);
+        }else{
+          if(!Array.isArray(row.checked))row.checked=Array(flowState.months.length).fill(false);
+          while(row.checked.length<flowState.months.length)row.checked.push(false);
+        }
+        if(!row.formulas || typeof row.formulas!=='object' || Array.isArray(row.formulas))row.formulas={};
+        if(!Array.isArray(row.comments))row.comments=Array(flowState.months.length).fill('');
+        while(row.comments.length<flowState.months.length)row.comments.push('');
+      });
+    });
+  }
+
+  function normalizeFormulaEntry(entry){
+    if(!entry)return null;
+    if(typeof entry==='string')return {display:entry,compiled:entry};
+    return {
+      display:String(entry.display||entry.formula||entry.text||entry.compiled||''),
+      compiled:String(entry.compiled||entry.internal||entry.display||entry.formula||'')
+    };
+  }
+  function setFormulaEntry(row,mi,display,compiled){
+    if(!row.formulas || typeof row.formulas!=='object' || Array.isArray(row.formulas))row.formulas={};
+    row.formulas[String(mi)]={display,compiled};
+  }
+  function clearFormulaEntry(row,mi){ if(row && row.formulas) delete row.formulas[String(mi)]; }
+  function getFormulaEntry(row,mi){ return normalizeFormulaEntry(row?.formulas?.[String(mi)]); }
+  function roundSheet(n){ n=Number(n)||0; return Math.round(n*1000000)/1000000; }
+  function displayNumber(n){
+    const num=Number(n)||0;
+    if(Math.abs(num)<0.0000005)return '';
+    const rounded=roundSheet(num);
+    return Number.isInteger(rounded)?String(rounded):String(rounded).replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1');
+  }
+  function safeNum(v){ const n=Number(String(v).replace(',','.')); return Number.isFinite(n)?n:0; }
+  function colLetters(idx){ let n=idx, s=''; while(n>=0){ s=String.fromCharCode(65+(n%26))+s; n=Math.floor(n/26)-1; } return s; }
+  function parseCoord(ref){
+    const m=String(ref||'').trim().toUpperCase().match(/^\$?([A-Z]+)\$?(\d+)$/); if(!m)return null;
+    let col=0; for(const ch of m[1]) col=col*26+(ch.charCodeAt(0)-64); col-=1;
+    return {col,row:Number(m[2]),coord:m[1]+m[2]};
+  }
+  function coordLabel(col,row){ return colLetters(col)+row; }
+
+  function rowVisibleForMonths(row,months){
+    return !Number.isInteger(row.hiddenFrom) || months.some(mi=>mi<row.hiddenFrom);
+  }
+  function buildVisibleRows(months){
+    const rows=[];
+    FLOW_TYPES.forEach(type=>{
+      (flowState[type]||[]).forEach((row,ri)=>{
+        if(rowVisibleForMonths(row,months))rows.push({type,ri,row,name:row.name||''});
+      });
+    });
+    return rows;
+  }
+
+  function buildActualKey(type,ri,mi){ return type+':'+ri+':'+mi; }
+  function parseActualKey(key){ const [type,ri,mi]=String(key).split(':'); return {type,ri:+ri,mi:+mi}; }
+
+  function buildCoordMaps(months,rows){
+    const coordMap=new Map(), actualToCoord=new Map();
+    // Row 1 headers
+    coordMap.set('A1',{kind:'label'});
+    months.forEach((mi,idx)=>coordMap.set(coordLabel(idx+1,1),{kind:'header',monthIndex:mi}));
+    rows.forEach((item,idx)=>{
+      const rowNum=idx+2;
+      coordMap.set('A'+rowNum,{kind:'label',type:item.type,ri:item.ri});
+      months.forEach((mi,ci)=>{
+        const coord=coordLabel(ci+1,rowNum);
+        const key=buildActualKey(item.type,item.ri,mi);
+        coordMap.set(coord,{kind:'cell',key,type:item.type,ri:item.ri,mi,rowNum,col:ci+1});
+        actualToCoord.set(key,coord);
+      });
+    });
+    return {coordMap,actualToCoord};
+  }
+
+  function expandRangeToActualKeys(rangeText,coordMap){
+    const parts=String(rangeText).split(':'); if(parts.length!==2)return [];
+    const a=parseCoord(parts[0]), b=parseCoord(parts[1]); if(!a||!b)return [];
+    const c1=Math.min(a.col,b.col), c2=Math.max(a.col,b.col), r1=Math.min(a.row,b.row), r2=Math.max(a.row,b.row);
+    const keys=[];
+    for(let r=r1;r<=r2;r++){
+      for(let c=c1;c<=c2;c++){
+        const info=coordMap.get(coordLabel(c,r));
+        if(info && info.kind==='cell')keys.push(info.key);
+      }
+    }
+    return keys;
+  }
+
+  function compileFormula(display,coordMap){
+    let txt=String(display||'').trim();
+    if(!txt.startsWith('='))return null;
+    txt=txt.replace(/\r?\n/g,' ');
+    txt=txt.replace(/\$?[A-Z]+\$?\d+\s*:\s*\$?[A-Z]+\$?\d+/gi,m=>{
+      const keys=expandRangeToActualKeys(m.replace(/\s+/g,''),coordMap);
+      return `__LIST__(${keys.join(',')})`;
+    });
+    txt=txt.replace(/\$?[A-Z]+\$?\d+/gi,m=>{
+      const info=coordMap.get((parseCoord(m)||{}).coord||'');
+      return info && info.kind==='cell' ? `__CELL__(${info.key})` : '0';
+    });
+    return txt;
+  }
+
+  function splitFormulaArgs(s){
+    const args=[]; let cur='', depth=0;
+    for(let i=0;i<s.length;i++){
+      const ch=s[i];
+      if(ch==='(')depth++;
+      if(ch===')')depth--;
+      if((ch===','||ch===';') && depth===0){ args.push(cur); cur=''; continue; }
+      cur+=ch;
+    }
+    if(cur.trim())args.push(cur);
+    return args;
+  }
+
+  function evaluateCompiledFormula(expr,stack){
+    let raw=String(expr||'').trim();
+    if(!raw)return 0;
+    if(!raw.startsWith('='))return safeNum(raw);
+    let body=raw.slice(1);
+
+    function resolveCellToken(token){
+      const m=String(token).match(/^__CELL__\(([^)]+)\)$/); if(!m)return 0;
+      return evaluateActualKey(m[1],stack);
+    }
+    function resolveListToken(token){
+      const m=String(token).match(/^__LIST__\((.*)\)$/); if(!m)return [];
+      return m[1].split(',').map(x=>x.trim()).filter(Boolean).map(key=>evaluateActualKey(key,stack));
+    }
+    function evalExpr(fragment){
+      let exp=String(fragment||'').trim();
+      if(!exp)return 0;
+      let prev;
+      const fnRe=/(SUM|AVERAGE|PROMEDIO|MIN|MAX)\(([^()]*)\)/i;
+      do{
+        prev=exp;
+        exp=exp.replace(fnRe,(match,fn,args)=>{
+          let vals=[];
+          splitFormulaArgs(args).forEach(arg=>{
+            const a=arg.trim();
+            if(!a)return;
+            if(/^__LIST__\(/.test(a)) vals=vals.concat(resolveListToken(a));
+            else vals.push(evalExpr(a));
+          });
+          if(!vals.length) return '0';
+          const key=fn.toUpperCase();
+          if(key==='SUM')return String(vals.reduce((acc,v)=>acc+(Number(v)||0),0));
+          if(key==='AVERAGE' || key==='PROMEDIO')return String(vals.reduce((acc,v)=>acc+(Number(v)||0),0)/vals.length);
+          if(key==='MIN')return String(Math.min(...vals.map(v=>Number(v)||0)));
+          if(key==='MAX')return String(Math.max(...vals.map(v=>Number(v)||0)));
+          return '0';
+        });
+      }while(exp!==prev && fnRe.test(exp));
+
+      exp=exp.replace(/__CELL__\(([^)]+)\)/g,(_,key)=>String(evaluateActualKey(key,stack)));
+      exp=exp.replace(/__LIST__\(([^)]*)\)/g,(_,keys)=>String(keys.split(',').map(k=>evaluateActualKey(k.trim(),stack)).reduce((acc,v)=>acc+(Number(v)||0),0)));
+      exp=exp.replace(/,/g,'.');
+      if(/[^0-9+\-*/().\s]/.test(exp))return 0;
+      try{
+        const out=Function('"use strict"; return ('+exp+');')();
+        return Number.isFinite(out)?out:0;
+      }catch(e){ return 0; }
+    }
+    return roundSheet(evalExpr(body));
+  }
+
+  function evaluateActualKey(key,stack){
+    const k=String(key||'');
+    if(stack.has(k))return 0;
+    const {type,ri,mi}=parseActualKey(k);
+    const row=flowState?.[type]?.[ri];
+    if(!row)return 0;
+    const entry=getFormulaEntry(row,mi);
+    if(!entry)return safeNum(row.months?.[mi]);
+    stack.add(k);
+    const val=evaluateCompiledFormula(entry.compiled||entry.display||'',stack);
+    stack.delete(k);
+    return val;
+  }
+
+  function recalcAllStoredFormulas(){
+    ensureFlowExtras();
+    FLOW_TYPES.forEach(type=>{
+      (flowState[type]||[]).forEach((row)=>{
+        if(!row.formulas || typeof row.formulas!=='object')return;
+        Object.keys(row.formulas).forEach(miKey=>{
+          const mi=+miKey, entry=getFormulaEntry(row,mi);
+          if(!entry)return;
+          row.months[mi]=evaluateCompiledFormula(entry.compiled||entry.display||'',new Set());
+        });
+      });
+    });
+  }
+
+  function coordForActualKey(key){ return cqSheetState.actualToCoord.get(String(key||''))||''; }
+
+  function selectedRangeKeys(){
+    const startKey=cqSheetState.rangeStart||cqSheetState.selected;
+    const endKey=cqSheetState.rangeEnd||startKey;
+    const a=parseCoord(coordForActualKey(startKey)), b=parseCoord(coordForActualKey(endKey));
+    if(!a||!b)return startKey?[startKey]:[];
+    const c1=Math.min(a.col,b.col), c2=Math.max(a.col,b.col), r1=Math.min(a.row,b.row), r2=Math.max(a.row,b.row);
+    const keys=[];
+    for(let r=r1;r<=r2;r++)for(let c=c1;c<=c2;c++){
+      const info=cqSheetState.coordMap.get(coordLabel(c,r));
+      if(info?.kind==='cell')keys.push(info.key);
+    }
+    return keys;
+  }
+
+  function selectedRangeStats(){
+    const keys=selectedRangeKeys();
+    const vals=keys.map(k=>evaluateActualKey(k,new Set())).filter(v=>Number.isFinite(Number(v))).map(Number);
+    const sum=vals.reduce((a,b)=>a+b,0);
+    return {keys,count:keys.length,sum,avg:vals.length?sum/vals.length:0};
+  }
+
+  function formatSelectionNumber(n){
+    const v=roundSheet(Number(n)||0);
+    return new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(v);
+  }
+
+  function updateSelectionStatus(){
+    const status=document.getElementById('flowSheetFormulaStatus');
+    const topSummary=document.getElementById('flowSheetRangeSummary');
+    const stats=selectedRangeStats();
+    if(stats.count>1){
+      const msg=`${stats.count} celdas · Suma ${formatSelectionNumber(stats.sum)} · Prom. ${formatSelectionNumber(stats.avg)}`;
+      if(status){status.textContent=msg;status.classList.add('range-summary');}
+      if(topSummary){topSummary.innerHTML=`<b>Σ ${formatSelectionNumber(stats.sum)}</b><span>${stats.count} celdas · Prom. ${formatSelectionNumber(stats.avg)}</span>`;topSummary.classList.add('show');}
+    }else{
+      if(topSummary){topSummary.classList.remove('show');topSummary.innerHTML='';}
+      if(status){
+        status.classList.remove('range-summary');
+        const actualKey=cqSheetState.selected;
+        if(!actualKey){status.textContent='Seleccioná una celda';return;}
+        const {type,ri,mi}=parseActualKey(actualKey), row=flowState?.[type]?.[ri], entry=getFormulaEntry(row,mi);
+        status.textContent=entry?.display ? 'Fórmula guardada · se recalcula automáticamente' : 'Valor directo';
+      }
+    }
+  }
+
+  function updateSheetSelectionVisual(){
+    const selected=cqSheetState.selected;
+    const activeCoord=selected ? coordForActualKey(selected) : '';
+    const parsed=activeCoord ? parseCoord(activeCoord) : null;
+    const rangeKeys=new Set(selectedRangeKeys());
+    document.querySelectorAll('#flowSheetBody [data-sheet-ui-cell]').forEach(td=>{
+      const key=td.dataset.sheetUiCell;
+      td.classList.toggle('sheet-selected', selected && key===selected);
+      td.classList.toggle('sheet-range-selected', rangeKeys.has(key));
+      td.classList.toggle('sheet-range-anchor', key===(cqSheetState.rangeStart||selected));
+      td.classList.toggle('sheet-range-end', key===(cqSheetState.rangeEnd||selected));
+    });
+    document.querySelectorAll('#flowSheetHead .sheet-col-letter').forEach((th,idx)=>{ if(idx===0)return; th.classList.toggle('active', !!(parsed && parsed.col===idx)); });
+    document.querySelectorAll('#flowSheetBody .sheet-row-num').forEach(th=>{
+      const rn=Number(th.textContent)||0;
+      th.classList.toggle('active', !!(parsed && parsed.row===rn));
+    });
+    updateSelectionStatus();
+  }
+
+  function setSelectedActualKey(actualKey,keepRange=false){
+    cqSheetState.selected=actualKey||null;
+    if(!keepRange){
+      cqSheetState.rangeStart=actualKey||null;
+      cqSheetState.rangeEnd=actualKey||null;
+    }
+    const ref=document.getElementById('flowSheetCellRef');
+    const input=document.getElementById('flowSheetFormulaInput');
+    if(!ref||!input)return;
+    if(!actualKey){ ref.textContent='—'; input.value=''; updateSheetSelectionVisual(); return; }
+    const coord=coordForActualKey(actualKey)||'—';
+    const rangeCount=selectedRangeKeys().length;
+    ref.textContent=rangeCount>1 ? `${coord} · ${rangeCount}` : coord;
+    const {type,ri,mi}=parseActualKey(actualKey);
+    const row=flowState[type][ri];
+    const entry=getFormulaEntry(row,mi);
+    input.value=entry?.display || displayNumber(row.months[mi]);
+    cqSheetState.lastDisplayInput=input.value;
+    updateSheetSelectionVisual();
+  }
+
+  function setRangeEndActualKey(actualKey){
+    if(!actualKey)return;
+    if(!cqSheetState.rangeStart)cqSheetState.rangeStart=cqSheetState.selected||actualKey;
+    cqSheetState.rangeEnd=actualKey;
+    const ref=document.getElementById('flowSheetCellRef');
+    if(ref){
+      const a=coordForActualKey(cqSheetState.rangeStart), b=coordForActualKey(cqSheetState.rangeEnd);
+      ref.textContent=a===b?a:`${a}:${b}`;
+    }
+    updateSheetSelectionVisual();
+  }
+
+  function applySelectedCellValue(raw){
+    const actualKey=cqSheetState.selected; if(!actualKey)return;
+    const {type,ri,mi}=parseActualKey(actualKey);
+    const row=flowState[type][ri]; if(!row)return;
+    const txt=String(raw??'').trim();
+    if(txt.startsWith('=')){
+      const compiled=compileFormula(txt,cqSheetState.coordMap);
+      setFormulaEntry(row,mi,txt,compiled||txt);
+      row.months[mi]=evaluateCompiledFormula(compiled||txt,new Set());
+    }else{
+      clearFormulaEntry(row,mi);
+      row.months[mi]=safeNum(txt);
+    }
+    recalcAllStoredFormulas();
+    flowPersist();
+    if(document.getElementById('dashboardPage'))dashboardRender();
+    updateHeaderForActivePage();
+    cqFlowSheetRender();
+    setSelectedActualKey(actualKey);
+  }
+
+  function ensureSheetToolbar(){
+    const modal=document.getElementById('flowSheetModal'); if(!modal)return;
+    const existingBar=document.getElementById('flowSheetToolbar');
+    if(existingBar){
+      if(!document.getElementById('flowSheetRangeSummary')){
+        const sumBar=document.createElement('div');
+        sumBar.id='flowSheetRangeSummary';
+        sumBar.className='flow-sheet-range-summary';
+        existingBar.insertAdjacentElement('afterend',sumBar);
+      }
+      const existingFoot=modal.querySelector('.flow-sheet-foot');
+      if(existingFoot && !document.getElementById('flowSheetFormulaStatus')){
+        const status=document.createElement('span');
+        status.id='flowSheetFormulaStatus';
+        status.className='sheet-formula-status';
+        status.textContent='Seleccioná una celda';
+        existingFoot.insertBefore(status,existingFoot.firstChild.nextSibling);
+      }
+      return;
+    }
+    const filters=modal.querySelector('.flow-sheet-filters');
+    if(!filters)return;
+    const bar=document.createElement('div');
+    bar.id='flowSheetToolbar';
+    bar.className='flow-sheet-toolbar';
+    bar.innerHTML=''
+      +'<div class="flow-sheet-cellref" id="flowSheetCellRef">—</div>'
+      +'<div class="flow-sheet-fx">fx</div>'
+      +'<input id="flowSheetFormulaInput" class="flow-sheet-formula" type="text" placeholder="Escribí un valor o una fórmula, por ejemplo =SUM(B2:B5)">'
+      +'<button type="button" id="flowSheetApply" aria-label="Aplicar">✓</button>'
+      +'<button type="button" id="flowSheetCancelFormula" aria-label="Cancelar">×</button>';
+    filters.insertAdjacentElement('afterend',bar);
+    if(!document.getElementById('flowSheetRangeSummary')){
+      const sumBar=document.createElement('div');
+      sumBar.id='flowSheetRangeSummary';
+      sumBar.className='flow-sheet-range-summary';
+      bar.insertAdjacentElement('afterend',sumBar);
+    }
+    const foot=modal.querySelector('.flow-sheet-foot');
+    if(foot && !document.getElementById('flowSheetFormulaStatus')){
+      const status=document.createElement('span');
+      status.id='flowSheetFormulaStatus';
+      status.className='sheet-formula-status';
+      status.textContent='Seleccioná una celda';
+      foot.insertBefore(status,foot.firstChild.nextSibling);
+    }
+    const formulaInput=document.getElementById('flowSheetFormulaInput');
+    document.getElementById('flowSheetApply').onclick=()=>applySelectedCellValue(formulaInput.value);
+    document.getElementById('flowSheetCancelFormula').onclick=()=>setSelectedActualKey(cqSheetState.selected);
+    formulaInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); applySelectedCellValue(formulaInput.value); }});
+  }
+
+  function sheetCellHtml(item,mi,ci,rowNum){
+    const key=buildActualKey(item.type,item.ri,mi);
+    const isSelected=cqSheetState.selected===key;
+    const value=displayNumber(item.row.months[mi]);
+    const comment=String(item.row.comments?.[mi]||'').trim();
+    return `<td class="${monthColorClass(ci)} ${isSelected?'sheet-selected':''} ${comment?'has-sheet-comment':''}" data-sheet-ui-cell="${key}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" type="number" inputmode="decimal" step="any" data-sheet-edit="${key}" value="${fesc(value)}" placeholder="0"><button type="button" class="sheet-comment-btn ${comment?'has-comment':''}" data-sheet-comment="${key}" title="${comment?fesc(comment):'Agregar comentario'}" aria-label="Comentario">✎</button><span class="sheet-drag-handle" data-sheet-handle="${key}" aria-hidden="true"></span></div></td>`;
+  }
+
+  function renderSheetTable(months,rows){
+    const thead=document.getElementById('flowSheetHead');
+    const tbody=document.getElementById('flowSheetBody');
+    if(!thead||!tbody)return;
+    thead.innerHTML='';
+
+    const grouped=[
+      {type:'works',title:'Obras'},
+      {type:'others',title:'Otros egresos'},
+      {type:'incomes',title:'Ingresos'}
+    ];
+
+    let body='';
+    body+=`<tr class="sheet-months-row"><td class="sheet-label-cell sheet-header-label">Concepto</td>${months.map((mi,ci)=>`<td class="sheet-month-head ${monthColorClass(ci)}">${fesc(flowState.months[mi])}</td>`).join('')}</tr>`;
+
+    grouped.forEach(group=>{
+      const groupRows=rows.filter(item=>item.type===group.type);
+      if(!groupRows.length)return;
+      body+=`<tr class="sheet-section-row"><td class="sheet-section-cell" colspan="${months.length+1}">${group.title}</td></tr>`;
+      groupRows.forEach((item)=>{
+        body+=`<tr><td class="sheet-label-cell" title="${fesc(item.name)}">${fesc(item.name)}</td>${months.map((mi,ci)=>sheetCellHtml(item,mi,ci)).join('')}</tr>`;
+      });
+    });
+
+    const c=flowCalc();
+    body+=`<tr class="sheet-total-row"><td class="sheet-label-cell">Flujo neto</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.net[mi]))}" readonly></div></td>`).join('')}</tr>`;
+    body+=`<tr class="sheet-total-row"><td class="sheet-label-cell">Saldo acumulado</td>${months.map((mi,ci)=>`<td class="${monthColorClass(ci)}"><div class="sheet-cell-wrap"><input class="sheet-cell-input" value="${fesc(displayNumber(c.balance[mi]))}" readonly></div></td>`).join('')}</tr>`;
+    tbody.innerHTML=body;
+
+    const modal=document.getElementById('flowSheetModal');
+    const wrap=document.querySelector('#flowSheetModal .flow-sheet-wrap');
+
+    function beginRangeDrag(key,pointerId){
+      cqSheetState.draggingRange=true;
+      cqSheetState.activeDragPointer=pointerId;
+      cqSheetState.rangeStart=key||cqSheetState.selected;
+      cqSheetState.rangeEnd=key||cqSheetState.selected;
+      updateSheetSelectionVisual();
+      if(wrap)wrap.classList.add('range-dragging');
+    }
+    function updateRangeFromPoint(clientX,clientY){
+      const prevPE=modal ? modal.style.pointerEvents : '';
+      if(modal)modal.style.pointerEvents='auto';
+      const el=document.elementFromPoint(clientX,clientY);
+      if(modal)modal.style.pointerEvents=prevPE;
+      const td=el?.closest?.('[data-sheet-ui-cell]');
+      if(td)setRangeEndActualKey(td.dataset.sheetUiCell);
+    }
+    function finishRangeDrag(){
+      if(!cqSheetState.draggingRange)return;
+      cqSheetState.draggingRange=false;
+      cqSheetState.activeDragPointer=null;
+      if(wrap)wrap.classList.remove('range-dragging');
+      updateSheetSelectionVisual();
+    }
+
+    if(!window.__cqFlowSheetDocDragBound){
+      window.__cqFlowSheetDocDragBound=true;
+      document.addEventListener('pointermove',e=>{
+        if(!cqSheetState.draggingRange)return;
+        if(cqSheetState.activeDragPointer!==null && cqSheetState.activeDragPointer!==undefined && e.pointerId!==cqSheetState.activeDragPointer)return;
+        updateRangeFromPoint(e.clientX,e.clientY);
+      },{passive:true});
+      document.addEventListener('pointerup',e=>{
+        if(cqSheetState.activeDragPointer!==null && cqSheetState.activeDragPointer!==undefined && e.pointerId!==cqSheetState.activeDragPointer)return;
+        finishRangeDrag();
+      },{passive:true});
+      document.addEventListener('pointercancel',e=>{
+        if(cqSheetState.activeDragPointer!==null && cqSheetState.activeDragPointer!==undefined && e.pointerId!==cqSheetState.activeDragPointer)return;
+        finishRangeDrag();
+      },{passive:true});
+    }
+
+    tbody.querySelectorAll('[data-sheet-ui-cell]').forEach(td=>{
+      td.addEventListener('click',e=>{
+        if(cqSheetState.draggingRange)return;
+        const key=td.dataset.sheetUiCell;
+        setSelectedActualKey(key);
+      });
+      td.addEventListener('pointerdown',e=>{
+        const key=td.dataset.sheetUiCell;
+        const rect=td.getBoundingClientRect();
+        const nearCorner=(e.clientX>=rect.right-20 && e.clientY>=rect.bottom-20);
+        if(key===cqSheetState.selected && nearCorner){
+          e.preventDefault();
+          e.stopPropagation();
+          beginRangeDrag(key,e.pointerId);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('[data-sheet-comment]').forEach(btn=>{
+      btn.addEventListener('pointerdown',e=>{e.stopPropagation();});
+      btn.addEventListener('click',e=>{
+        e.preventDefault();e.stopPropagation();
+        const key=btn.dataset.sheetComment;
+        setSelectedActualKey(key);
+        const {type,ri,mi}=parseActualKey(key);
+        if(typeof window.cqOpenFlowComment==='function')window.cqOpenFlowComment(type,ri,mi);
+      });
+    });
+
+    tbody.querySelectorAll('[data-sheet-handle]').forEach(handle=>{
+      handle.addEventListener('pointerdown',e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const key=handle.dataset.sheetHandle;
+        if(key!==cqSheetState.selected)setSelectedActualKey(key);
+        beginRangeDrag(key,e.pointerId);
+        try{handle.setPointerCapture(e.pointerId)}catch(_e){}
+      });
+    });
+
+    tbody.querySelectorAll('[data-sheet-edit]').forEach(inp=>{
+      inp.addEventListener('focus',()=>{ if(!cqSheetState.draggingRange){setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select());} });
+      inp.addEventListener('click',e=>{ e.stopPropagation(); if(!cqSheetState.draggingRange){setSelectedActualKey(inp.dataset.sheetEdit); requestAnimationFrame(()=>inp.select());} });
+      inp.addEventListener('pointerdown',e=>{
+        const td=inp.closest('[data-sheet-ui-cell]');
+        if(!td)return;
+        const key=td.dataset.sheetUiCell;
+        const rect=td.getBoundingClientRect();
+        const nearCorner=(e.clientX>=rect.right-20 && e.clientY>=rect.bottom-20);
+        if(key===cqSheetState.selected && nearCorner){
+          e.preventDefault();
+          e.stopPropagation();
+          beginRangeDrag(key,e.pointerId);
+        }
+      });
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); applySelectedCellValue(inp.value); } });
+      inp.addEventListener('change',()=>applySelectedCellValue(inp.value));
+      inp.addEventListener('blur',()=>{
+        const key=inp.dataset.sheetEdit;
+        if(key===cqSheetState.selected){
+          const parsedKey=parseActualKey(key), row=flowState[parsedKey.type][parsedKey.ri];
+          const entry=getFormulaEntry(row,parsedKey.mi);
+          const wanted=entry?.display || displayNumber(row.months[parsedKey.mi]);
+          inp.value=displayNumber(row.months[parsedKey.mi]);
+          const formulaInput=document.getElementById('flowSheetFormulaInput');
+          if(formulaInput)formulaInput.value=wanted;
+        }
+      });
+    });
+  }
+
+  window.cqFlowSheetRender=function(){
+    ensureFlowExtras();
+    ensureSheetToolbar();
+    cqFlowSheetRenderFilters();
+    const months=(typeof cqFlowSheetVisibleMonths==='function'?cqFlowSheetVisibleMonths():[]);
+    cqSheetState.months=months;
+    const rows=buildVisibleRows(months);
+    cqSheetState.rows=rows;
+    const maps=buildCoordMaps(months,rows);
+    cqSheetState.coordMap=maps.coordMap;
+    cqSheetState.actualToCoord=maps.actualToCoord;
+    if((!cqSheetState.selected || !cqSheetState.actualToCoord.has(cqSheetState.selected)) && rows.length && months.length){
+      cqSheetState.selected=buildActualKey(rows[0].type,rows[0].ri,months[0]);
+    }
+    renderSheetTable(months,rows);
+    setSelectedActualKey(cqSheetState.selected);
+  };
+
+  const oldFlowCatRows=window.flowCatRows;
+  window.flowCatRows=function(type,mi){
+    ensureFlowExtras();
+    const rows=flowState[type]||[];
+    const html=rows.map((r,ri)=>{
+      if(Number.isInteger(r.hiddenFrom) && mi>=r.hiddenFrom)return '';
+      const keyPrefix=type+':'+ri+':'+mi;
+      const input=`<input class="${type==='works'?'flow-work-value':''}" type="number" step="1" inputmode="decimal" data-flow-cell="${type}:${ri}:${mi}" value="${fnum(r.months[mi])||''}" placeholder="0">`;
+      const checked = type==='incomes' ? (Array.isArray(r.received)&&!!r.received[mi]) : (Array.isArray(r.checked)&&!!r.checked[mi]);
+      const valueCell=`<div class="flow-check-cell">${input}<button type="button" class="flow-check-btn ${checked?'checked':''}" data-flow-mark="${type}:${ri}:${mi}" title="${checked?'Marcado':'Marcar'}" aria-label="${checked?'Marcado':'Marcar'}"></button></div>`;
+      const moveBtns=`<button type="button" class="flow-entry-action move-up" data-flow-move="${type}:${ri}:-1" title="Subir">↑</button><button type="button" class="flow-entry-action move-down" data-flow-move="${type}:${ri}:1" title="Bajar">↓</button>`;
+      const editBtn=type==='works'?`<button type="button" class="flow-entry-action edit-work" data-work-ri="${ri}" title="Modificar obra">✎</button>`:type==='others'?`<button type="button" class="flow-entry-action edit-other" data-other-ri="${ri}" title="Modificar nombre">✎</button>`:`<button type="button" class="flow-entry-action edit-income" data-income-ri="${ri}" title="Modificar nombre">✎</button>`;
+      const delBtn=type==='works'?`<button type="button" class="flow-entry-action delete del-work-forward" data-work-ri="${ri}" data-work-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:type==='others'?`<button type="button" class="flow-entry-action delete del-other-forward" data-other-ri="${ri}" data-other-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:`<button type="button" class="flow-entry-action delete del-income-forward" data-income-ri="${ri}" data-income-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`;
+      return `<div class="flow-entry has-check ${type==='works'&&r.autoCost?'new-work':''} ${checked?'cell-checked':''}"><div class="flow-entry-name" title="${fesc(r.name)}">${fesc(r.name)}${type==='works'&&r.autoCost?'<span class="flow-new-tag">Nueva</span>':''}</div>${valueCell}<div class="flow-entry-actions">${moveBtns}${editBtn}${delBtn}</div></div>`;
+    }).join('');
+    return html||'<div class="flow-empty">Sin conceptos</div>';
+  };
+
+  const oldFlowRenderPanels=window.flowRenderPanels;
+  window.flowRenderPanels=function(){
+    ensureFlowExtras();
+    const c=flowCalc(),open=(flowOpenMonths[flowYear]||[]).filter(i=>flowState.months[i]);
+    const panels=document.getElementById('flowMonthPanels');
+    if(!panels)return;
+    panels.classList.toggle('multi-month',open.length>1);
+    panels.dataset.openMonths=String(open.length);
+    panels.innerHTML=open.length?open.map(mi=>`<section class="flow-month-panel"><div class="flow-month-title"><h2>${flowState.months[mi]}</h2><div class="flow-month-mini"><span>Egresos <b>${fusd(c.expenses[mi])}</b></span><span>Ingresos <b>${fusd(c.incomes[mi])}</b></span><span>Flujo neto <b class="${c.net[mi]>=0?'pos':'neg'}">${fusd(c.net[mi])}</b></span><span class="balance-chip">Saldo acumulado <b class="${c.balance[mi]>=0?'pos':'neg'}">${fusd(c.balance[mi])}</b></span></div></div>${flowCat('works','Obras','Todas las obras',mi,c.works[mi])}${flowCat('others','Otros egresos','Acopios · Gastos generales · Retiro socios · Impuestos',mi,c.others[mi])}${flowCat('incomes','Ingresos','Obras y otros ingresos',mi,c.incomes[mi])}</section>`).join(''):'<div class="flow-empty" style="background:#fff;border:1px solid var(--line);border-radius:12px">Elegí uno o varios meses para comenzar.</div>';
+
+    document.querySelectorAll('[data-flow-cat]').forEach(b=>b.onclick=()=>{
+      const k=b.dataset.flowCat;
+      const parts=k.split(':'); const type=parts[1];
+      const shouldOpen=!flowOpenCats.has(k);
+      if(open.length>1){ open.forEach(mi=>{ const key=mi+':'+type; shouldOpen?flowOpenCats.add(key):flowOpenCats.delete(key); }); }
+      else{ shouldOpen?flowOpenCats.add(k):flowOpenCats.delete(k); }
+      flowRenderPanels();
+    });
+
+    document.querySelectorAll('[data-flow-cell]').forEach(inp=>{
+      inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
+      inp.onclick=()=>requestAnimationFrame(()=>inp.select());
+      inp.onchange=e=>{
+        let [type,ri,mi]=inp.dataset.flowCell.split(':'); ri=+ri; mi=+mi;
+        const row=flowState[type][ri];
+        row.months[mi]=fnum(e.target.value);
+        clearFormulaEntry(row,mi);
+        recalcAllStoredFormulas();
+        flowPersist();
+        flowRenderPanels();
+        if(document.getElementById('dashboardPage'))dashboardRender();
+        updateHeaderForActivePage();
+        if(document.getElementById('flowSheetModal')?.classList.contains('open')) cqFlowSheetRender();
+      };
+    });
+    document.querySelectorAll('[data-flow-mark]').forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      let [type,ri,mi]=btn.dataset.flowMark.split(':'); ri=+ri; mi=+mi;
+      const row=flowState[type][ri];
+      if(type==='incomes'){ if(!Array.isArray(row.received))row.received=Array(flowState.months.length).fill(false); row.received[mi]=!row.received[mi]; }
+      else{ if(!Array.isArray(row.checked))row.checked=Array(flowState.months.length).fill(false); row.checked[mi]=!row.checked[mi]; }
+      flowPersist(); flowRenderPanels();
+    });
+    document.querySelectorAll('[data-flow-move]').forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      let [type,ri,dir]=btn.dataset.flowMove.split(':'); ri=+ri; dir=+dir;
+      const arr=flowState[type]||[]; const ni=ri+dir;
+      if(ni<0 || ni>=arr.length)return;
+      [arr[ri],arr[ni]]=[arr[ni],arr[ri]];
+      flowPersist();
+      flowRenderPanels();
+      if(document.getElementById('flowSheetModal')?.classList.contains('open')) cqFlowSheetRender();
+      toast('Orden actualizado');
+    });
+    document.querySelectorAll('.add-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddManualWork(+b.dataset.workMonth)});
+    document.querySelectorAll('.new-auto-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowOpenNewWorkModal(+b.dataset.workMonth)});
+    document.querySelectorAll('.add-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddOther(+b.dataset.otherMonth)});
+    document.querySelectorAll('.add-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddIncome(+b.dataset.incomeMonth)});
+    document.querySelectorAll('.edit-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameWork(+b.dataset.workRi)});
+    document.querySelectorAll('.edit-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameOther(+b.dataset.otherRi)});
+    document.querySelectorAll('.edit-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameIncome(+b.dataset.incomeRi)});
+    document.querySelectorAll('.del-work-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteWorkForward(+b.dataset.workRi,+b.dataset.workMi)});
+    document.querySelectorAll('.del-other-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteOtherForward(+b.dataset.otherRi,+b.dataset.otherMi)});
+    document.querySelectorAll('.del-income-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteIncomeForward(+b.dataset.incomeRi,+b.dataset.incomeMi)});
+  };
+
+  const oldSheetOpen=window.cqFlowSheetOpen;
+  window.cqFlowSheetOpen=function(){
+    ensureFlowExtras();
+    recalcAllStoredFormulas();
+    if(typeof cqFlowSheetInitSelection==='function')cqFlowSheetInitSelection();
+    cqFlowSheetRender();
+    const modal=document.getElementById('flowSheetModal');
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden','false');
+  };
+
+  window.cqFlowSheetClose=function(){
+    const modal=document.getElementById('flowSheetModal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden','true');
+  };
+
+  function setupSheetButtons(){
+    ensureSheetToolbar();
+    const open=document.getElementById('flowSheetOpen');
+    const close=document.getElementById('flowSheetClose');
+    const done=document.getElementById('flowSheetDone');
+    const modal=document.getElementById('flowSheetModal');
+    if(open)open.onclick=window.cqFlowSheetOpen;
+    if(close)close.onclick=window.cqFlowSheetClose;
+    if(done)done.onclick=()=>{ window.cqFlowSheetClose(); flowRender(); };
+    if(modal)modal.onclick=e=>{ if(e.target===modal)window.cqFlowSheetClose(); };
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>{ ensureFlowExtras(); recalcAllStoredFormulas(); flowPersist(); setupSheetButtons(); if(typeof flowRender==='function')flowRender(); });
+  if(document.readyState!=='loading'){ ensureFlowExtras(); recalcAllStoredFormulas(); setTimeout(()=>{ setupSheetButtons(); try{flowPersist(); if(typeof flowRender==='function')flowRender();}catch(e){} },40); }
+})();
+</script>
+
+
+<style id="cq-flow-sheet-phone-fix-v2">
+/* Ajuste fino SOLO teléfono: planilla más compacta y estética */
+@media (max-width: 520px){
+  #flowSheetModal.flow-sheet-backdrop{padding:2px!important}
+  #flowSheetModal .flow-sheet-panel{height:98vh!important;border-radius:12px!important}
+  #flowSheetModal .flow-sheet-head{padding:9px 10px!important}
+  #flowSheetModal .flow-sheet-head strong{font-size:14px!important}
+  #flowSheetModal .flow-sheet-head span{font-size:8px!important;margin-top:1px!important}
+  #flowSheetModal .flow-sheet-close{width:34px!important;height:34px!important;border-radius:10px!important}
+  #flowSheetModal .flow-sheet-filters{padding:7px 8px!important;gap:6px!important}
+  #flowSheetModal .flow-sheet-filter-row{grid-template-columns:42px minmax(0,1fr)!important;gap:6px!important}
+  #flowSheetModal .flow-sheet-filter-row>b{font-size:8px!important;padding-top:5px!important}
+  #flowSheetModal .flow-sheet-chips{gap:4px!important}
+  #flowSheetModal .flow-sheet-chip{padding:4px 7px!important;font-size:8px!important;border-radius:8px!important}
+
+  #flowSheetModal .flow-sheet-toolbar{grid-template-columns:72px 28px minmax(0,1fr) 34px 34px!important;gap:5px!important;padding:6px!important}
+  #flowSheetModal .flow-sheet-cellref,
+  #flowSheetModal .flow-sheet-toolbar button,
+  #flowSheetModal .flow-sheet-formula{height:30px!important;border-radius:8px!important}
+  #flowSheetModal .flow-sheet-cellref{padding:0 8px!important;font-size:11px!important}
+  #flowSheetModal .flow-sheet-cellref:after{font-size:8px!important}
+  #flowSheetModal .flow-sheet-fx{font-size:16px!important}
+  #flowSheetModal .flow-sheet-formula{padding:0 8px!important;font-size:11px!important}
+  #flowSheetModal .flow-sheet-toolbar button{font-size:14px!important}
+
+  #flowSheetModal .flow-sheet-table{font-size:11px!important}
+  #flowSheetModal .flow-sheet-table th,
+  #flowSheetModal .flow-sheet-table td{height:32px!important}
+  #flowSheetModal .flow-sheet-table .sheet-corner,
+  #flowSheetModal .flow-sheet-table .sheet-row-num{min-width:34px!important;font-size:10px!important}
+  #flowSheetModal .flow-sheet-table .sheet-col-letter{min-width:86px!important;font-size:10px!important}
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{min-width:120px!important;max-width:120px!important;padding:0 6px!important;font-size:10px!important;line-height:1.05!important}
+  #flowSheetModal .flow-sheet-table .sheet-month-head{font-size:10px!important;padding:0 4px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{min-width:86px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{height:32px!important;padding:0 6px!important;font-size:11px!important}
+  #flowSheetModal .flow-sheet-table td.sheet-selected{box-shadow:inset 0 0 0 2px #2ea56c!important}
+  #flowSheetModal .flow-sheet-table td.sheet-selected::after{width:8px!important;height:8px!important}
+  #flowSheetModal .flow-sheet-table tr.sheet-total-row td{font-size:10.5px!important}
+
+  #flowSheetModal .flow-sheet-foot{padding:7px 8px!important;gap:6px!important;align-items:flex-end!important}
+  #flowSheetModal .flow-sheet-foot span{font-size:7.5px!important;line-height:1.15!important}
+  #flowSheetModal .flow-sheet-foot .sheet-formula-status{font-size:7.5px!important}
+  #flowSheetModal .flow-sheet-foot button{padding:7px 12px!important;font-size:10px!important;border-radius:10px!important}
+}
+</style>
+
+
+<style id="cq-flow-sheet-range-formula-v3">
+/* v82 · alineación numérica + rango de selección estilo Excel */
+#flowSheetModal .flow-sheet-table .sheet-cell-wrap{
+  display:flex!important;align-items:center!important;justify-content:flex-end!important;height:100%!important;width:100%!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-cell-input{
+  display:block!important;width:100%!important;height:100%!important;margin:0!important;
+  text-align:right!important;vertical-align:middle!important;line-height:normal!important;
+  font-variant-numeric:tabular-nums!important;font-feature-settings:"tnum" 1!important;
+  box-sizing:border-box!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-range-selected{
+  position:relative!important;
+  background-color:rgba(65,150,105,.10)!important;
+  box-shadow:inset 0 0 0 1px rgba(46,165,108,.38)!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-selected{
+  box-shadow:inset 0 0 0 2px #2ea56c!important;
+  z-index:3!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-selected::after{display:none!important}
+#flowSheetModal .sheet-range-handle{
+  position:fixed;display:none;width:20px;height:20px;border-radius:50%;background:#2ea56c;
+  border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.25);z-index:10050;touch-action:none;cursor:nwse-resize;
+}
+#flowSheetModal .flow-sheet-foot .sheet-formula-status.range-summary{
+  color:#245541!important;font-weight:850!important;background:#e5f2eb;border:1px solid #c8dfd3;border-radius:8px;padding:4px 7px;
+}
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{padding:0 7px!important;font-size:10.5px!important;line-height:32px!important}
+  #flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:31px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{height:31px!important}
+  #flowSheetModal .sheet-range-handle{width:22px;height:22px;border-width:3px}
+  #flowSheetModal .flow-sheet-foot .sheet-formula-status.range-summary{font-size:7.8px!important;padding:3px 5px!important}
+}
+</style>
+
+
+<style id="cq-flow-sheet-restore-groups-v4">
+/* v84 · restaurar títulos de grupos + limpiar grilla */
+#flowSheetModal .flow-sheet-head span{display:block}
+#flowSheetModal .flow-sheet-wrap{overflow:auto!important}
+#flowSheetModal .flow-sheet-table thead{display:none!important}
+#flowSheetModal .flow-sheet-table{min-width:max-content!important}
+#flowSheetModal .flow-sheet-table .sheet-label-cell{
+  min-width:260px!important;max-width:260px!important;
+  background:#fbfcfc!important;color:#2e473d;font-weight:850;
+}
+#flowSheetModal .flow-sheet-table .sheet-header-label{font-weight:900!important;background:#f5f8f7!important}
+#flowSheetModal .flow-sheet-table .sheet-months-row td{
+  position:sticky!important;top:0!important;z-index:4!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-month-head{
+  font-weight:900!important;text-align:center!important;background:#f6faf8!important;color:#304d42!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-section-row td{
+  position:sticky;top:39px;z-index:3;background:#eef3f0!important;color:#446156!important;
+  font-size:11px;font-weight:900;letter-spacing:.02em;text-transform:none;
+  border-top:1px solid #d7dfdc!important;border-bottom:1px solid #d7dfdc!important;
+  padding:7px 10px!important;text-align:left!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-cell-wrap{min-width:118px!important}
+#flowSheetModal .flow-sheet-table .sheet-cell-input{font-size:15px!important;padding:0 10px!important}
+#flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:39px!important}
+#flowSheetModal .flow-sheet-table tr.sheet-total-row td:first-child{background:#e5efea!important}
+#flowSheetModal .flow-sheet-table td.sheet-range-selected{background-color:rgba(65,150,105,.08)!important}
+
+/* Mantener colores anteriores por columna */
+#flowSheetModal .flow-sheet-table td.sheet-month-col-0,#flowSheetModal .flow-sheet-table th.sheet-month-col-0{background:#eef7f3!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-1,#flowSheetModal .flow-sheet-table th.sheet-month-col-1{background:#eef4fa!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-2,#flowSheetModal .flow-sheet-table th.sheet-month-col-2{background:#fbf5e9!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-3,#flowSheetModal .flow-sheet-table th.sheet-month-col-3{background:#f8f0f6!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-4,#flowSheetModal .flow-sheet-table th.sheet-month-col-4{background:#f1f7ec!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-5,#flowSheetModal .flow-sheet-table th.sheet-month-col-5{background:#f2f0fa!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-6,#flowSheetModal .flow-sheet-table th.sheet-month-col-6{background:#fbf0ed!important}
+#flowSheetModal .flow-sheet-table td.sheet-month-col-7,#flowSheetModal .flow-sheet-table th.sheet-month-col-7{background:#edf7f7!important}
+
+/* Teléfono: más prolijo y compacto */
+@media (max-width: 520px){
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{min-width:150px!important;max-width:150px!important;font-size:10px!important;padding:0 8px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{min-width:78px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{font-size:10.5px!important;padding:0 6px!important;line-height:30px!important}
+  #flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:30px!important}
+  #flowSheetModal .flow-sheet-table .sheet-months-row td{top:0!important}
+  #flowSheetModal .flow-sheet-table .sheet-section-row td{top:30px!important;font-size:9px!important;padding:5px 8px!important}
+}
+
+/* Flujo en teléfono: más espacio para nombres de ingresos */
+@media (max-width:700px){
+  #flowPage .flow-month-panels.multi-month{grid-auto-columns:minmax(320px,92vw)!important;padding-right:10vw!important}
+  #flowPage .flow-month-panels.multi-month .flow-entry{grid-template-columns:minmax(0,1fr) 86px auto!important;gap:4px!important}
+  #flowPage .flow-month-panels.multi-month .flow-entry-name,
+  #flowPage .flow-entry-name{
+    white-space:normal!important;overflow:hidden!important;text-overflow:ellipsis!important;
+    display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;
+    line-height:1.08!important;min-height:2.15em!important;
+  }
+  #flowPage .flow-check-cell{grid-template-columns:minmax(0,1fr) 21px!important;gap:2px!important}
+  #flowPage .flow-check-btn{width:21px!important;height:21px!important;font-size:11px!important}
+  #flowPage .flow-entry input{padding:4px 6px!important}
+  #flowPage .flow-entry-action{width:21px!important;height:21px!important;font-size:10px!important}
+}
+</style>
+
+
+<style id="cq-flow-ordering-and-sheet-drag-v5">
+/* Ordenar: sacar flechas de filas y pasar a config por categoría */
+.flow-cat-name-wrap{display:flex;align-items:center;gap:6px;min-width:0}
+.flow-cat-labels{min-width:0;flex:1}
+.flow-cat-config{width:24px;height:24px;border:1px solid #d8e3de;border-radius:8px;background:#fff;color:#5f746a;display:grid;place-items:center;cursor:pointer;font-size:13px;padding:0;flex:0 0 auto}
+.flow-cat-config:hover{background:#f3f7f5;border-color:#c6d6cf}
+@media(max-width:600px){.flow-cat-config{width:22px;height:22px;font-size:12px}}
+
+.flow-order-backdrop{position:fixed;inset:0;background:rgba(28,43,36,.26);display:none;align-items:center;justify-content:center;z-index:10060;padding:16px}
+.flow-order-backdrop.open{display:flex}
+.flow-order-panel{width:min(540px,100%);max-height:85vh;overflow:auto;background:#fff;border:1px solid #dce5e0;border-radius:16px;box-shadow:0 18px 42px rgba(16,29,24,.16)}
+.flow-order-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #e7eeea;background:#f7faf8}
+.flow-order-head strong{font-size:15px;color:#2f4e42}
+.flow-order-head span{display:block;font-size:11px;color:#72817b;margin-top:2px}
+.flow-order-close{width:34px;height:34px;border:1px solid #d7e2dd;border-radius:10px;background:#fff;color:#66766f;font-size:20px;cursor:pointer}
+.flow-order-list{padding:10px}
+.flow-order-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border:1px solid #e8efeb;border-radius:12px;background:#fff;margin-bottom:8px}
+.flow-order-row-name{font-size:13px;font-weight:700;color:#39594d;line-height:1.18}
+.flow-order-actions{display:flex;gap:6px}
+.flow-order-btn{width:34px;height:34px;border:1px solid #d9e3de;border-radius:10px;background:#fff;display:grid;place-items:center;color:#647771;cursor:pointer;font-size:14px}
+.flow-order-btn:hover{background:#f4f8f6}
+.flow-order-foot{display:flex;justify-content:flex-end;padding:0 12px 12px}
+.flow-order-done{padding:9px 14px;border:0;border-radius:12px;background:#356c57;color:#fff;font-weight:800;cursor:pointer}
+@media(max-width:600px){.flow-order-panel{width:100%}.flow-order-row{padding:8px}.flow-order-row-name{font-size:12px}.flow-order-btn{width:32px;height:32px}}
+
+/* Planilla: handle integrado a la celda, sin punto flotante */
+#flowSheetModal .sheet-range-handle{display:none!important}
+#flowSheetModal .flow-sheet-wrap.range-dragging{cursor:crosshair}
+#flowSheetModal .flow-sheet-table td.sheet-selected::after{
+  content:''!important;display:block!important;position:absolute!important;right:4px!important;bottom:4px!important;
+  width:12px!important;height:12px!important;border-radius:50%!important;background:#2ea56c!important;border:2px solid #fff!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.18)!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-range-selected::after{display:none!important}
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-table td.sheet-selected::after{width:11px!important;height:11px!important;right:3px!important;bottom:3px!important}
+}
+</style>
+<script id="cq-flow-ordering-and-sheet-drag-v5">
+(function(){
+  if(window.__cqFlowOrderV5)return;
+  window.__cqFlowOrderV5=true;
+
+  function ensureFlowOrderModal(){
+    if(document.getElementById('flowOrderModal'))return;
+    const wrap=document.createElement('div');
+    wrap.id='flowOrderModal';
+    wrap.className='flow-order-backdrop';
+    wrap.innerHTML=''
+      +'<div class="flow-order-panel" role="dialog" aria-modal="true">'
+      +  '<div class="flow-order-head"><div><strong id="flowOrderTitle">Ordenar</strong><span>Reordená los conceptos sin ocupar lugar en la vista principal.</span></div><button type="button" class="flow-order-close" id="flowOrderClose">×</button></div>'
+      +  '<div class="flow-order-list" id="flowOrderList"></div>'
+      +  '<div class="flow-order-foot"><button type="button" class="flow-order-done" id="flowOrderDone">Listo</button></div>'
+      +'</div>';
+    document.body.appendChild(wrap);
+    wrap.addEventListener('click',e=>{ if(e.target===wrap) closeFlowOrderModal(); });
+    document.getElementById('flowOrderClose').onclick=closeFlowOrderModal;
+    document.getElementById('flowOrderDone').onclick=closeFlowOrderModal;
+  }
+
+  let currentOrderType='works';
+  const FLOW_TITLES={works:'Obras', others:'Otros egresos', incomes:'Ingresos'};
+
+  function renderFlowOrderModal(){
+    ensureFlowOrderModal();
+    const title=document.getElementById('flowOrderTitle');
+    const list=document.getElementById('flowOrderList');
+    if(title)title.textContent='Ordenar · '+(FLOW_TITLES[currentOrderType]||'Conceptos');
+    const arr=flowState?.[currentOrderType]||[];
+    list.innerHTML=arr.length?arr.map((r,i)=>`<div class="flow-order-row"><div class="flow-order-row-name">${fesc(r.name||'Sin nombre')}</div><div class="flow-order-actions"><button type="button" class="flow-order-btn" data-order-move="${currentOrderType}:${i}:-1" title="Subir">↑</button><button type="button" class="flow-order-btn" data-order-move="${currentOrderType}:${i}:1" title="Bajar">↓</button></div></div>`).join(''):'<div class="flow-empty">Sin conceptos</div>';
+    list.querySelectorAll('[data-order-move]').forEach(btn=>btn.onclick=()=>{
+      const [type,idx,dir]=btn.dataset.orderMove.split(':');
+      const arr=flowState[type]||[]; const i=+idx, ni=i+(+dir);
+      if(ni<0||ni>=arr.length)return;
+      [arr[i],arr[ni]]=[arr[ni],arr[i]];
+      flowPersist();
+      renderFlowOrderModal();
+      if(typeof flowRender==='function')flowRender();
+      if(document.getElementById('flowSheetModal')?.classList.contains('open') && typeof cqFlowSheetRender==='function')cqFlowSheetRender();
+    });
+  }
+
+  window.openFlowOrderModal=function(type){
+    currentOrderType=type;
+    renderFlowOrderModal();
+    document.getElementById('flowOrderModal')?.classList.add('open');
+  };
+  window.closeFlowOrderModal=function(){ document.getElementById('flowOrderModal')?.classList.remove('open'); };
+
+  const prevFlowCatRows=window.flowCatRows;
+  window.flowCatRows=function(type,mi){
+    const rows=flowState[type]||[];
+    const html=rows.map((r,ri)=>{
+      if(Number.isInteger(r.hiddenFrom) && mi>=r.hiddenFrom)return '';
+      const input=`<input class="${type==='works'?'flow-work-value':''}" type="number" step="1" inputmode="decimal" data-flow-cell="${type}:${ri}:${mi}" value="${fnum(r.months[mi])||''}" placeholder="0">`;
+      const checked = type==='incomes' ? (Array.isArray(r.received)&&!!r.received[mi]) : (Array.isArray(r.checked)&&!!r.checked[mi]);
+      const comment=String(r.comments?.[mi]||'').trim();
+      const valueCell=`<div class="flow-check-cell"><div class="flow-value-with-comment">${input}<button type="button" class="flow-comment-btn ${comment?'has-comment':''}" data-flow-comment="${type}:${ri}:${mi}" title="${comment?fesc(comment):'Agregar comentario'}" aria-label="Comentario">✎</button></div><button type="button" class="flow-check-btn ${checked?'checked':''}" data-flow-mark="${type}:${ri}:${mi}" title="${checked?'Marcado':'Marcar'}" aria-label="${checked?'Marcado':'Marcar'}"></button></div>`;
+      const editBtn=type==='works'?`<button type="button" class="flow-entry-action edit-work" data-work-ri="${ri}" title="Modificar obra">✎</button>`:type==='others'?`<button type="button" class="flow-entry-action edit-other" data-other-ri="${ri}" title="Modificar nombre">✎</button>`:`<button type="button" class="flow-entry-action edit-income" data-income-ri="${ri}" title="Modificar nombre">✎</button>`;
+      const delBtn=type==='works'?`<button type="button" class="flow-entry-action delete del-work-forward" data-work-ri="${ri}" data-work-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:type==='others'?`<button type="button" class="flow-entry-action delete del-other-forward" data-other-ri="${ri}" data-other-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`:`<button type="button" class="flow-entry-action delete del-income-forward" data-income-ri="${ri}" data-income-mi="${mi}" title="Eliminar desde ${flowState.months[mi]} en adelante">×</button>`;
+      return `<div class="flow-entry has-check ${type==='works'&&r.autoCost?'new-work':''} ${checked?'cell-checked':''}"><div class="flow-entry-name" title="${fesc(r.name)}">${fesc(r.name)}${type==='works'&&r.autoCost?'<span class="flow-new-tag">Nueva</span>':''}</div>${valueCell}<div class="flow-entry-actions">${editBtn}${delBtn}</div></div>`;
+    }).join('');
+    return html||'<div class="flow-empty">Sin conceptos</div>';
+  };
+
+  window.flowCat=function(type,title,sub,mi,total){
+    let key=mi+':'+type,open=flowOpenCats.has(key),tools='';
+    const configBtn=`<button type="button" class="flow-cat-config" data-flow-config="${type}" title="Ordenar ${title}">⚙</button>`;
+    if(type==='works')tools=`<div class="flow-cat-body-tools"><button type="button" class="flow-mini-btn add-work" data-work-month="${mi}">+ Obra</button><button type="button" class="flow-mini-btn new new-auto-work" data-work-month="${mi}">Nueva</button></div>`;
+    else if(type==='others')tools=`<div class="flow-cat-body-tools"><button type="button" class="flow-mini-btn add-other" data-other-month="${mi}">+ Egreso</button></div>`;
+    else if(type==='incomes')tools=`<div class="flow-cat-body-tools"><button type="button" class="flow-mini-btn add-income" data-income-month="${mi}">+ Ingreso</button></div>`;
+    return `<div class="flow-cat ${open?'open':''}"><div class="flow-cat-head" data-flow-cat="${key}"><div class="flow-cat-name-wrap"><div class="flow-cat-labels"><span class="flow-cat-name">${title}</span><span class="flow-cat-sub">${sub}</span></div>${configBtn}</div><span class="flow-cat-total">${fusd(total)}</span><span class="flow-cat-chev">⌄</span></div><div class="flow-cat-body">${tools}${flowCatRows(type,mi)}</div></div>`;
+  };
+
+  window.flowRenderPanels=function(){
+    ensureFlowOrderModal();
+    const c=flowCalc(),open=(flowOpenMonths[flowYear]||[]).filter(i=>flowState.months[i]);
+    const panels=document.getElementById('flowMonthPanels');
+    if(!panels)return;
+    panels.classList.toggle('multi-month',open.length>1);
+    panels.dataset.openMonths=String(open.length);
+    panels.innerHTML=open.length?open.map(mi=>`<section class="flow-month-panel"><div class="flow-month-title"><h2>${flowState.months[mi]}</h2><div class="flow-month-mini"><span>Egresos <b>${fusd(c.expenses[mi])}</b></span><span>Ingresos <b>${fusd(c.incomes[mi])}</b></span><span>Flujo neto <b class="${c.net[mi]>=0?'pos':'neg'}">${fusd(c.net[mi])}</b></span><span class="balance-chip">Saldo acumulado <b class="${c.balance[mi]>=0?'pos':'neg'}">${fusd(c.balance[mi])}</b></span></div></div>${flowCat('works','Obras','Todas las obras',mi,c.works[mi])}${flowCat('others','Otros egresos','Acopios · Gastos generales · Retiro socios · Impuestos',mi,c.others[mi])}${flowCat('incomes','Ingresos','Obras y otros ingresos',mi,c.incomes[mi])}</section>`).join(''):'<div class="flow-empty" style="background:#fff;border:1px solid var(--line);border-radius:12px">Elegí uno o varios meses para comenzar.</div>';
+
+    document.querySelectorAll('[data-flow-cat]').forEach(b=>b.onclick=e=>{
+      if(e.target.closest('.flow-cat-config'))return;
+      const k=b.dataset.flowCat;
+      const parts=k.split(':'); const type=parts[1];
+      const shouldOpen=!flowOpenCats.has(k);
+      if(open.length>1){ open.forEach(mi=>{ const key=mi+':'+type; shouldOpen?flowOpenCats.add(key):flowOpenCats.delete(key); }); }
+      else{ shouldOpen?flowOpenCats.add(k):flowOpenCats.delete(k); }
+      flowRenderPanels();
+    });
+    document.querySelectorAll('[data-flow-config]').forEach(btn=>btn.onclick=e=>{ e.stopPropagation(); openFlowOrderModal(btn.dataset.flowConfig); });
+    document.querySelectorAll('[data-flow-comment]').forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      const [type,ri,mi]=btn.dataset.flowComment.split(':');
+      if(typeof window.cqOpenFlowComment==='function')window.cqOpenFlowComment(type,+ri,+mi);
+    });
+
+    document.querySelectorAll('[data-flow-cell]').forEach(inp=>{
+      inp.onfocus=()=>requestAnimationFrame(()=>inp.select());
+      inp.onclick=()=>requestAnimationFrame(()=>inp.select());
+      inp.onchange=e=>{
+        let [type,ri,mi]=inp.dataset.flowCell.split(':'); ri=+ri; mi=+mi;
+        const row=flowState[type][ri];
+        row.months[mi]=fnum(e.target.value);
+        if(row.formulas && typeof row.formulas==='object') delete row.formulas[String(mi)];
+        flowPersist();
+        flowRenderPanels();
+        if(document.getElementById('dashboardPage'))dashboardRender();
+        updateHeaderForActivePage();
+        if(document.getElementById('flowSheetModal')?.classList.contains('open') && typeof cqFlowSheetRender==='function') cqFlowSheetRender();
+      };
+    });
+    document.querySelectorAll('[data-flow-mark]').forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      let [type,ri,mi]=btn.dataset.flowMark.split(':'); ri=+ri; mi=+mi;
+      const row=flowState[type][ri];
+      if(type==='incomes'){ if(!Array.isArray(row.received))row.received=Array(flowState.months.length).fill(false); row.received[mi]=!row.received[mi]; }
+      else{ if(!Array.isArray(row.checked))row.checked=Array(flowState.months.length).fill(false); row.checked[mi]=!row.checked[mi]; }
+      flowPersist(); flowRenderPanels();
+    });
+    document.querySelectorAll('.add-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddManualWork(+b.dataset.workMonth)});
+    document.querySelectorAll('.new-auto-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowOpenNewWorkModal(+b.dataset.workMonth)});
+    document.querySelectorAll('.add-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddOther(+b.dataset.otherMonth)});
+    document.querySelectorAll('.add-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowAddIncome(+b.dataset.incomeMonth)});
+    document.querySelectorAll('.edit-work').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameWork(+b.dataset.workRi)});
+    document.querySelectorAll('.edit-other').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameOther(+b.dataset.otherRi)});
+    document.querySelectorAll('.edit-income').forEach(b=>b.onclick=e=>{e.stopPropagation();flowRenameIncome(+b.dataset.incomeRi)});
+    document.querySelectorAll('.del-work-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteWorkForward(+b.dataset.workRi,+b.dataset.workMi)});
+    document.querySelectorAll('.del-other-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteOtherForward(+b.dataset.otherRi,+b.dataset.otherMi)});
+    document.querySelectorAll('.del-income-forward').forEach(b=>b.onclick=e=>{e.stopPropagation();flowDeleteIncomeForward(+b.dataset.incomeRi,+b.dataset.incomeMi)});
+  };
+
+  document.addEventListener('DOMContentLoaded',()=>{ ensureFlowOrderModal(); });
+  if(document.readyState!=='loading') setTimeout(()=>ensureFlowOrderModal(),50);
+})();
+</script>
+
+
+<style id="cq-flow-sheet-responsive-fix-v6">
+/* v86 · viewport móvil real + planilla compacta + selección sin superposición */
+#flowSheetModal.flow-sheet-backdrop{
+  box-sizing:border-box!important;
+}
+#flowSheetModal .flow-sheet-panel{
+  grid-template-rows:auto auto auto minmax(0,1fr) auto!important;
+  min-height:0!important;
+}
+#flowSheetModal .flow-sheet-wrap{min-height:0!important;overscroll-behavior:contain}
+#flowSheetModal .flow-sheet-foot{position:relative;z-index:20;flex:0 0 auto}
+
+/* La columna Concepto siempre queda por encima de una celda seleccionada al hacer scroll horizontal. */
+#flowSheetModal .flow-sheet-table .sheet-label-cell{
+  position:sticky!important;left:0!important;z-index:7!important;
+}
+#flowSheetModal .flow-sheet-table .sheet-months-row .sheet-label-cell{z-index:12!important}
+#flowSheetModal .flow-sheet-table td.sheet-selected{
+  z-index:1!important;
+}
+#flowSheetModal .flow-sheet-table td.sheet-range-selected{z-index:0!important}
+
+/* Tirador real estilo Excel: vive dentro de la celda, no flota sobre la pantalla. */
+#flowSheetModal .flow-sheet-table td.sheet-selected::after{display:none!important}
+#flowSheetModal .sheet-drag-handle{
+  display:none;position:absolute;right:2px;bottom:2px;width:11px;height:11px;
+  background:#2ea56c;border:2px solid #fff;border-radius:2px;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:5;touch-action:none;cursor:crosshair;
+}
+#flowSheetModal td.sheet-selected .sheet-drag-handle{display:block}
+#flowSheetModal .flow-sheet-wrap.range-dragging,
+#flowSheetModal .flow-sheet-wrap.range-dragging *{user-select:none!important;-webkit-user-select:none!important}
+
+/* TELÉFONO VERTICAL */
+@media (max-width:520px) and (orientation:portrait){
+  #flowSheetModal.flow-sheet-backdrop{
+    padding:2px!important;align-items:stretch!important;justify-content:stretch!important;
+    height:100dvh!important;max-height:100dvh!important;
+  }
+  #flowSheetModal .flow-sheet-panel{
+    width:100%!important;height:calc(100dvh - 4px)!important;max-height:calc(100dvh - 4px)!important;
+    border-radius:10px!important;
+  }
+  #flowSheetModal .flow-sheet-head{padding:6px 8px!important;min-height:0!important}
+  #flowSheetModal .flow-sheet-head strong{font-size:12px!important;line-height:1.05!important}
+  #flowSheetModal .flow-sheet-head span{font-size:7px!important;line-height:1.05!important;margin-top:1px!important}
+  #flowSheetModal .flow-sheet-close{width:28px!important;height:28px!important;font-size:17px!important}
+
+  /* Años y meses en una sola línea desplazable para recuperar altura. */
+  #flowSheetModal .flow-sheet-filters{padding:4px 6px!important;gap:3px!important}
+  #flowSheetModal .flow-sheet-filter-row{grid-template-columns:34px minmax(0,1fr)!important;gap:4px!important;align-items:center!important}
+  #flowSheetModal .flow-sheet-filter-row>b{font-size:6.5px!important;padding-top:0!important}
+  #flowSheetModal .flow-sheet-chips{
+    flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;gap:3px!important;
+    scrollbar-width:none!important;-webkit-overflow-scrolling:touch;
+  }
+  #flowSheetModal .flow-sheet-chips::-webkit-scrollbar{display:none!important}
+  #flowSheetModal .flow-sheet-chip{flex:0 0 auto!important;font-size:7.2px!important;padding:3px 6px!important;border-radius:7px!important}
+
+  #flowSheetModal .flow-sheet-toolbar{grid-template-columns:55px 22px minmax(0,1fr) 29px 29px!important;gap:3px!important;padding:4px 5px!important}
+  #flowSheetModal .flow-sheet-cellref,#flowSheetModal .flow-sheet-toolbar button,#flowSheetModal .flow-sheet-formula{height:27px!important;border-radius:7px!important}
+  #flowSheetModal .flow-sheet-cellref{padding:0 5px!important;font-size:9px!important}
+  #flowSheetModal .flow-sheet-fx{font-size:14px!important}
+  #flowSheetModal .flow-sheet-formula{font-size:9.5px!important;padding:0 6px!important}
+  #flowSheetModal .flow-sheet-toolbar button{font-size:12px!important}
+
+  /* Más columnas visibles: concepto compacto + meses de 61 px. */
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{
+    width:116px!important;min-width:116px!important;max-width:116px!important;
+    padding:0 6px!important;font-size:9.2px!important;line-height:1.05!important;
+  }
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{
+    width:61px!important;min-width:61px!important;max-width:61px!important;
+  }
+  #flowSheetModal .flow-sheet-table td:not(:first-child),
+  #flowSheetModal .flow-sheet-table .sheet-month-head{
+    width:61px!important;min-width:61px!important;max-width:61px!important;
+  }
+  #flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:28px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{height:28px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{height:28px!important;font-size:9.4px!important;padding:0 4px!important;line-height:28px!important}
+  #flowSheetModal .flow-sheet-table .sheet-month-head{font-size:8.7px!important;padding:0 2px!important}
+  #flowSheetModal .flow-sheet-table .sheet-section-row td{top:28px!important;font-size:8.3px!important;padding:4px 6px!important;height:25px!important}
+  #flowSheetModal .sheet-drag-handle{width:10px;height:10px;right:1px;bottom:1px}
+
+  #flowSheetModal .flow-sheet-foot{padding:5px 7px!important;gap:5px!important;min-height:35px!important}
+  #flowSheetModal .flow-sheet-foot>span:first-child{display:none!important}
+  #flowSheetModal .flow-sheet-foot .sheet-formula-status{font-size:7px!important;line-height:1.1!important;max-width:72%!important}
+  #flowSheetModal .flow-sheet-foot button{padding:6px 11px!important;font-size:9.5px!important;border-radius:8px!important}
+}
+
+/* TELÉFONO HORIZONTAL: antes tomaba estilos de tablet; ahora tiene su propio layout. */
+@media (orientation:landscape) and (max-height:520px) and (max-width:950px){
+  #flowSheetModal.flow-sheet-backdrop{
+    padding:2px!important;align-items:stretch!important;justify-content:stretch!important;
+    height:100dvh!important;max-height:100dvh!important;
+  }
+  #flowSheetModal .flow-sheet-panel{
+    width:100%!important;height:calc(100dvh - 4px)!important;max-height:calc(100dvh - 4px)!important;
+    border-radius:9px!important;
+  }
+  #flowSheetModal .flow-sheet-head{padding:4px 7px!important}
+  #flowSheetModal .flow-sheet-head strong{font-size:11px!important;line-height:1!important}
+  #flowSheetModal .flow-sheet-head span{display:none!important}
+  #flowSheetModal .flow-sheet-close{width:25px!important;height:25px!important;font-size:15px!important}
+  #flowSheetModal .flow-sheet-filters{padding:3px 5px!important;gap:2px!important}
+  #flowSheetModal .flow-sheet-filter-row{grid-template-columns:30px minmax(0,1fr)!important;gap:3px!important;align-items:center!important}
+  #flowSheetModal .flow-sheet-filter-row>b{font-size:6px!important;padding:0!important}
+  #flowSheetModal .flow-sheet-chips{flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;gap:3px!important;scrollbar-width:none!important}
+  #flowSheetModal .flow-sheet-chips::-webkit-scrollbar{display:none!important}
+  #flowSheetModal .flow-sheet-chip{flex:0 0 auto!important;font-size:6.6px!important;padding:2px 5px!important}
+  #flowSheetModal .flow-sheet-toolbar{grid-template-columns:50px 20px minmax(0,1fr) 26px 26px!important;gap:3px!important;padding:3px 5px!important}
+  #flowSheetModal .flow-sheet-cellref,#flowSheetModal .flow-sheet-toolbar button,#flowSheetModal .flow-sheet-formula{height:24px!important;border-radius:6px!important}
+  #flowSheetModal .flow-sheet-cellref{font-size:8px!important;padding:0 4px!important}
+  #flowSheetModal .flow-sheet-fx{font-size:12px!important}
+  #flowSheetModal .flow-sheet-formula{font-size:8.5px!important;padding:0 5px!important}
+  #flowSheetModal .flow-sheet-toolbar button{font-size:11px!important}
+
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{width:126px!important;min-width:126px!important;max-width:126px!important;font-size:8.8px!important;padding:0 6px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap,
+  #flowSheetModal .flow-sheet-table td:not(:first-child),
+  #flowSheetModal .flow-sheet-table .sheet-month-head{width:68px!important;min-width:68px!important;max-width:68px!important}
+  #flowSheetModal .flow-sheet-table td,#flowSheetModal .flow-sheet-table th{height:25px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-wrap{height:25px!important}
+  #flowSheetModal .flow-sheet-table .sheet-cell-input{height:25px!important;font-size:8.8px!important;padding:0 4px!important;line-height:25px!important}
+  #flowSheetModal .flow-sheet-table .sheet-month-head{font-size:8px!important;padding:0 2px!important}
+  #flowSheetModal .flow-sheet-table .sheet-section-row td{top:25px!important;height:22px!important;font-size:7.7px!important;padding:3px 6px!important}
+  #flowSheetModal .flow-sheet-foot{padding:3px 6px!important;min-height:30px!important}
+  #flowSheetModal .flow-sheet-foot>span:first-child{display:none!important}
+  #flowSheetModal .flow-sheet-foot .sheet-formula-status{font-size:6.8px!important}
+  #flowSheetModal .flow-sheet-foot button{padding:5px 10px!important;font-size:8.5px!important}
+  #flowSheetModal .sheet-drag-handle{width:9px;height:9px;right:1px;bottom:1px}
+}
+
+/* TABLET: conservar tamaños actuales, solo corregir superposición del seleccionado. */
+@media (min-width:521px){
+  #flowSheetModal .flow-sheet-table .sheet-label-cell{z-index:8!important}
+  #flowSheetModal .flow-sheet-table .sheet-months-row .sheet-label-cell{z-index:14!important}
+  #flowSheetModal .flow-sheet-table td.sheet-selected{z-index:1!important}
+}
+</style>
+
+
+<style id="cq-flow-comments-and-summary-v7">
+/* v87 · suma visible + teclado numérico + comentarios por celda */
+#flowSheetModal .flow-sheet-range-summary{
+  display:none;align-items:center;gap:10px;padding:5px 10px;background:#e5f2eb;border-bottom:1px solid #c8dfd3;
+  color:#315b4b;font-size:10px;line-height:1.1;flex:0 0 auto;
+}
+#flowSheetModal .flow-sheet-range-summary.show{display:flex}
+#flowSheetModal .flow-sheet-range-summary b{font-size:12px;color:#23513f}
+#flowSheetModal .flow-sheet-range-summary span{color:#5d756b;font-weight:700}
+
+.flow-value-with-comment{position:relative;min-width:0}
+.flow-value-with-comment>input{width:100%;padding-left:24px!important}
+.flow-comment-btn{
+  position:absolute;left:4px;top:50%;transform:translateY(-50%);width:17px;height:17px;border:0;border-radius:5px;
+  background:transparent;color:#a2afa9;font-size:10px;line-height:1;display:grid;place-items:center;cursor:pointer;padding:0;z-index:2;
+}
+.flow-comment-btn:hover{background:#eef5f1;color:#557466}
+.flow-comment-btn.has-comment{background:#e8f2ed;color:#3d705b;box-shadow:inset 0 0 0 1px #c3dbcf}
+
+#flowSheetModal .sheet-cell-wrap{position:relative!important}
+#flowSheetModal .sheet-comment-btn{
+  display:none;position:absolute;left:2px;top:2px;width:16px;height:16px;border:0;border-radius:4px;padding:0;
+  background:rgba(255,255,255,.72);color:#789087;font-size:9px;line-height:1;place-items:center;cursor:pointer;z-index:4;
+}
+#flowSheetModal td.sheet-selected .sheet-comment-btn,
+#flowSheetModal .sheet-comment-btn.has-comment{display:grid}
+#flowSheetModal .sheet-comment-btn.has-comment{background:#e8f2ed;color:#35634f;box-shadow:inset 0 0 0 1px #bcd7c9}
+#flowSheetModal td.has-sheet-comment:before{
+  content:'';position:absolute;left:0;top:0;width:0;height:0;border-top:7px solid #6f9b87;border-right:7px solid transparent;z-index:3;
+}
+#flowSheetModal td.has-sheet-comment{position:relative}
+
+.cq-flow-comment-backdrop{position:fixed;inset:0;background:rgba(23,38,32,.34);display:none;align-items:center;justify-content:center;padding:14px;z-index:10150}
+.cq-flow-comment-backdrop.open{display:flex}
+.cq-flow-comment-panel{width:min(470px,100%);background:#fff;border:1px solid #d9e4df;border-radius:16px;box-shadow:0 20px 60px rgba(15,31,24,.22);overflow:hidden}
+.cq-flow-comment-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 14px;background:#f2f7f4;border-bottom:1px solid #dfe9e4}
+.cq-flow-comment-head strong{display:block;font-size:14px;color:#315b4b}.cq-flow-comment-head span{display:block;margin-top:2px;font-size:10px;color:#74817c}
+.cq-flow-comment-close{width:32px;height:32px;border:1px solid #d4e0da;background:#fff;border-radius:9px;color:#61746b;font-size:18px;cursor:pointer}
+.cq-flow-comment-body{padding:12px 14px}
+.cq-flow-comment-body textarea{width:100%;min-height:105px;resize:vertical;border:1px solid #d5e1db;border-radius:11px;padding:10px 11px;font:inherit;font-size:13px;line-height:1.4;color:#2d433a;outline:none;background:#fbfdfc}
+.cq-flow-comment-body textarea:focus{border-color:#8cb19f;box-shadow:0 0 0 3px #edf5f1}
+.cq-flow-comment-actions{display:flex;justify-content:space-between;gap:8px;padding:0 14px 13px}
+.cq-flow-comment-actions button{border:1px solid #d7e2dd;border-radius:9px;padding:8px 12px;background:#fff;color:#64766e;font-weight:800;cursor:pointer}
+.cq-flow-comment-actions .save{background:#356c57;border-color:#356c57;color:#fff}
+.cq-flow-comment-actions .delete{color:#995b60;background:#fff7f7;border-color:#ead7d8}
+
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-range-summary{padding:3px 6px;gap:7px;font-size:7px}
+  #flowSheetModal .flow-sheet-range-summary b{font-size:9px}
+  #flowSheetModal .sheet-comment-btn{width:13px;height:13px;font-size:7px;left:1px;top:1px}
+  .flow-comment-btn{width:15px;height:15px;left:3px;font-size:9px}.flow-value-with-comment>input{padding-left:20px!important}
+  .cq-flow-comment-panel{border-radius:13px}.cq-flow-comment-body textarea{min-height:90px}
+}
+</style>
+<script id="cq-flow-comments-v7">
+(function(){
+  if(window.__cqFlowCommentsV7)return;
+  window.__cqFlowCommentsV7=true;
+  let current=null;
+
+  function ensureRowComments(row){
+    if(!row)return;
+    if(!Array.isArray(row.comments))row.comments=Array(flowState?.months?.length||0).fill('');
+    while(row.comments.length<(flowState?.months?.length||0))row.comments.push('');
+  }
+  function ensureModal(){
+    if(document.getElementById('cqFlowCommentModal'))return;
+    const bg=document.createElement('div');
+    bg.id='cqFlowCommentModal';bg.className='cq-flow-comment-backdrop';
+    bg.innerHTML=`<div class="cq-flow-comment-panel" role="dialog" aria-modal="true"><div class="cq-flow-comment-head"><div><strong>Comentario</strong><span id="cqFlowCommentContext"></span></div><button type="button" class="cq-flow-comment-close" id="cqFlowCommentClose">×</button></div><div class="cq-flow-comment-body"><textarea id="cqFlowCommentText" placeholder="Escribí un comentario para esta celda..."></textarea></div><div class="cq-flow-comment-actions"><button type="button" class="delete" id="cqFlowCommentDelete">Borrar</button><div><button type="button" id="cqFlowCommentCancel">Cancelar</button> <button type="button" class="save" id="cqFlowCommentSave">Guardar</button></div></div></div>`;
+    document.body.appendChild(bg);
+    document.getElementById('cqFlowCommentClose').onclick=close;
+    document.getElementById('cqFlowCommentCancel').onclick=close;
+    document.getElementById('cqFlowCommentSave').onclick=save;
+    document.getElementById('cqFlowCommentDelete').onclick=()=>{const ta=document.getElementById('cqFlowCommentText');if(ta)ta.value='';save();};
+    bg.onclick=e=>{if(e.target===bg)close()};
+  }
+  function refreshViews(){
+    try{flowPersist()}catch(e){}
+    try{if(typeof flowRenderPanels==='function')flowRenderPanels()}catch(e){}
+    try{if(document.getElementById('flowSheetModal')?.classList.contains('open') && typeof cqFlowSheetRender==='function')cqFlowSheetRender()}catch(e){}
+  }
+  function close(){document.getElementById('cqFlowCommentModal')?.classList.remove('open');current=null;}
+  function save(){
+    if(!current)return close();
+    const row=flowState?.[current.type]?.[current.ri];if(!row)return close();
+    ensureRowComments(row);
+    row.comments[current.mi]=String(document.getElementById('cqFlowCommentText')?.value||'').trim();
+    refreshViews();close();
+  }
+  window.cqOpenFlowComment=function(type,ri,mi){
+    ensureModal();
+    const row=flowState?.[type]?.[ri];if(!row)return;
+    ensureRowComments(row);current={type,ri:+ri,mi:+mi};
+    const ctx=document.getElementById('cqFlowCommentContext');
+    const month=flowState?.months?.[mi]||'';
+    if(ctx)ctx.textContent=`${row.name||''}${month?' · '+month:''}`;
+    const ta=document.getElementById('cqFlowCommentText');if(ta)ta.value=row.comments[mi]||'';
+    document.getElementById('cqFlowCommentModal')?.classList.add('open');
+    setTimeout(()=>ta?.focus(),30);
+  };
+  document.addEventListener('DOMContentLoaded',ensureModal);
+  if(document.readyState!=='loading')setTimeout(ensureModal,40);
+})();
+</script>
+
+
+<style id="cq-flow-summary-comment-hotfix-v8">
+/* v88 · sumatoria siempre visible + comentario rojo suave */
+#flowSheetModal .flow-sheet-range-summary{
+  display:none!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:12px!important;
+  min-height:36px!important;
+  padding:6px 12px!important;
+  background:#e2f1e9!important;
+  border-top:1px solid #c8dfd3!important;
+  border-bottom:1px solid #b9d7c8!important;
+  color:#294f40!important;
+  font-size:11px!important;
+  line-height:1.1!important;
+  flex:0 0 auto!important;
+  box-shadow:inset 0 -1px 0 rgba(49,87,74,.04)!important;
+}
+#flowSheetModal .flow-sheet-range-summary.show{display:flex!important}
+#flowSheetModal .flow-sheet-range-summary b{
+  font-size:14px!important;
+  color:#20533e!important;
+  font-weight:950!important;
+  white-space:nowrap!important;
+}
+#flowSheetModal .flow-sheet-range-summary span{
+  color:#526e62!important;
+  font-weight:800!important;
+  white-space:nowrap!important;
+}
+
+/* Comentario cargado: rojo suave, no verde */
+.flow-comment-btn.has-comment{
+  background:#f8e9e9!important;
+  color:#a45f63!important;
+  box-shadow:inset 0 0 0 1px #e9cdd0!important;
+}
+#flowSheetModal .sheet-comment-btn.has-comment{
+  background:#f8e9e9!important;
+  color:#a45f63!important;
+  box-shadow:inset 0 0 0 1px #e9cdd0!important;
+}
+#flowSheetModal td.has-sheet-comment:before{
+  border-top-color:#c77b80!important;
+}
+
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-range-summary{
+    min-height:32px!important;
+    padding:5px 8px!important;
+    gap:8px!important;
+    font-size:9px!important;
+  }
+  #flowSheetModal .flow-sheet-range-summary b{font-size:12px!important}
+  #flowSheetModal .flow-sheet-range-summary span{font-size:8.5px!important}
+}
+</style>
+<script id="cq-flow-summary-hotfix-v8">
+(function(){
+  if(window.__cqFlowSummaryHotfixV8)return;
+  window.__cqFlowSummaryHotfixV8=true;
+
+  function ensureSummaryBar(){
+    const modal=document.getElementById('flowSheetModal');
+    const toolbar=document.getElementById('flowSheetToolbar');
+    if(!modal||!toolbar)return null;
+    let bar=document.getElementById('flowSheetRangeSummary');
+    if(!bar){
+      bar=document.createElement('div');
+      bar.id='flowSheetRangeSummary';
+      bar.className='flow-sheet-range-summary';
+      toolbar.insertAdjacentElement('afterend',bar);
+    }
+    return bar;
+  }
+
+  function parseVisibleNumber(v){
+    let s=String(v??'').trim();
+    if(!s)return 0;
+    s=s.replace(/\s/g,'').replace(/\./g,'').replace(',','.');
+    const n=Number(s); return Number.isFinite(n)?n:0;
+  }
+  function fmt(n){return new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(Number(n)||0)}
+
+  function refreshFromSelection(){
+    const bar=ensureSummaryBar(); if(!bar)return;
+    const selected=[...document.querySelectorAll('#flowSheetBody td.sheet-range-selected[data-sheet-ui-cell]')];
+    if(selected.length>1){
+      let sum=0;
+      selected.forEach(td=>{
+        const inp=td.querySelector('.sheet-cell-input');
+        sum+=parseVisibleNumber(inp?.value||0);
+      });
+      const avg=selected.length?sum/selected.length:0;
+      bar.innerHTML=`<b>Σ Suma ${fmt(sum)}</b><span>${selected.length} celdas · Prom. ${fmt(avg)}</span>`;
+      bar.classList.add('show');
+    }else{
+      bar.classList.remove('show');
+      bar.innerHTML='';
+    }
+  }
+
+  const observer=new MutationObserver(()=>refreshFromSelection());
+  document.addEventListener('DOMContentLoaded',()=>{
+    ensureSummaryBar();
+    const body=document.getElementById('flowSheetBody');
+    if(body)observer.observe(body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
+  });
+  if(document.readyState!=='loading'){
+    setTimeout(()=>{
+      ensureSummaryBar();
+      const body=document.getElementById('flowSheetBody');
+      if(body)observer.observe(body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
+      refreshFromSelection();
+    },80);
+  }
+  document.addEventListener('pointermove',()=>{ if(document.getElementById('flowSheetModal')?.classList.contains('open')) refreshFromSelection(); },{passive:true});
+  document.addEventListener('pointerup',()=>setTimeout(refreshFromSelection,0),{passive:true});
+})();
+</script>
+
+
+<style id="cq-flow-range-persist-summary-v9">
+/* v89 · selección persistente + sumatoria visible en teléfono/tablet */
+#flowSheetModal .flow-sheet-toolbar{
+  position:relative!important;
+}
+#flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary{
+  grid-column:1/-1!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+  margin:0!important;
+  min-height:30px!important;
+  padding:5px 9px!important;
+  border:1px solid #bcd9cb!important;
+  border-radius:8px!important;
+  background:#e4f2eb!important;
+  color:#294f40!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:10px!important;
+  z-index:30!important;
+  box-shadow:0 2px 6px rgba(49,87,74,.08)!important;
+}
+#flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary.show{
+  display:flex!important;
+}
+#flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary b{
+  font-size:12px!important;
+  font-weight:950!important;
+  color:#20533e!important;
+  white-space:nowrap!important;
+}
+#flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary span{
+  font-size:9px!important;
+  font-weight:800!important;
+  color:#536e62!important;
+  white-space:nowrap!important;
+}
+@media(max-width:520px){
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary{
+    min-height:25px!important;
+    padding:3px 6px!important;
+    gap:7px!important;
+    border-radius:7px!important;
+  }
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary b{font-size:10px!important}
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary span{font-size:7.5px!important}
+}
+@media(orientation:landscape) and (max-height:520px) and (max-width:950px){
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary{
+    min-height:22px!important;padding:2px 5px!important;gap:6px!important;
+  }
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary b{font-size:9px!important}
+  #flowSheetModal .flow-sheet-toolbar #flowSheetRangeSummary span{font-size:7px!important}
+}
+</style>
+<script id="cq-flow-range-persist-summary-v9">
+(function(){
+  if(window.__cqFlowRangePersistV9)return;
+  window.__cqFlowRangePersistV9=true;
+  let suppressUntil=0;
+  let raf=0;
+
+  function parseNum(v){
+    let s=String(v??'').trim();
+    if(!s)return 0;
+    // inputs type=number usan punto decimal; no eliminarlo como separador de miles.
+    const n=Number(s.replace(',','.'));
+    return Number.isFinite(n)?n:0;
+  }
+  function fmt(n){
+    return new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(Number(n)||0);
+  }
+  function ensureBar(){
+    const toolbar=document.getElementById('flowSheetToolbar');
+    if(!toolbar)return null;
+    let bar=document.getElementById('flowSheetRangeSummary');
+    if(!bar){
+      bar=document.createElement('div');
+      bar.id='flowSheetRangeSummary';
+      bar.className='flow-sheet-range-summary';
+    }
+    if(bar.parentElement!==toolbar)toolbar.appendChild(bar);
+    return bar;
+  }
+  function selectedCells(){
+    return [...document.querySelectorAll('#flowSheetBody td.sheet-range-selected[data-sheet-ui-cell]')];
+  }
+  function refresh(){
+    raf=0;
+    const bar=ensureBar();
+    if(!bar)return;
+    const cells=selectedCells();
+    if(cells.length>1){
+      let sum=0;
+      cells.forEach(td=>{sum+=parseNum(td.querySelector('.sheet-cell-input')?.value||0)});
+      const avg=sum/cells.length;
+      bar.innerHTML=`<b>Σ ${fmt(sum)}</b><span>${cells.length} celdas · Prom. ${fmt(avg)}</span>`;
+      bar.classList.add('show');
+    }else{
+      bar.classList.remove('show');
+      bar.innerHTML='';
+    }
+  }
+  function schedule(){
+    if(raf)return;
+    raf=requestAnimationFrame(refresh);
+  }
+
+  // En tablet, el click sintético posterior al drag volvía a dejar una sola celda.
+  // Guardamos una ventana muy corta tras soltar si había rango múltiple y bloqueamos ese click.
+  document.addEventListener('pointerup',()=>{
+    const count=selectedCells().length;
+    if(count>1)suppressUntil=performance.now()+550;
+    schedule();
+    setTimeout(schedule,20);
+    setTimeout(schedule,90);
+  },true);
+  document.addEventListener('touchend',()=>{
+    const count=selectedCells().length;
+    if(count>1)suppressUntil=performance.now()+650;
+    schedule();
+    setTimeout(schedule,60);
+  },true);
+  document.addEventListener('click',e=>{
+    if(performance.now()>suppressUntil)return;
+    const cell=e.target?.closest?.('#flowSheetBody [data-sheet-ui-cell]');
+    if(!cell)return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(typeof e.stopImmediatePropagation==='function')e.stopImmediatePropagation();
+    schedule();
+  },true);
+
+  document.addEventListener('pointermove',()=>{
+    if(document.getElementById('flowSheetModal')?.classList.contains('open'))schedule();
+  },{passive:true});
+  document.addEventListener('touchmove',()=>{
+    if(document.getElementById('flowSheetModal')?.classList.contains('open'))schedule();
+  },{passive:true});
+
+  const obs=new MutationObserver(schedule);
+  function bind(){
+    ensureBar();
+    const body=document.getElementById('flowSheetBody');
+    if(body && !body.__cqRangeV9Observed){
+      body.__cqRangeV9Observed=true;
+      obs.observe(body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
+    }
+    schedule();
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(bind,40));
+  if(document.readyState!=='loading')setTimeout(bind,40);
+
+  // La planilla puede reconstruirse; mantener barra y observer vinculados.
+  const mo=new MutationObserver(()=>{
+    if(document.getElementById('flowSheetModal')?.classList.contains('open'))bind();
+  });
+  document.addEventListener('DOMContentLoaded',()=>{
+    const modal=document.getElementById('flowSheetModal');
+    if(modal)mo.observe(modal,{subtree:true,childList:true});
+  });
+})();
+</script>
+
+
+<style id="cq-flow-sheet-section-not-sticky-v10">
+/* Solo la fila de meses queda inmovilizada. Los títulos Obras / Otros egresos / Ingresos se desplazan con la planilla. */
+#flowSheetModal .flow-sheet-table .sheet-section-row td{
+  position:static!important;
+  top:auto!important;
+  z-index:auto!important;
+}
+@media (max-width:520px), (orientation:landscape) and (max-height:520px) and (max-width:950px){
+  #flowSheetModal .flow-sheet-table .sheet-section-row td{
+    position:static!important;
+    top:auto!important;
+    z-index:auto!important;
+  }
+}
+</style>
+
 </body></html>
