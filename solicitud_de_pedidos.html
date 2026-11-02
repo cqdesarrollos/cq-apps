@@ -687,6 +687,20 @@ th:nth-child(2), td:nth-child(2){display:none!important}
 }
 </style>
 
+
+<style id="cq-v-archivado-retroceso-v2">
+/* Archivado queda visualmente fuera de la cadena operativa */
+.tab.cq-tab-archivado{background:#f4f0f6!important;color:#75687d!important;border-color:#e0d7e5!important}
+.tab.cq-tab-archivado.active{background:#e9e1ee!important;color:#5e5068!important;border-color:#d3c6db!important;box-shadow:0 1px 5px rgba(78,62,88,.10)!important}
+.cq-archivado-activo #pedidos .card{background:#fdfcfe!important;border-color:#e7e0eb!important}
+.cq-archivado-activo .cq-list-actions{background:#f8f5fa!important;border-bottom-color:#e7dfea!important}
+.cq-archivado-activo .obra-group.cq-obra-color{border-left-color:#b9abc2!important;background:#fcfafd!important}
+.cq-archivado-activo .obra-group.cq-obra-color .obra-head{background:#f2edf5!important}
+.cq-archivado-activo .pedido-head-v37{background:#f6f2f8!important}
+.cq-archivado-activo .pedido-row-v37.selected{background:#f1eaf5!important}
+.cq-back-selected.show{display:inline-flex!important;align-items:center!important;gap:4px!important}
+.cq-back-selected.cq-disabled{opacity:.42!important;filter:grayscale(.2);cursor:default!important}
+</style>
 </head>
 <body>
 
@@ -695,7 +709,7 @@ th:nth-child(2), td:nth-child(2){display:none!important}
 </div><div id="cqFirebaseStatus" class="wait" title="Estado Firebase"><span class="cq-fb-dot"></span><span id="cqFirebaseStatusText">...</span></div>
 <div class="hactions"><button type="button" class="btn btn-light cq-home-btn" onclick="cqVolverMaterialesMenu()" title="Volver a Materiales y logística" aria-label="Inicio">⌂</button><button type="button" class="header-config-btn" onclick="abrirConfigPesos()" title="Configurar peso por producto" aria-label="Configurar pesos">⚖</button><button class="btn btn-light" onclick="exportar()">↗ Compartir</button><button class="btn btn-green" onclick="abrir()">＋ Nueva solicitud</button></div></header>
 <main>
-<div class="toprow"><div class="tabs"><button class="tab active" onclick="cqCambiarSolapa('Pendiente',this)">Solicitudes</button><button class="tab" onclick="cqCambiarSolapa('Pedido',this)">Pedido</button><button class="tab" onclick="cqCambiarSolapa('Entregado',this)">Entregado</button><button class="tab" onclick="cqCambiarSolapa('Archivado',this)">Archivado</button></div></div>
+<div class="toprow"><div class="tabs"><button class="tab active" onclick="cqCambiarSolapa('Pendiente',this)">Solicitudes</button><button class="tab" onclick="cqCambiarSolapa('Pedido',this)">Pedido</button><button class="tab" onclick="cqCambiarSolapa('Entregado',this)">Entregado</button><button class="tab cq-tab-archivado" onclick="cqCambiarSolapa('Archivado',this)">Archivado</button></div></div>
 <div class="kpis"><div class="kpi"><small>Pendientes</small><strong id="kPend">0</strong></div><div class="kpi"><small>Esta semana</small><strong id="kSem">0</strong></div><div class="kpi"><small>Ítems pedidos</small><strong id="kItems">0</strong></div><div class="kpi"><small>Urgentes</small><strong id="kUrg">0</strong></div></div>
 <div id="pedidos" class="view active"><div class="card"><div class="cardhd"><b>Pedidos de obra</b><span id="count" style="font-size:10px;color:#74847b"></span></div><div class="filters"><input id="fObra" type="hidden" value="[]">
 <div class="cq-obras-filter">
@@ -1501,6 +1515,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
  };
 
  window.render=function(){
+  document.body?.classList.toggle("cq-archivado-activo",cqEstadoActivo==="Archivado");
   if(window.cqRefrescarCatalogoObrasFiltro)window.cqRefrescarCatalogoObrasFiltro();
   pedidos.forEach(p=>{if(p.estado==="Enviado")p.estado="Pedido";if(p.estado==="Recibido")p.estado="Entregado";if(!p.estado)p.estado="Pendiente"});
   try{kpis()}catch(e){}
@@ -1526,7 +1541,7 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
     (cqEstadoActivo==="Pedido"?'<div class="cq-fecha-entrega-bulk"><input type="date" id="cqFechaEntregaBulk" aria-label="Fecha de entrega"><button type="button" class="cq-fecha-entrega-btn '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqAsignarFechaEntregaSeleccion()">📅 Fecha entrega <span class="count">'+n+'</span></button></div>':'')+
     (cqEstadoActivo==="Entregado"?'<button type="button" class="cq-move-selected cq-archive-selected show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqArchivarSeleccion()">▣ Archivar <span class="count">'+n+'</span></button>':'')+
     (cqEstadoActivo==="Archivado"?'<button type="button" class="cq-move-selected cq-delete-selected show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqEliminarArchivadosSeleccion()">Eliminar <span class="count">'+n+'</span></button>':'')+
-    ((cqEstadoActivo==="Pedido"||cqEstadoActivo==="Entregado")?'<button type="button" class="cq-back-selected '+(n?'show':'')+'" onclick="cqVolverSeleccion()">← Volver</button>':'')+
+    ((cqEstadoActivo==="Pedido"||cqEstadoActivo==="Entregado"||cqEstadoActivo==="Archivado")?'<button type="button" class="cq-back-selected show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqVolverSeleccion()">← Volver a '+(cqEstadoActivo==="Archivado"?'Entregado':cqEstadoActivo==="Entregado"?'Pedido':'Solicitudes')+' <span class="count">'+n+'</span></button>':'')+
     '</div></div><div class="pedidos-grouped">'+Object.entries(grupos).map(([gkey,ps])=>{
    const partes=String(gkey).split("|||");
    const fechaGrupo=cqEstadoActivo==="Entregado"?partes[0]:"";
@@ -1734,7 +1749,33 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
    window.render();
  };
 
- window.cqVolverSeleccion=function(){if(!selected.size)return alert("Marcá al menos un ítem.");cqMover(cqEstadoActivo==="Entregado"?"Pedido":"Pendiente")};
+ window.cqDesarchivarSeleccion=function(){
+   if(cqEstadoActivo!=="Archivado")return;
+   if(!selected.size)return alert("Marcá al menos un ítem.");
+   const keys=new Set(selected),resultado=[],devueltos=[];
+   let seq=0;
+   pedidos.forEach(p=>{
+     if(!p.archivado){resultado.push(p);return}
+     const quedan=[],van=[];
+     (p.items||[]).forEach((x,i)=>{
+       (keys.has(k(p.id,i))?van:quedan).push(JSON.parse(JSON.stringify(x)));
+     });
+     if(!van.length){resultado.push(p);return}
+     if(quedan.length)resultado.push({...p,items:quedan});
+     devueltos.push({...p,id:Date.now()+(++seq),estado:"Entregado",archivado:false,archivadoAt:null,items:van});
+   });
+   pedidos=[...devueltos,...resultado];
+   selected.clear();
+   persist();
+   window.render();
+ };
+
+ window.cqVolverSeleccion=function(){
+   if(!selected.size)return alert("Marcá al menos un ítem.");
+   if(cqEstadoActivo==="Archivado")return window.cqDesarchivarSeleccion();
+   if(cqEstadoActivo==="Entregado")return cqMover("Pedido");
+   if(cqEstadoActivo==="Pedido")return cqMover("Pendiente");
+ };
 
  window.cqArchivarSeleccion=function(){
    if(cqEstadoActivo!=="Entregado")return;
