@@ -7843,6 +7843,7 @@ function promptNuevaCategoria(targetSelectId){
 
 var modoFirebase=true;
 var unsubMateriales=null;
+var unsubTombstonesMateriales=null;
 var unsubConfigMateriales=null;
 var unsubIntegraciones=null;
 var procesandoIntegraciones=false;
@@ -7990,6 +7991,158 @@ function cqIgnorarIntegracionLogica(x){
     state.ignoredIntegrationKeys.push(k);
   }
   return k;
+}
+
+// CQ 02/11/2026 — borrado manual definitivo de cargas automáticas.
+// Caja Gerencia puede volver a escribir el documento principal de Materiales; por eso
+// el bloqueo no depende sólo de state. Se conserva también en localStorage y en un
+// documento lateral de Firebase que Caja no modifica.
+var CQ_CARGAS_BORRADAS_LOCAL_KEY='cq_materiales_cargas_borradas_v2';
+var CQ_CARGAS_BORRADAS_DOC='tombstones_cargas_v2';
+
+function cqEsCargaAutomaticaExterna(c){
+  if(!c)return false;
+  if(c.automatico===true||!!c.integracionId||!!c.sourceMovementId)return true;
+  var o=cqOrigenCargaNormalizado(c);
+  if(o==='acopio'||o==='panol'||o==='caja_chica'||o==='caja_gerencia'||o==='cq_caja_gerencia')return true;
+  return /autom[aá]tico/i.test(String(c.nota||''));
+}
+
+function cqClaveIntegracionRespaldo(x){
+  if(!x)return '';
+  var origen=cqOrigenCargaNormalizado(x);
+  if(!origen)return '';
+  var obra=cqClaveObraIntegracion(x.obraNameOrigen||x.obraName||'');
+  var nombre=normalizarClaveIntegracion(x.materialNameOrigen||x.matName||x.materialName||'');
+  var codigo=String(x.codigoOrigen||x.materialCode||x.matCode||'').trim().toLowerCase();
+  var matId=String(x.materialIdOrigen!=null&&x.materialIdOrigen!==''?x.materialIdOrigen:(x.matId!=null?x.matId:'')).trim();
+  var fecha=String(x.fecha||'').trim();
+  var qty=Number(x.qty);
+  var cantidad=Number.isFinite(qty)?String(qty):'';
+  var material=codigo?('cod:'+codigo):(nombre?('nom:'+nombre):(matId?('id:'+matId):''));
+  if(!obra||!material||!fecha)return '';
+  return 'fp:'+origen+'|obra:'+obra+'|mat:'+material+'|fecha:'+fecha+'|qty:'+cantidad;
+}
+
+function cqIntegracionRespaldoIgnorada(x){
+  var k=cqClaveIntegracionRespaldo(x);
+  return !!k && Array.isArray(state.ignoredIntegrationFingerprints)
+    && state.ignoredIntegrationFingerprints.some(function(v){return String(v)===k;});
+}
+
+function cqIgnorarIntegracionRespaldo(x){
+  var k=cqClaveIntegracionRespaldo(x);
+  if(!k)return '';
+  if(!Array.isArray(state.ignoredIntegrationFingerprints))state.ignoredIntegrationFingerprints=[];
+  if(!state.ignoredIntegrationFingerprints.some(function(v){return String(v)===k;}))state.ignoredIntegrationFingerprints.push(k);
+  return k;
+}
+
+function cqLeerTombstonesLocales(){
+  try{
+    var raw=JSON.parse(localStorage.getItem(CQ_CARGAS_BORRADAS_LOCAL_KEY)||'null')||{};
+    return {
+      ids:Array.isArray(raw.ids)?raw.ids.map(String):[],
+      keys:Array.isArray(raw.keys)?raw.keys.map(String):[],
+      fps:Array.isArray(raw.fps)?raw.fps.map(String):[]
+    };
+  }catch(e){return {ids:[],keys:[],fps:[]};}
+}
+
+function cqFusionarTombstones(a,b){
+  return Array.from(new Set((Array.isArray(a)?a:[]).concat(Array.isArray(b)?b:[]).map(String).filter(Boolean)));
+}
+
+function cqFusionarTombstonesLocalesEnState(){
+  var local=cqLeerTombstonesLocales();
+  state.ignoredIntegrationIds=cqFusionarTombstones(state.ignoredIntegrationIds,local.ids);
+  state.ignoredIntegrationKeys=cqFusionarTombstones(state.ignoredIntegrationKeys,local.keys);
+  state.ignoredIntegrationFingerprints=cqFusionarTombstones(state.ignoredIntegrationFingerprints,local.fps);
+}
+
+function cqGuardarTombstonesLocalesDesdeState(){
+  try{
+    localStorage.setItem(CQ_CARGAS_BORRADAS_LOCAL_KEY,JSON.stringify({
+      ids:cqFusionarTombstones([],state.ignoredIntegrationIds),
+      keys:cqFusionarTombstones([],state.ignoredIntegrationKeys),
+      fps:cqFusionarTombstones([],state.ignoredIntegrationFingerprints),
+      updatedAt:new Date().toISOString()
+    }));
+  }catch(e){}
+}
+
+function cqRegistrarTombstoneCarga(c){
+  if(!c||!cqEsCargaAutomaticaExterna(c))return false;
+  if(c.integracionId)cqIgnorarIntegracion(c.integracionId);
+  cqIgnorarIntegracionLogica(c);
+  cqIgnorarIntegracionRespaldo(c);
+  cqGuardarTombstonesLocalesDesdeState();
+  return true;
+}
+
+function cqCargaAutomaticaBloqueada(c){
+  if(!c||!cqEsCargaAutomaticaExterna(c))return false;
+  if(c.integracionId&&cqIntegracionIgnorada(c.integracionId))return true;
+  if(cqIntegracionLogicaIgnorada(c))return true;
+  if(cqIntegracionRespaldoIgnorada(c))return true;
+  return false;
+}
+
+function cqAplicarTombstonesRemotos(raw){
+  raw=raw||{};
+  state.ignoredIntegrationIds=cqFusionarTombstones(state.ignoredIntegrationIds,raw.ids||raw.ignoredIntegrationIds);
+  state.ignoredIntegrationKeys=cqFusionarTombstones(state.ignoredIntegrationKeys,raw.keys||raw.ignoredIntegrationKeys);
+  state.ignoredIntegrationFingerprints=cqFusionarTombstones(state.ignoredIntegrationFingerprints,raw.fps||raw.ignoredIntegrationFingerprints);
+  cqGuardarTombstonesLocalesDesdeState();
+}
+
+async function cqGuardarTombstonesFirebase(){
+  if(!window._dbReady||!window._setDoc||!window._doc)return false;
+  try{
+    await window._setDoc(
+      window._doc(window._db,'materiales',CQ_CARGAS_BORRADAS_DOC),
+      {
+        ids:cqFusionarTombstones([],state.ignoredIntegrationIds),
+        keys:cqFusionarTombstones([],state.ignoredIntegrationKeys),
+        fps:cqFusionarTombstones([],state.ignoredIntegrationFingerprints),
+        updatedAt:new Date().toISOString()
+      },
+      {merge:true}
+    );
+    return true;
+  }catch(e){
+    console.warn('No se pudieron guardar bloqueos de cargas borradas',e);
+    return false;
+  }
+}
+
+async function cqCargarTombstonesFirebase(){
+  cqFusionarTombstonesLocalesEnState();
+  if(!window._dbReady||!window._getDoc||!window._doc)return false;
+  try{
+    var snap=await window._getDoc(window._doc(window._db,'materiales',CQ_CARGAS_BORRADAS_DOC));
+    if(snap.exists())cqAplicarTombstonesRemotos(snap.data()||{});
+    return true;
+  }catch(e){
+    console.warn('No se pudieron leer bloqueos de cargas borradas',e);
+    return false;
+  }
+}
+
+function cqEscucharTombstonesFirebase(){
+  if(!window._dbReady||!window._onSnapshot||!window._doc)return;
+  if(unsubTombstonesMateriales){unsubTombstonesMateriales();unsubTombstonesMateriales=null;}
+  unsubTombstonesMateriales=window._onSnapshot(
+    window._doc(window._db,'materiales',CQ_CARGAS_BORRADAS_DOC),
+    function(snap){
+      if(!snap.exists())return;
+      cqAplicarTombstonesRemotos(snap.data()||{});
+      normalizeState();
+      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(e){}
+      renderActive();
+    },
+    function(e){console.warn('Error leyendo bloqueos de cargas borradas',e);}
+  );
 }
 
 
@@ -8354,6 +8507,7 @@ function normalizeState(){
   if(!state.deletedMatIds)state.deletedMatIds=[];
   if(!state.deletedMaterialKeys)state.deletedMaterialKeys=[];
   if(!state.ignoredIntegrationKeys)state.ignoredIntegrationKeys=[];
+  if(!state.ignoredIntegrationFingerprints)state.ignoredIntegrationFingerprints=[];
   if(!state.deletedCatNames)state.deletedCatNames=[];
   if(!state.matNombres)state.matNombres={};
   if(!state.matCodigos)state.matCodigos={};
@@ -8363,16 +8517,18 @@ function normalizeState(){
   if(!state.ignoredIntegrationIds)state.ignoredIntegrationIds=[];
   if(!state.reporteComentarios)state.reporteComentarios={};
 
+  // Recuperar tombstones independientes antes de aceptar cualquier snapshot remoto.
+  // Así una escritura de Caja Gerencia no puede borrar la memoria de un borrado manual.
+  cqFusionarTombstonesLocalesEnState();
+
   // Defensa adicional: si Firebase contiene todavía una copia vieja de una carga
   // que ya tiene tombstone, ni siquiera dejarla entrar al estado visible.
   state.cargas=(state.cargas||[]).filter(function(c){
     if(!c)return false;
-    var esAuto=c.automatico===true||!!c.integracionId;
-    if(!esAuto)return true;
-    if(c.integracionId&&cqIntegracionIgnorada(c.integracionId))return false;
-    if(cqIntegracionLogicaIgnorada(c))return false;
-    return true;
+    if(!cqEsCargaAutomaticaExterna(c))return true;
+    return !cqCargaAutomaticaBloqueada(c);
   });
+  cqGuardarTombstonesLocalesDesdeState();
 
   // Normaliza el origen de cargas automáticas viejas y nuevas.
   // Esto hace que cualquier filtro por origen reconozca siempre Acopio/Pañol,
@@ -8638,12 +8794,15 @@ async function cqGuardarMaterialesSeguro(extra){
     var mapa={};
     var idsIgnorados=(Array.isArray(local.ignoredIntegrationIds)?local.ignoredIntegrationIds:[]).map(String);
     var clavesIgnoradas=(Array.isArray(local.ignoredIntegrationKeys)?local.ignoredIntegrationKeys:[]).map(String);
+    var fpsIgnoradas=(Array.isArray(local.ignoredIntegrationFingerprints)?local.ignoredIntegrationFingerprints:[]).map(String);
     function autoPermitida(c){
       if(!c||cqEsAcopioAnteriorAlLinkeo(c))return false;
       var iid=String(c.integracionId||'');
       if(iid && idsIgnorados.indexOf(iid)>=0)return false;
       var lk=cqClaveIntegracionLogica(c);
       if(lk && clavesIgnoradas.indexOf(String(lk))>=0)return false;
+      var fp=cqClaveIntegracionRespaldo(c);
+      if(fp && fpsIgnoradas.indexOf(String(fp))>=0)return false;
       return true;
     }
     locCargas.filter(esAuto).filter(autoPermitida).forEach(function(c){
@@ -9221,7 +9380,7 @@ function aplicarIntegracion(ev){
   // no permitir que el listener de Firebase la vuelva a crear. Se bloquea tanto
   // el integrationId actual como la identidad lógica del movimiento, porque Caja
   // Gerencia puede republicarlo con un integrationId distinto.
-  if(ev.active!==false && (cqIntegracionIgnorada(ev.integrationId)||cqIntegracionLogicaIgnorada(ev))) return false;
+  if(ev.active!==false && (cqIntegracionIgnorada(ev.integrationId)||cqIntegracionLogicaIgnorada(ev)||cqIntegracionRespaldoIgnorada(ev))) return false;
 
   if(cqEsTechiCau29_77Integracion(ev)){
     var idxBloq=(state.cargas||[]).findIndex(function(c){return c.integracionId===ev.integrationId;});
@@ -9528,6 +9687,11 @@ async function startFirebase(){
     try{
       setSyncStatus('Firebase: conectando...');
 
+      // 0. Cargar primero los borrados manuales definitivos. Este documento lateral
+      // no es reescrito por Caja Gerencia y protege el historial antes del snapshot principal.
+      await cqCargarTombstonesFirebase();
+      cqEscucharTombstonesFirebase();
+
       // 1. Primero traer el documento principal completo.
       await loadFromFirebase();
 
@@ -9676,6 +9840,7 @@ function toggleModoFirebase(){
     startFirebase();
   }else{
     if(unsubMateriales){unsubMateriales();unsubMateriales=null;}
+    if(unsubTombstonesMateriales){unsubTombstonesMateriales();unsubTombstonesMateriales=null;}
     if(unsubConfigMateriales){unsubConfigMateriales();unsubConfigMateriales=null;}
     if(unsubIntegraciones){unsubIntegraciones();unsubIntegraciones=null;}
     firebaseStarted=false;
@@ -12591,14 +12756,17 @@ function registrarCarga(){
 
 async function borrarCarga(id){
   var carga=(state.cargas||[]).find(function(c){return c.id===id;})||null;
+  var esAutomatica=cqEsCargaAutomaticaExterna(carga);
 
-  // Una carga automática tiene una fuente activa en materiales_integraciones.
-  // Antes se borraba sólo de state.cargas; el listener veía la integración aún
-  // activa y la volvía a crear. Ahora se guarda un "tombstone" compartido y,
-  // además, se desactiva el documento de integración en Firebase.
-  if(carga && carga.automatico){
-    if(carga.integracionId)cqIgnorarIntegracion(carga.integracionId);
-    var claveLogicaBorrada=cqIgnorarIntegracionLogica(carga);
+  // Borrado definitivo: registrar el movimiento ANTES de quitarlo. Se guarda por
+  // integrationId, por identidad lógica y por una huella de respaldo. De este modo
+  // no reaparece aunque Caja Gerencia lo republice con otro ID o reescriba el estado.
+  if(carga && esAutomatica){
+    cqRegistrarTombstoneCarga(carga);
+
+    // Guardar el bloqueo en un documento lateral que Caja Gerencia no reescribe.
+    // Si Firebase no lo permite, localStorage + el documento principal siguen protegiendo.
+    await cqGuardarTombstonesFirebase();
 
     if(carga.integracionId && window._dbReady && window._setDoc && window._doc){
       try{
@@ -12618,19 +12786,24 @@ async function borrarCarga(id){
     }
   }
 
-  // Quitar la carga elegida. Si el mismo vínculo lógico ya había quedado duplicado
-  // con otro integrationId, quitar esas copias también; no afecta movimientos distintos.
-  state.cargas=state.cargas.filter(function(c){
+  // Quitar la carga elegida y cualquier copia del mismo vínculo que ya hubiese
+  // quedado duplicada. No toca cargas manuales ni movimientos automáticos distintos.
+  state.cargas=(state.cargas||[]).filter(function(c){
     if(c.id===id)return false;
-    if(carga && carga.automatico && claveLogicaBorrada && c && c.automatico){
-      return cqClaveIntegracionLogica(c)!==claveLogicaBorrada;
+    if(carga && esAutomatica && cqEsCargaAutomaticaExterna(c)){
+      if(carga.integracionId && String(c.integracionId||'')===String(carga.integracionId))return false;
+      var k1=cqClaveIntegracionLogica(carga), k2=cqClaveIntegracionLogica(c);
+      if(k1&&k2&&k1===k2)return false;
+      var f1=cqClaveIntegracionRespaldo(carga), f2=cqClaveIntegracionRespaldo(c);
+      if(f1&&f2&&f1===f2)return false;
     }
     return true;
   });
   editingCargaId=null;
   pendingDeleteId=null;
   await persist();
-  showToast('Carga eliminada');
+  if(esAutomatica)await cqGuardarTombstonesFirebase();
+  showToast('Carga eliminada definitivamente');
   renderCargaTab();
 }
 
