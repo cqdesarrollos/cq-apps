@@ -695,7 +695,7 @@ th:nth-child(2), td:nth-child(2){display:none!important}
 </div><div id="cqFirebaseStatus" class="wait" title="Estado Firebase"><span class="cq-fb-dot"></span><span id="cqFirebaseStatusText">...</span></div>
 <div class="hactions"><button type="button" class="btn btn-light cq-home-btn" onclick="cqVolverMaterialesMenu()" title="Volver a Materiales y logística" aria-label="Inicio">⌂</button><button type="button" class="header-config-btn" onclick="abrirConfigPesos()" title="Configurar peso por producto" aria-label="Configurar pesos">⚖</button><button class="btn btn-light" onclick="exportar()">↗ Compartir</button><button class="btn btn-green" onclick="abrir()">＋ Nueva solicitud</button></div></header>
 <main>
-<div class="toprow"><div class="tabs"><button class="tab active" onclick="cqCambiarSolapa('Pendiente',this)">Solicitudes</button><button class="tab" onclick="cqCambiarSolapa('Pedido',this)">Pedido</button><button class="tab" onclick="cqCambiarSolapa('Entregado',this)">Entregado</button></div></div>
+<div class="toprow"><div class="tabs"><button class="tab active" onclick="cqCambiarSolapa('Pendiente',this)">Solicitudes</button><button class="tab" onclick="cqCambiarSolapa('Pedido',this)">Pedido</button><button class="tab" onclick="cqCambiarSolapa('Entregado',this)">Entregado</button><button class="tab" onclick="cqCambiarSolapa('Archivado',this)">Archivado</button></div></div>
 <div class="kpis"><div class="kpi"><small>Pendientes</small><strong id="kPend">0</strong></div><div class="kpi"><small>Esta semana</small><strong id="kSem">0</strong></div><div class="kpi"><small>Ítems pedidos</small><strong id="kItems">0</strong></div><div class="kpi"><small>Urgentes</small><strong id="kUrg">0</strong></div></div>
 <div id="pedidos" class="view active"><div class="card"><div class="cardhd"><b>Pedidos de obra</b><span id="count" style="font-size:10px;color:#74847b"></span></div><div class="filters"><input id="fObra" type="hidden" value="[]">
 <div class="cq-obras-filter">
@@ -1386,9 +1386,13 @@ window.eliminarPedido=async function(id){
    // Marca/desmarca todos los ítems actualmente visibles en la solapa activa.
    const fechaEnt=document.getElementById("cqFechaEntregado")?.value||"";
    pedidos.forEach(p=>{
-     if(p.archivado)return;
-     if((p.estado||"Pendiente")!==cqEstadoActivo)return;
-     if(cqEstadoActivo==="Entregado" && fechaEnt && (p.fechaEntregado||p.fecha)!==fechaEnt)return;
+     let est=p.estado||"Pendiente";
+     if(est==="Enviado")est="Pedido";
+     if(est==="Recibido")est="Entregado";
+     const visible=cqEstadoActivo==="Archivado"
+       ?!!p.archivado
+       :(!p.archivado&&est===cqEstadoActivo&&(cqEstadoActivo!=="Entregado"||!fechaEnt||(p.fechaEntregado||p.fecha)===fechaEnt));
+     if(!visible)return;
      (p.items||[]).forEach((_,i)=>{const key=k(p.id,i);on?selected.add(key):selected.delete(key)});
    });
    window.render();
@@ -1503,7 +1507,9 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
   const fechaEnt=document.getElementById("cqFechaEntregado")?.value||"";
   const filtroEnt=document.getElementById("cqFiltroEntregado");
   if(filtroEnt)filtroEnt.style.display=cqEstadoActivo==="Entregado"?"flex":"none";
-  const arr=pedidos.filter(p=>!p.archivado&&(p.estado||"Pendiente")===cqEstadoActivo&&(cqEstadoActivo!=="Entregado"||!fechaEnt||(p.fechaEntregado||p.fecha)===fechaEnt));
+  const arr=cqEstadoActivo==="Archivado"
+    ?pedidos.filter(p=>!!p.archivado)
+    :pedidos.filter(p=>!p.archivado&&(p.estado||"Pendiente")===cqEstadoActivo&&(cqEstadoActivo!=="Entregado"||!fechaEnt||(p.fechaEntregado||p.fecha)===fechaEnt));
   const count=document.querySelector(".cardhd span");if(count)count.textContent=arr.length+" solicitudes";
   const title=document.querySelector("#pedidos .cardhd b");if(title)title.textContent=cqEstadoActivo==="Pendiente"?"Pedidos de obra":cqEstadoActivo;
   const wrap=document.querySelector(".tblwrap");if(!wrap)return;
@@ -1518,7 +1524,9 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
     (cqEstadoActivo==="Pendiente"?'<button type="button" class="cq-send-selected show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqEnviarSeleccionados()">↗ WhatsApp <span class="count">'+n+'</span></button>':'')+
     (destino?'<button type="button" class="cq-move-selected '+(destino==="Pedido"?'a-pedido':'a-entregado')+' show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqMoverSeleccion(\''+destino+'\')">→ Enviar a '+destino+' <span class="count">'+n+'</span></button>':'')+
     (cqEstadoActivo==="Pedido"?'<div class="cq-fecha-entrega-bulk"><input type="date" id="cqFechaEntregaBulk" aria-label="Fecha de entrega"><button type="button" class="cq-fecha-entrega-btn '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqAsignarFechaEntregaSeleccion()">📅 Fecha entrega <span class="count">'+n+'</span></button></div>':'')+
-    (cqEstadoActivo!=="Pendiente"?'<button type="button" class="cq-back-selected '+(n?'show':'')+'" onclick="cqVolverSeleccion()">← Volver</button>':'')+
+    (cqEstadoActivo==="Entregado"?'<button type="button" class="cq-move-selected cq-archive-selected show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqArchivarSeleccion()">▣ Archivar <span class="count">'+n+'</span></button>':'')+
+    (cqEstadoActivo==="Archivado"?'<button type="button" class="cq-move-selected cq-delete-selected show '+(!n?'cq-disabled':'')+'" '+(!n?'disabled':'')+' onclick="cqEliminarArchivadosSeleccion()">Eliminar <span class="count">'+n+'</span></button>':'')+
+    ((cqEstadoActivo==="Pedido"||cqEstadoActivo==="Entregado")?'<button type="button" class="cq-back-selected '+(n?'show':'')+'" onclick="cqVolverSeleccion()">← Volver</button>':'')+
     '</div></div><div class="pedidos-grouped">'+Object.entries(grupos).map(([gkey,ps])=>{
    const partes=String(gkey).split("|||");
    const fechaGrupo=cqEstadoActivo==="Entregado"?partes[0]:"";
@@ -1645,7 +1653,8 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
    const fechaEnt=document.getElementById("cqFechaEntregado")?.value||"";
    const n=(pedidos||[]).filter(p=>{
      let est=p.estado||"Pendiente";if(est==="Enviado")est="Pedido";if(est==="Recibido")est="Entregado";
-     return !p.archivado&&est===cqEstadoActivo&&(!elegidas.length||elegidas.includes(String(p.obra||"").trim()))&&
+     const enSolapa=cqEstadoActivo==="Archivado"?!!p.archivado:(!p.archivado&&est===cqEstadoActivo);
+     return enSolapa&&(!elegidas.length||elegidas.includes(String(p.obra||"").trim()))&&
        (cqEstadoActivo!=="Entregado"||!fechaEnt||(p.fechaEntregado||p.fecha)===fechaEnt);
    }).length;
    const count=document.querySelector(".cardhd span");if(count)count.textContent=n+" solicitudes";
@@ -1726,6 +1735,50 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
  };
 
  window.cqVolverSeleccion=function(){if(!selected.size)return alert("Marcá al menos un ítem.");cqMover(cqEstadoActivo==="Entregado"?"Pedido":"Pendiente")};
+
+ window.cqArchivarSeleccion=function(){
+   if(cqEstadoActivo!=="Entregado")return;
+   if(!selected.size)return alert("Marcá al menos un ítem.");
+   const keys=new Set(selected),resultado=[],archivados=[];
+   let seq=0;
+   pedidos.forEach(p=>{
+     let estado=p.estado||"Pendiente";
+     if(estado==="Enviado")estado="Pedido";
+     if(estado==="Recibido")estado="Entregado";
+     if(p.archivado||estado!=="Entregado"){resultado.push(p);return}
+
+     const quedan=[],van=[];
+     (p.items||[]).forEach((x,i)=>{
+       (keys.has(k(p.id,i))?van:quedan).push(JSON.parse(JSON.stringify(x)));
+     });
+     if(!van.length){resultado.push(p);return}
+     if(quedan.length)resultado.push({...p,items:quedan});
+     archivados.push({...p,id:Date.now()+(++seq),archivado:true,archivadoAt:new Date().toISOString(),items:van});
+   });
+
+   pedidos=[...archivados,...resultado];
+   selected.clear();
+   persist();
+   window.render();
+ };
+
+ window.cqEliminarArchivadosSeleccion=function(){
+   if(cqEstadoActivo!=="Archivado")return;
+   if(!selected.size)return alert("Marcá al menos un ítem.");
+   const cantidad=selected.size;
+   if(!confirm("¿Eliminar definitivamente "+cantidad+" ítem"+(cantidad===1?"":"s")+" archivado"+(cantidad===1?"":"s")+"?"))return;
+   const keys=new Set(selected),resultado=[];
+   pedidos.forEach(p=>{
+     if(!p.archivado){resultado.push(p);return}
+     const quedan=(p.items||[]).filter((_,i)=>!keys.has(k(p.id,i)));
+     if(quedan.length)resultado.push({...p,items:quedan});
+   });
+   pedidos=resultado;
+   selected.clear();
+   persist();
+   window.render();
+ };
+
  window.archivarPedido=function(id){
    const p=pedidos.find(x=>String(x.id)===String(id));if(!p)return;
    if(!confirm("¿Archivar esta solicitud? Dejará de aparecer en la pantalla principal."))return;
@@ -1830,6 +1883,8 @@ function rowsSel(){const out=[];pedidos.forEach(p=>(p.items||[]).forEach((x,i)=>
 </style><style id="cq-v42-botones-flujo">
 .cq-move-selected.a-pedido{background:#173f75!important;color:#fff!important}
 .cq-move-selected.a-entregado{background:#21845a!important;color:#fff!important}
+.cq-archive-selected{background:#596b64!important;color:#fff!important}
+.cq-delete-selected{background:#c84b4b!important;color:#fff!important}
 </style>
 <style id="cq-v43-obras-multiple">
 .cq-obras-filter{position:relative;width:100%}
