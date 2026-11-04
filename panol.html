@@ -2768,6 +2768,20 @@ onAuthStateChanged(auth,async user=>{
 
 <script>
 var DB_KEY='cq_panol_v1';
+// CQ 04/11/2026 — El error DOMException.code === 22 es QUOTA_EXCEEDED del
+// navegador. La copia en localStorage es auxiliar: nunca debe interrumpir una
+// lectura/snapshot válido desde Firestore ni confundirse con una falla Firebase.
+// No borra datos, no elimina backups y no modifica la estructura en Firestore.
+function cqPanolGuardarLocalSeguro(clave, valor){
+  try{
+    localStorage.setItem(clave,valor);
+    return true;
+  }catch(e){
+    console.warn('Pañol: no se pudo actualizar la copia local; Firebase no está necesariamente afectado.',e);
+    return false;
+  }
+}
+
 var PANOL_RESET_VERSION='panol_reset_subrubros_2026_08_05_v1';
 var PANOL_RESET_KEY='cq_panol_reset_aplicado_'+PANOL_RESET_VERSION;
 var DOC_COL='panol';
@@ -3680,7 +3694,12 @@ async function persist(opts){
   normalizeState();
 
   if(panolTieneDatos(state))panolGuardarBackupLocal(state,opts.restauracion?'restauración':'antes de guardar');
-  localStorage.setItem(DB_KEY,JSON.stringify(state));
+  var copiaLocalGuardada=cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
+  // Sin Firebase y sin almacenamiento local NO confirmar un guardado inexistente.
+  if(!window._dbReady && !copiaLocalGuardada){
+    setSyncStatus('Sin espacio local · sin Firebase','err');
+    return false;
+  }
 
   if(window._dbReady){
     try{
@@ -3734,7 +3753,7 @@ async function persist(opts){
         console.warn('Escritura vacía bloqueada: Firebase contiene datos de Pañol.');
         state=panolClonarEstado(remotoPrev);
         normalizeState();
-        localStorage.setItem(DB_KEY,JSON.stringify(state));
+        cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
         panolGuardarBackupLocal(state,'escritura vacía bloqueada');
         setSyncStatus('Protegido · datos recuperados','ok');
         renderActive();
@@ -3749,7 +3768,7 @@ async function persist(opts){
         console.warn('Escritura parcial bloqueada: el estado local perdió demasiados productos respecto de Firebase.');
         state=panolClonarEstado(remotoPrev);
         normalizeState();
-        localStorage.setItem(DB_KEY,JSON.stringify(state));
+        cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
         panolGuardarBackupLocal(state,'escritura parcial bloqueada');
         setSyncStatus('Protegido · se evitó una reducción masiva','ok');
         panolLimpiarFiltrosVisualesStock();
@@ -3777,7 +3796,7 @@ async function persist(opts){
       }
 
       panolAllowEmptyWriteOnce=false;
-      setSyncStatus('Sincronizado','ok');
+      setSyncStatus(copiaLocalGuardada?'Sincronizado':'Sincronizado · sin copia local','ok');
       return true;
     }catch(e){
       console.warn('Firebase error',e);
@@ -3809,16 +3828,16 @@ async function loadFromFirebase(){
       // nunca debe republicarse automáticamente sobre cambios de otro dispositivo.
       state=panolClonarEstado(remoto);
       normalizeState();
-      localStorage.setItem(DB_KEY,JSON.stringify(state));
+      var cachéActualizado=cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
       panolGuardarBackupLocal(state,'carga desde Firebase');
-      setSyncStatus('Firebase ON','ok');
+      setSyncStatus(cachéActualizado?'Firebase ON':'Firebase ON · memoria local llena','ok');
       panolGuardarBackupFirebase(state,'carga válida desde Firebase').catch(function(e){console.warn(e);});
     }else{
       var rescate=await panolRescatarMejorEstado(remoto);
       if(rescate&&panolTieneDatos(rescate.state)){
         state=panolClonarEstado(rescate.state);
         normalizeState();
-        localStorage.setItem(DB_KEY,JSON.stringify(state));
+        cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
         panolGuardarBackupLocal(state,'rescate '+rescate.origen);
 
         suppressRemoteUntil=Date.now()+1500;
@@ -3872,10 +3891,10 @@ function startFirebase(){
       // para sobrescribir automáticamente cambios de otro dispositivo.
       state=panolClonarEstado(d);
       normalizeState();
-      localStorage.setItem(DB_KEY,JSON.stringify(state));
+      var cachéActualizado=cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
       panolGuardarBackupLocal(state,'snapshot Firebase');
       cqLimpiarTechiCau29_77Panol().catch(function(e){console.warn(e);});
-      setSyncStatus('Actualizado','ok');
+      setSyncStatus(cachéActualizado?'Actualizado':'Firebase ON · memoria local llena','ok');
       renderActive();
       panolGuardarBackupFirebase(state,'snapshot válido').catch(function(e){console.warn(e);});
     },function(e){
@@ -5998,7 +6017,7 @@ function iniciarVerificacionMaterialesPanol(){
       }
     });
     if(cambioEstado){
-      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(_e){}
+      try{cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));}catch(_e){}
     }
 
     try{ if(curTab==='obras') renderObrasTab(); }catch(_e){}
