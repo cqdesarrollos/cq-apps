@@ -957,7 +957,7 @@ button[onclick="createRestorePoint()"]{display:none!important}
           import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js")
         ]);
         const { initializeApp, getApps, getApp } = appMod;
-        const { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, orderBy, limit, deleteDoc } = fs;
+        const { getFirestore, doc, setDoc, getDoc, getDocFromServer, runTransaction, collection, getDocs, query, orderBy, limit, deleteDoc } = fs;
         const { getAuth, onAuthStateChanged } = authMod;
         const firebaseConfig = {
           apiKey: "AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
@@ -975,6 +975,8 @@ button[onclick="createRestorePoint()"]{display:none!important}
         window._doc = doc;
         window._setDoc = setDoc;
         window._getDoc = getDoc;
+        window._getDocServer = getDocFromServer;
+        window._runTransaction = runTransaction;
         window._collection = collection;
         window._getDocs = getDocs;
         window._query = query;
@@ -2567,6 +2569,100 @@ window.cqRevealInitialScreen=function(){
 </style>
 </head>
 <body>
+<style id="cq-verificacion-firebase-style">
+/* Actualización exclusivamente estética del loader: no modifica Firebase ni sincronización. */
+#cq-verificacion-firebase{
+  position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;
+  justify-content:center;padding:22px;box-sizing:border-box;
+  background:radial-gradient(circle at 50% 36%,#f9fcfa 0%,#f1f6f3 58%,#eaf2ee 100%);
+  font-family:Arial,sans-serif;
+}
+#cq-verificacion-firebase .card{
+  position:relative;overflow:hidden;box-sizing:border-box;width:100%;max-width:394px;
+  padding:24px 26px 25px;border-radius:24px;border:1px solid rgba(25,100,74,.12);
+  background:#fff;box-shadow:0 18px 55px rgba(16,63,47,.10),0 2px 10px rgba(16,63,47,.035);
+  color:#153f33;text-align:center;
+}
+#cq-verificacion-firebase .card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,#0e5540,#2fa977,#b6e5c7);
+}
+#cq-verificacion-firebase .cq-load-brand{
+  display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:22px;
+  color:#214c3e;font-size:10px;font-weight:800;letter-spacing:.12em;text-align:left;
+}
+#cq-verificacion-firebase .cq-load-mark{
+  display:flex;align-items:center;justify-content:center;width:33px;height:33px;
+  border-radius:11px;background:linear-gradient(145deg,#0e5842,#209666);
+  color:white;font-size:11px;font-weight:900;letter-spacing:-.05em;
+  box-shadow:0 5px 12px rgba(14,88,66,.16);
+}
+#cq-verificacion-firebase .cq-load-brand small{
+  display:block;font-size:9px;font-weight:500;letter-spacing:.09em;color:#829a8d;margin-top:3px;
+}
+#cq-verificacion-firebase .cq-load-symbol{
+  display:grid;place-items:center;width:84px;height:84px;margin:0 auto 17px;
+  border-radius:50%;background:#f0f8f3;position:relative;
+}
+#cq-verificacion-firebase .cq-load-symbol::before{
+  content:'';position:absolute;inset:8px;border-radius:50%;border:3px solid #d5eadc;
+  border-top-color:#1d9264;animation:cqLoadingSpin .9s linear infinite;
+}
+#cq-verificacion-firebase .cq-load-bars{display:flex;gap:4px;align-items:flex-end;height:21px}
+#cq-verificacion-firebase .cq-load-bars i{width:6px;border-radius:2px;background:#178259;display:block}
+#cq-verificacion-firebase .cq-load-bars i:nth-child(1){height:11px;opacity:.58}
+#cq-verificacion-firebase .cq-load-bars i:nth-child(2){height:20px;opacity:.9}
+#cq-verificacion-firebase .cq-load-bars i:nth-child(3){height:15px;opacity:.7}
+#cq-verificacion-firebase .cq-load-kicker{
+  display:block;margin-bottom:9px;color:#299068;text-transform:uppercase;
+  font-weight:800;font-size:10px;letter-spacing:.15em;
+}
+#cq-verificacion-firebase h2{
+  font-size:20px;line-height:1.3;letter-spacing:-.025em;margin:0 0 10px;font-weight:800;
+  color:#154939;
+}
+#cq-verificacion-firebase p{font-size:13px;line-height:1.6;color:#698477;margin:0 auto 15px;max-width:310px}
+#cq-verificacion-firebase .cq-load-track{
+  height:5px;border-radius:9px;background:#e9f2ed;overflow:hidden;margin:19px auto 14px;
+  max-width:230px;
+}
+#cq-verificacion-firebase .cq-load-track span{
+  display:block;height:100%;width:34%;border-radius:9px;
+  background:linear-gradient(90deg,#1b815b,#36b884);
+  animation:cqLoadingProgress 1.7s ease-in-out infinite;
+}
+#cq-verificacion-firebase .cq-load-foot{
+  margin:0!important;color:#96a99e!important;font-size:11px!important;
+}
+#cq-verificacion-firebase button{
+  display:none;margin:15px auto 0;cursor:pointer;border:0;border-radius:11px;
+  background:#13794e;padding:12px 17px;color:#fff;font-size:14px;font-weight:700;
+}
+#cq-verificacion-firebase:has(#cq-verificacion-reintentar[style*="block"]) .cq-load-track,
+#cq-verificacion-firebase:has(#cq-verificacion-reintentar[style*="block"]) .cq-load-foot{
+  display:none;
+}
+@keyframes cqLoadingSpin{to{transform:rotate(360deg)}}
+@keyframes cqLoadingProgress{0%{transform:translateX(-115%)}100%{transform:translateX(400%)}}
+@media (prefers-reduced-motion:reduce){
+  #cq-verificacion-firebase .cq-load-symbol::before,
+  #cq-verificacion-firebase .cq-load-track span{animation:none}
+}
+@media (max-width:420px){
+  #cq-verificacion-firebase .card{padding:22px 20px 23px;border-radius:21px}
+  #cq-verificacion-firebase h2{font-size:19px}
+}
+</style>
+<div id="cq-verificacion-firebase" role="status" aria-live="polite"><div class="card">
+  <div class="cq-load-brand" aria-hidden="true"><span class="cq-load-mark">CQ</span><span>DESARROLLOS<small>CONTROL DE OBRAS</small></span></div>
+  <div class="cq-load-symbol" aria-hidden="true"><span class="cq-load-bars"><i></i><i></i><i></i></span></div>
+  <span class="cq-load-kicker" aria-hidden="true">Sincronización segura</span>
+  <h2 id="cq-verificacion-titulo">Cargando obras y avances reales…</h2>
+  <p id="cq-verificacion-detalle">La aplicación primero verifica Firebase. No se mostrarán obras de ejemplo ni se enviarán datos antiguos.</p>
+  <div class="cq-load-track" aria-hidden="true"><span></span></div>
+  <p class="cq-load-foot" aria-hidden="true">Conectando con los datos actualizados</p>
+  <button type="button" id="cq-verificacion-reintentar" onclick="location.reload()">Recargar desde Firebase</button>
+</div></div>
 
 <div id="cq-access-total">
   <div class="cq-card">
@@ -2906,16 +3002,15 @@ function backupHasData(payload){
   const hasEstado = estados && typeof estados === 'object' && Object.keys(estados).length > 0;
   return hasObras && hasConstructores && hasEstado;
 }
-function buildBackupPayload(kind='auto'){
+function buildBackupPayload(kind='auto',source){
+  const snap=source || {obrasConfig,constructoresConfig,estadosObras};
   return JSON.parse(JSON.stringify({
-    kind,
-    dateKey: backupDateKey(),
-    createdAt: new Date().toISOString(),
-    curObraId: typeof curObraId !== 'undefined' ? curObraId : null,
-    currentConstructorId: typeof currentConstructorId !== 'undefined' ? currentConstructorId : null,
-    constructoresConfig: typeof constructoresConfig !== 'undefined' ? constructoresConfig : [],
-    obrasConfig: typeof obrasConfig !== 'undefined' ? obrasConfig : [],
-    estadosObras: typeof estadosObras !== 'undefined' ? estadosObras : {}
+    kind,dateKey:backupDateKey(),createdAt:new Date().toISOString(),
+    curObraId:typeof curObraId!=='undefined'?curObraId:null,
+    currentConstructorId:typeof currentConstructorId!=='undefined'?currentConstructorId:null,
+    constructoresConfig:snap.constructoresConfig||[],
+    obrasConfig:snap.obrasConfig||[],
+    estadosObras:snap.estadosObras||{}
   }));
 }
 async function backupNow(kind='manual'){
@@ -2929,8 +3024,8 @@ async function backupNow(kind='manual'){
   }
   try{
     setFirebaseStatus('sync','Backup: guardando...');
-    await loadAllForBackup();
-    const payload = buildBackupPayload(kind);
+    const snapshot = await loadAllForBackup();
+    const payload = buildBackupPayload(kind,snapshot);
     if(!backupHasData(payload)){
       setFirebaseStatus('err','Backup cancelado: datos no cargados');
       if(kind !== 'auto') alert('Backup cancelado: todavía no se cargaron las obras/datos. Esperá unos segundos y probá de nuevo.');
@@ -2954,8 +3049,8 @@ async function ensureDailyBackup(){
   const todayKey = backupDateKey();
   if(localStorage.getItem('avance_last_auto_backup') === todayKey) return;
   try{
-    await loadAllForBackup();
-    const payload = buildBackupPayload('auto');
+    const snapshot = await loadAllForBackup();
+    const payload = buildBackupPayload('auto',snapshot);
     if(!backupHasData(payload)) return;
     const ref = window._doc(window._db,'avance_backups',todayKey);
     const snap = await window._getDoc(ref);
@@ -2995,6 +3090,8 @@ async function showBackups(){
   }
 }
 async function restoreBackup(id){
+  alert('Por seguridad, la restauración completa antigua está deshabilitada. Conservá los backups existentes y utilizá recuperación selectiva.');
+  return;
   if(!window._dbReady || !currentFirebaseModeOn()){
     alert('Activá Firebase ON para restaurar backups.');
     return;
@@ -3052,22 +3149,20 @@ async function cleanupOldBackups(){
   }catch(e){console.warn('Cleanup backups error',e);}
 }
 async function loadAllForBackup(){
-  if(!window._dbReady || !currentFirebaseModeOn()) return;
-  try{
-    const conf = await window._getDoc(window._doc(window._db,'mano_obra_config','app'));
-    if(conf.exists()){
-      const c = conf.data();
-      if(c.constructores) constructoresConfig = c.constructores;
-      if(c.obras) obrasConfig = c.obras;
-    }
-    for(const o of obrasConfig){
-      const snap = await window._getDoc(window._doc(window._db,'mano_obra',o.id));
-      if(snap.exists()) estadosObras[o.id] = normalizeState(snap.data(), o);
-      else if(!estadosObras[o.id]) estadosObras[o.id] = createDefaultState(o);
-    }
-    if(!estadosObras[curObraId] && obrasConfig[0]) curObraId = obrasConfig[0].id;
-    state = estadosObras[curObraId] || state;
-  }catch(e){console.warn('loadAllForBackup error',e);}
+  if(!window._dbReady || !isFirebaseEnabled() || !firebaseInitialLoadDone)
+    throw new Error('No se puede respaldar antes de completar Firebase.');
+  const config=await window._getDocServer(window._doc(window._db,'config','mano_obra_multiobra'));
+  if(!config.exists() || !Array.isArray(config.data().obras) || !config.data().obras.length)
+    throw new Error('No se encontraron obras para respaldar.');
+  const lista=cqClone(config.data().obras);
+  const cons=cqClone(config.data().constructores||[]);
+  const estados={};
+  for(let i=0;i<lista.length;i+=4){
+    const lote=lista.slice(i,i+4);
+    const snaps=await Promise.all(lote.map(o=>window._getDocServer(window._doc(window._db,'obras',o.id))));
+    snaps.forEach((s,j)=>{if(!s.exists()) throw new Error('Falta la obra '+lote[j].id+' en Firebase.');estados[lote[j].id]=s.data();});
+  }
+  return {obrasConfig:lista,constructoresConfig:cons,estadosObras:estados};
 }
 
 function getSemanas() {
@@ -3653,6 +3748,8 @@ function updateHeaderTitle() {
   if (el) el.textContent = t;
 }
 let obraModalMode = 'edit';
+// Bloquea el doble clic mientras se crea la obra de forma atómica en Firebase.
+let cqCreandoObra = false;
 function openEditObra() {
   obraModalMode = 'edit';
   const meta = currentObra();
@@ -3687,7 +3784,10 @@ function openNuevaObra() {
   updatePlantTemplateHint(true);
   setTimeout(()=>document.getElementById('eo-label').focus(), 30);
 }
-function closeEditObra() { document.getElementById('modal-obra').classList.remove('open'); }
+function closeEditObra() {
+  if(cqCreandoObra) return; // No cerrar el formulario durante la transacción.
+  document.getElementById('modal-obra').classList.remove('open');
+}
 function makeObraId(label) {
   const base = (label || 'obra').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'') || 'obra';
   let id = base;
@@ -3956,7 +4056,7 @@ async function ensureProjectTypeTemplates(writeRemote=false){
   if(estadosObras[curObraId]) state=estadosObras[curObraId];
 }
 
-function saveEditObra() {
+async function saveEditObra() {
   const label = document.getElementById('eo-label').value.trim();
   const c = document.getElementById('eo-constructor').value.trim();
   const n = document.getElementById('eo-num').value.trim();
@@ -3967,28 +4067,97 @@ function saveEditObra() {
   const constructorNombre = c || consObj?.nombre || 'Constructor';
   const finalLabel = label || (n ? 'L' + n.replace('/', ' Mz') : c || 'Nueva obra');
   if (obraModalMode === 'new') {
+    if(cqCreandoObra) return false;
+    // En FIREBASE ON no crear nada en memoria antes de obtener la confirmación.
+    if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){
+      alert('Firebase está terminando de cargar. Esperá que aparezca en verde antes de crear una obra.');
+      return false;
+    }
     const tipoPlantas = Number(document.getElementById('eo-tipo')?.value || 1) === 2 ? 2 : 1;
     const tipoCimentacion = tipoPlantas===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value || 'pilotes') : '';
     const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, ...(tipoPlantas===2?{tipoCimentacion}:{}), plantillaVersion: tipoPlantas===2 ? (tipoCimentacion==='platea' ? PLANTILLA_2P_PLATEA_EXCEL : '2p_v1') : '1p_detallada_v1', createdAt:new Date().toISOString() };
-    obrasConfig.push(newMeta);
-    estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
-    estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
-    // Si es la primera Platea del sistema (todavía no había una Platea anterior),
-    // genera importes desde una referencia financiera. Cuando sí existe una obra
-    // Platea anterior, sus importes ya fueron copiados y no deben sobrescribirse.
-    if(tipoPlantas===2 && tipoCimentacion==='platea' && estadosObras[newMeta.id]._plateaInitialTemplate){
+    // Primero preparar el estado, tomando la última obra como modelo, sin alterar
+    // el listado real ni cambiar la obra seleccionada hasta finalizar Firebase.
+    const newState=createStateFromLatestTemplate(newMeta,tipoPlantas);
+    newState.acuerdo=a>0?a:newState.acuerdo;
+    if(tipoPlantas===2 && tipoCimentacion==='platea' && newState._plateaInitialTemplate){
       const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
-      if(perfilFin) cqAplicarPerfilFinancieroPlatea(estadosObras[newMeta.id],newMeta,perfilFin);
+      if(perfilFin) cqAplicarPerfilFinancieroPlatea(newState,newMeta,perfilFin);
     }
-    curObraId = newMeta.id;
-    state = estadosObras[curObraId];
-    // Ambos persist() marcan una cola durable antes de intentar Firebase. Si el
-    // navegador se actualiza en este instante, la próxima carga los sube primero.
+
+    if(isFirebaseEnabled()){
+      const guardarBtn=document.querySelector('#modal-obra .modal-footer .btn-primary');
+      const textoAnterior=guardarBtn?.textContent||'Guardar';
+      cqCreandoObra=true;
+      if(guardarBtn){guardarBtn.disabled=true;guardarBtn.textContent='Guardando obra…';}
+      markSaving();
+      try{
+        // UNA sola transacción: alta en config + documento de obra con cronograma.
+        // Si la transacción falla no quedan escrituras ni cambios locales parciales.
+        let remoteConfig;
+        try{
+          remoteConfig=await cqCrearObraEnFirebase(newMeta,newState,false);
+        }catch(error){
+          if(error?.code!=='CQ_OBRA_HUERFANA') throw error;
+          const previa=error.obraExistente||{};
+          const info=[
+            'Esta obra ya tiene un documento en Firebase, pero no está en el listado.',
+            '',
+            'Identificador: '+newMeta.id,
+            'Constructor guardado: '+(previa.constructor||'Sin identificar'),
+            'Número guardado: '+(previa.obraNum||'Sin indicar'),
+            'Acuerdo guardado: '+(Number.isFinite(Number(previa.acuerdo)) ? '$ '+Number(previa.acuerdo).toLocaleString('es-AR') : 'Sin indicar'),
+            '',
+            '¿Querés VOLVER A MOSTRAR esta obra en el listado?',
+            'Se conservarán INTACTOS sus avances, tareas, certificados y pagos. No se creará una segunda obra.'
+          ].join('\n');
+          if(!confirm(info)){
+            markSaved();
+            return false;
+          }
+          // Se vuelve a validar todo en una transacción antes de escribir.
+          remoteConfig=await cqCrearObraEnFirebase(newMeta,newState,true);
+        }
+        const estadoReal=remoteConfig.estadoObra||newState;
+        obrasConfig=cqClone(remoteConfig.obras);
+        constructoresConfig=cqClone(remoteConfig.constructores);
+        estadosObras[newMeta.id]=cqClone(estadoReal);
+        normalizeObrasConfig();
+        try{
+          localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
+          localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));
+          localStorage.setItem('mano_obra_'+newMeta.id,JSON.stringify(estadoReal));
+        }catch(e){console.warn('Obra creada: no se pudo actualizar el caché local',e);}
+        _cqConfigRevision++;
+        curObraId=newMeta.id;
+        state=estadoReal;
+        cqCreandoObra=false;
+        document.getElementById('modal-obra').classList.remove('open');
+        switchObra(newMeta.id);
+        recordMutationForHistory();
+        markSaved();
+        return true;
+      }catch(e){
+        console.warn('La creación de la obra se canceló sin escribir datos parciales',e);
+        markError();
+        alert('No se pudo crear la obra. No se guardó ningún cambio parcial en Firebase.\n\n'+String(e?.message||e));
+        return false;
+      }finally{
+        cqCreandoObra=false;
+        if(guardarBtn){guardarBtn.disabled=false;guardarBtn.textContent=textoAnterior;}
+      }
+    }
+
+    // Modo local OFF: conserva el comportamiento de prueba sin conectar a Firebase.
+    obrasConfig.push(newMeta);
+    estadosObras[newMeta.id]=newState;
+    curObraId=newMeta.id;
+    state=newState;
     persistConfig();
     persist();
     closeEditObra();
-    switchObra(curObraId);
-    return;
+    switchObra(newMeta.id);
+    return true;
   }
   const meta = currentObra();
   state.constructor = constructorNombre;
@@ -4727,10 +4896,7 @@ function normalizeState(s, meta={}) {
     .toLowerCase()
     .replace(/lote|l|mz|manzana|\s/g,'')
     .replace(/-/g,'/');
-  if(obraRef.includes('12/93') || obraRef.includes('13/93')){
-    s.items['18-3'] = 1;
-    s._banquinasInteriores100 = true;
-  }
+  // Los avances de Banquinas se leen de Firebase y no se fuerzan a 100%.
 
   if(!s.montos) s.montos = {};
   if(!s.customTasks) s.customTasks = {};
@@ -4856,37 +5022,227 @@ function cqObraDirtyToken(id){ const x=cqReadDirtyObras(); return String(x[id]||
 function cqIsObraDirty(id){ return !!cqObraDirtyToken(id); }
 function cqMarkObraDirty(id){ if(!id) return ''; const x=cqReadDirtyObras(); const t=cqDirtyToken(); x[id]=t; cqWriteDirtyObras(x); return t; }
 function cqClearObraDirtyIf(id,token){ if(!id||!token) return; const x=cqReadDirtyObras(); if(String(x[id]||'')===String(token)){ delete x[id]; cqWriteDirtyObras(x); } }
+// PROTECCIÓN 04/11/2026: al iniciar, Firebase es la única fuente autorizada.
+// Los pendientes anteriores permanecen como copia local, nunca se envían al iniciar.
+const cqRemoteObraBaselines = new Map();
+const cqObraWriteQueues = new Map();
+let cqRemoteConfigBaseline = null;
+let cqConfigWriteQueue = Promise.resolve();
+let cqSyncErrorText = '';
+let cqSaveErrorShown = false;
+function cqClone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x));}
+function cqSame(a,b){
+  const stable=v=>{
+    if(Array.isArray(v)) return v.map(stable);
+    if(v && typeof v==='object'){
+      const out={}; Object.keys(v).sort().forEach(k=>{if(v[k]!==undefined) out[k]=stable(v[k]);});return out;
+    }
+    return v;
+  };
+  return JSON.stringify(stable(a))===JSON.stringify(stable(b));
+}
+function cqIsPlainObj(v){return !!v && typeof v==='object' && !Array.isArray(v);}
+function cqThreeWay(base,desired,current,path='datos'){
+  if(cqSame(desired,base)) return cqClone(current);
+  if(cqSame(current,base) || cqSame(current,desired)) return cqClone(desired);
+  if(cqIsPlainObj(base) && cqIsPlainObj(desired) && cqIsPlainObj(current)){
+    const out=cqClone(current);
+    const keys=new Set([...Object.keys(base),...Object.keys(desired)]);
+    for(const key of keys){
+      if(!cqSame(base[key],desired[key])){
+        const value=cqThreeWay(base[key],desired[key],current[key],path+'.'+key);
+        if(value===undefined) delete out[key]; else out[key]=value;
+      }
+    }
+    return out;
+  }
+  throw new Error('Otro dispositivo modificó '+path+'. Recargá desde Firebase antes de volver a editar.');
+}
+function cqMergeConfigArray(base,desired,current,label){
+  if(cqSame(base,desired)) return cqClone(current);
+  if(cqSame(base,current)) return cqClone(desired);
+  const ids=x=>Array.isArray(x)?x.map(o=>o?.id):[];
+  if(!Array.isArray(base)||!Array.isArray(desired)||!Array.isArray(current))
+    throw new Error('Conflicto al guardar '+label);
+  // Altas, bajas y reordenamientos no se pisan entre sí.
+  if(!cqSame(ids(base),ids(desired)))
+    throw new Error('Otro usuario cambió el orden o listado de '+label+'. Recargá antes de guardar.');
+  const basemap=new Map(base.map(o=>[o.id,o]));
+  const desiredmap=new Map(desired.map(o=>[o.id,o]));
+  const actualmap=new Map(current.map(o=>[o.id,o]));
+  const out=cqClone(current);
+  for(let i=0;i<out.length;i++){
+    const id=out[i].id;
+    if(basemap.has(id) && desiredmap.has(id) && !cqSame(basemap.get(id),desiredmap.get(id))){
+      out[i]=cqThreeWay(basemap.get(id),desiredmap.get(id),actualmap.get(id),label+'.'+id);
+    }
+  }
+  for(const [id,v] of desiredmap){
+    if(!actualmap.has(id) && !cqSame(v,basemap.get(id)))
+      throw new Error('La obra o constructor '+id+' fue eliminado en otro dispositivo.');
+  }
+  return out;
+}
+function cqMergeConfig(base,desired,current){
+  if(!base || !current) throw new Error('No se verificó la configuración actual de Firebase.');
+  return {
+    obras:cqMergeConfigArray(base.obras||[],desired.obras||[],current.obras||[],'obras'),
+    constructores:cqMergeConfigArray(base.constructores||[],desired.constructores||[],current.constructores||[],'constructores')
+  };
+}
+function cqFirebaseWriteAllowed(){
+  return !!(isFirebaseEnabled() && window._dbReady && firebaseInitialLoadDone && !cqSyncErrorText);
+}
+function cqProtectWrite(reason){
+  console.warn('Avances: guardado bloqueado hasta completar Firebase',reason);
+  cqShowFirebaseGate();
+}
+function cqSaveFailed(error){
+  console.warn('Avances: no se pudo guardar en Firebase',error);
+  markError();
+  if(!cqSaveErrorShown){
+    cqSaveErrorShown=true;
+    alert('El cambio no se guardó en Firebase. '+String(error?.message||error)+
+      '\n\nNo se reemplazaron los datos de otro dispositivo. Recargá Avances antes de volver a editar.');
+  }
+  cqSyncErrorText=String(error?.message||error);
+  cqShowFirebaseGate();
+}
+function cqDiscardOldPending(){
+  try{
+    const cfg=localStorage.getItem(CQ_DIRTY_CONFIG_KEY);
+    const obs=localStorage.getItem(CQ_DIRTY_OBRAS_KEY);
+    if(cfg || obs){
+      localStorage.setItem('mano_obra_pendientes_anteriores_aislados',JSON.stringify({fecha:new Date().toISOString(),configToken:cfg,obrasTokens:obs}));
+      localStorage.removeItem(CQ_DIRTY_CONFIG_KEY);
+      localStorage.removeItem(CQ_DIRTY_OBRAS_KEY);
+    }
+  }catch(e){console.warn('No se pudieron aislar pendientes antiguos',e);}
+}
+cqDiscardOldPending();
 async function cqWriteConfigRemote(snapshot,token){
-  await window._setDoc(window._doc(window._db,'config','mano_obra_multiobra'),JSON.parse(JSON.stringify(snapshot)));
-  cqClearConfigDirtyIf(token);
+  const desired=cqClone(snapshot);
+  const task=cqConfigWriteQueue.then(async()=>{
+    if(!cqFirebaseWriteAllowed()) throw new Error('Firebase todavía no terminó de cargar.');
+    const base=cqClone(cqRemoteConfigBaseline);
+    if(!base) throw new Error('Falta la configuración inicial de Firebase.');
+    const ref=window._doc(window._db,'config','mano_obra_multiobra');
+    let saved;
+    await window._runTransaction(window._db,async tr=>{
+      const snap=await tr.get(ref);
+      if(!snap.exists()) throw new Error('El listado de obras no existe en Firebase.');
+      const rem=snap.data();
+      saved=cqMergeConfig(base,desired,rem);
+      tr.update(ref,{obras:saved.obras,constructores:saved.constructores});
+    });
+    cqRemoteConfigBaseline=cqClone(saved);
+    cqClearConfigDirtyIf(token);
+    // Actualizar los campos combinados sin pisar otra edición hecha en esta misma pantalla.
+    if(cqSame({obras:obrasConfig,constructores:constructoresConfig},desired)){
+      obrasConfig=cqClone(saved.obras);constructoresConfig=cqClone(saved.constructores);
+      try{localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
+          localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));}catch(_){}
+    }
+  });
+  cqConfigWriteQueue=task.catch(()=>{});
+  return task;
 }
 async function cqWriteObraRemote(id,snapshot,token){
-  await window._setDoc(window._doc(window._db,'obras',id),JSON.parse(JSON.stringify(snapshot)));
-  cqClearObraDirtyIf(id,token);
+  const desired=cqClone(snapshot);
+  const prev=cqObraWriteQueues.get(id)||Promise.resolve();
+  const task=prev.then(async()=>{
+    if(!cqFirebaseWriteAllowed()) throw new Error('Firebase todavía no terminó de cargar.');
+    if(!cqRemoteObraBaselines.has(id)) throw new Error('No se verificó la obra '+id+' en Firebase.');
+    const base=cqClone(cqRemoteObraBaselines.get(id));
+    const ref=window._doc(window._db,'obras',id);
+    let saved;
+    await window._runTransaction(window._db,async tr=>{
+      const snap=await tr.get(ref);
+      const rem=snap.exists()?snap.data():null;
+      if(base===null && rem!==null)
+        throw new Error('La obra '+id+' ya fue creada en otra sesión.');
+      saved=cqThreeWay(base||{},desired,rem||{},'obra '+id);
+      tr.set(ref,saved);
+    });
+    cqRemoteObraBaselines.set(id,cqClone(saved));
+    cqClearObraDirtyIf(id,token);
+    // Incluye cambios de otras sesiones sin descartar ediciones locales posteriores.
+    const latest=estadosObras[id];
+    if(latest){
+      try{
+        const combined=cqThreeWay(desired,latest,saved,'obra '+id);
+        estadosObras[id]=combined;
+        if(curObraId===id) state=combined;
+        localStorage.setItem('mano_obra_'+id,JSON.stringify(combined));
+      }catch(e){console.info('Los cambios posteriores siguen pendientes',id,e.message);}
+    }
+  });
+  cqObraWriteQueues.set(id,task.catch(()=>{}));
+  return task;
 }
-async function cqFlushPendingLocalToFirebase(){
-  if(!window._dbReady || !isFirebaseEnabled()) return {configPending:cqIsConfigDirty(),obrasPending:Object.keys(cqReadDirtyObras())};
-
-  // Configuración primero: si se creó una obra nueva, su ID debe existir en la
-  // lista remota antes de que una lectura vieja pueda ocultarla.
-  const cfgToken=cqConfigDirtyToken();
-  if(cfgToken){
-    try{
-      const snap={obras:obrasConfig,constructores:constructoresConfig};
-      await cqWriteConfigRemote(snap,cfgToken);
-    }catch(e){ console.warn('No se pudo subir configuración pendiente',e); }
-  }
-
-  const pendientes=cqReadDirtyObras();
-  for(const [id,token] of Object.entries(pendientes)){
-    let st=estadosObras && estadosObras[id];
-    if(!st){ try{ st=JSON.parse(localStorage.getItem('mano_obra_'+id)||'null'); }catch(e){} }
-    if(!st) continue;
-    try{ await cqWriteObraRemote(id,st,token); }
-    catch(e){ console.warn('No se pudo subir obra pendiente',id,e); }
-  }
-  return {configPending:cqIsConfigDirty(),obrasPending:Object.keys(cqReadDirtyObras())};
+// CREACIÓN ATÓMICA: alta en el listado + estado/cronograma de la obra en
+// una única transacción. No depende de una baseline de obra inexistente.
+async function cqCrearObraEnFirebase(newMeta,newState,recuperarHuerfana=false){
+  const meta=cqClone(newMeta), obra=cqClone(newState);
+  // Comparte cola con ediciones de configuración en curso para evitar carreras.
+  const task=cqConfigWriteQueue.then(async()=>{
+    if(!cqFirebaseWriteAllowed()) throw new Error('Firebase no terminó de sincronizar.');
+    if(!cqRemoteConfigBaseline) throw new Error('No se verificó la configuración de obras.');
+    const configRef=window._doc(window._db,'config','mano_obra_multiobra');
+    const obraRef=window._doc(window._db,'obras',meta.id);
+    const guardado=await window._runTransaction(window._db,async tr=>{
+      // Firestore requiere todas las lecturas antes de la primera escritura.
+      const configSnap=await tr.get(configRef);
+      const obraSnap=await tr.get(obraRef);
+      if(!configSnap.exists()) throw new Error('No existe la configuración actual de Firebase.');
+      const config=configSnap.data();
+      if(!Array.isArray(config.obras) || !Array.isArray(config.constructores) || !config.obras.length)
+        throw new Error('La configuración actual está incompleta. Se canceló el alta.');
+      if(config.obras.some(o=>o && o.id===meta.id))
+        throw new Error('Esta obra ya está en el listado de Firebase. Recargá Avances antes de volver a crearla.');
+      if(!config.constructores.some(c=>c && c.id===meta.constructorId))
+        throw new Error('El constructor elegido ya no está disponible en Firebase. Recargá Avances.');
+      let estadoGuardado=obra;
+      let recuperada=false;
+      if(obraSnap.exists()){
+        const existing=obraSnap.data();
+        if(!existing || typeof existing!=='object' || !existing.items || typeof existing.items!=='object' || Array.isArray(existing.items))
+          throw new Error('Existe un documento con este identificador, pero no tiene una estructura válida de avances. No se modificó.');
+        // La obra huérfana conserva su propio estado. No sobrescribirla con un
+        // cronograma nuevo ni adoptarla si pertenece a otro constructor o número.
+        if(existing.constructor && normKey(existing.constructor)!==normKey(meta.constructor))
+          throw new Error('Existe un documento de obra con ese identificador, pero pertenece a otro constructor ('+existing.constructor+'). No se modificó.');
+        if(existing.obraNum && meta.obraNum && normKey(existing.obraNum)!==normKey(meta.obraNum))
+          throw new Error('Existe un documento con otro número de obra ('+existing.obraNum+'). No se modificó.');
+        if(!recuperarHuerfana){
+          const e=new Error('La obra ya existe en Firebase, pero no está en el listado. Se puede volver a vincular sin borrar su contenido.');
+          e.code='CQ_OBRA_HUERFANA';
+          e.obraExistente={constructor:existing.constructor||'',obraNum:existing.obraNum||'',acuerdo:existing.acuerdo};
+          throw e;
+        }
+        estadoGuardado=cqClone(existing);
+        recuperada=true;
+      }else if(recuperarHuerfana){
+        throw new Error('La obra existente ya no está en Firebase. Volvé a verificar antes de continuar.');
+      }
+      // Sólo agrega el registro de la obra al listado remoto más reciente.
+      // En una recuperación NUNCA escribe sobre el documento /obras/{id}.
+      const nuevoListado=[...config.obras,meta];
+      tr.update(configRef,{obras:nuevoListado});
+      if(!recuperada) tr.set(obraRef,obra);
+      return {obras:nuevoListado,constructores:config.constructores,estadoObra:estadoGuardado,recuperada};
+    });
+    cqRemoteConfigBaseline=cqClone({obras:guardado.obras,constructores:guardado.constructores});
+    cqRemoteObraBaselines.set(meta.id,cqClone(guardado.estadoObra));
+    _cqRemoteLoadedObras.add(meta.id);
+    return guardado;
+  });
+  cqConfigWriteQueue=task.catch(()=>{});
+  return task;
 }
+
+// No reenviar al abrir cambios guardados por una versión antigua de Avances.
+async function cqFlushPendingLocalToFirebase(){return {disabled:true};}
 
 // ─── MODO FIREBASE / PRUEBA LOCAL ───────────────────────────────────────
 let firebaseModeEnabled = localStorage.getItem('mano_obra_firebase_mode') !== 'off';
@@ -5088,6 +5444,7 @@ function restoreManualPoint(){
 }
 
 function persistConfig(){
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){cqProtectWrite('config');return;}
   normalizeObrasConfig();
   localStorage.setItem('mano_obra_config', JSON.stringify(obrasConfig));
   const token=cqMarkConfigDirty();
@@ -5098,13 +5455,14 @@ function persistConfig(){
     const snapshot={obras:obrasConfig,constructores:constructoresConfig};
     cqWriteConfigRemote(snapshot,token)
       .then(markSaved)
-      .catch(e => { console.warn('Firebase config write error', e); markError(); });
+      .catch(cqSaveFailed);
   } else {
     markLocal();
   }
 }
 function currentObra(){ return obrasConfig.find(o=>o.id===curObraId) || obrasConfig[0]; }
 function persist() {
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){cqProtectWrite('obra');return;}
   const id=curObraId;
   const meta=obrasConfig.find(o=>o.id===id);
   if(Number(state?.tipoPlantas || meta?.tipoPlantas)===2 &&
@@ -5131,7 +5489,7 @@ function persist() {
     const snapshot=JSON.parse(JSON.stringify(state));
     cqWriteObraRemote(id,snapshot,token)
       .then(markSaved)
-      .catch(e => { console.warn('Firebase write error', e); markError(); });
+      .catch(cqSaveFailed);
   } else {
     markLocal();
   }
@@ -5297,7 +5655,7 @@ function switchObra(id){
   renderObraSwitch();
   updateHeaderTitle();
   showObraView();
-  cqAsegurarImportesCronogramaPlateaUnaVez();
+  // No modificar importes por abrir una obra.
   renderKPIs();
   renderSemanas();
   // La vista abre con cache local al instante. Si esta obra todavía no se leyó
@@ -5349,6 +5707,7 @@ let _cqAvanceSummaryWeek=null;
 // interacción (click, onchange del porcentaje, soltar slider). Así un refresh
 // inmediato nunca pierde el avance aunque la escritura remota siga diferida.
 function cqCheckpointAvanceLocal(){
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()) return;
   const id=curObraId;
   if(!id || !state) return;
   state._cqUpdatedAt=Date.now();
@@ -5363,6 +5722,7 @@ function cqCheckpointAvanceLocal(){
 }
 
 function cqScheduleAvancePersist(delay=750){
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()) return;
   _cqLocallyTouchedObras.add(curObraId);
   estadosObras[curObraId]=state;
   _cqAvancePersistDirty=true;
@@ -6653,13 +7013,7 @@ function showObraView(){
   document.body.classList.remove('cq-constructor-mode');
   document.body.classList.add('cq-obra-mode');
   currentScreen='obra';
-  asegurarBanquinasInterioresNelson().then(cambio=>{
-    if(cambio){
-      renderKPIs();
-      renderSemanas();
-      if(document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
-    }
-  });
+  // La navegación no debe modificar otras obras ni guardar datos automáticamente.
   const _hb=document.getElementById('header-home-btn'); if(_hb) _hb.style.display='inline-flex';
   if(!currentConstructorId && currentObra()?.constructorId) currentConstructorId = currentObra().constructorId;
   hideMainViews();
@@ -7377,8 +7731,7 @@ async function cqReadRemoteObra(meta, idx=0){
   if(_cqRemoteLoadingObras.has(id)) return false;
   _cqRemoteLoadingObras.add(id);
   try{
-    let snap=await window._getDoc(window._doc(window._db,'obras',id));
-    if(!snap.exists() && idx===0) snap=await window._getDoc(window._doc(window._db,'obras','simon_state'));
+    let snap=await window._getDocServer(window._doc(window._db,'obras',id));
     if(isFirebaseHistoryBlocked()) return false;
     // Si el usuario ya tocó esta obra durante la lectura, prevalece su cambio local.
     if(_cqLocallyTouchedObras.has(id) || cqIsObraDirty(id)){
@@ -7387,47 +7740,15 @@ async function cqReadRemoteObra(meta, idx=0){
     }
     if(snap.exists()){
       const rawRemote=snap.data()||{};
-      const localState=estadosObras[id] || (()=>{ try{return JSON.parse(localStorage.getItem('mano_obra_'+id)||'null');}catch(e){return null;} })();
-      const localPlatea24=
-        Number(localState?.tipoPlantas || meta?.tipoPlantas)===2 &&
-        normalizeCimentacion2P(localState?.tipoCimentacion || meta?.tipoCimentacion || '')==='platea' &&
-        (localState?.plantillaVersion===PLANTILLA_2P_PLATEA_EXCEL || meta?.plantillaVersion===PLANTILLA_2P_PLATEA_EXCEL);
-      const remoteCim=normalizeCimentacion2P(rawRemote?.tipoCimentacion || meta?.tipoCimentacion || '');
-      const remoteLegacyPlatea=(remoteCim==='platea' && rawRemote?.plantillaVersion!==PLANTILLA_2P_PLATEA_EXCEL);
-
-      // Caso crítico: Firebase aún guarda el esquema viejo de 30 semanas pero este
-      // dispositivo ya tiene la obra correcta de 24. El remoto NO se aplica:
-      // se reescribe Firebase con el estado local correcto.
-      if(localPlatea24 && remoteLegacyPlatea){
-        if(meta){
-          meta.tipoPlantas=2;
-          meta.tipoCimentacion='platea';
-          meta.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
-        }
-        localState.tipoPlantas=2;
-        localState.tipoCimentacion='platea';
-        localState.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
-        estadosObras[id]=localState;
-        try{
-          localStorage.setItem('mano_obra_'+id,JSON.stringify(localState));
-          localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
-        }catch(e){}
-        try{
-          const cfgToken=cqMarkConfigDirty();
-          const obraToken=cqMarkObraDirty(id);
-          _cqConfigRevision++;
-          await cqWriteConfigRemote({obras:obrasConfig,constructores:constructoresConfig},cfgToken);
-          await cqWriteObraRemote(id,localState,obraToken);
-        }catch(e){ console.warn('No se pudo reemplazar Platea legacy en Firebase',id,e); }
-        _cqRemoteLoadedObras.add(id);
-        return false;
-      }
-
+      // La lectura nunca repara esquemas automáticamente ni reenvía cachés locales.
+      cqRemoteObraBaselines.set(id,cqClone(rawRemote));
       const remote=normalizeState(rawRemote,meta);
       estadosObras[id]=remote;
       try{ localStorage.setItem('mano_obra_'+id,JSON.stringify(remote)); }catch(e){}
-    }else if(!estadosObras[id]){
-      estadosObras[id]=normalizeState(null,meta);
+    }else{
+      // Obra nueva aún sin documento: no se inventan avances en Firebase.
+      cqRemoteObraBaselines.set(id,null);
+      if(!estadosObras[id]) estadosObras[id]=normalizeState(null,meta);
     }
     _cqRemoteLoadedObras.add(id);
     return true;
@@ -7498,16 +7819,14 @@ function cqStartBackgroundFullSync(skipId){
         await cqYieldUI(8);
       }
 
-      // Antes de migraciones, sube cualquier cambio hecho mientras corría la sincronización.
-      await cqFlushPendingLocalToFirebase();
-
-      // Estas migraciones/reparaciones necesitan todas las obras disponibles,
-      // pero ya no bloquean el inicio de la app.
-      await cqRepararImportesPlateaPostFirebase(true);
-      await cqYieldUI(0);
-      await ensureProjectTypeTemplates(true);
+      // Ninguna reparación automática ni envío de cachés al completar la lectura.
+      // Las modificaciones de esquemas se harán solamente mediante acciones explícitas.
+      if(obrasConfig.some(o=>!_cqRemoteLoadedObras.has(o.id)))
+        throw new Error('No se pudieron leer todas las obras de Firebase.');
       state=estadosObras[curObraId] || state;
       firebaseInitialLoadDone=true;
+      cqSyncErrorText='';
+      cqShowFirebaseGate();
       ensureDailyBackup();
 
       // Refresca sólo la vista vigente; jamás vuelve a Inicio por la fuerza.
@@ -7515,6 +7834,8 @@ function cqStartBackgroundFullSync(skipId){
       markSaved();
     }catch(e){
       console.warn('Firebase background sync error',e);
+      cqSyncErrorText=String(e?.message||e);
+      cqShowFirebaseGate();
       markError();
     }finally{
       _cqBackgroundSyncRunning=false;
@@ -7524,6 +7845,7 @@ function cqStartBackgroundFullSync(skipId){
 
 async function initApp() {
   updateFirebaseModeUI();
+  cqShowFirebaseGate();
   startAvancePresence();
 
   // FASE 1 — instantánea: siempre abre con el cache local. No se bloquea la UI
@@ -7554,42 +7876,22 @@ async function initApp() {
   setFirebaseStatus('Firebase: leyendo…','sync');
 
   try{
-    // FASE 2 — prioritaria: primero sube cualquier cambio local pendiente de una
-    // sesión anterior. Sólo después acepta datos remotos. Esto evita que un refresh
-    // recupere una configuración vieja y esconda la obra recién creada.
-    await cqFlushPendingLocalToFirebase();
-
-    const configRevisionAtRead=_cqConfigRevision;
-    const confSnap = await window._getDoc(window._doc(window._db,'config','mano_obra_multiobra'));
+    // FASE 2: leer primero Firebase. Nunca subir pendientes de sesiones viejas.
+    const confSnap = await window._getDocServer(window._doc(window._db,'config','mano_obra_multiobra'));
     if(isFirebaseHistoryBlocked()) throw new Error('Lectura Firebase cancelada por restauración local');
 
-    // Si el usuario creó/editó una obra mientras getDoc estaba esperando, esa
-    // lectura ya quedó vieja aunque su escritura haya alcanzado a terminar.
-    const configCambioDuranteLectura=(_cqConfigRevision!==configRevisionAtRead);
-    if(cqIsConfigDirty() || configCambioDuranteLectura){
-      await cqFlushPendingLocalToFirebase();
-    }else if(confSnap.exists() && Array.isArray(confSnap.data().obras) && confSnap.data().obras.length){
-      const data=confSnap.data();
-
-      // No permitir que una config remota vieja vuelva una Platea 24 semanas a 2p_v1.
-      // Si localmente esa misma obra ya está identificada como Platea, se conservan
-      // esos tres campos de esquema aunque Firebase todavía tenga metadatos antiguos.
-      const prevById=new Map((obrasConfig||[]).map(o=>[o.id,o]));
-      obrasConfig=data.obras.map(remoteMeta=>{
-        const localMeta=prevById.get(remoteMeta.id);
-        const localState=estadosObras && estadosObras[remoteMeta.id];
-        const localPlatea=
-          (Number(localMeta?.tipoPlantas)===2 && normalizeCimentacion2P(localMeta?.tipoCimentacion)==='platea') ||
-          (Number(localState?.tipoPlantas)===2 && normalizeCimentacion2P(localState?.tipoCimentacion)==='platea');
-        const remotePlatea=Number(remoteMeta?.tipoPlantas)===2 && normalizeCimentacion2P(remoteMeta?.tipoCimentacion)==='platea';
-        if(localPlatea || remotePlatea){
-          return {...remoteMeta,tipoPlantas:2,tipoCimentacion:'platea',plantillaVersion:PLANTILLA_2P_PLATEA_EXCEL};
-        }
-        return remoteMeta;
-      });
+    if(!confSnap.exists()) throw new Error('No existe la configuración de obras en Firebase.');
+    if(!Array.isArray(confSnap.data().obras) || !confSnap.data().obras.length)
+      throw new Error('La configuración de Firebase no contiene obras reales.');
+    const data=confSnap.data();
+    if(data.obras.length===2 && data.obras.some(o=>/sim[oó]n/i.test(o.constructor||o.label||''))
+       && data.obras.some(o=>/ram[oó]n/i.test(o.constructor||o.label||'')))
+      throw new Error('Firebase contiene el listado de demostración. Se canceló la carga para proteger tus avances.');
+    obrasConfig=cqClone(data.obras);
       if(Array.isArray(data.constructores)) constructoresConfig=data.constructores;
       normalizeConstructoresConfig();
       normalizeObrasConfig();
+      cqRemoteConfigBaseline=cqClone({obras:obrasConfig,constructores:constructoresConfig});
       try{
         localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
         localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));
@@ -7598,7 +7900,6 @@ async function initApp() {
         curObraId=obrasConfig[0].id;
         localStorage.setItem('mano_obra_actual',curObraId);
       }
-    }
 
     // Prioriza la obra que esté seleccionada AHORA, no la que estaba al iniciar.
     const priorityId=curObraId;
@@ -7608,13 +7909,12 @@ async function initApp() {
       const applied=await cqReadRemoteObra(priorityMeta,idx);
       if(applied && curObraId===priorityId){
         state=estadosObras[priorityId] || state;
-        cqAsegurarImportesCronogramaPlateaUnaVez();
       }
       cqRefreshVisibleAfterRemote(priorityId);
     }
 
     _cqForegroundSyncDone=true;
-    markSaved();
+    setFirebaseStatus('Firebase: completando obras…','sync');
     // Auth ya está listo: actualiza presencia una vez sin crear otro intervalo.
     heartbeatAvancePresence();
     readLastSyncAvance();
@@ -7625,10 +7925,34 @@ async function initApp() {
     if(String(e && e.message || '').includes('restauración local')){
       console.info(e.message); markSaved();
     }else{
-      console.warn('Firebase read error',e); markError();
+      console.warn('Firebase read error',e);
+      cqSyncErrorText=String(e?.message||e);
+      cqShowFirebaseGate();
+      markError();
     }
   }finally{
     _cqInitialSyncRunning=false;
+  }
+}
+
+// Oculta la pantalla de ejemplo hasta que la lectura REAL de todas las obras termine.
+function cqShowFirebaseGate(){
+  const gate=document.getElementById('cq-verificacion-firebase');
+  if(!gate) return;
+  const needed=isFirebaseEnabled() && (!firebaseInitialLoadDone || !!cqSyncErrorText);
+  gate.style.display=needed?'flex':'none';
+  if(!needed) return;
+  const title=document.getElementById('cq-verificacion-titulo');
+  const detail=document.getElementById('cq-verificacion-detalle');
+  const retry=document.getElementById('cq-verificacion-reintentar');
+  if(cqSyncErrorText){
+    title.textContent='No se guardará información desactualizada';
+    detail.textContent=cqSyncErrorText+' — Cerrá las otras sesiones si están editando y recargá desde Firebase.';
+    retry.style.display='block';
+  }else{
+    title.textContent='Cargando obras y avances reales…';
+    detail.textContent='Verificando obras y certificaciones en Firebase. La pantalla quedará habilitada al terminar.';
+    retry.style.display='none';
   }
 }
 
