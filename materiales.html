@@ -19265,3 +19265,267 @@ body:has(#modal-reporte.open) #modal-reporte{
 })();
 </script>
 
+
+<!-- CQ 04/11/2026 — fuente independiente para el SUBRUBRO elegido a mano.
+     Caja/Acopio/Pañol siguen usando materiales/data_planilla_exacta_v4;
+     ese documento compartido NO es una fuente fiable de decisiones manuales. -->
+<script id="cq-clasificacion-manual-cloud-definitiva-v1">
+(function(){
+  'use strict';
+  if(window.__cqClasificacionManualCloudV1)return;
+  window.__cqClasificacionManualCloudV1=true;
+
+  var CACHE_KEY='cq_materiales_subrubros_manuales_cloud_v1';
+  var COLLECTION='materiales_meta';
+  var DOCUMENT='subrubros_manuales_definitivos_v1';
+  var records={};
+  var pendientes={};
+  var cargando=null;
+  var cloudLoaded=false;
+  var unsubscribe=null;
+  var applying=false;
+  var guardando=false;
+
+  function normalizar(s){
+    return String(s||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+  }
+  function keyNombre(nombre){var n=normalizar(nombre);return n?'name:'+n:'';}
+  function copia(v){return JSON.parse(JSON.stringify(v));}
+  function cacheGuardar(){
+    try{localStorage.setItem(CACHE_KEY,JSON.stringify(records));}catch(e){console.warn('Materiales: caché subrubros',e);}
+  }
+  function cacheLeer(){
+    try{
+      var x=JSON.parse(localStorage.getItem(CACHE_KEY)||'{}');
+      return x&&typeof x==='object'&&!Array.isArray(x)?x:{};
+    }catch(e){return {};}
+  }
+  records=cacheLeer();
+
+  function firestoreListo(){return !!(window._dbReady&&window._db&&window._doc&&window._getDoc&&window._runTransaction&&modoFirebase);}
+  function refCloud(){return window._doc(window._db,COLLECTION,DOCUMENT);}
+  function categoriaReal(nombre){
+    var k=normalizar(nombre);if(!k)return '';
+    var c=(window.CATS||[]).find(function(x){
+      if(!x||normalizar(x.name)!==k)return false;
+      try{if(typeof isCatDeleted==='function'&&isCatDeleted(x.name))return false;}catch(e){}
+      return true;
+    });
+    return c?c.name:'';
+  }
+  function obtenerMateriales(){return Array.isArray(window.ALL_MATS)?window.ALL_MATS:[];}
+  function asegurarEstructuras(){
+    if(!window.state)return false;
+    ['matCategorias','categoriaManual','catalogoManual','categoriaManualIdentidad','categoriaMemoria']
+      .forEach(function(k){if(!state[k]||typeof state[k]!=='object')state[k]={};});
+    return true;
+  }
+  function protegerCategoria(mat,reg){
+    if(!mat||!reg)return false;
+    var cat=categoriaReal(reg.categoria);
+    if(!cat)return false; // No inventar subrubros ni restaurar categorías eliminadas.
+    var id=String(mat.id),antes=String(state.matCategorias[id]||mat.catName||'');
+    state.matCategorias[id]=cat;
+    state.categoriaManual[id]=cat;
+    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{}, {
+      nombre:String(mat.mat||''),codigo:String(reg.codigo||''),
+      categoria:cat,manual:true,updatedAt:reg.updatedAt||new Date().toISOString()
+    });
+    var nk=keyNombre(mat.mat);
+    if(nk){
+      state.categoriaManualIdentidad[nk]={
+        nombre:String(mat.mat||''),codigo:String(reg.codigo||''),
+        categoria:cat,manual:true,updatedAt:reg.updatedAt||new Date().toISOString()
+      };
+      // No aplicar reglas sólo por código: puede estar repetido en otro producto.
+      state.categoriaMemoria[nk]=cat;
+    }
+    mat.catName=cat;
+    (state.extraMats||[]).forEach(function(x){if(String(x&&x.id)===id)x.catName=cat;});
+    (state.materialesNuevos||[]).forEach(function(x){if(String(x&&x.id)===id)x.catName=cat;});
+    var destino=(window.CATS||[]).find(function(c){return c.name===cat;});
+    // Evitar reconstruir todas las categorías si el material ya está bien ubicado.
+    if(destino&&(normalizar(antes)!==normalizar(cat)||!destino.items.some(function(x){return String(x&&x.id)===id;}))){
+      (window.CATS||[]).forEach(function(c){
+        if(Array.isArray(c.items))c.items=c.items.filter(function(x){return String(x&&x.id)!==id;});
+      });
+      destino.items.push(mat);
+    }
+    return normalizar(antes)!==normalizar(cat);
+  }
+  function aplicarRegistros(){
+    if(applying||!asegurarEstructuras())return false;
+    applying=true;
+    try{
+      var cambio=false;
+      obtenerMateriales().forEach(function(m){
+        if(!m)return;
+        try{if(typeof isMatDeleted==='function'&&isMatDeleted(m.id))return;}catch(e){}
+        var key=keyNombre(m.mat);
+        var reg=key?records[key]:null;
+        // Respaldo de renombres a medio sincronizar: el ID y el nombre viejo deben coincidir.
+        if(!reg){
+          Object.keys(records).some(function(k){
+            var r=records[k];
+            if(r&&String(r.id)===String(m.id)&&normalizar(r.previousName)===normalizar(m.mat)&&r.previousName){reg=r;return true;}
+            return false;
+          });
+        }
+        if(reg&&reg.manual===true)cambio=protegerCategoria(m,reg)||cambio;
+      });
+      return cambio;
+    }finally{applying=false;}
+  }
+  function aceptarRemoto(datos){
+    var r=datos&&datos.registros&&typeof datos.registros==='object'&&!Array.isArray(datos.registros)?datos.registros:{};
+    // Firebase es la verdad compartida. Sólo se exceptúa una edición de ESTE equipo aún pendiente.
+    records=copia(r);
+    Object.keys(pendientes).forEach(function(k){records[k]=pendientes[k];});
+    cloudLoaded=true;
+    cacheGuardar();
+    var cambio=aplicarRegistros();
+    if(cambio){
+      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(e){}
+      try{renderActive();}catch(e){}
+    }
+  }
+  function escuchar(){
+    if(unsubscribe||!window._onSnapshot||!firestoreListo())return;
+    unsubscribe=window._onSnapshot(refCloud(),function(snap){
+      aceptarRemoto(snap.exists()?snap.data():{});
+    },function(e){console.warn('Materiales: suscripción subrubros manuales',e);});
+  }
+  async function cargarCloud(){
+    if(!firestoreListo())return;
+    if(cloudLoaded){escuchar();return;}
+    if(cargando)return cargando;
+    cargando=(async function(){
+      try{
+        var snap=await window._getDoc(refCloud());
+        aceptarRemoto(snap.exists()?snap.data():{});
+        escuchar();
+      }catch(e){
+        console.warn('Materiales: no se pudo leer la clasificación manual independiente',e);
+        // No detener el resto de Materiales por una caída transitoria de esta lectura.
+      }finally{cargando=null;}
+    })();
+    return cargando;
+  }
+
+  async function escribirDecision(reg){
+    if(!firestoreListo())return;
+    var k=keyNombre(reg.nombre);
+    if(!k)throw new Error('Material sin nombre');
+    // Transacción que conserva las decisiones de otros materiales/otros dispositivos.
+    await window._runTransaction(window._db,async function(tx){
+      var ref=refCloud();
+      var snap=await tx.get(ref);
+      var data=snap.exists()?(snap.data()||{}):{};
+      var mapa=data.registros&&typeof data.registros==='object'?copia(data.registros):{};
+      mapa[k]=reg;
+      tx.set(ref,{registros:mapa,updatedAt:new Date().toISOString()});
+    });
+    delete pendientes[k];
+    records[k]=reg;
+    cacheGuardar();
+  }
+
+  // IMPORTANTE: se ejecuta DESPUÉS de todos los parches históricos del archivo.
+  // De ese modo la última palabra del estado/catálogo es la decisión explícita del usuario.
+  var normalizarAntes=(typeof normalizeState==='function')?normalizeState:null;
+  if(normalizarAntes){
+    window.normalizeState=normalizeState=function(){
+      var r=normalizarAntes.apply(this,arguments);
+      aplicarRegistros();
+      return r;
+    };
+  }
+  var iniciarAntes=(typeof startFirebase==='function')?startFirebase:null;
+  if(iniciarAntes){
+    window.startFirebase=startFirebase=async function(){
+      if(firestoreListo())await cargarCloud();
+      return iniciarAntes.apply(this,arguments);
+    };
+  }
+  var cargarAntes=(typeof loadFromFirebase==='function')?loadFromFirebase:null;
+  if(cargarAntes){
+    window.loadFromFirebase=loadFromFirebase=async function(){
+      if(firestoreListo())await cargarCloud();
+      var res=await cargarAntes.apply(this,arguments);
+      aplicarRegistros();
+      return res;
+    };
+  }
+
+  // Guardar en la base lateral ANTES de que los procesos antiguos ejecuten persist()
+  // y reintroduzcan un shadow viejo. Si Firebase falla, NO informar éxito ficticio.
+  var guardarAntes=(typeof guardarNombreMat==='function')?guardarNombreMat:null;
+  if(guardarAntes){
+    window.guardarNombreMat=guardarNombreMat=async function(){
+      if(guardando)return;
+      guardando=true;
+      try{
+      var el=document.getElementById('editar-mat-cat');
+      var nom=document.getElementById('editar-mat-nombre-input');
+      var cod=document.getElementById('editar-mat-codigo');
+      var nombre=String(nom&&nom.value||'').trim();
+      var categoria=categoriaReal(el&&el.value);
+      var id=Number(window.selectedCargaMat!=null?window.selectedCargaMat:selectedCargaMat);
+      var actual=obtenerMateriales().find(function(m){return Number(m&&m.id)===id;});
+      if(!nombre||!categoria||!actual)return guardarAntes.apply(this,arguments);
+      var key=keyNombre(nombre);
+      var previo=records[key];
+      var registro={
+        nombre:nombre,previousName:String(actual.mat||''),
+        codigo:String(cod&&cod.value||''),id:id,
+        categoria:categoria,manual:true,updatedAt:new Date().toISOString()
+      };
+      records[key]=registro;
+      if(firestoreListo())pendientes[key]=registro;
+      cacheGuardar();
+      aplicarRegistros();
+      if(firestoreListo()){
+        try{
+          setSyncStatus('Firebase: guardando subrubro...');
+          await escribirDecision(registro);
+        }catch(e){
+          console.error('Materiales: no se guardó el subrubro manual en Firebase',e);
+          if(previo)records[key]=previo;else delete records[key];
+          delete pendientes[key];
+          cacheGuardar();
+          setSyncStatus('Firebase: ERROR al guardar subrubro','err');
+          alert('No se pudo guardar el subrubro en Firebase. Revisá la conexión e intentá nuevamente. No se cerró la edición.');
+          return;
+        }
+      }
+      var resultado=await guardarAntes.apply(this,arguments);
+      aplicarRegistros();
+      cacheGuardar();
+      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(e){}
+      // Refuerzo liviano del documento compartido SIN reescribir las cargas de Caja/Acopio.
+      if(firestoreListo()&&window._setDoc){
+        var matFinal=obtenerMateriales().find(function(m){return keyNombre(m&&m.mat)===key;});
+        if(matFinal){
+          var campos={matCategorias:{}};
+          campos.matCategorias[String(matFinal.id)]=categoria;
+          try{
+            await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),campos,{merge:true});
+          }catch(e){console.warn('Materiales: pendiente reflejar subrubro en planilla principal',e);}
+        }
+      }
+      return resultado;
+      }finally{guardando=false;}
+    };
+  }
+
+  // Proteger visualmente el catálogo desde el primer render, incluso sin conexión.
+  aplicarRegistros();
+  document.addEventListener('firebase-ready',function(){cargarCloud();});
+  document.addEventListener('cq-firebase-ready',function(){cargarCloud();});
+  window.cqSubrubrosManualesDiagnostico=function(){
+    return {firebaseCargado:cloudLoaded,clasificaciones:Object.keys(records).length,
+      pendientes:Object.keys(pendientes).length};
+  };
+})();
+</script>
