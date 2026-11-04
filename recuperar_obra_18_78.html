@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CQ | Recuperar solo la obra 18/78</title>
+<style>
+:root{color-scheme:light;--ink:#164336;--muted:#597064;--line:#d7e5dd;--bg:#f5f8f5}
+*{box-sizing:border-box}body{margin:0;padding:20px 12px;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Arial,sans-serif}
+main{max-width:670px;margin:0 auto;background:#fff;padding:clamp(18px,4vw,32px);border:1px solid var(--line);border-radius:20px;box-shadow:0 12px 30px #183d3410}
+.logo{text-transform:uppercase;letter-spacing:.13em;font-weight:900;font-size:11px;color:#32936b}h1{margin:9px 0 10px;font-size:27px;line-height:1.18}h2{font-size:15px;margin:0 0 8px}p{margin:9px 0}.muted,small{color:var(--muted)}.notice{padding:13px 15px;background:#fff8e8;border:1px solid #e8d79b;border-radius:12px;margin:16px 0}.step{padding:16px 0;border-top:1px solid var(--line)}.num{color:#398a65;font-weight:900;font-size:11px;letter-spacing:.1em;text-transform:uppercase}button{width:100%;min-height:44px;padding:11px 15px;border:0;border-radius:11px;background:var(--ink);color:white;font-weight:800;font-size:14px;cursor:pointer;margin-top:9px}button:disabled{opacity:.42;cursor:not-allowed}.secondary{color:var(--ink);background:#e2f0e8}.danger{background:#a74538}label{display:flex;gap:10px;align-items:flex-start;margin:12px 0}input{accent-color:#15935e;margin-top:4px}.result{background:#f3f8f4;border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}.ok{color:#11613a;background:#e7f8ed;border-color:#afd7ba}.err{color:#9c3d31;background:#fff2ef;border-color:#ebc4bb}code{font-size:13px}footer{font-size:12px;color:var(--muted);margin-top:18px}
+</style>
+</head>
+<body>
+<main>
+<div class="logo">CQ Desarrollos · Recuperación individual</div>
+<h1>Recuperar solamente L18 Mz78</h1>
+<p class="muted">Usa el backup del <b>3 de noviembre de 2026</b>. No restaura las demás obras.</p>
+<div class="notice"><b>Importante:</b> cerrá Avances en teléfono, tablet y otros dispositivos. Esta herramienta apunta al <b>Firebase real</b> aunque la publiques en Netlify Prueba. No borra ni cambia el documento <code>obras/obra_2_99</code>.</div>
+<section class="step">
+<div class="num">Paso 1</div><h2>Verificar qué se recuperaría</h2>
+<p>Comprueba que el backup tenga exactamente L18 Mz78, sus avances y certificaciones, y que la obra no esté ya en el listado.</p>
+<button id="check">1. Verificar 18/78</button><div id="details" class="result" hidden></div>
+</section>
+<section class="step">
+<div class="num">Paso 2</div><h2>Guardar una copia antes de modificar</h2>
+<p>Descarga un archivo JSON con la configuración actual y los datos que se recuperarían.</p>
+<button id="download" class="secondary" disabled>2. Descargar respaldo</button>
+</section>
+<section class="step">
+<div class="num">Paso 3</div><h2>Recuperar 18/78</h2>
+<p>Agrega L18 Mz78 al listado y crea <b>su propio documento nuevo</b> con los avances del backup. No sobrescribe el identificador antiguo.</p>
+<label><input type="checkbox" id="closed"><span>Confirmo que nadie tiene Avances abierto y que guardé el JSON del paso 2.</span></label>
+<button id="restore" class="danger" disabled>3. Recuperar únicamente L18 Mz78</button>
+</section>
+<h2>Estado</h2><div id="status" class="result" role="status" aria-live="polite">Sin cambios. Primero verificá.</div>
+<footer>Al finalizar, eliminá esta herramienta temporal de GitHub. No la dejés publicada como una función permanente.</footer>
+</main>
+<script type="module">
+import {initializeApp,getApp,getApps} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {getAuth,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import {getFirestore,doc,getDocFromServer,runTransaction} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+const firebaseConfig={apiKey:'AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8',authDomain:'cq-mano-de-obra.firebaseapp.com',projectId:'cq-mano-de-obra',storageBucket:'cq-mano-de-obra.firebasestorage.app',messagingSenderId:'502127540211',appId:'1:502127540211:web:8daefc75bdaafad412c486'};
+const BACKUP='2026-11-03', OLD_ID='obra_2_99', NEW_ID='l18_mz78_recuperada_20261104', OBRA_NUM='18/78';
+const $=id=>document.getElementById(id);
+let db,auth,scan=null,downloaded=false,busy=false,finished=false;
+const clone=x=>JSON.parse(JSON.stringify(x));
+const norm=x=>String(x??'').toLowerCase().replace(/\s/g,'').replace(/manzana|mz/g,'m').replace(/lote|lt/g,'l');
+const canonical=x=>Array.isArray(x)?'['+x.map(canonical).join(',')+']':x&&typeof x==='object'?'{'+Object.keys(x).sort().map(k=>JSON.stringify(k)+':'+canonical(x[k])).join(',')+'}':JSON.stringify(x);
+const errorText=e=>e?.code ? `${e.code}: ${e?.message||e}` : String(e?.message||e);
+const status=(s,kind='')=>{$('status').className='result '+kind;$('status').textContent=s;};
+function refresh(){ $('check').disabled=busy||finished;$('download').disabled=busy||finished||!scan;$('restore').disabled=busy||finished||!scan||!downloaded||!$('closed').checked; }
+$('closed').addEventListener('change',refresh);
+async function ready(){
+ if(db)return;
+ const app=getApps().length?getApp():initializeApp(firebaseConfig);
+ auth=getAuth(app);db=getFirestore(app);
+ await new Promise(resolve=>{let ended=false;let unsub=()=>{};const done=()=>{if(ended)return;ended=true;try{unsub()}catch(e){}resolve()};unsub=onAuthStateChanged(auth,done,done);setTimeout(done,6000)});
+}
+function validate(b,c,oldSnap,newSnap){
+ if(!b||!Array.isArray(b.obrasConfig)||!b.estadosObras||!Array.isArray(c.obras)||!Array.isArray(c.constructores))throw Error('La configuración o el backup no tienen el formato esperado. No se modificó nada.');
+ const refs=b.obrasConfig.filter(o=>o&&o.id===OLD_ID&&norm(o.obraNum)===norm(OBRA_NUM));
+ if(refs.length!==1)throw Error('El backup no contiene exactamente una referencia de 18/78 con identificador obra_2_99. No se modificó nada.');
+ const meta=clone(refs[0]), state=clone(b.estadosObras[OLD_ID]);
+ if(!state||typeof state!=='object'||!state.items||typeof state.items!=='object'||Array.isArray(state.items)||norm(state.obraNum)!==norm(OBRA_NUM))throw Error('El estado del backup no coincide con 18/78 o carece de avances. No se modificó nada.');
+ if(!meta.constructorId||!c.constructores.some(x=>x?.id===meta.constructorId))throw Error('El constructor del backup no está en la configuración actual. No se modificó nada.');
+ if(c.obras.some(o=>o&&(norm(o.obraNum)===norm(OBRA_NUM)||o.id===NEW_ID||norm(o.label)==='l18m78')))throw Error('La 18/78 ya figura en el listado actual. No se agregará otra copia. Revisá los filtros y obras terminadas.');
+ if(newSnap.exists())throw Error('El identificador nuevo ya tiene datos en Firebase. No se sobrescribirá.');
+ if(oldSnap.exists()&&norm(oldSnap.data()?.obraNum)===norm(OBRA_NUM))throw Error('El documento antiguo ahora corresponde a 18/78. No conviene duplicarlo. Hay que vincularlo directamente.');
+ if(Object.keys(state.items).length===0||!state.montos||typeof state.montos!=='object')throw Error('El respaldo no incluye todas las estructuras de avances e importes esperadas. No se modificó nada.');
+ return {meta,state};
+}
+$('check').addEventListener('click',async()=>{
+ busy=true;scan=null;downloaded=false;refresh();$('details').hidden=true;status('Consultando Firebase sin modificar nada…');
+ try{
+  await ready();
+  const [bs,cs,os,ns]=await Promise.all([getDocFromServer(doc(db,'avance_backups',BACKUP)),getDocFromServer(doc(db,'config','mano_obra_multiobra')),getDocFromServer(doc(db,'obras',OLD_ID)),getDocFromServer(doc(db,'obras',NEW_ID))]);
+  if(!bs.exists()||!cs.exists())throw Error('No se encontró el backup o la configuración.');
+  const backup=bs.data(),current=cs.data(); const {meta,state}=validate(backup,current,os,ns);
+  scan={backup,current,meta,state,old:os.exists()?os.data():null};
+  $('details').hidden=false;
+  $('details').textContent=`Obra del backup: ${meta.label||OBRA_NUM}\nConstructor: ${meta.constructor||'—'}\nNúmero: ${state.obraNum}\nIdentificador antiguo: ${OLD_ID}\nIdentificador nuevo: ${NEW_ID}\nTareas con avance: ${Object.values(state.items).filter(x=>Number(x)>0).length}\nCertificaciones registradas: ${(state.certificados||[]).length}\nDocumento antiguo actual: ${os.exists()?(os.data()?.obraNum||'sin número'):'no existe'}\nSe modificarían SOLO: listado de obras y nuevo documento ${NEW_ID}.`;
+  status('Verificación correcta. Todavía no se modificó Firebase. Descargá el respaldo.','ok');
+ }catch(e){status('Operación detenida: '+errorText(e),'err');}
+ finally{busy=false;refresh();}
+});
+$('download').addEventListener('click',()=>{
+ if(!scan)return;
+ try{
+  const payload={_nota:'Respaldo previo a recuperar solo 18/78',fecha:new Date().toISOString(),proyecto:'cq-mano-de-obra',configActual:scan.current,obra18Backup:{meta:scan.meta,estado:scan.state},documentoObra2_99Actual:scan.old};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download='CQ_respaldo_18-78_antes_de_recuperar.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
+  downloaded=true;status('Descarga solicitada. Comprobá que el JSON esté en Descargas. Después podés continuar.','ok');
+ }catch(e){downloaded=false;status('No se pudo descargar: '+errorText(e),'err');}
+ refresh();
+});
+$('restore').addEventListener('click',async()=>{
+ if(!scan||!downloaded||!$('closed').checked||busy||finished)return;
+ if(!confirm('¿Confirmás recuperar solo L18 Mz78 usando el backup del 3/11? No se modificará ni borrará obras/obra_2_99 ni ninguna otra obra.'))return;
+ busy=true;refresh();status('Comprobando de nuevo y recuperando solo 18/78…');
+ try{
+  await ready();
+  const result=await runTransaction(db,async tr=>{
+   const bs=await tr.get(doc(db,'avance_backups',BACKUP));
+   const cs=await tr.get(doc(db,'config','mano_obra_multiobra'));
+   const os=await tr.get(doc(db,'obras',OLD_ID));
+   const ns=await tr.get(doc(db,'obras',NEW_ID));
+   if(!bs.exists()||!cs.exists())throw Error('El backup o la configuración ya no están. No se modificó nada.');
+   const b=bs.data(),c=cs.data(); const {meta,state}=validate(b,c,os,ns);
+   if(canonical(c.obras)!==canonical(scan.current.obras)||canonical(c.constructores)!==canonical(scan.current.constructores))throw Error('Cambió el listado desde la verificación. Repetí el paso 1 antes de recuperar.');
+   if(canonical(meta)!==canonical(scan.meta)||canonical(state)!==canonical(scan.state))throw Error('Cambió el respaldo del 3/11. Se canceló sin modificar nada.');
+   const nuevo={...meta,id:NEW_ID};
+   tr.update(doc(db,'config','mano_obra_multiobra'),{obras:[...c.obras,nuevo]});
+   tr.set(doc(db,'obras',NEW_ID),state);
+   return {id:NEW_ID,total:c.obras.length+1};
+  },{maxAttempts:3});
+  const [cs,ns,os]=await Promise.all([getDocFromServer(doc(db,'config','mano_obra_multiobra')),getDocFromServer(doc(db,'obras',NEW_ID)),getDocFromServer(doc(db,'obras',OLD_ID))]);
+  if(!cs.exists()||!ns.exists()||norm(ns.data().obraNum)!==norm(OBRA_NUM)||!cs.data().obras.some(o=>o.id===result.id))throw Error('La escritura terminó pero no se pudo verificar el resultado. NO repitas. Revisá Firebase antes de continuar.');
+  finished=true;scan=null;downloaded=false;
+  status(`RECUPERACIÓN CONFIRMADA\n\nL18 Mz78 figura nuevamente en el listado con sus avances guardados.\nIdentificador nuevo: ${result.id}\n\nEl documento antiguo ${OLD_ID} permanece ${os.exists()?'existente':'sin modificar'}; ninguna otra obra fue reemplazada.\n\nCerrá esta herramienta y recargá Avances para comprobar.`, 'ok');
+  $('details').hidden=true;
+ }catch(e){status('No se completó la recuperación: '+errorText(e),'err');}
+ finally{busy=false;refresh();}
+});
+</script>
+</body>
+</html>
