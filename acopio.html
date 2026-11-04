@@ -3567,6 +3567,13 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
           Al cambiarla, Acopio actualiza este retiro en Gastos y Materiales usando la obra vinculada actual.
         </div>
       </div>
+      <div class="fld">
+        <label>Producto retirado</label>
+        <select id="retiro-material" onchange="cqCambioMaterialEditRetiro()" aria-label="Seleccionar material del retiro"></select>
+        <div id="retiro-material-aviso" style="font-size:10px;color:#7A9E82;margin-top:5px;line-height:1.45" aria-live="polite"></div>
+        <button type="button" id="retiro-material-diagnostico-btn" class="btn btn-s btn-sm" onclick="cqDiagnosticarProductoRetiro()" style="display:none;margin-top:8px;font-size:10px">🔎 Diagnosticar referencia perdida (solo lectura)</button>
+        <div id="retiro-material-diagnostico" style="display:none;margin-top:8px;padding:10px;border:1px solid #D5CFC3;border-radius:8px;background:#F7F6F3;font-size:10px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere"></div>
+      </div>
       <div class="row2">
         <div class="fld"><label>Cantidad</label><input type="number" id="retiro-qty" min="0.01" step="0.01"></div>
         <div class="fld"><label>Fecha</label><input type="date" id="retiro-fecha"></div>
@@ -4773,6 +4780,32 @@ async function saveToFirebase(){
             }
           });
           acLocal.retiros=locales;
+
+          // CQ 04/11/2026 — Evitar que un catálogo local atrasado sobrescriba
+          // fichas nuevas que otro usuario ya confirmó en Firebase.
+          // El código anterior fusionaba retiros, pero NO las fichas de mats.
+          var matsLocales=Array.isArray(acLocal.mats)?acLocal.mats:[];
+          var idsMatsLocales=new Set(matsLocales.filter(Boolean).map(function(m){return String(m.id);}));
+          (Array.isArray(acRemoto.mats)?acRemoto.mats:[]).forEach(function(matRemoto){
+            if(!matRemoto||matRemoto.id==null)return;
+            var mid=String(matRemoto.id);
+            var tombMat=cqMatTombstoneKey(acLocal.id,mid);
+            if(!idsMatsLocales.has(mid) && !cqMatsBorradosPendientes.has(tombMat)){
+              matsLocales.push(JSON.parse(JSON.stringify(matRemoto)));
+              idsMatsLocales.add(mid);
+            }else if(idsMatsLocales.has(mid)){
+              // No pisar cambios confirmados con una copia de catálogo más vieja.
+              // Los registros anteriores sin updatedAt conservan el esquema legacy.
+              var idxLocal=matsLocales.findIndex(function(m){return m&&String(m.id)===mid;});
+              var localMat=idxLocal>=0?matsLocales[idxLocal]:null;
+              var remFecha=String(matRemoto.updatedAt||'');
+              var locFecha=String(localMat&&localMat.updatedAt||'');
+              if(idxLocal>=0 && remFecha && remFecha>locFecha){
+                matsLocales[idxLocal]=JSON.parse(JSON.stringify(matRemoto));
+              }
+            }
+          });
+          acLocal.mats=matsLocales;
         });
 
         // Reponer retiros recién creados que un cliente remoto viejo todavía no conocía.
@@ -4832,6 +4865,21 @@ async function saveToFirebase(){
             }
           });
           acActual.retiros=arr;
+          var matsActuales=Array.isArray(acActual.mats)?acActual.mats:[];
+          var porId=new Map(matsActuales.filter(Boolean).map(function(m,i){return [String(m.id),i];}));
+          (Array.isArray(acConf.mats)?acConf.mats:[]).forEach(function(m){
+            if(!m||m.id==null)return;
+            var mid=String(m.id),idx=porId.get(mid);
+            if(idx==null){
+              if(!cqMatsBorradosPendientes.has(cqMatTombstoneKey(acActual.id,mid))){
+                matsActuales.push(JSON.parse(JSON.stringify(m)));
+                porId.set(mid,matsActuales.length-1);
+              }
+            }else if(String(m.updatedAt||'')>String(matsActuales[idx].updatedAt||'')){
+              matsActuales[idx]=JSON.parse(JSON.stringify(m));
+            }
+          });
+          acActual.mats=matsActuales;
         });
         DB=actual;
         DB.backups=backupsLocales;
@@ -5324,7 +5372,12 @@ function retiroObraLabel(r){
   var legacy=a&&Array.isArray(a.obras)?a.obras:[];
   return legacy[Number.isInteger(r.obraIdx)?r.obraIdx:0]||'Obra';
 }
-function getMat(id){return getAllMats().find(function(m){return m.id===id;});}
+// CQ 04/11/2026 — IDs históricos pueden ser texto o número.
+// No confundir un ID de distinto tipo con un material eliminado.
+function getMat(id){
+  if(id==null || String(id).trim()==='')return undefined;
+  return getAllMats().find(function(m){return m && String(m.id)===String(id);});
+}
 function catKey(v){return String(v||'').trim().toLowerCase();}
 function getCats(){
   if(!Array.isArray(DB.cats))DB.cats=CATS_BASE.slice();
@@ -6684,19 +6737,7 @@ function guardarCargaMasivaMateriales(){
 
   var agregados=[];
   var duplicados=[];
-  var maxId=1;
-  (a.mats||[]).forEach(function(m){if(Number(m.id)>=maxId)maxId=Number(m.id)+1;});
-
-  // CQ 31/08/2026 — la carga masiva tampoco puede reutilizar IDs que quedaron
-  // protegidos por un borrado anterior. Reutilizarlos hacía que el tombstone
-  // del material viejo eliminara automáticamente el producto nuevo.
-  Array.from(cqMatsBorradosPendientes||[]).forEach(function(k){
-    var p=String(k).split('::');
-    if(String(p[0])===String(a.id)){
-      var n=Number(p[1]);
-      if(Number.isFinite(n)&&n>=maxId)maxId=n+1;
-    }
-  });
+  // Generar identificadores únicos para cada material nuevo.
 
   // Revalidar duplicados justo antes de grabar.
   existingCodes={};
@@ -6721,7 +6762,7 @@ function guardarCargaMasivaMateriales(){
       return;
     }
     if(!m.cat)return;
-    m.id=maxId++;
+    m.id=cqNuevoIdMaterialAcopio(a);
     m.cat=ensureCat(m.cat);
     delete m.fila;
     delete m.omitirDuplicado;
@@ -6799,6 +6840,18 @@ function syncMatPrecioAcord(){
   var v=parseFloat(document.getElementById('mat-precio-unit').value)||0;
   if(v>0) document.getElementById('mat-precio-acord').value=(v/1.21).toFixed(2);
 }
+// CQ 04/11/2026 — ID numérico único para altas desde distintas sesiones.
+// Evita colisiones del antiguo esquema maxId+1 en catálogos atrasados.
+function cqNuevoIdMaterialAcopio(acopio){
+  var existentes=new Set((acopio&&Array.isArray(acopio.mats)?acopio.mats:[])
+    .filter(Boolean).map(function(m){return String(m.id);}));
+  (acopio&&Array.isArray(acopio.retiros)?acopio.retiros:[]).forEach(function(r){
+    if(r&&r.matId!=null)existentes.add(String(r.matId));
+  });
+  var id=Date.now()*1000+Math.floor(Math.random()*1000);
+  while(existentes.has(String(id)) || cqMatsBorradosPendientes.has(cqMatTombstoneKey(acopio.id,id)))id++;
+  return id;
+}
 function guardarMaterial(){
   pushUndo();
   var nom=document.getElementById('mat-nombre').value.trim();
@@ -6824,21 +6877,11 @@ function guardarMaterial(){
   setLastMatCat(cat);
   var a=getAcopio();
   if(editMatId){
-    a.mats=a.mats.map(function(m){return m.id===editMatId?Object.assign({},m,{nom:nom,cod:cod,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal}):m;});
+    a.mats=a.mats.map(function(m){return String(m.id)===String(editMatId)?Object.assign({},m,{nom:nom,cod:cod,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal,updatedAt:new Date().toISOString(),updatedBy:window._cqUsuarioActual||'Acopio'}):m;});
     toast('✓ Material actualizado');
   } else {
-    var maxId=1;
-    a.mats.forEach(function(m){if(Number(m.id)>=maxId)maxId=Number(m.id)+1;});
-    // No reutilizar IDs todavía protegidos por tombstone.
-    Array.from(cqMatsBorradosPendientes||[]).forEach(function(k){
-      var p=String(k).split('::');
-      if(String(p[0])===String(a.id)){
-        var n=Number(p[1]);
-        if(Number.isFinite(n)&&n>=maxId)maxId=n+1;
-      }
-    });
-    cqQuitarTombstoneMat(a.id,maxId);
-    a.mats.push({id:maxId,cod:cod,nom:nom,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal});
+    var nuevoId=cqNuevoIdMaterialAcopio(a);
+    a.mats.push({id:nuevoId,cod:cod,nom:nom,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),updatedBy:window._cqUsuarioActual||'Acopio'});
     toast('✓ Material "'+nom+'" agregado en '+cat);
   }
   persist();closeModal('modal-mat');renderMateriales();
@@ -9415,20 +9458,21 @@ function renderRetirarHistorial(){
     document.getElementById('retirar-historial').innerHTML='<div class="card"><div class="empty">Sin retiros para el filtro seleccionado</div></div>';
     return;
   }
-  var total=0;
+  var total=0, sinPrecio=0;
   var rows=retiros.map(function(r){
     var m=getMat(r.matId);
-    var val=r.qty*(m?m.precioAcord:0);
-    total+=val;
+    var val=m ? r.qty*(Number(m.precioAcord)||0) : null;
+    if(val===null)sinPrecio++;
+    else total+=val;
     return '<tr>'
       +'<td class="mono" style="color:#A8BFA8">'+fmtFecha(r.fecha)+'</td>'
       +'<td><span class="badge" style="background:#EBF7F0;color:#0A6E3A">'+retiroObraLabel(r)+'</span></td>'
-      +'<td style="font-size:12px;font-weight:600">'+(m?m.nom:'(material eliminado)')
+      +'<td style="font-size:12px;font-weight:600">'+(m?m.nom:(r.materialName||('⚠ Sin ficha de material'+(r.materialCode?' · Código '+r.materialCode:''))))
         +(r.subrubro?'<div style="font-size:9px;color:#7A9E82;margin-top:2px;font-weight:800">'+r.subrubro+'</div>':'')
         +(r.comentario?'<div style="font-size:9px;color:#7A9E82;margin-top:2px">💬 '+String(r.comentario).replace(/</g,'&lt;')+'</div>':'')+'</td>'
-      +'<td class="mono r" style="font-weight:700">'+fmtN(r.qty,2)+' '+(m?m.unidad:'')+'</td>'
-      +'<td class="mono r cq-precio-mobile"><span class="cq-precio-pesos">'+fmtP(val)+'</span><span class="cq-precio-usd">'+fmtU(toUSD(val))+'</span></td>'
-      +'<td class="mono r cq-precio-usd-desktop" style="color:#7A9E82">'+fmtU(toUSD(val))+'</td>'
+      +'<td class="mono r" style="font-weight:700">'+fmtN(r.qty,2)+' '+(m?m.unidad:(r.materialUnidad||''))+'</td>'
+      +'<td class="mono r cq-precio-mobile"><span class="cq-precio-pesos">'+(val===null?'⚠ Sin precio':fmtP(val))+'</span><span class="cq-precio-usd">'+(val===null?'—':fmtU(toUSD(val)))+'</span></td>'
+      +'<td class="mono r cq-precio-usd-desktop" style="color:#7A9E82">'+(val===null?'—':fmtU(toUSD(val)))+'</td>'
       +'<td class="mat-sync-cell">'+puntoMaterialesRetiro(r)+'</td>'
       +'<td class="gasto-sync-cell">'+puntoGastosRetiro(r)+'</td>'
       +'<td class="gasto-sync-cell">'+puntoPanolRetiro(r)+'</td>'
@@ -9436,7 +9480,7 @@ function renderRetirarHistorial(){
       +'</tr>';
   }).join('');
   document.getElementById('retirar-historial').innerHTML=
-    '<div class="kpi-row" style="grid-template-columns:1fr 1fr"><div class="kpi"><div class="kpi-label">Retiros filtrados</div><div class="kpi-val">'+retiros.length+'</div><div class="kpi-sub">'+(obraFiltros.length?(obraFiltros.length===1?obraFiltroTexto:obraFiltros.length+' obras seleccionadas'):(todas?'Todas las obras':(getObras()[curRetirarObra]||'')))+'</div></div><div class="kpi"><div class="kpi-label">Total retirado</div><div class="kpi-val">'+fmtP(total)+'</div><div class="kpi-sub">'+fmtU(toUSD(total))+'</div></div></div>'
+    '<div class="kpi-row" style="grid-template-columns:1fr 1fr"><div class="kpi"><div class="kpi-label">Retiros filtrados</div><div class="kpi-val">'+retiros.length+'</div><div class="kpi-sub">'+(obraFiltros.length?(obraFiltros.length===1?obraFiltroTexto:obraFiltros.length+' obras seleccionadas'):(todas?'Todas las obras':(getObras()[curRetirarObra]||'')))+'</div></div><div class="kpi"><div class="kpi-label">'+(sinPrecio?'Subtotal con precio':'Total retirado')+'</div><div class="kpi-val">'+fmtP(total)+'</div><div class="kpi-sub">'+fmtU(toUSD(total))+(sinPrecio?' · ⚠ '+sinPrecio+' retiro(s) sin precio; total incompleto':'')+'</div></div></div>'
     +'<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Obra</th><th>Material</th><th class="r">Cantidad</th><th class="r">$</th><th class="r">u$s</th><th class="mat-sync-cell">Mat.</th><th class="gasto-sync-cell">Gastos</th><th class="gasto-sync-cell">Pañol</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 
@@ -9951,10 +9995,149 @@ function llenarObrasEditRetiro(selectedId,retiro){
   sel.value=matchId||'__CQ_KEEP_CURRENT__';
 }
 
+// CQ 04/11/2026: mostrar el producto original y permitir reparar su referencia.
+// Reagregar una ficha con el mismo nombre NO reconecta un retiro: el vínculo usa matId.
+function cqEscapeHtmlRetiro(v){
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function cqLlenarProductosEditRetiro(retiro){
+  var sel=document.getElementById('retiro-material');
+  var info=document.getElementById('retiro-material-aviso');
+  if(!sel||!info||!retiro)return;
+  var diagBtn=document.getElementById('retiro-material-diagnostico-btn');
+  var diagTxt=document.getElementById('retiro-material-diagnostico');
+  if(diagBtn)diagBtn.style.display='none';
+  if(diagTxt){diagTxt.style.display='none';diagTxt.textContent='';}
+  var mats=ordenarMaterialesAlfabeticamente(getAllMats()).filter(function(m){return m && m.id!=null;});
+  var original=mats.find(function(m){return String(m.id)===String(retiro.matId);})||null;
+  var options=mats.map(function(m){
+    var label=String(m.nom||'Material sin nombre');
+    if(m.cod)label+=' · '+m.cod;
+    if(m.unidad)label+=' ('+m.unidad+')';
+    return '<option value="'+cqEscapeHtmlRetiro(m.id)+'"'+
+      (original&&String(original.id)===String(m.id)?' selected':'')+'>'+cqEscapeHtmlRetiro(label)+'</option>';
+  }).join('');
+  if(!original){
+    if(diagBtn)diagBtn.style.display='inline-block';
+    var historico=String(retiro.materialName||'').trim();
+    var codigo=String(retiro.materialCode||'').trim();
+    var nombre=historico||('ID '+String(retiro.matId||'sin identificar'));
+    sel.innerHTML='<option value="__CQ_MATERIAL_FALTANTE__" selected>⚠ Ficha faltante: '+cqEscapeHtmlRetiro(nombre)+(codigo?' · '+cqEscapeHtmlRetiro(codigo):'')+'</option>'+options;
+    var coincidencias=mats.filter(function(m){
+      return (codigo&&String(m.cod||'').trim().toLowerCase()===codigo.toLowerCase())
+        || (historico&&String(m.nom||'').trim().toLowerCase()===historico.toLowerCase());
+    });
+    info.innerHTML='<strong style="color:#A35229">⚠ El material original no está en el catálogo de este acopio (ID '+cqEscapeHtmlRetiro(retiro.matId)+').</strong> '
+      +'El retiro se conserva, pero para recuperarle el precio tenés que elegir su ficha correcta. No se vincula solo por nombre.'
+      +(coincidencias.length===1?'<br>Se encontró una ficha con nombre o código coincidente: <b>'+cqEscapeHtmlRetiro(coincidencias[0].nom)+'</b>. Verificá antes de seleccionarla.':'');
+  }else{
+    sel.innerHTML=options;
+    sel.value=String(original.id);
+    info.textContent='Producto original: '+String(original.nom||'')+(original.cod?' · Código '+original.cod:'')+'. Podés seleccionarlo de nuevo si un retiro quedó asociado al artículo equivocado.';
+  }
+}
+function cqCambioMaterialEditRetiro(){
+  var sel=document.getElementById('retiro-material');
+  var info=document.getElementById('retiro-material-aviso');
+  if(!sel||!info)return;
+  if(sel.value==='__CQ_MATERIAL_FALTANTE__'){
+    info.textContent='⚠ Seleccioná una ficha existente para recuperar el vínculo y su precio.';
+    return;
+  }
+  var m=getMat(sel.value);
+  if(!m){info.textContent='⚠ No se encontró el producto seleccionado.';return;}
+  info.textContent='Vincular a «'+String(m.nom||'')+'»'+(m.cod?' · Código '+m.cod:'')+
+    (m.controlStock==='limitado'?' · Stock disponible: '+fmtN(cqMaterialSaldoCantidad(m),2)+' '+(m.unidad||''):'')+
+    '. La modificación se guarda sólo al pulsar Guardar.';
+}
+
+// Diagnóstico solo lectura: compara catálogo local, documento remoto y respaldos.
+// NO modifica Firebase ni crea, re-vincula o borra fichas.
+async function cqDiagnosticarProductoRetiro(){
+  var out=document.getElementById('retiro-material-diagnostico');
+  var btn=document.getElementById('retiro-material-diagnostico-btn');
+  var ac=getAcopio();
+  var r=ac&&(ac.retiros||[]).find(function(x){return String(x.id)===String(editRetiroId);});
+  if(!out||!r||!ac)return;
+  out.style.display='block';
+  out.textContent='Analizando únicamente los registros existentes…';
+  if(btn)btn.disabled=true;
+  try{
+    var id=String(r.matId),acId=String(ac.id);
+    var lineas=[];
+    lineas.push('RETIRO · '+String(r.fecha||'')+' · '+String(r.qty||0)+' '+String(r.materialUnidad||''));
+    lineas.push('Referencia original: '+id);
+    lineas.push('Nombre histórico: '+String(r.materialName||'(no guardado)'));
+    lineas.push('Código histórico: '+String(r.materialCode||'(no guardado)'));
+    lineas.push('Catálogo de este dispositivo: '+(getMat(id)?'EXISTE':'NO EXISTE'));
+    var tomb=cqMatTombstoneKey(acId,id);
+    var tieneTomb=cqMatsBorradosPendientes.has(tomb);
+    lineas.push('Marca local de eliminación para este ID: '+(tieneTomb?'SÍ':'no'));
+
+    var f=window._cqFirebase;
+    var remoteMat=null,remoteAc=null,backups=[];
+    if(f&&window._cqFirebaseReady){
+      var snap=await f.getDoc(f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID));
+      var data=snap.exists()?(snap.data()||{}):{};
+      var remoteDB=data.db||{};
+      remoteAc=(remoteDB.acopios||[]).find(function(x){return String(x&&x.id)===acId;})||null;
+      remoteMat=remoteAc&&(remoteAc.mats||[]).find(function(x){return String(x&&x.id)===id;})||null;
+      lineas.push('Catálogo actual de Firebase: '+(remoteMat?'EXISTE':'NO EXISTE'));
+      lineas.push('Última actualización general: '+String(data.updatedAt||'sin fecha'));
+      // La app vieja no registra autor del cambio de cada ficha; updatedBy
+      // en el documento general NO prueba quién eliminó un material.
+      try{
+        var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
+        snaps.forEach(function(docSnap){
+          var b=docSnap.data()||{};
+          var ab=b.db&&(b.db.acopios||[]).find(function(a){return String(a&&a.id)===acId;});
+          var mb=ab&&(ab.mats||[]).find(function(m){return String(m&&m.id)===id;});
+          if(mb)backups.push({fecha:String(b.createdAt||b.fecha||''),id:String(docSnap.id),mat:mb});
+        });
+      }catch(errorB){lineas.push('Respaldos Firebase: no se pudieron consultar ('+String(errorB&&errorB.message||errorB)+')');}
+    }else{
+      lineas.push('Firebase: no disponible para esta consulta.');
+    }
+    (Array.isArray(DB.backups)?DB.backups:[]).forEach(function(b,i){
+      var ab=b.data&&(b.data.acopios||[]).find(function(a){return String(a&&a.id)===acId;});
+      var mb=ab&&(ab.mats||[]).find(function(m){return String(m&&m.id)===id;});
+      if(mb)backups.push({fecha:String(b.createdAt||''),id:'local_'+i,mat:mb});
+    });
+    backups.sort(function(a,b){return String(b.fecha).localeCompare(String(a.fecha));});
+    lineas.push('Respaldos que conservan la misma ficha: '+backups.length);
+    if(backups.length){
+      var b0=backups[0];
+      lineas.push('Copia comprobable: '+String(b0.mat.nom||'')+
+        (b0.mat.cod?' · Código '+String(b0.mat.cod):'')+
+        ' · precio acordado $'+String(b0.mat.precioAcord??'sin dato')+
+        ' · respaldo '+String(b0.fecha||b0.id));
+    }
+    lineas.push('');
+    if(remoteMat && !getMat(id)){
+      lineas.push('CONCLUSIÓN: Firebase aún tiene la ficha; la falla está en la copia local/sincronización. No recrees el producto.');
+    }else if(!remoteMat && backups.length){
+      lineas.push('CONCLUSIÓN: la ficha EXISTÍA en un respaldo y FALTA en el catálogo actual. Esto demuestra la pérdida de la referencia, no quién la produjo.');
+      if(tieneTomb)lineas.push('Además, este navegador conserva una marca de borrado para el ID. Puede provenir de un borrado anterior o de la reutilización del ID.');
+      else lineas.push('No se ve una marca de borrado en este navegador. Una copia vieja publicada sobre Firebase es una causa posible, pero no comprobada.');
+    }else if(!remoteMat){
+      lineas.push('CONCLUSIÓN: la referencia falta y no se halló copia de esa ficha. No hay evidencia suficiente para determinar cuándo ni cómo desapareció.');
+    }else{
+      lineas.push('CONCLUSIÓN: la referencia existe en Firebase. Revisar que la pantalla esté sincronizada.');
+    }
+    lineas.push('No se modificó ningún dato.');
+    out.textContent=lineas.join('\n');
+  }catch(e){
+    out.textContent='No se pudo completar el diagnóstico. No se modificó ningún dato. Error: '+String(e&&e.message||e);
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
 async function openEditRetiro(id){
   editRetiroId=id;
   var a=getAcopio();
-  var r=(a.retiros||[]).find(function(r){return r.id===id;});
+  var r=(a.retiros||[]).find(function(r){return String(r.id)===String(id);});
   if(!r)return;
 
   try{
@@ -9966,6 +10149,7 @@ async function openEditRetiro(id){
   }
 
   llenarObrasEditRetiro(r.gastosObraId||'',r);
+  cqLlenarProductosEditRetiro(r);
   document.getElementById('retiro-qty').value=r.qty;
   document.getElementById('retiro-fecha').value=r.fecha;
   llenarSubrubrosAcopio('retiro-subrubro',r.subrubro||'');
@@ -10248,7 +10432,7 @@ window.cqRepararPanolPendientes=cqRepararPanolPendientes;
 
 
 async function guardarEditRetiro(){
-  pushUndo();
+  var matSeleccionId=(document.getElementById('retiro-material').value||'').trim();
   var qty=parseFloat(document.getElementById('retiro-qty').value);
   var fecha=document.getElementById('retiro-fecha').value;
   var subrubro=(document.getElementById('retiro-subrubro').value||'').trim();
@@ -10293,8 +10477,23 @@ async function guardarEditRetiro(){
   }
 
   var a=getAcopio();
-  var anterior=(a.retiros||[]).find(function(r){return r.id===editRetiroId;});
+  var anterior=(a.retiros||[]).find(function(r){return String(r.id)===String(editRetiroId);});
   if(!anterior)return;
+  // Nunca reemplazar una referencia faltante de manera automática por nombre:
+  // la selección manual evita atribuir un retiro a otro producto.
+  var matNuevo=matSeleccionId==='__CQ_MATERIAL_FALTANTE__'?null:getMat(matSeleccionId);
+  if(!matNuevo){
+    alert('El material original ya no existe en este acopio. Elegí en «Producto retirado» la ficha correcta antes de guardar. Si no sabés cuál era, cancelá: no se modificará nada.');
+    return;
+  }
+  var cambioMaterial=String(anterior.matId)!==String(matNuevo.id);
+  if(cambioMaterial && matNuevo.controlStock==='limitado'){
+    var disponible=cqMaterialSaldoCantidad(matNuevo);
+    if(qty>disponible+0.000001){
+      alert('Stock insuficiente para «'+matNuevo.nom+'». Disponible: '+fmtN(disponible,2)+' '+(matNuevo.unidad||'')+'.');
+      return;
+    }
+  }
 
   // Guardamos una copia completa del retiro anterior para poder limpiar
   // cualquier vínculo viejo antes de moverlo a la obra nueva.
@@ -10321,9 +10520,42 @@ async function guardarEditRetiro(){
     return;
   }
 
+  // Si Pañol ya consumió el lote, el sistema no permite cambiarlo a otra ficha.
+  // El control de Pañol se mantiene en su integración; avisar antes de la escritura
+  // y no alterar el retiro ante un error de validación previo.
+  if(cambioMaterial && cargarPanol && antesPanol){
+    if(!window._cqFirebaseReady||!window._cqFirebase){
+      alert('Necesitás conexión con Firebase para reasignar un producto vinculado a Pañol.');
+      return;
+    }
+    try{
+      var fPanol=window._cqFirebase;
+      var snapPanol=await fPanol.getDoc(fPanol.doc(fPanol.db,'panol','stock_v1'));
+      if(snapPanol.exists()){
+        var pData=snapPanol.data()||{};
+        var pMov=Array.isArray(pData.movimientos)?pData.movimientos:[];
+        var pLotes=Array.isArray(pData.lotes)?pData.lotes:[];
+        var pId=String(a.id),rId=String(anterior.id);
+        var pIds=pLotes.filter(function(l){return l&&String(l.acopioId||'')===pId&&String(l.acopioRetiroId||'')===rId;}).map(function(l){return String(l.id);});
+        var tieneConsumo=pMov.some(function(m){return m&&m.tipo==='salida'&&(m.detalle||[]).some(function(d){return d&&pIds.indexOf(String(d.loteId))>=0;});});
+        if(tieneConsumo){
+          alert('Este ingreso ya tuvo consumos en Pañol. No se puede cambiarle el producto desde el retiro porque alteraría sus salidas. No se modificó nada.');
+          return;
+        }
+      }
+    }catch(ePanol){
+      alert('No se pudo verificar el consumo del Pañol. Por seguridad no se modificó el retiro: '+String(ePanol&&ePanol.message||ePanol));
+      return;
+    }
+  }
+  pushUndo();
   a.retiros=(a.retiros||[]).map(function(r){
-    if(r.id!==editRetiroId)return r;
+    if(String(r.id)!==String(editRetiroId))return r;
     return Object.assign({},r,{
+      matId:matNuevo.id,
+      materialCode:(cambioMaterial||!r.materialCode)?String(matNuevo.cod||'').trim():r.materialCode,
+      materialName:(cambioMaterial||!r.materialName)?String(matNuevo.nom||'').trim():r.materialName,
+      materialUnidad:(cambioMaterial||!r.materialUnidad)?String(matNuevo.unidad||'').trim():r.materialUnidad,
       qty:qty,
       fecha:fecha,
       subrubro:subrubro,
@@ -10342,7 +10574,7 @@ async function guardarEditRetiro(){
     });
   });
 
-  var actualizado=(a.retiros||[]).find(function(r){return r.id===editRetiroId;});
+  var actualizado=(a.retiros||[]).find(function(r){return String(r.id)===String(editRetiroId);});
   if(actualizado)guardarPreferenciaSubrubroMaterialAcopio(actualizado.matId,subrubro);
   persist();closeModal('modal-retiro');renderRetirarHistorial();
 
