@@ -2570,16 +2570,98 @@ window.cqRevealInitialScreen=function(){
 </head>
 <body>
 <style id="cq-verificacion-firebase-style">
-#cq-verificacion-firebase{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#f6faf8;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif}
-#cq-verificacion-firebase .card{background:#fff;border:1px solid #dce8e1;border-radius:17px;padding:26px;max-width:430px;width:100%;box-shadow:0 12px 36px #143d301e;text-align:center;color:#154939}
-#cq-verificacion-firebase h2{font-size:20px;line-height:1.3;margin:0 0 10px;font-weight:800}
-#cq-verificacion-firebase p{font-size:14px;line-height:1.55;color:#557164;margin:0 0 12px}
-#cq-verificacion-firebase button{background:#13794e;border:0;border-radius:11px;padding:11px 16px;color:white;font-size:14px;font-weight:700;cursor:pointer;display:none;margin:12px auto 0}
+/* Actualización exclusivamente estética del loader: no modifica Firebase ni sincronización. */
+#cq-verificacion-firebase{
+  position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;
+  justify-content:center;padding:22px;box-sizing:border-box;
+  background:radial-gradient(circle at 50% 36%,#f9fcfa 0%,#f1f6f3 58%,#eaf2ee 100%);
+  font-family:Arial,sans-serif;
+}
+#cq-verificacion-firebase .card{
+  position:relative;overflow:hidden;box-sizing:border-box;width:100%;max-width:394px;
+  padding:24px 26px 25px;border-radius:24px;border:1px solid rgba(25,100,74,.12);
+  background:#fff;box-shadow:0 18px 55px rgba(16,63,47,.10),0 2px 10px rgba(16,63,47,.035);
+  color:#153f33;text-align:center;
+}
+#cq-verificacion-firebase .card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,#0e5540,#2fa977,#b6e5c7);
+}
+#cq-verificacion-firebase .cq-load-brand{
+  display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:22px;
+  color:#214c3e;font-size:10px;font-weight:800;letter-spacing:.12em;text-align:left;
+}
+#cq-verificacion-firebase .cq-load-mark{
+  display:flex;align-items:center;justify-content:center;width:33px;height:33px;
+  border-radius:11px;background:linear-gradient(145deg,#0e5842,#209666);
+  color:white;font-size:11px;font-weight:900;letter-spacing:-.05em;
+  box-shadow:0 5px 12px rgba(14,88,66,.16);
+}
+#cq-verificacion-firebase .cq-load-brand small{
+  display:block;font-size:9px;font-weight:500;letter-spacing:.09em;color:#829a8d;margin-top:3px;
+}
+#cq-verificacion-firebase .cq-load-symbol{
+  display:grid;place-items:center;width:84px;height:84px;margin:0 auto 17px;
+  border-radius:50%;background:#f0f8f3;position:relative;
+}
+#cq-verificacion-firebase .cq-load-symbol::before{
+  content:'';position:absolute;inset:8px;border-radius:50%;border:3px solid #d5eadc;
+  border-top-color:#1d9264;animation:cqLoadingSpin .9s linear infinite;
+}
+#cq-verificacion-firebase .cq-load-bars{display:flex;gap:4px;align-items:flex-end;height:21px}
+#cq-verificacion-firebase .cq-load-bars i{width:6px;border-radius:2px;background:#178259;display:block}
+#cq-verificacion-firebase .cq-load-bars i:nth-child(1){height:11px;opacity:.58}
+#cq-verificacion-firebase .cq-load-bars i:nth-child(2){height:20px;opacity:.9}
+#cq-verificacion-firebase .cq-load-bars i:nth-child(3){height:15px;opacity:.7}
+#cq-verificacion-firebase .cq-load-kicker{
+  display:block;margin-bottom:9px;color:#299068;text-transform:uppercase;
+  font-weight:800;font-size:10px;letter-spacing:.15em;
+}
+#cq-verificacion-firebase h2{
+  font-size:20px;line-height:1.3;letter-spacing:-.025em;margin:0 0 10px;font-weight:800;
+  color:#154939;
+}
+#cq-verificacion-firebase p{font-size:13px;line-height:1.6;color:#698477;margin:0 auto 15px;max-width:310px}
+#cq-verificacion-firebase .cq-load-track{
+  height:5px;border-radius:9px;background:#e9f2ed;overflow:hidden;margin:19px auto 14px;
+  max-width:230px;
+}
+#cq-verificacion-firebase .cq-load-track span{
+  display:block;height:100%;width:34%;border-radius:9px;
+  background:linear-gradient(90deg,#1b815b,#36b884);
+  animation:cqLoadingProgress 1.7s ease-in-out infinite;
+}
+#cq-verificacion-firebase .cq-load-foot{
+  margin:0!important;color:#96a99e!important;font-size:11px!important;
+}
+#cq-verificacion-firebase button{
+  display:none;margin:15px auto 0;cursor:pointer;border:0;border-radius:11px;
+  background:#13794e;padding:12px 17px;color:#fff;font-size:14px;font-weight:700;
+}
+#cq-verificacion-firebase:has(#cq-verificacion-reintentar[style*="block"]) .cq-load-track,
+#cq-verificacion-firebase:has(#cq-verificacion-reintentar[style*="block"]) .cq-load-foot{
+  display:none;
+}
+@keyframes cqLoadingSpin{to{transform:rotate(360deg)}}
+@keyframes cqLoadingProgress{0%{transform:translateX(-115%)}100%{transform:translateX(400%)}}
+@media (prefers-reduced-motion:reduce){
+  #cq-verificacion-firebase .cq-load-symbol::before,
+  #cq-verificacion-firebase .cq-load-track span{animation:none}
+}
+@media (max-width:420px){
+  #cq-verificacion-firebase .card{padding:22px 20px 23px;border-radius:21px}
+  #cq-verificacion-firebase h2{font-size:19px}
+}
 </style>
 <div id="cq-verificacion-firebase" role="status" aria-live="polite"><div class="card">
-<h2 id="cq-verificacion-titulo">Cargando obras y avances reales…</h2>
-<p id="cq-verificacion-detalle">La aplicación primero verifica Firebase. No se mostrarán obras de ejemplo ni se enviarán datos antiguos.</p>
-<button type="button" id="cq-verificacion-reintentar" onclick="location.reload()">Recargar desde Firebase</button>
+  <div class="cq-load-brand" aria-hidden="true"><span class="cq-load-mark">CQ</span><span>DESARROLLOS<small>CONTROL DE OBRAS</small></span></div>
+  <div class="cq-load-symbol" aria-hidden="true"><span class="cq-load-bars"><i></i><i></i><i></i></span></div>
+  <span class="cq-load-kicker" aria-hidden="true">Sincronización segura</span>
+  <h2 id="cq-verificacion-titulo">Cargando obras y avances reales…</h2>
+  <p id="cq-verificacion-detalle">La aplicación primero verifica Firebase. No se mostrarán obras de ejemplo ni se enviarán datos antiguos.</p>
+  <div class="cq-load-track" aria-hidden="true"><span></span></div>
+  <p class="cq-load-foot" aria-hidden="true">Conectando con los datos actualizados</p>
+  <button type="button" id="cq-verificacion-reintentar" onclick="location.reload()">Recargar desde Firebase</button>
 </div></div>
 
 <div id="cq-access-total">
@@ -3666,6 +3748,8 @@ function updateHeaderTitle() {
   if (el) el.textContent = t;
 }
 let obraModalMode = 'edit';
+// Bloquea el doble clic mientras se crea la obra de forma atómica en Firebase.
+let cqCreandoObra = false;
 function openEditObra() {
   obraModalMode = 'edit';
   const meta = currentObra();
@@ -3700,7 +3784,10 @@ function openNuevaObra() {
   updatePlantTemplateHint(true);
   setTimeout(()=>document.getElementById('eo-label').focus(), 30);
 }
-function closeEditObra() { document.getElementById('modal-obra').classList.remove('open'); }
+function closeEditObra() {
+  if(cqCreandoObra) return; // No cerrar el formulario durante la transacción.
+  document.getElementById('modal-obra').classList.remove('open');
+}
 function makeObraId(label) {
   const base = (label || 'obra').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'') || 'obra';
   let id = base;
@@ -3969,7 +4056,7 @@ async function ensureProjectTypeTemplates(writeRemote=false){
   if(estadosObras[curObraId]) state=estadosObras[curObraId];
 }
 
-function saveEditObra() {
+async function saveEditObra() {
   const label = document.getElementById('eo-label').value.trim();
   const c = document.getElementById('eo-constructor').value.trim();
   const n = document.getElementById('eo-num').value.trim();
@@ -3980,28 +4067,73 @@ function saveEditObra() {
   const constructorNombre = c || consObj?.nombre || 'Constructor';
   const finalLabel = label || (n ? 'L' + n.replace('/', ' Mz') : c || 'Nueva obra');
   if (obraModalMode === 'new') {
+    if(cqCreandoObra) return false;
+    // En FIREBASE ON no crear nada en memoria antes de obtener la confirmación.
+    if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){
+      alert('Firebase está terminando de cargar. Esperá que aparezca en verde antes de crear una obra.');
+      return false;
+    }
     const tipoPlantas = Number(document.getElementById('eo-tipo')?.value || 1) === 2 ? 2 : 1;
     const tipoCimentacion = tipoPlantas===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value || 'pilotes') : '';
     const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, ...(tipoPlantas===2?{tipoCimentacion}:{}), plantillaVersion: tipoPlantas===2 ? (tipoCimentacion==='platea' ? PLANTILLA_2P_PLATEA_EXCEL : '2p_v1') : '1p_detallada_v1', createdAt:new Date().toISOString() };
-    obrasConfig.push(newMeta);
-    estadosObras[newMeta.id] = createStateFromLatestTemplate(newMeta, tipoPlantas);
-    estadosObras[newMeta.id].acuerdo = a > 0 ? a : estadosObras[newMeta.id].acuerdo;
-    // Si es la primera Platea del sistema (todavía no había una Platea anterior),
-    // genera importes desde una referencia financiera. Cuando sí existe una obra
-    // Platea anterior, sus importes ya fueron copiados y no deben sobrescribirse.
-    if(tipoPlantas===2 && tipoCimentacion==='platea' && estadosObras[newMeta.id]._plateaInitialTemplate){
+    // Primero preparar el estado, tomando la última obra como modelo, sin alterar
+    // el listado real ni cambiar la obra seleccionada hasta finalizar Firebase.
+    const newState=createStateFromLatestTemplate(newMeta,tipoPlantas);
+    newState.acuerdo=a>0?a:newState.acuerdo;
+    if(tipoPlantas===2 && tipoCimentacion==='platea' && newState._plateaInitialTemplate){
       const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
-      if(perfilFin) cqAplicarPerfilFinancieroPlatea(estadosObras[newMeta.id],newMeta,perfilFin);
+      if(perfilFin) cqAplicarPerfilFinancieroPlatea(newState,newMeta,perfilFin);
     }
-    curObraId = newMeta.id;
-    state = estadosObras[curObraId];
-    // Ambos persist() marcan una cola durable antes de intentar Firebase. Si el
-    // navegador se actualiza en este instante, la próxima carga los sube primero.
+
+    if(isFirebaseEnabled()){
+      const guardarBtn=document.querySelector('#modal-obra .modal-footer .btn-primary');
+      const textoAnterior=guardarBtn?.textContent||'Guardar';
+      cqCreandoObra=true;
+      if(guardarBtn){guardarBtn.disabled=true;guardarBtn.textContent='Guardando obra…';}
+      markSaving();
+      try{
+        // UNA sola transacción: alta en config + documento de obra con cronograma.
+        // Si la transacción falla no quedan escrituras ni cambios locales parciales.
+        const remoteConfig=await cqCrearObraEnFirebase(newMeta,newState);
+        obrasConfig=cqClone(remoteConfig.obras);
+        constructoresConfig=cqClone(remoteConfig.constructores);
+        estadosObras[newMeta.id]=newState;
+        normalizeObrasConfig();
+        try{
+          localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
+          localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));
+          localStorage.setItem('mano_obra_'+newMeta.id,JSON.stringify(newState));
+        }catch(e){console.warn('Obra creada: no se pudo actualizar el caché local',e);}
+        _cqConfigRevision++;
+        curObraId=newMeta.id;
+        state=newState;
+        cqCreandoObra=false;
+        document.getElementById('modal-obra').classList.remove('open');
+        switchObra(newMeta.id);
+        recordMutationForHistory();
+        markSaved();
+        return true;
+      }catch(e){
+        console.warn('La creación de la obra se canceló sin escribir datos parciales',e);
+        markError();
+        alert('No se pudo crear la obra. No se guardó ningún cambio parcial en Firebase.\n\n'+String(e?.message||e));
+        return false;
+      }finally{
+        cqCreandoObra=false;
+        if(guardarBtn){guardarBtn.disabled=false;guardarBtn.textContent=textoAnterior;}
+      }
+    }
+
+    // Modo local OFF: conserva el comportamiento de prueba sin conectar a Firebase.
+    obrasConfig.push(newMeta);
+    estadosObras[newMeta.id]=newState;
+    curObraId=newMeta.id;
+    state=newState;
     persistConfig();
     persist();
     closeEditObra();
-    switchObra(curObraId);
-    return;
+    switchObra(newMeta.id);
+    return true;
   }
   const meta = currentObra();
   state.constructor = constructorNombre;
@@ -5024,6 +5156,45 @@ async function cqWriteObraRemote(id,snapshot,token){
   cqObraWriteQueues.set(id,task.catch(()=>{}));
   return task;
 }
+// CREACIÓN ATÓMICA: alta en el listado + estado/cronograma de la obra en
+// una única transacción. No depende de una baseline de obra inexistente.
+async function cqCrearObraEnFirebase(newMeta,newState){
+  const meta=cqClone(newMeta), obra=cqClone(newState);
+  // Compartir la cola con cualquier edición de configuración ya iniciada.
+  const task=cqConfigWriteQueue.then(async()=>{
+    if(!cqFirebaseWriteAllowed()) throw new Error('Firebase no terminó de sincronizar.');
+    if(!cqRemoteConfigBaseline) throw new Error('No se verificó la configuración de obras.');
+    const configRef=window._doc(window._db,'config','mano_obra_multiobra');
+    const obraRef=window._doc(window._db,'obras',meta.id);
+    const guardado=await window._runTransaction(window._db,async tr=>{
+      // Firestore requiere leer los dos documentos antes de escribir cualquiera.
+      const configSnap=await tr.get(configRef);
+      const obraSnap=await tr.get(obraRef);
+      if(!configSnap.exists()) throw new Error('No existe la configuración actual de Firebase.');
+      const config=configSnap.data();
+      if(!Array.isArray(config.obras) || !Array.isArray(config.constructores) || !config.obras.length)
+        throw new Error('La configuración actual está incompleta. Se canceló el alta.');
+      if(config.obras.some(o=>o && o.id===meta.id) || obraSnap.exists())
+        throw new Error('Ya existe una obra con este identificador. Actualizá Avances y revisá la lista antes de crear otra.');
+      if(!config.constructores.some(c=>c && c.id===meta.constructorId))
+        throw new Error('El constructor elegido ya no está disponible en Firebase. Recargá Avances.');
+      // Incorporar la obra al listado REAL obtenido dentro de la transacción:
+      // no pisar otras obras ni constructores agregados desde otro dispositivo.
+      const nuevoListado=[...config.obras,meta];
+      tr.update(configRef,{obras:nuevoListado});
+      tr.set(obraRef,obra);
+      return {obras:nuevoListado,constructores:config.constructores};
+    });
+    // Sólo después del commit quedan verificadas ambas escrituras.
+    cqRemoteConfigBaseline=cqClone(guardado);
+    cqRemoteObraBaselines.set(meta.id,cqClone(obra));
+    _cqRemoteLoadedObras.add(meta.id);
+    return guardado;
+  });
+  cqConfigWriteQueue=task.catch(()=>{});
+  return task;
+}
+
 // No reenviar al abrir cambios guardados por una versión antigua de Avances.
 async function cqFlushPendingLocalToFirebase(){return {disabled:true};}
 
