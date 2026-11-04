@@ -1,4 +1,4 @@
-<!-- CQ 04/11/2026 · SOLO MATERIALES v4 · catálogo autoritativo con recuperación de altas explícitas y validación estricta de identidad -->
+<!-- CQ 04/11/2026 · SOLO MATERIALES v5 · catálogo autoritativo con recuperación de altas explícitas y validación estricta de identidad -->
 <!DOCTYPE html>
 <!-- CQ 13/10/2026 · permisos individuales de obra: Materiales -->
 
@@ -8516,6 +8516,7 @@ function normalizeState(){
   if(!state.deletedCatNames)state.deletedCatNames=[];
   if(!state.matNombres)state.matNombres={};
   if(!state.matCodigos)state.matCodigos={};
+  if(!state.matComentarios)state.matComentarios={};
   if(!state.matCategorias)state.matCategorias={};
   if(!state.catRenames)state.catRenames={};
   if(!state.categoriaMemoria)state.categoriaMemoria={};
@@ -8836,7 +8837,7 @@ async function cqGuardarMaterialesSeguro(extra){
     // las decisiones que V3 acaba de guardar de forma transaccional. Para
     // editar el catálogo existe transaccionCatalogo(), que lee ambos documentos.
     var guardadosPorCatalogo=['extraMats','materialesNuevos','matCategorias','matNombres',
-      'matCodigos','catalogoManual','categoriaManual','categoriaManualIdentidad',
+      'matCodigos','matComentarios','catalogoManual','categoriaManual','categoriaManualIdentidad',
       'categoriaMemoria','deletedMatIds','deletedMaterialKeys'];
     var final=Object.assign({},remoto,local);
     guardadosPorCatalogo.forEach(function(k){
@@ -11521,8 +11522,8 @@ function openEditarNombreMat(){
     catEl.innerHTML=categoriasActivas().map(function(c){return '<option value="'+escapeHtml(c.name)+'">'+escapeHtml(c.name)+'</option>';}).join('');
     catEl.value=obtenerCategoriaMaterial(mat.id)||'VARIOS';
   }
-  var comentarioActual='';
-  if(state.extraMats){
+  var comentarioActual=String((state.matComentarios&&state.matComentarios[mat.id])||'');
+  if(!comentarioActual&&state.extraMats){
     var extra=state.extraMats.find(function(m){return m.id===mat.id;});
     if(extra) comentarioActual=extra.comentarios||'';
   }
@@ -19497,7 +19498,7 @@ async function aislarColisionesHistoricas(){
 }
 function asegurarEstado(){
   if(!window.state)return false;
-  ['extraMats','matCategorias','matNombres','matCodigos','catalogoManual','categoriaManual','categoriaManualIdentidad','categoriaMemoria']
+  ['extraMats','matCategorias','matNombres','matCodigos','matComentarios','catalogoManual','categoriaManual','categoriaManualIdentidad','categoriaMemoria']
     .forEach(function(k){if(!state[k]||typeof state[k]!=='object')state[k]=(k==='extraMats'?[]:{});});
   return true;
 }
@@ -19509,13 +19510,17 @@ function aplicarAutoridad(){
     Object.keys(autoridad).forEach(function(k){
       var r=autoridad[k]; if(!r||r.manual!==true||r.active===false||!r.nombre||!Number.isFinite(Number(r.id)))return;
       var id=Number(r.id);
+      // Los registros migrados se conservan para consulta, pero NO prevalecen
+      // sobre las clasificaciones actuales de Acopio ni las de otras aplicaciones.
+      if(!decisionExplicita(r))return;
       var marcadaBorrada=typeof isMatDeleted==='function'&&isMatDeleted(id);
       if(marcadaBorrada&&!decisionExplicita(r))return;
       // Una decisión antigua puede apuntar a un ID reutilizado. Nunca activarla
       // si la identidad actualmente visible pertenece a otro artículo.
       var ocupanteState=(state.extraMats||[]).concat(state.materialesNuevos||[])
         .find(function(x){return x&&String(x.id)===String(id);});
-      if(ocupanteState&&norm(ocupanteState.mat)!==norm(r.nombre)){
+      if(ocupanteState&&norm(ocupanteState.mat)!==norm(r.nombre)&&
+          !(r.origen==='editar'&&r.nombreAnterior&&norm(ocupanteState.mat)===norm(r.nombreAnterior))){
         logDiscrepanciaUnaVez('ocupante_state:'+id,'ID '+id+' ocupado por '+ocupanteState.mat+' (protegido: '+r.nombre+')');
         return;
       }
@@ -19528,10 +19533,12 @@ function aplicarAutoridad(){
       }
       var m=activos().find(function(x){return String(x&&x.id)===String(id);});
       if(m&&norm(m.mat)!==norm(r.nombre)){
-        // Un ID reutilizado nunca justifica cambiar un producto diferente.
-        m=activos().find(function(x){return norm(x&&x.mat)===norm(r.nombre);})||null;
-        if(!m){logDiscrepanciaUnaVez('id_reutilizado:'+id,'ID '+id+' corresponde a otro material, no '+r.nombre);return;}
-        id=Number(m.id);
+        // Autorizar únicamente el renombre confirmado de ESE artículo.
+        if(!(r.origen==='editar'&&r.nombreAnterior&&norm(m.mat)===norm(r.nombreAnterior))){
+          m=activos().find(function(x){return norm(x&&x.mat)===norm(r.nombre);})||null;
+          if(!m){logDiscrepanciaUnaVez('id_reutilizado:'+id,'ID '+id+' corresponde a otro material, no '+r.nombre);return;}
+          id=Number(m.id);
+        }
       }
       if(!m){
         // Acopio/Caja pueden recrear un producto con otro ID: identificar por NOMBRE.
@@ -19561,6 +19568,7 @@ function aplicarAutoridad(){
       if(norm(state.matCategorias[id])!==norm(cat)||norm(m.catName)!==norm(cat))cambio=true;
       state.matCategorias[id]=cat;state.categoriaManual[id]=cat;
       state.matNombres[id]=r.nombre;state.matCodigos[id]=r.codigo||'';
+      state.matComentarios[id]=r.comentarios||'';
       var lock={nombre:r.nombre,codigo:r.codigo||'',categoria:cat,manual:true,updatedAt:r.updatedAt};
       state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{},lock);
       state.categoriaManualIdentidad['name:'+norm(r.nombre)]=Object.assign({},lock);
@@ -19611,7 +19619,9 @@ function diferencias(main,entries){
       return; // Nunca atribuir al material protegido el subrubro del ocupante actual.
     }
     var mat=ex||activos().find(function(m){return String(m&&m.id)===id;});
-    if(mat&&norm(mat.mat)!==norm(r.nombre)&&!ex){
+    if(mat&&norm(mat.mat)!==norm(r.nombre)&&!ex&&
+        !(r.origen==='editar'&&r.nombreAnterior&&norm(mat.mat)===norm(r.nombreAnterior)&&
+          norm((main.matNombres||{})[id])===norm(r.nombre))){
       res.push({id:id,nombre:r.nombre,tipo:'CONFLICTO_ID',remoto:mat.mat});return;
     }
     if(r.manualCreated&&!ex)res.push({id:id,nombre:r.nombre,tipo:'ALTA_FALTANTE'});
@@ -19619,6 +19629,11 @@ function diferencias(main,entries){
     if(ex&&limpia(ex.codigo)!==limpia(r.codigo))res.push({id:id,nombre:r.nombre,tipo:'CODIGO_DISTINTO',remoto:ex.codigo||''});
     var cat=limpia((main.matCategorias||{})[id]||(ex&&ex.catName)||'');
     if(norm(cat)!==norm(r.categoria))res.push({id:id,nombre:r.nombre,tipo:'SUBRUBRO_DISTINTO',remoto:cat});
+    if(decisionExplicita(r)){
+      var comentarioServidor=limpia((main.matComentarios||{})[id]||(ex&&ex.comentarios)||'');
+      if(comentarioServidor!==limpia(r.comentarios))
+        res.push({id:id,nombre:r.nombre,tipo:'OBSERVACIONES_DISTINTAS'});
+    }
     var remotoNombre=limpia((main.matNombres||{})[id]);
     if(!r.manualCreated&&remotoNombre&&norm(remotoNombre)!==norm(r.nombre))res.push({id:id,nombre:r.nombre,tipo:'RENOMBRE_DISTINTO',remoto:remotoNombre});
     if(r.manualCreated&&mat&&norm(mat.mat)!==norm(r.nombre)&&!ex)res.push({id:id,nombre:r.nombre,tipo:'COLISION_ID',remoto:mat.mat});
@@ -19629,7 +19644,8 @@ function prepararCambios(main,entries,renombresAutorizados){
   renombresAutorizados=renombresAutorizados||{};
   var extra=copia(Array.isArray(main.extraMats)?main.extraMats:[]),
       matCategorias=Object.assign({},main.matCategorias||{}),matNombres=Object.assign({},main.matNombres||{}),
-      matCodigos=Object.assign({},main.matCodigos||{}),catManual=Object.assign({},main.catalogoManual||{}),
+      matCodigos=Object.assign({},main.matCodigos||{}),matComentarios=Object.assign({},main.matComentarios||{}),
+      catManual=Object.assign({},main.catalogoManual||{}),
       categoriaManual=Object.assign({},main.categoriaManual||{});
   var changed=false, colisiones=[];
   var deletedIds=Array.isArray(main.deletedMatIds)?main.deletedMatIds.slice():[];
@@ -19654,7 +19670,8 @@ function prepararCambios(main,entries,renombresAutorizados){
       return;
     }
     var id=String(r.id), ex=extra.find(function(m){return String(m.id)===id;});
-    var autorizado=renombresAutorizados[id]||'';
+    var autorizado=renombresAutorizados[id]||
+      (r.origen==='editar'?limpia(r.nombreAnterior):'');
     var nombreRemoto=ocupanteRemoto(main,id);
     if(nombreRemoto&&norm(nombreRemoto)!==norm(r.nombre)&&
         !(autorizado&&norm(nombreRemoto)===norm(autorizado))){
@@ -19687,7 +19704,9 @@ function prepararCambios(main,entries,renombresAutorizados){
     }
     if(!ex){
       var baseOcupada=activos().find(function(m){return String(m&&m.id)===id&&norm(m.mat)!==norm(r.nombre);});
-      if(baseOcupada){colisiones.push({id:id,remoto:baseOcupada.mat,protegido:r.nombre});return;}
+      if(baseOcupada&&!(autorizado&&norm(baseOcupada.mat)===norm(autorizado))){
+        colisiones.push({id:id,remoto:baseOcupada.mat,protegido:r.nombre});return;
+      }
     }
     if(r.manualCreated&&!ex){
       ex={id:Number(r.id),mat:r.nombre,codigo:r.codigo||'',catName:r.categoria,prom:Number(r.prom)||0,
@@ -19698,13 +19717,16 @@ function prepararCambios(main,entries,renombresAutorizados){
       if(ex.mat!==r.nombre||limpia(ex.codigo)!==limpia(r.codigo)||norm(ex.catName)!==norm(r.categoria)||limpia(ex.comentarios)!==limpia(r.comentarios))changed=true;
       ex.mat=r.nombre;ex.codigo=r.codigo||'';ex.catName=r.categoria;ex.comentarios=r.comentarios||'';
     }
-    if(norm(matCategorias[id])!==norm(r.categoria)||limpia(matNombres[id])!==limpia(r.nombre)||limpia(matCodigos[id])!==limpia(r.codigo))changed=true;
+    if(norm(matCategorias[id])!==norm(r.categoria)||limpia(matNombres[id])!==limpia(r.nombre)||
+        limpia(matCodigos[id])!==limpia(r.codigo)||limpia(matComentarios[id])!==limpia(r.comentarios))changed=true;
     matCategorias[id]=r.categoria;matNombres[id]=r.nombre;matCodigos[id]=r.codigo||'';
+    matComentarios[id]=r.comentarios||'';
     categoriaManual[id]=r.categoria;
     catManual[id]=Object.assign({},catManual[id]||{}, {nombre:r.nombre,codigo:r.codigo||'',categoria:r.categoria,manual:true,updatedAt:r.updatedAt});
   });
   return {changed:changed,collisions:colisiones,patch:{extraMats:extra,matCategorias:matCategorias,matNombres:matNombres,
-    matCodigos:matCodigos,catalogoManual:catManual,categoriaManual:categoriaManual,deletedMatIds:deletedIds,deletedMaterialKeys:deletedNames}};
+    matCodigos:matCodigos,matComentarios:matComentarios,catalogoManual:catManual,
+    categoriaManual:categoriaManual,deletedMatIds:deletedIds,deletedMaterialKeys:deletedNames}};
 }
 async function reconciliar(origen){
   if(reparando||guardando||!listo||!disponible())return false;
@@ -19742,7 +19764,7 @@ function aceptarRespaldo(datos,origen){
   var cambio=aplicarAutoridad();
   if(cambio){try{renderActive();}catch(_e){}}
   log('RESPALDO_LEIDO',origen+' · '+Object.keys(autoridad).length+' materiales/decisiones');
-  if(ultimoPrincipal&&diferencias(ultimoPrincipal,autoridad).length)programarReparacion('cambios recibidos');
+  if(ultimoPrincipal&&diferencias(ultimoPrincipal,entradasConfirmadas(autoridad)).length)programarReparacion('cambios recibidos');
 }
 function escuchar(){
   if(sincronia||!disponible()||!window._onSnapshot)return;
@@ -19755,7 +19777,7 @@ function escuchar(){
     if(!snap.exists())return;
     ultimoPrincipal=snap.data()||{};
     if(!listo)return;
-    var dif=diferencias(ultimoPrincipal,autoridad);
+    var dif=diferencias(ultimoPrincipal,entradasConfirmadas(autoridad));
     if(dif.length){
       var ejemplo=dif.slice(0,4).map(function(x){return x.nombre+' ['+x.tipo+']';}).join('; ');
       log('SOBRESCRITURA_DETECTADA',dif.length+' diferencias en Firebase principal: '+ejemplo);
@@ -19842,9 +19864,11 @@ function guardarNuevaEntrada(entries,main,d,accion){
   var extraActual=extras.find(function(m){return String(m.id)===String(id);});
   var yaCreado=!!(extraActual||entries[String(id)]&&entries[String(id)].manualCreated);
   var actual=extraActual||conocidos.find(function(m){return String(m.id)===String(id);});
-  var viejoNombre=limpia(actual&&actual.mat);
-  var reg={id:id,nombre:d.nombre,codigo:d.codigo,categoria:d.categoria,comentarios:d.comentarios,
-    prom:accion==='editar'?(Number(actual&&actual.prom)||0):d.prom, manualCreated:(!actual||!!extraActual||yaCreado)&&
+  var viejoNombre=limpia((main.matNombres||{})[id]||(actual&&actual.mat)||d.nombreOriginal);
+  var reg={id:id,nombre:d.nombre,nombreAnterior:accion==='editar'?viejoNombre:'',
+    codigo:d.codigo,categoria:d.categoria,comentarios:d.comentarios,
+    prom:accion==='editar'?(Number(actual&&actual.prom)||0):d.prom,
+    confirmadaEnMateriales:true,manualCreated:(!actual||!!extraActual||yaCreado)&&
       !(actual&&esAuto(actual)),manual:true,updatedAt:new Date().toISOString(),origen:accion};
   if(accion==='nuevo'&&!enNombre)reg.manualCreated=true;
   if(entries[String(id)]&&entries[String(id)].manualCreated)reg.manualCreated=true;
@@ -19900,19 +19924,41 @@ async function transaccionCatalogo(datos,accion){
       patch.updatedAt=new Date().toISOString();
       patch.catalogoManualWriter='CQ Materiales v3';
       tx.set(base(),patch,{merge:true});
-      tx.set(respaldo(),Object.assign({},a,{version:3,entries:entries,updatedAt:patch.updatedAt,lastAction:accion}));
-      return result;
+      var respaldoNuevo=Object.assign({},a,{version:3,entries:entries,updatedAt:patch.updatedAt,lastAction:accion});
+      tx.set(respaldo(),respaldoNuevo);
+      // runTransaction sólo termina una vez que Firestore acepta ambas escrituras.
+      return {resultados:result,respaldoNuevo:respaldoNuevo};
     });
-    var ver=await leerServidor(respaldo());
-    if(!ver.exists())throw new Error('El catálogo independiente no figura en Firebase después del guardado');
-    var guardados=ver.data().entries||{};
-    hecho.forEach(function(x){
-      var r=guardados[String(x.id)];
-      if(!r||r.nombre!==x.reg.nombre||norm(r.categoria)!==norm(x.reg.categoria))
-        throw new Error('Firebase no confirmó el artículo '+x.reg.nombre+' en el respaldo');
-    });
-    aceptarRespaldo(ver.data(),'guardado confirmado');
-    log('GUARDADO_CONFIRMADO',accion+' · '+hecho.map(function(x){return x.reg.nombre+' (#'+x.id+', '+x.reg.categoria+')';}).join('; '));
+    var confirmados=hecho.resultados;
+    // La transacción ya fue aceptada por Firestore. Una lectura posterior puede
+    // encontrar una edición concurrente, lo cual NO equivale a 'no se guardó'.
+    var ver=null, discrepancia='';
+    for(var intento=0;intento<3;intento++){
+      ver=await leerServidor(respaldo());
+      var guardados=ver.exists()?(ver.data().entries||{}):{};
+      discrepancia='';
+      confirmados.forEach(function(x){
+        var r=guardados[String(x.id)],esperado=x.reg;
+        if(!r||norm(r.nombre)!==norm(esperado.nombre)||
+          norm(r.categoria)!==norm(esperado.categoria)||
+          limpia(r.comentarios)!==limpia(esperado.comentarios)){
+          discrepancia='ID '+x.id+' ('+esperado.nombre+'): esperado '+esperado.categoria+
+            ', remoto '+(r?(String(r.nombre)+' / '+String(r.categoria)):'SIN REGISTRO');
+        }
+      });
+      if(!discrepancia)break;
+      if(intento<2)await new Promise(function(resolve){setTimeout(resolve,350*(intento+1));});
+    }
+    if(discrepancia){
+      // Guardar localmente el resultado confirmado POR LA TRANSACCIÓN; no
+      // sobreescribir otra identidad con una lectura posterior sospechosa.
+      aceptarRespaldo(hecho.respaldoNuevo,'transacción aceptada; escritura externa detectada');
+      log('REEMPLAZO_POSTERIOR',discrepancia);
+      throw new Error('Firebase aceptó la edición, pero al volver a leer el respaldo encontró otra versión. '+
+        discrepancia+'. Cerrá otras pestañas de Materiales y exportá el diagnóstico. No se reintentó a ciegas.');
+    }
+    aceptarRespaldo(ver.data(),'guardado confirmado por transacción y lectura de servidor');
+    log('GUARDADO_CONFIRMADO',accion+' · '+confirmados.map(function(x){return x.reg.nombre+' (#'+x.id+', '+x.reg.categoria+')';}).join('; '));
     setSyncStatus('Firebase: catálogo guardado','ok');
     // Las escrituras de otras aplicaciones pueden alterar el documento principal más tarde.
     // El listener lo repara con los datos confirmados de la copia independiente.
@@ -19922,8 +19968,8 @@ async function transaccionCatalogo(datos,accion){
     aplicarAutoridad();
     try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(_e){}
     try{renderActive();}catch(e){console.warn(e);}
-    return hecho;
-  }catch(e){error('NO SE GUARDÓ el catálogo',e);setSyncStatus('Firebase: ERROR al guardar catálogo','err');throw e;}
+    return confirmados;
+  }catch(e){error('Guardado no completado o verificación posterior fallida',e);setSyncStatus('Firebase: revisar guardado','err');throw e;}
   finally{guardando=false;if(ultimoPrincipal&&listo&&diferencias(ultimoPrincipal,autoridad).length)programarReparacion('fin de guardado');}
 }
 
@@ -19956,7 +20002,14 @@ window.guardarNombreMat=guardarNombreMat=async function(){
     await transaccionCatalogo(d,'editar');
     closeEditarNombreMat();showToast('✓ Subrubro y material confirmados en Firebase');
     return true;
-  }catch(e){alert('No se pudo guardar la edición. La ventana sigue abierta.\n\n'+String(e&&e.message||e));return false;}
+  }catch(e){
+    var mensaje=String(e&&e.message||e);
+    var aceptado=mensaje.indexOf('Firebase aceptó la edición')===0;
+    alert((aceptado?'La edición fue aceptada, pero otra sincronización cambió el respaldo. '+
+      'La ventana sigue abierta para revisar.':'No se pudo completar y verificar la edición. La ventana sigue abierta.')+
+      '\n\n'+mensaje);
+    return false;
+  }
 };
 window.procesarCargaMasivaCatalogo=procesarCargaMasivaCatalogo=async function(){
   if(window.__cqMaterialesEmployeeRO){alert('Solo lectura · No se puede hacer carga masiva');return false;}
@@ -20060,7 +20113,7 @@ function resumen(){
     altasProtegidas:Object.values(autoridad).filter(function(r){return r&&r.active!==false&&r.manualCreated;}).length,
     entradasImportadas:Object.values(autoridad).filter(function(r){return r&&String(r.origen||'').indexOf('migracion_')===0;}).length,
     conflictosHistoricosAislados:Object.keys(conflictosAislados).length,
-    diferencias:ultimoPrincipal?diferencias(ultimoPrincipal,autoridad):[],
+    diferencias:ultimoPrincipal?diferencias(ultimoPrincipal,entradasConfirmadas(autoridad)):[],
     ultimoError:ultimoError,eventos:eventos.slice(-35)};
 }
 function asegurarPanel(){
@@ -20070,6 +20123,7 @@ function asegurarPanel(){
   box.style.cssText='margin:8px 0 12px;padding:10px 13px;background:#eef4f1;border:1px solid #cbded5;border-radius:12px;font-size:11px;color:#214b3b;';
   box.innerHTML='<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">'+
     '<span id="cq-catalogo-diag-estado" style="flex:1;min-width:160px">Verificando catálogo protegido...</span>'+ 
+    '<button type="button" id="cq-catalogo-acopio-btn" onclick="window.cqCompararSubrubrosAcopio()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700;cursor:pointer">Comparar Acopio</button>'+ 
     '<button type="button" id="cq-catalogo-diag-toggle" aria-expanded="false" onclick="window.cqAlternarDiagnosticoCatalogo()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700;cursor:pointer">Ver diagnóstico</button></div>'+ 
     '<div id="cq-catalogo-diag-panel" style="display:none;margin-top:9px;padding-top:9px;border-top:1px solid #cbded5">'+
     '<div style="text-align:right"><button type="button" onclick="window.cqExportarDiagnosticoMateriales()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700;cursor:pointer">Exportar diagnóstico</button></div>'+ 
@@ -20127,6 +20181,102 @@ window.cqExportarDiagnosticoMateriales=function(){
   var a=document.createElement('a');a.href=url;a.download='diagnostico_materiales_firebase.json';
   document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},5000);
 };
+
+// CQ 04/11 — Auditoría segura Acopio → Materiales.
+// NO modifica Acopio, ni toca las cargas: propone sólo subrubros inequívocos.
+function catAcopioCanon(categoria){
+  var directa=catCanon(categoria);if(directa)return directa;
+  var equivalencias={
+    'hierros':'HIERROS','cemento':'CEMENTO Y HERCAL',
+    'revoques':'REVOQUES Y YESO','ladrillos':'LADRILLOS',
+    'impermeabilizantes':'IMPERMEABILIZANTES','viguetas':'VIGUETAS'
+  };
+  var base=equivalencias[norm(categoria)];if(!base)return '';
+  var c=(window.CATS||[]).find(function(c){
+    if(!c||!c.name)return false;
+    if(typeof isCatDeleted==='function'&&isCatDeleted(c.name))return false;
+    return norm(c.name)===norm(base)||norm(c._baseName||'')===norm(base);
+  });
+  return c?c.name:'';
+}
+window.cqCompararSubrubrosAcopio=async function(){
+  if(!disponible()){alert('Conectá Firebase antes de comparar los subrubros.');return false;}
+  var b=document.getElementById('cq-catalogo-acopio-btn');
+  if(b){b.disabled=true;b.textContent='Comparando...';}
+  try{
+    if(!(await inicializar()))throw new Error('No se pudo leer el catálogo protegido');
+    var snap=await leerServidor(window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3'));
+    if(!snap.exists())throw new Error('No existe el documento principal de Acopio');
+    var dbA=(snap.data()||{}).db||{},acopios=Array.isArray(dbA.acopios)?dbA.acopios:[];
+    var refs={},cargasAcopio={};
+    (state.cargas||[]).forEach(function(c){
+      if(!c||!c.integracionId)return;
+      var iid=String(c.integracionId);
+      if(iid.indexOf('acopio_')===0)cargasAcopio[iid]=c;
+    });
+    function anotar(id,cat,nombre,origen){
+      id=String(id||'');cat=catAcopioCanon(cat);if(!id||!cat||norm(cat)==='varios')return;
+      var m=activos().find(function(x){return String(x&&x.id)===id;});
+      if(!m||typeof isMatDeleted==='function'&&isMatDeleted(m.id))return;
+      // El vínculo por retiro sirve sólo si también coincide el nombre de origen.
+      if(nombre&&norm(m.mat)!==norm(nombre)){
+        var evento=(state.cargas||[]).find(function(c){return c&&String(c.matId)===id&&
+          norm(c.materialNameOrigen||'')===norm(nombre);});
+        if(!evento)return;
+      }
+      var manual=Object.values(autoridad).some(function(r){return decisionExplicita(r)&&r.active!==false&&
+        (String(r.id)===id||norm(r.nombre)===norm(m.mat));});
+      if(manual)return;
+      var k=id;refs[k]=refs[k]||{m:m,categorias:{},fuentes:[]};
+      refs[k].categorias[cat]=true;refs[k].fuentes.push(origen);
+    }
+    acopios.forEach(function(a){
+      var mats=Array.isArray(a&&a.mats)?a.mats:[];
+      mats.forEach(function(am){
+        if(!am||!limpia(am.nom))return;
+        var candidatas=activos().filter(function(m){return !isMatDeleted(m.id)&&norm(m.mat)===norm(am.nom);});
+        if(candidatas.length===1)anotar(candidatas[0].id,am.cat,am.nom,'ficha de Acopio');
+      });
+      (Array.isArray(a&&a.retiros)?a.retiros:[]).forEach(function(r){
+        if(!r||r.materialesSyncEstado==='omitido')return;
+        var key='acopio_'+String(a.id)+'_'+String(r.id);
+        var carga=cargasAcopio[key];if(!carga)return;
+        var matLocal=mats.find(function(am){return String(am&&am.id)===String(r.matId);});
+        var name=limpia(r.materialName||(matLocal&&matLocal.nom)||'');
+        // El mismo retiro linkeado con el mismo nombre, sin confiar sólo en el ID.
+        if(name&&norm(carga.materialNameOrigen||carga.matName||'')===norm(name))
+          anotar(carga.matId,r.subrubro||(matLocal&&matLocal.cat),name,'retiro vinculado');
+      });
+    });
+    var propuestos=[],ambiguos=0;
+    Object.keys(refs).forEach(function(k){
+      var ref=refs[k],cats=Object.keys(ref.categorias);
+      if(cats.length!==1){ambiguos++;return;}
+      var actual=catCanon((state.matCategorias||{})[k]||ref.m.catName||obtenerCategoriaMaterial(Number(k))||'');
+      if(norm(actual)!==norm(cats[0]))propuestos.push({m:ref.m,actual:actual||'Sin clasificar',cat:cats[0]});
+    });
+    if(!propuestos.length){alert('Comparación terminada: no hay cambios inequívocos para aplicar. '+
+      (ambiguos?ambiguos+' materiales presentan categorías contradictorias en Acopio.':''));return true;}
+    var lista=propuestos.slice(0,14).map(function(p){return '• '+p.m.mat+': '+p.actual+' → '+p.cat;}).join('\n');
+    if(!confirm('Se encontraron '+propuestos.length+' subrubros diferentes en Acopio. '+
+      'Se omitieron las ediciones manuales confirmadas y '+ambiguos+' identidades ambiguas.\n\n'+
+      lista+(propuestos.length>14?'\n... y '+(propuestos.length-14)+' más':'')+
+      '\n\n¿Guardar estas categorías desde Materiales? Quedarán como decisiones manuales protegidas.'))return false;
+    var hechos=0;
+    for(var i=0;i<propuestos.length;i+=8){
+      var lote=propuestos.slice(i,i+8).map(function(p){return {
+        id:Number(p.m.id),nombreOriginal:p.m.mat,nombre:p.m.mat,
+        codigo:limpia((state.matCodigos||{})[p.m.id]||p.m.codigo),
+        categoria:p.cat,comentarios:limpia((state.matComentarios||{})[p.m.id]||p.m.comentarios),prom:Number(p.m.prom)||0
+      };});
+      await transaccionCatalogo(lote,'editar');hechos+=lote.length;
+    }
+    alert('Confirmadas '+hechos+' clasificaciones desde Acopio en el catálogo protegido.');
+    return true;
+  }catch(e){error('Comparación Acopio',e);alert('No se completó la comparación con Acopio.\n\n'+String(e&&e.message||e));return false;}
+  finally{if(b){b.disabled=false;b.textContent='Comparar Acopio';}}
+};
+
 // Nombre compatible con diagnóstico anterior, ahora con origen de verdad conocido.
 window.cqSubrubrosManualesDiagnostico=function(){return resumen();};
 function activar(){asegurarPanel();if(disponible())inicializar();}
