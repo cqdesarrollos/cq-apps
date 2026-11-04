@@ -3572,6 +3572,7 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
         <select id="retiro-material" onchange="cqCambioMaterialEditRetiro()" aria-label="Seleccionar material del retiro"></select>
         <div id="retiro-material-aviso" style="font-size:10px;color:#7A9E82;margin-top:5px;line-height:1.45" aria-live="polite"></div>
         <button type="button" id="retiro-material-diagnostico-btn" class="btn btn-s btn-sm" onclick="cqDiagnosticarProductoRetiro()" style="display:none;margin-top:8px;font-size:10px">🔎 Diagnosticar referencia perdida (solo lectura)</button>
+        <button type="button" id="retiro-material-restaurar-btn" class="btn btn-p btn-sm" onclick="cqRecuperarFichaDelRetiro()" style="display:none;margin-top:8px;font-size:10px">♻ Recuperar esta ficha original del respaldo</button>
         <div id="retiro-material-diagnostico" style="display:none;margin-top:8px;padding:10px;border:1px solid #D5CFC3;border-radius:8px;background:#F7F6F3;font-size:10px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere"></div>
       </div>
       <div class="row2">
@@ -3745,6 +3746,7 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
       </div>
       <button class="btn btn-p btn-sm" onclick="openPago()">+ Pago</button>
       <button class="btn btn-s btn-sm" onclick="openNuevoMaterial()">+ Material</button>
+      <button type="button" id="cq-recuperar-fichas-btn" class="btn btn-s btn-sm" onclick="cqRecuperarFichasFaltantesAcopio()" title="Reponer desde copias de seguridad solo fichas ausentes con retiros verificables">♻ Recuperar fichas faltantes</button>
       <button class="btn btn-s btn-sm" onclick="openCargaMasivaMateriales()">Carga masiva de retiros</button>
       <button class="btn btn-s btn-sm" onclick="openCategoriasMateriales()">Categorías</button>
     </div>
@@ -4289,6 +4291,99 @@ function cqConfirmarTombstonesMatsConPayload(payload){
   try{cqGuardarTombstonesMats();}catch(e){}
 }
 
+// CQ 04/11/2026 — ANTISOBRESCRITURA PARA ALTAS RECIENTES DEL CATÁLOGO.
+// El catálogo se guarda dentro del documento compartido de Acopio. Una app vieja
+// podía publicar una lista de mats anterior y hacer desaparecer las últimas altas.
+// Guardar una copia LOCAL, acotada a 7 días, de cada ficha NUEVA registrada aquí.
+// Ante un snapshot remoto que la omita sin un borrado explícito en este equipo,
+// reponer exactamente ese mismo ID/código/ficha y volver a sincronizar.
+// No afecta fichas antiguas, retiros, Gastos, Pañol ni precios de otros productos.
+var CQ_MATS_ALTAS_RECIENTES_KEY='cq_acopio_mats_altas_recientes_v1';
+var CQ_MATS_ALTAS_TTL=7*24*60*60*1000;
+var cqMatsAltasRecientes=(function(){
+  try{
+    var x=JSON.parse(localStorage.getItem(CQ_MATS_ALTAS_RECIENTES_KEY)||'{}');
+    return x&&typeof x==='object'&&!Array.isArray(x)?x:{};
+  }catch(_e){return {};}
+})();
+function cqGuardarAltasRecientes(){
+  try{localStorage.setItem(CQ_MATS_ALTAS_RECIENTES_KEY,JSON.stringify(cqMatsAltasRecientes));}catch(e){
+    console.warn('Acopio: no se pudo guardar protección de alta reciente',e);
+  }
+}
+function cqLimpiarAltasRecientes(){
+  var ahora=Date.now(),cambio=false;
+  Object.keys(cqMatsAltasRecientes).forEach(function(k){
+    var rec=cqMatsAltasRecientes[k];
+    if(!rec||!rec.material||!Number(rec.fecha)||ahora-Number(rec.fecha)>CQ_MATS_ALTAS_TTL||Number(rec.fecha)>ahora+60000){
+      delete cqMatsAltasRecientes[k];cambio=true;
+    }
+  });
+  if(cambio)cqGuardarAltasRecientes();
+}
+function cqProtegerAltaMaterial(acopioId,material){
+  if(acopioId==null||!material||material.id==null)return;
+  cqLimpiarAltasRecientes();
+  var key=cqMatTombstoneKey(acopioId,material.id);
+  // Sólo se usa para una alta realmente realizada, no para restaurar cualquier dato viejo.
+  if(cqMatsBorradosPendientes.has(key))return;
+  var anterior=cqMatsAltasRecientes[key];
+  cqMatsAltasRecientes[key]={
+    fecha:anterior&&Number(anterior.fecha)||Date.now(),
+    material:JSON.parse(JSON.stringify(material))
+  };
+  cqGuardarAltasRecientes();
+}
+function cqActualizarAltaProtegida(acopioId,material){
+  if(!material||material.id==null)return;
+  var key=cqMatTombstoneKey(acopioId,material.id);
+  if(cqMatsAltasRecientes[key])cqProtegerAltaMaterial(acopioId,material);
+}
+function cqQuitarAltaProtegida(acopioId,matId){
+  var key=cqMatTombstoneKey(acopioId,matId);
+  if(cqMatsAltasRecientes[key]){
+    delete cqMatsAltasRecientes[key];
+    cqGuardarAltasRecientes();
+  }
+}
+function cqReponerAltasRecientesEnDB(db){
+  cqLimpiarAltasRecientes();
+  var repuestos=0;
+  if(!db||!Array.isArray(db.acopios))return {db:db,repuestos:0};
+  Object.keys(cqMatsAltasRecientes).forEach(function(k){
+    var info=cqMatsAltasRecientes[k],mat=info&&info.material;
+    if(!mat||mat.id==null||cqMatsBorradosPendientes.has(k))return;
+    var pos=k.indexOf('::');
+    if(pos<0)return;
+    var idAcopio=k.substring(0,pos),mid=k.substring(pos+2);
+    var ac=(db.acopios||[]).find(function(a){return a&&String(a.id)===idAcopio;});
+    if(!ac)return;
+    if(!Array.isArray(ac.mats))ac.mats=[];
+    if(ac.mats.some(function(m){return m&&String(m.id)===mid;}))return;
+    // Si otra ficha usa ahora su código, no generar un duplicado: requiere revisión.
+    var cod=String(mat.cod||'').trim().toLowerCase();
+    if(cod&&ac.mats.some(function(m){return m&&String(m.cod||'').trim().toLowerCase()===cod;})){
+      console.warn('Acopio: alta reciente faltante con código ya ocupado; revisar',idAcopio,mid,cod);
+      return;
+    }
+    ac.mats.push(JSON.parse(JSON.stringify(mat)));
+    repuestos++;
+  });
+  return {db:db,repuestos:repuestos};
+}
+function cqAjustarProteccionesLuegoDeshacer(){
+  var cambio=false;
+  Object.keys(cqMatsAltasRecientes).forEach(function(k){
+    var p=k.indexOf('::');if(p<0)return;
+    var acId=k.slice(0,p),matId=k.slice(p+2);
+    var ac=(DB.acopios||[]).find(function(a){return a&&String(a.id)===acId;});
+    if(ac&&!((ac.mats||[]).some(function(m){return m&&String(m.id)===matId;}))){
+      delete cqMatsAltasRecientes[k];cambio=true;
+    }
+  });
+  if(cambio)cqGuardarAltasRecientes();
+}
+
 // CQ 31/08/2026 — reparación segura del bug de reutilización de IDs en carga masiva.
 // Sólo restaura un material faltante si existe una copia EXACTA (mismo ID y mismo
 // código/nombre histórico del retiro) en alguno de los backups locales. Así no
@@ -4680,7 +4775,9 @@ function deshacer(){
         if(cambioMatTomb && typeof cqGuardarTombstonesMats==='function')cqGuardarTombstonesMats();
       }
     }catch(_e){}
+    cqAjustarProteccionesLuegoDeshacer();
     cqGuardarLocalSeguro();
+    marcarAcopioDirty();
     scheduleFirebaseSave();
   }catch(e){toast('No se pudo deshacer');return;}
   updateUndoBtn();
@@ -4814,6 +4911,10 @@ async function saveToFirebase(){
           local=rn.db;
         }
 
+        // Conservar altas recientes de este dispositivo incluso si la versión remota
+        // ya fue sobreescrita por una sesión antigua.
+        local=cqReponerAltasRecientesEnDB(local).db;
+
         // Aplicar borrados confirmados del catálogo antes de publicar.
         if(typeof cqAplicarTombstonesMats==='function'){
           var mt=cqAplicarTombstonesMats(local);
@@ -4829,6 +4930,7 @@ async function saveToFirebase(){
           var rn0=cqReponerRetirosNuevosEnDB(payload.db);
           payload.db=rn0.db;
         }
+        payload.db=cqReponerAltasRecientesEnDB(payload.db).db;
         if(typeof cqAplicarTombstonesMats==='function'){
           var mt0=cqAplicarTombstonesMats(payload.db);
           payload.db=mt0.db;
@@ -4881,7 +4983,7 @@ async function saveToFirebase(){
           });
           acActual.mats=matsActuales;
         });
-        DB=actual;
+        DB=cqReponerAltasRecientesEnDB(actual).db;
         DB.backups=backupsLocales;
       }
       cqGuardarLocalSeguro();
@@ -5140,6 +5242,14 @@ async function loadFromFirebase(){
         marcarAcopioDirty();
         saveRequested=true;
       }
+      // Guardas locales de altas NUEVAS: si faltan en la nube, reponerlas.
+      var altasInicio=cqReponerAltasRecientesEnDB(DB);
+      DB=altasInicio.db;
+      if(altasInicio.repuestos){
+        console.warn('Acopio: restituidas '+altasInicio.repuestos+' altas recientes ausentes en Firebase');
+        marcarAcopioDirty();
+        saveRequested=true;
+      }
       cqGuardarLocalSeguro();
       lastSyncedAt=snap.data().updatedAt||null;
       guardarBaseAcopio(lastSyncedAt);
@@ -5150,6 +5260,8 @@ async function loadFromFirebase(){
 
     setSyncStatus('Sync: ON',false,(snap.exists()&&snap.data().updatedAt)?snap.data().updatedAt:new Date().toISOString());
     listenFirebase();
+    // Si al cargar se repuso alguna ficha protegida, publicar la reparación.
+    if(localDirty||saveRequested)scheduleFirebaseSave();
     if(curAcopioId && !getAcopio()) curAcopioId=null;
     if(curAcopioId){
         abrirAcopio(curAcopioId);
@@ -5253,6 +5365,12 @@ function listenFirebase(){
         teniaBorradosPendientes=rr.encontro;
       }
 
+      // Proteger los productos creados recientemente contra una publicación
+      // remota con el catálogo viejo. Jamás reconstruir por nombre solamente.
+      var altasSnapshot=cqReponerAltasRecientesEnDB(remoteDB);
+      remoteDB=altasSnapshot.db;
+      var teniaAltasRecientes=altasSnapshot.repuestos>0;
+
       DB=remoteDB;
       if((!DB.backups||!DB.backups.length) && localBackups.length) DB.backups=localBackups;
       if(typeof cqRecuperarMatsFaltantesDesdeBackups==='function'){
@@ -5266,10 +5384,11 @@ function listenFirebase(){
       lastSyncedAt=remoteUpdatedAt;
       guardarBaseAcopio(remoteUpdatedAt);
       setSyncStatus('Sync: actualizado',false,remoteUpdatedAt||new Date().toISOString());
+      if(teniaAltasRecientes)console.warn('CQ Acopio: snapshot remoto omitió '+altasSnapshot.repuestos+' altas recientes; se volverán a guardar.');
 
       // Si el snapshot venía atrasado y todavía contenía un retiro borrado,
       // volver a publicar inmediatamente la versión correcta sin ese retiro.
-      if(teniaBorradosPendientes || teniaMatsBorrados || teniaRetirosNuevos || teniaAcopiosNuevos || reparoMatsListener){
+      if(teniaBorradosPendientes || teniaMatsBorrados || teniaRetirosNuevos || teniaAcopiosNuevos || teniaAltasRecientes || reparoMatsListener){
         marcarAcopioDirty();
         scheduleFirebaseSave();
       }
@@ -6764,9 +6883,13 @@ function guardarCargaMasivaMateriales(){
     if(!m.cat)return;
     m.id=cqNuevoIdMaterialAcopio(a);
     m.cat=ensureCat(m.cat);
+    m.createdAt=new Date().toISOString();
+    m.updatedAt=m.createdAt;
+    m.updatedBy=window._cqUsuarioActual||'Acopio';
     delete m.fila;
     delete m.omitirDuplicado;
     a.mats.push(m);
+    cqProtegerAltaMaterial(a.id,m);
     if(m.cod)existingCodes[catKey(m.cod)]=true;
     agregados.push(m);
   });
@@ -6878,10 +7001,14 @@ function guardarMaterial(){
   var a=getAcopio();
   if(editMatId){
     a.mats=a.mats.map(function(m){return String(m.id)===String(editMatId)?Object.assign({},m,{nom:nom,cod:cod,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal,updatedAt:new Date().toISOString(),updatedBy:window._cqUsuarioActual||'Acopio'}):m;});
+    var fichaEditada=a.mats.find(function(m){return m&&String(m.id)===String(editMatId);});
+    cqActualizarAltaProtegida(a.id,fichaEditada);
     toast('✓ Material actualizado');
   } else {
     var nuevoId=cqNuevoIdMaterialAcopio(a);
-    a.mats.push({id:nuevoId,cod:cod,nom:nom,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),updatedBy:window._cqUsuarioActual||'Acopio'});
+    var nuevoMaterial={id:nuevoId,cod:cod,nom:nom,comentario:comentario,precioUnit:pu,precioAcord:pa,unidad:unidad,cat:cat,controlStock:controlStock,cantidadTotal:cantidadTotal,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),updatedBy:window._cqUsuarioActual||'Acopio'};
+    a.mats.push(nuevoMaterial);
+    cqProtegerAltaMaterial(a.id,nuevoMaterial);
     toast('✓ Material "'+nom+'" agregado en '+cat);
   }
   persist();closeModal('modal-mat');renderMateriales();
@@ -6903,6 +7030,7 @@ async function borrarMaterialActual(){
 
   // Registrar el borrado ANTES de modificar el array para que ningún snapshot
   // atrasado pueda volver a insertar el material.
+  cqQuitarAltaProtegida(a.id,matId);
   cqAgregarTombstoneMat(a.id,matId);
   a.mats=(a.mats||[]).filter(function(x){return String(x.id)!==matId;});
 
@@ -10006,8 +10134,10 @@ function cqLlenarProductosEditRetiro(retiro){
   var info=document.getElementById('retiro-material-aviso');
   if(!sel||!info||!retiro)return;
   var diagBtn=document.getElementById('retiro-material-diagnostico-btn');
+  var restaurarBtn=document.getElementById('retiro-material-restaurar-btn');
   var diagTxt=document.getElementById('retiro-material-diagnostico');
   if(diagBtn)diagBtn.style.display='none';
+  if(restaurarBtn)restaurarBtn.style.display='none';
   if(diagTxt){diagTxt.style.display='none';diagTxt.textContent='';}
   var mats=ordenarMaterialesAlfabeticamente(getAllMats()).filter(function(m){return m && m.id!=null;});
   var original=mats.find(function(m){return String(m.id)===String(retiro.matId);})||null;
@@ -10052,11 +10182,206 @@ function cqCambioMaterialEditRetiro(){
     '. La modificación se guarda sólo al pulsar Guardar.';
 }
 
+// CQ 04/11/2026 — recuperación quirúrgica de fichas de Acopio desde backups.
+// El sistema antiguo solo reparaba fichas con tombstone local. Si un cliente
+// atrasado sobreescribía a.mats en Firebase, no quedaba tombstone: se perdía
+// el vínculo pese a existir una copia válida en acopio_backups.
+// NO inventar materiales ni precios: solo copiar la ficha histórica íntegra
+// (mismo acopio + ID + nombre y código de los retiros), previa confirmación.
+// NO tocar retiros, obras, Gastos, Pañol, otros acopios, ni fichas existentes.
+var cqRecuperacionFichasEnCurso=false;
+function cqNormHistMat(v){
+  return String(v==null?'':v).trim().replace(/\s+/g,' ').toLocaleLowerCase('es');
+}
+function cqBackupMatCoincideConRetiros(mat,retiros){
+  if(!mat||mat.id==null||!Array.isArray(retiros)||!retiros.length)return false;
+  var nombre=cqNormHistMat(mat.nom),codigo=cqNormHistMat(mat.cod);
+  if(!nombre && !codigo)return false;
+  return retiros.every(function(r){
+    var rn=cqNormHistMat(r.materialName),rc=cqNormHistMat(r.materialCode);
+    if(!rn && !rc)return false;
+    if(rn && (!nombre || rn!==nombre))return false;
+    if(rc && (!codigo || rc!==codigo))return false;
+    return String(r.matId)===String(mat.id);
+  });
+}
+function cqRecuperarFichaDelRetiro(){
+  var a=getAcopio();
+  var r=a&&(a.retiros||[]).find(function(x){return String(x.id)===String(editRetiroId);});
+  if(!r)return;
+  return cqRecuperarFichasFaltantesAcopio(String(r.matId));
+}
+async function cqRecuperarFichasFaltantesAcopio(soloId){
+  if(cqRecuperacionFichasEnCurso)return;
+  var f=window._cqFirebase,a=getAcopio();
+  if(!f||!window._cqFirebaseReady||!a){alert('No hay conexión con Firebase o acopio seleccionado.');return;}
+  if(typeof firebaseSaving!=='undefined' && (firebaseSaving||localDirty||saveRequested||saveTimer)){
+    alert('Todavía hay una sincronización pendiente. Verificá que aparezca Sync: ON y reintentá antes de recuperar fichas.');
+    return;
+  }
+  var btn=document.getElementById(soloId?'retiro-material-restaurar-btn':'cq-recuperar-fichas-btn');
+  cqRecuperacionFichasEnCurso=true;
+  if(btn)btn.disabled=true;
+  var acId=String(a.id),restaurados=[];
+  try{
+    var ref=f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID);
+    var liveSnap=await f.getDoc(ref);
+    if(!liveSnap.exists()||!liveSnap.data().db)throw new Error('No se pudo leer Acopio de Firebase');
+    var liveData=liveSnap.data(),live=liveData.db;
+    var acLive=(live.acopios||[]).find(function(x){return String(x&&x.id)===acId;});
+    if(!acLive)throw new Error('El acopio seleccionado no se encuentra en Firebase');
+    var matsLive=Array.isArray(acLive.mats)?acLive.mats:[];
+    var retirosLive=Array.isArray(acLive.retiros)?acLive.retiros:[];
+    var pendientes=new Map();
+    retirosLive.forEach(function(r){
+      if(!r||r.matId==null)return;
+      var mid=String(r.matId);
+      if(soloId!=null&&String(soloId)!==mid)return;
+      if(matsLive.some(function(m){return m&&String(m.id)===mid;}))return;
+      if(!pendientes.has(mid))pendientes.set(mid,[]);
+      pendientes.get(mid).push(r);
+    });
+    if(!pendientes.size){
+      alert('No hay fichas faltantes con retiros vigentes para '+(soloId?'este producto':'este acopio')+'.');
+      return;
+    }
+    // Se leen respaldos Firebase, no datos reconstruidos a partir del nombre.
+    var bk=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
+    var respaldos=[];
+    bk.forEach(function(d){
+      var b=d.data()||{};
+      if(b.db && Array.isArray(b.db.acopios))respaldos.push({id:String(d.id),fecha:String(b.createdAt||''),db:b.db});
+    });
+    respaldos.sort(function(x,y){return y.fecha.localeCompare(x.fecha);});
+    var candidatos=[];
+    var omisiones=[];
+    pendientes.forEach(function(retiros,mid){
+      var hallada=null;
+      for(var bi=0;bi<respaldos.length&&!hallada;bi++){
+        var res=respaldos[bi];
+        var acB=(res.db.acopios||[]).find(function(x){return x&&String(x.id)===acId;});
+        var matB=acB&&Array.isArray(acB.mats)?acB.mats.find(function(m){
+          return m&&String(m.id)===mid&&cqBackupMatCoincideConRetiros(m,retiros);
+        }):null;
+        if(matB){hallada={id:mid,mat:JSON.parse(JSON.stringify(matB)),respaldo:res.id,fecha:res.fecha};}
+      }
+      if(!hallada){omisiones.push(mid+' (sin respaldo con ID, nombre y código coincidentes)');return;}
+      var cod=cqNormHistMat(hallada.mat.cod);
+      var existeMismoCodigo=cod&&matsLive.some(function(m){
+        return m&&String(m.id)!==mid&&cqNormHistMat(m.cod)===cod;
+      });
+      if(existeMismoCodigo){omisiones.push(mid+' (el código ya está usado por otra ficha; revisar manualmente)');return;}
+      candidatos.push(hallada);
+    });
+    if(!candidatos.length){
+      alert('No se encontró ninguna ficha restaurable de forma segura.'+(omisiones.length?'\n'+omisiones.slice(0,10).join('\n'):''));
+      return;
+    }
+    var muestra=candidatos.slice(0,12).map(function(c){
+      return '• '+String(c.mat.nom||'')+(c.mat.cod?' ('+String(c.mat.cod)+')':'');
+    }).join('\n');
+    var aviso='Se encontraron '+candidatos.length+' fichas perdidas de este acopio, comprobadas contra retiros y respaldos de Firebase.\n\n'+
+      muestra+(candidatos.length>12?'\n… y '+(candidatos.length-12)+' más':'')+'\n\n'+
+      'Se restaurará cada ficha con su ID original, categoría y precios de respaldo. No se modificarán los retiros ni las demás aplicaciones.'+
+      '\nAntes se guardará una copia del estado actual en Firebase.'+
+      (omisiones.length?'\n\nSe omitirán '+omisiones.length+' fichas dudosas.':'')+
+      '\n\n¿Confirmás la recuperación?';
+    if(!confirm(aviso))return;
+    // Backup pre-restauración del estado remoto real (no del teléfono).
+    var preId='pre_restore_materiales_'+new Date().toISOString().replace(/[:.]/g,'-');
+    await cqCrearBackupFirebase('pre_restore',live,preId);
+    var revInicial=localRevision;
+    await f.runTransaction(f.db,async function(tx){
+      var s=await tx.get(ref);
+      if(!s.exists()||!s.data().db)throw new Error('El documento remoto desapareció');
+      var p=JSON.parse(JSON.stringify(s.data()));
+      var dbR=p.db;
+      var acR=(dbR.acopios||[]).find(function(x){return x&&String(x.id)===acId;});
+      if(!acR)throw new Error('El acopio ya no existe');
+      if(!Array.isArray(acR.mats))acR.mats=[];
+      var aplicados=[];
+      candidatos.forEach(function(c){
+        var mid=String(c.id);
+        var vivos=(acR.retiros||[]).filter(function(r){return r&&String(r.matId)===mid;});
+        if(!vivos.length||!cqBackupMatCoincideConRetiros(c.mat,vivos))return;
+        if(acR.mats.some(function(m){return m&&String(m.id)===mid;}))return;
+        var codigo=cqNormHistMat(c.mat.cod);
+        if(codigo && acR.mats.some(function(m){return m&&String(m.id)!==mid&&cqNormHistMat(m.cod)===codigo;}))return;
+        var copia=JSON.parse(JSON.stringify(c.mat));
+        copia.updatedAt=new Date().toISOString();
+        copia.updatedBy=window._cqUsuarioActual||'Acopio';
+        copia.cqRecuperadoDesde=c.respaldo;
+        copia.cqRecuperadoAt=copia.updatedAt;
+        acR.mats.push(copia);
+        aplicados.push(copia);
+      });
+      if(!aplicados.length)return;
+      p.db=dbR;
+      p.updatedAt=new Date().toISOString();
+      p.updatedBy=window._cqUsuarioActual||'Acopio';
+      p.catalogoRecuperadoDesdeBackup=preId;
+      tx.set(ref,p);
+      restaurados=aplicados;
+    });
+    if(!restaurados.length){alert('Otro dispositivo ya completó o modificó las fichas. No se escribió ningún cambio.');return;}
+    // Confirmación remota antes de mostrar éxito.
+    var confirmSnap=await f.getDoc(ref);
+    var confirmData=confirmSnap.exists()?confirmSnap.data():{};
+    var acConfirm=(confirmData.db&&confirmData.db.acopios||[]).find(function(x){return x&&String(x.id)===acId;});
+    var confirmados=restaurados.filter(function(mat){return acConfirm&&(acConfirm.mats||[]).some(function(x){return x&&String(x.id)===String(mat.id)&&cqNormHistMat(x.cod)===cqNormHistMat(mat.cod);});});
+    if(confirmados.length!==restaurados.length)throw new Error('No pudieron verificarse todas las fichas restauradas');
+    confirmados.forEach(function(m){
+      cqQuitarTombstoneMat(acId,m.id);
+      // Una ficha restaurada también debe quedar protegida frente a sesiones viejas.
+      cqProtegerAltaMaterial(acId,m);
+    });
+    var localesBackups=(DB&&DB.backups)||[];
+    if(localRevision===revInicial && !localDirty){
+      DB=sanitizeDB(JSON.parse(JSON.stringify(confirmData.db)));
+      DB.backups=localesBackups;
+      lastSyncedAt=confirmData.updatedAt||null;
+      guardarBaseAcopio(lastSyncedAt);
+      cqGuardarLocalSeguro();
+      setSyncStatus('Sync: ON',false,lastSyncedAt||new Date().toISOString());
+    }else{
+      // No perder cambios hechos por otro control mientras se recuperaban fichas.
+      var acLocal=getAcopio();
+      if(acLocal){
+        if(!Array.isArray(acLocal.mats))acLocal.mats=[];
+        confirmados.forEach(function(m){if(!acLocal.mats.some(function(x){return x&&String(x.id)===String(m.id);}))acLocal.mats.push(m);});
+      }
+      cqGuardarLocalSeguro();
+      scheduleFirebaseSave();
+    }
+    if(getAcopio()){
+      renderMateriales();
+      renderKPIs();
+      try{renderRetirarHistorial();}catch(_e){}
+      if(soloId!=null){
+        var actual=getAcopio();
+        var actualRetiro=actual&&(actual.retiros||[]).find(function(r){return String(r.id)===String(editRetiroId);});
+        if(actualRetiro)cqLlenarProductosEditRetiro(actualRetiro);
+      }
+    }
+    alert('✓ Recuperadas y verificadas '+confirmados.length+' fichas del catálogo de Acopio. Ya aparecen en la pestaña Materiales con sus datos históricos.'+
+      (omisiones.length?'\n\nQuedaron '+omisiones.length+' fichas sin restaurar porque requieren revisión.':'')+
+      '\n\nLos retiros conservaron sus IDs originales.');
+  }catch(e){
+    console.warn('Acopio: recuperación de fichas falló',e);
+    alert('No se completó la recuperación. Revisá el estado de sincronización.\n'+String(e&&e.message||e));
+  }finally{
+    cqRecuperacionFichasEnCurso=false;
+    if(btn)btn.disabled=false;
+  }
+}
+
 // Diagnóstico solo lectura: compara catálogo local, documento remoto y respaldos.
 // NO modifica Firebase ni crea, re-vincula o borra fichas.
 async function cqDiagnosticarProductoRetiro(){
   var out=document.getElementById('retiro-material-diagnostico');
   var btn=document.getElementById('retiro-material-diagnostico-btn');
+  var restaurarBtn=document.getElementById('retiro-material-restaurar-btn');
+  if(restaurarBtn)restaurarBtn.style.display='none';
   var ac=getAcopio();
   var r=ac&&(ac.retiros||[]).find(function(x){return String(x.id)===String(editRetiroId);});
   if(!out||!r||!ac)return;
@@ -10114,6 +10439,10 @@ async function cqDiagnosticarProductoRetiro(){
         ' · respaldo '+String(b0.fecha||b0.id));
     }
     lineas.push('');
+    if(!remoteMat && backups.some(function(b){return cqBackupMatCoincideConRetiros(b.mat,[r]);})){
+      if(restaurarBtn)restaurarBtn.style.display='inline-block';
+      lineas.push('ACCIÓN DISPONIBLE: recuperar la ficha original completa con su mismo ID desde el respaldo.');
+    }
     if(remoteMat && !getMat(id)){
       lineas.push('CONCLUSIÓN: Firebase aún tiene la ficha; la falla está en la copia local/sincronización. No recrees el producto.');
     }else if(!remoteMat && backups.length){
