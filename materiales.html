@@ -20069,10 +20069,11 @@ function asegurarPanel(){
   var box=document.createElement('div');box.id='cq-catalogo-diag-v2';
   box.style.cssText='margin:8px 0 12px;padding:10px 13px;background:#eef4f1;border:1px solid #cbded5;border-radius:12px;font-size:11px;color:#214b3b;';
   box.innerHTML='<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">'+
-    '<span id="cq-catalogo-diag-estado">Verificando catálogo protegido...</span>'+
-    '<div><button type="button" onclick="window.cqDiagnosticoCatalogo()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700">Ver diagnóstico</button> '+
-    '<button type="button" onclick="window.cqExportarDiagnosticoMateriales()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700">Exportar</button></div></div>'+
-    '<div id="cq-catalogo-diag-detalle" style="display:none;white-space:pre-wrap;margin-top:9px;line-height:1.5;max-height:250px;overflow:auto"></div>';
+    '<span id="cq-catalogo-diag-estado" style="flex:1;min-width:160px">Verificando catálogo protegido...</span>'+ 
+    '<button type="button" id="cq-catalogo-diag-toggle" aria-expanded="false" onclick="window.cqAlternarDiagnosticoCatalogo()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700;cursor:pointer">Ver diagnóstico</button></div>'+ 
+    '<div id="cq-catalogo-diag-panel" style="display:none;margin-top:9px;padding-top:9px;border-top:1px solid #cbded5">'+
+    '<div style="text-align:right"><button type="button" onclick="window.cqExportarDiagnosticoMateriales()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700;cursor:pointer">Exportar diagnóstico</button></div>'+ 
+    '<div id="cq-catalogo-diag-detalle" style="white-space:pre-wrap;margin-top:9px;line-height:1.5;max-height:250px;overflow:auto"></div></div>';
   var anchor=document.getElementById('catalogo-content');
   if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(box,anchor);else view.insertBefore(box,view.firstChild);
   actualizarPanel();
@@ -20084,6 +20085,18 @@ function actualizarPanel(){
      r.materialesProtegidos+' registros · '+(n?n+' diferencias en Firebase (reparación automática)':'sin diferencias detectadas');
   if(ultimoError)el.textContent+=' · último error disponible en diagnóstico';
 }
+// Panel cerrado por defecto: sin lecturas extra de Firebase hasta que el usuario lo abra.
+window.cqAlternarDiagnosticoCatalogo=function(){
+  asegurarPanel();
+  var panel=document.getElementById('cq-catalogo-diag-panel');
+  var boton=document.getElementById('cq-catalogo-diag-toggle');
+  if(!panel||!boton)return;
+  var abrir=panel.style.display==='none';
+  panel.style.display=abrir?'block':'none';
+  boton.textContent=abrir?'Ocultar diagnóstico':'Ver diagnóstico';
+  boton.setAttribute('aria-expanded',abrir?'true':'false');
+  if(abrir)window.cqDiagnosticoCatalogo();
+};
 window.cqDiagnosticoCatalogo=async function(){
   asegurarPanel();
   var el=document.getElementById('cq-catalogo-diag-detalle');
