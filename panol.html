@@ -2768,17 +2768,116 @@ onAuthStateChanged(auth,async user=>{
 
 <script>
 var DB_KEY='cq_panol_v1';
-// CQ 04/11/2026 — El error DOMException.code === 22 es QUOTA_EXCEEDED del
-// navegador. La copia en localStorage es auxiliar: nunca debe interrumpir una
-// lectura/snapshot válido desde Firestore ni confundirse con una falla Firebase.
-// No borra datos, no elimina backups y no modifica la estructura en Firestore.
-function cqPanolGuardarLocalSeguro(clave, valor){
+// CQ 04/11/2026 — Almacén de Pañol: las copias completas se guardan en
+// IndexedDB para no saturar el localStorage compartido con Caja, Materiales, etc.
+// Firebase/stock_v1 y Firebase/panol_backups no se alteran.
+// Se conservan los registros previos: SOLO se retira una copia antigua del
+// localStorage DESPUÉS de guardarla y verificarla en IndexedDB.
+var CQ_PANOL_ALMACEN_DB='cq_panol_copias_v1';
+var cqPanolIdbOpenPromise=null;
+function cqPanolAbrirIDB(){
+  if(cqPanolIdbOpenPromise)return cqPanolIdbOpenPromise;
+  cqPanolIdbOpenPromise=new Promise(function(resolve){
+    if(!window.indexedDB){resolve(null);return;}
+    var terminado=false;
+    function terminar(v){if(terminado)return;terminado=true;clearTimeout(timer);resolve(v);}
+    var timer=setTimeout(function(){terminar(null);},4500);
+    try{
+      var request=indexedDB.open(CQ_PANOL_ALMACEN_DB,1);
+      request.onupgradeneeded=function(){
+        if(!request.result.objectStoreNames.contains('copias'))request.result.createObjectStore('copias');
+      };
+      request.onsuccess=function(){
+        var db=request.result;
+        db.onversionchange=function(){db.close();cqPanolIdbOpenPromise=null;};
+        terminar(db);
+      };
+      request.onerror=function(){terminar(null);};
+      request.onblocked=function(){terminar(null);};
+    }catch(e){console.warn('Pañol no pudo abrir IndexedDB',e);terminar(null);}
+  });
+  return cqPanolIdbOpenPromise;
+}
+async function cqPanolIDBLeer(clave){
+  var db=await cqPanolAbrirIDB();
+  if(!db)throw new Error('IndexedDB no disponible');
+  return new Promise(function(resolve,reject){
+    try{
+      var tx=db.transaction('copias','readonly');
+      var req=tx.objectStore('copias').get(clave);
+      req.onsuccess=function(){resolve(req.result===undefined?null:req.result);};
+      req.onerror=function(){reject(req.error||new Error('Lectura local fallida'));};
+      tx.onabort=function(){reject(tx.error||new Error('Lectura local cancelada'));};
+    }catch(e){reject(e);}
+  });
+}
+async function cqPanolIDBEscribir(clave,valor){
+  var db=await cqPanolAbrirIDB();
+  if(!db)return false;
+  return new Promise(function(resolve){
+    try{
+      var tx=db.transaction('copias','readwrite');
+      tx.objectStore('copias').put(valor,clave);
+      tx.oncomplete=function(){resolve(true);};
+      tx.onerror=function(){console.warn('Pañol: fallo escritura IndexedDB',tx.error);resolve(false);};
+      tx.onabort=function(){resolve(false);};
+    }catch(e){console.warn('Pañol: IndexedDB no pudo guardar',e);resolve(false);}
+  });
+}
+async function cqPanolIDBBorrar(clave){
+  var db=await cqPanolAbrirIDB();
+  if(!db)return false;
+  return new Promise(function(resolve){
+    try{
+      var tx=db.transaction('copias','readwrite');
+      tx.objectStore('copias').delete(clave);
+      tx.oncomplete=function(){resolve(true);};
+      tx.onerror=function(){resolve(false);};
+      tx.onabort=function(){resolve(false);};
+    }catch(e){resolve(false);}
+  });
+}
+async function cqPanolLeerCopia(clave){
   try{
-    localStorage.setItem(clave,valor);
-    return true;
-  }catch(e){
-    console.warn('Pañol: no se pudo actualizar la copia local; Firebase no está necesariamente afectado.',e);
-    return false;
+    var v=await cqPanolIDBLeer(clave);
+    if(v!==null)return v;
+  }catch(e){}
+  try{return localStorage.getItem(clave);}catch(e){return null;}
+}
+async function cqPanolGuardarLocalSeguro(clave, valor){
+  if(await cqPanolIDBEscribir(clave,valor))return true;
+  try{localStorage.setItem(clave,valor);return true;}
+  catch(e){console.warn('Pañol sin espacio para copia local; Firebase es independiente.',e);return false;}
+}
+async function cqPanolBorrarCopia(clave){
+  var ok=await cqPanolIDBBorrar(clave);
+  try{localStorage.removeItem(clave);}catch(e){}
+  return ok;
+}
+async function cqPanolMigrarCopiasViejas(){
+  if(!await cqPanolAbrirIDB())return;
+  var keys=['cq_panol_v1','cq_panol_backup_local_v2','cq_panol_undo_v1'];
+  for(var i=0;i<keys.length;i++){
+    var key=keys[i],anterior=null;
+    try{anterior=localStorage.getItem(key);}catch(e){}
+    if(!anterior)continue;
+    try{
+      var actual=await cqPanolIDBLeer(key);
+      var destino=key;
+      // Si existía otra versión en IndexedDB, conservar ambas (no sobrescribir).
+      if(actual!==null && actual!==anterior){
+        destino='legado_'+key;
+        var legado=await cqPanolIDBLeer(destino);
+        if(legado!==null && legado!==anterior){
+          // Se conservan copias sucesivas con marcas únicas; no eliminamos ninguna.
+          destino='legado_'+key+'_'+Date.now()+'_'+i;
+        }
+      }
+      if(actual===anterior || (await cqPanolIDBEscribir(destino,anterior)
+           && (await cqPanolIDBLeer(destino))===anterior)){
+        localStorage.removeItem(key);
+      }
+    }catch(e){console.warn('Se conserva la copia antigua de Pañol en localStorage',e);}
   }
 }
 
@@ -3421,20 +3520,19 @@ function panolClonarEstado(x){
   try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return null;}
 }
 
-function panolGuardarBackupLocal(x,razon){
-  if(!panolTieneDatos(x))return;
-  try{
-    localStorage.setItem(PANOL_BACKUP_LOCAL_KEY,JSON.stringify({
-      state:panolClonarEstado(x),
-      savedAt:new Date().toISOString(),
-      razon:String(razon||'')
-    }));
-  }catch(e){console.warn('No se pudo guardar backup local de Pañol',e);}
+async function panolGuardarBackupLocal(x,razon){
+  if(!panolTieneDatos(x))return false;
+  var pack=JSON.stringify({
+    state:panolClonarEstado(x),
+    savedAt:new Date().toISOString(),
+    razon:String(razon||'')
+  });
+  return cqPanolGuardarLocalSeguro(PANOL_BACKUP_LOCAL_KEY,pack);
 }
 
-function panolLeerBackupLocal(){
+async function panolLeerBackupLocal(){
   try{
-    var raw=JSON.parse(localStorage.getItem(PANOL_BACKUP_LOCAL_KEY)||'null');
+    var raw=JSON.parse(await cqPanolLeerCopia(PANOL_BACKUP_LOCAL_KEY)||'null');
     return raw&&panolTieneDatos(raw.state)?raw:null;
   }catch(e){return null;}
 }
@@ -3490,7 +3588,7 @@ async function panolRescatarMejorEstado(remoteActual){
   var fb=await panolLeerBackupFirebase();
   if(fb&&panolTieneDatos(fb.state))return {state:fb.state,origen:'backup Firebase'};
 
-  var lb=panolLeerBackupLocal();
+  var lb=await panolLeerBackupLocal();
   if(lb&&panolTieneDatos(lb.state))return {state:lb.state,origen:'backup local'};
 
   return null;
@@ -3529,7 +3627,7 @@ async function panolMejorReferenciaProteccion(){
 
   if(panolTieneDatos(state))candidatos.push({state:panolClonarEstado(state),origen:'estado local'});
 
-  var lb=panolLeerBackupLocal();
+  var lb=await panolLeerBackupLocal();
   if(lb&&panolTieneDatos(lb.state))candidatos.push({state:panolClonarEstado(lb.state),origen:'backup local'});
 
   var fb=await panolLeerBackupFirebase();
@@ -3567,7 +3665,7 @@ function panolLimpiarFiltrosVisualesStock(){
 window.recuperarPanolBackup=async function(){
   try{
     var fb=await panolLeerBackupFirebase();
-    var lb=panolLeerBackupLocal();
+    var lb=await panolLeerBackupLocal();
     var elegido=null,origen='';
 
     if(fb&&panolTieneDatos(fb.state)){elegido=fb.state;origen='backup Firebase';}
@@ -3693,8 +3791,8 @@ async function persist(opts){
   opts=opts||{};
   normalizeState();
 
-  if(panolTieneDatos(state))panolGuardarBackupLocal(state,opts.restauracion?'restauración':'antes de guardar');
-  var copiaLocalGuardada=cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
+  if(panolTieneDatos(state))await panolGuardarBackupLocal(state,opts.restauracion?'restauración':'antes de guardar');
+  var copiaLocalGuardada=await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
   // Sin Firebase y sin almacenamiento local NO confirmar un guardado inexistente.
   if(!window._dbReady && !copiaLocalGuardada){
     setSyncStatus('Sin espacio local · sin Firebase','err');
@@ -3753,8 +3851,8 @@ async function persist(opts){
         console.warn('Escritura vacía bloqueada: Firebase contiene datos de Pañol.');
         state=panolClonarEstado(remotoPrev);
         normalizeState();
-        cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
-        panolGuardarBackupLocal(state,'escritura vacía bloqueada');
+        await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
+        await panolGuardarBackupLocal(state,'escritura vacía bloqueada');
         setSyncStatus('Protegido · datos recuperados','ok');
         renderActive();
         return false;
@@ -3768,8 +3866,8 @@ async function persist(opts){
         console.warn('Escritura parcial bloqueada: el estado local perdió demasiados productos respecto de Firebase.');
         state=panolClonarEstado(remotoPrev);
         normalizeState();
-        cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
-        panolGuardarBackupLocal(state,'escritura parcial bloqueada');
+        await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
+        await panolGuardarBackupLocal(state,'escritura parcial bloqueada');
         setSyncStatus('Protegido · se evitó una reducción masiva','ok');
         panolLimpiarFiltrosVisualesStock();
         renderActive();
@@ -3788,7 +3886,7 @@ async function persist(opts){
       ),12000,'Guardado de Pañol');
 
       if(panolTieneDatos(state)){
-        panolGuardarBackupLocal(state,'último estado válido');
+        await panolGuardarBackupLocal(state,'último estado válido');
         // Backup Firebase en segundo plano; no deja el estado en “Guardando…” innecesariamente.
         setTimeout(function(){
           panolGuardarBackupFirebase(state,opts.restauracion?'restaurado':'último estado válido').catch(function(e){console.warn(e);});
@@ -3828,8 +3926,8 @@ async function loadFromFirebase(){
       // nunca debe republicarse automáticamente sobre cambios de otro dispositivo.
       state=panolClonarEstado(remoto);
       normalizeState();
-      var cachéActualizado=cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
-      panolGuardarBackupLocal(state,'carga desde Firebase');
+      var cachéActualizado=await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
+      await panolGuardarBackupLocal(state,'carga desde Firebase');
       setSyncStatus(cachéActualizado?'Firebase ON':'Firebase ON · memoria local llena','ok');
       panolGuardarBackupFirebase(state,'carga válida desde Firebase').catch(function(e){console.warn(e);});
     }else{
@@ -3837,8 +3935,8 @@ async function loadFromFirebase(){
       if(rescate&&panolTieneDatos(rescate.state)){
         state=panolClonarEstado(rescate.state);
         normalizeState();
-        cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
-        panolGuardarBackupLocal(state,'rescate '+rescate.origen);
+        await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
+        await panolGuardarBackupLocal(state,'rescate '+rescate.origen);
 
         suppressRemoteUntil=Date.now()+1500;
         await window._setDoc(
@@ -3891,8 +3989,8 @@ function startFirebase(){
       // para sobrescribir automáticamente cambios de otro dispositivo.
       state=panolClonarEstado(d);
       normalizeState();
-      var cachéActualizado=cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
-      panolGuardarBackupLocal(state,'snapshot Firebase');
+      var cachéActualizado=await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
+      await panolGuardarBackupLocal(state,'snapshot Firebase');
       cqLimpiarTechiCau29_77Panol().catch(function(e){console.warn(e);});
       setSyncStatus(cachéActualizado?'Actualizado':'Firebase ON · memoria local llena','ok');
       renderActive();
@@ -3934,8 +4032,8 @@ function fmtN(n){ if(n==null||isNaN(n)) return '-'; return parseFloat(n).toLocal
 function fmtMoney(n){ if(n==null||isNaN(n)) return '-'; return '$ '+new Intl.NumberFormat('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0,useGrouping:true}).format(Number(n)); }
 function fmtUSD(n){ if(n==null||isNaN(n)) return 'US$ —'; return 'US$ '+new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:true}).format(Number(n)); }
 var TC_KEY='cq_panol_ultimo_tc';
-function getLastTC(){ var v=parseFloat(localStorage.getItem(TC_KEY)); if(isNaN(v)||v<=0){v=1500; localStorage.setItem(TC_KEY,String(v));} return v; }
-function setLastTC(v){ if(v && !isNaN(v)) localStorage.setItem(TC_KEY, v); }
+function getLastTC(){ var v=parseFloat(localStorage.getItem(TC_KEY)); if(isNaN(v)||v<=0){v=1500; try{localStorage.setItem(TC_KEY,String(v));}catch(e){}} return v; }
+function setLastTC(v){ if(v && !isNaN(v)) try{localStorage.setItem(TC_KEY, v);}catch(e){} }
 function onCfTcInput(fieldId){
   var el=document.getElementById(fieldId||'cf-tc');
   if(!el) return;
@@ -5976,6 +6074,10 @@ function puntoMaterialesConsumo(mov){
   return '<span class="mat-sync-dot '+e.cls+'" title="'+e.txt.replace(/"/g,'&quot;')+'" aria-label="'+e.txt.replace(/"/g,'&quot;')+'"></span>';
 }
 function iniciarVerificacionMaterialesPanol(){
+  if(!cqPanolInicioCompleto){
+    setTimeout(iniciarVerificacionMaterialesPanol,700);
+    return;
+  }
   if(!window._dbReady||!window._onSnapshot||!window._doc||!window._db){
     // Reintentar sólo hasta que Firebase esté disponible. El catálogo se carga al
     // abrir/usar el selector y el documento principal de Materiales ya tiene listener.
@@ -6017,7 +6119,7 @@ function iniciarVerificacionMaterialesPanol(){
       }
     });
     if(cambioEstado){
-      try{cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));}catch(_e){}
+      cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state)).catch(function(e){console.warn(e);});
     }
 
     try{ if(curTab==='obras') renderObrasTab(); }catch(_e){}
@@ -7358,7 +7460,7 @@ function renderReportePorObra(salidas){
 var FAV_KEY='cq_panol_favoritos_v2';
 var REC_KEY='cq_panol_recientes_v2';
 function getFavs(){try{return JSON.parse(localStorage.getItem(FAV_KEY)||'[]')}catch(e){return []}}
-function saveFavs(v){localStorage.setItem(FAV_KEY,JSON.stringify(v.slice(0,30)))}
+function saveFavs(v){try{localStorage.setItem(FAV_KEY,JSON.stringify(v.slice(0,30)));}catch(e){console.warn(e);}}
 function toggleFavorito(prodId){
   var f=getFavs(); var i=f.indexOf(prodId);
   if(i>=0) f.splice(i,1); else f.unshift(prodId);
@@ -7367,7 +7469,7 @@ function toggleFavorito(prodId){
 function markRecent(prodId){
   var r; try{r=JSON.parse(localStorage.getItem(REC_KEY)||'[]')}catch(e){r=[]}
   r=r.filter(function(x){return x!==prodId}); r.unshift(prodId);
-  localStorage.setItem(REC_KEY,JSON.stringify(r.slice(0,10)));
+  try{localStorage.setItem(REC_KEY,JSON.stringify(r.slice(0,10)));}catch(e){console.warn(e);}
 }
 function getRecents(){try{return JSON.parse(localStorage.getItem(REC_KEY)||'[]')}catch(e){return []}}
 function quickChooseProduct(prodId){
@@ -7391,18 +7493,26 @@ function stockStateHTML(total){
 }
 
 // ---------- INIT ----------
-document.addEventListener('firebase-ready',function(){ startFirebase(); });
-window.addEventListener('DOMContentLoaded',function(){
-  var saved=localStorage.getItem(DB_KEY);
-  if(saved){ try{ state=JSON.parse(saved); }catch(e){} }
+var cqPanolInicioCompleto=false;
+var cqPanolFirebasePendiente=false;
+document.addEventListener('firebase-ready',function(){
+  if(cqPanolInicioCompleto)startFirebase();
+  else cqPanolFirebasePendiente=true;
+});
+window.addEventListener('DOMContentLoaded',async function(){
+  // Nunca se descartan las copias previas sin migrarlas y releerlas primero.
+  await cqPanolMigrarCopiasViejas();
+  var saved=await cqPanolLeerCopia(DB_KEY);
+  if(saved){ try{ state=JSON.parse(saved); }catch(e){console.warn('Copia local Pañol inválida',e);} }
   normalizeState();
   promptUsuario(false);
   refreshRubroSelects(getRubros()[0]||'');
   renderActive();
+  cqPanolInicioCompleto=true;
 
   // Si el evento firebase-ready ocurrió antes de que este script registrara
   // su listener, arrancar igualmente apenas detectemos Firebase disponible.
-  if(window._dbReady){
+  if(window._dbReady||cqPanolFirebasePendiente){
     setTimeout(startFirebase,0);
   }else{
     var intentosFbPanol=0;
@@ -7486,20 +7596,18 @@ window.showConsumoCodigoDropdown=showConsumoCodigoDropdown;
     return p||{codigo:(m&&m.materialCode)||'',nombre:(m&&m.materialName)||''};
   }
 
-  function setUndoButtonState(){
+  async function setUndoButtonState(){
     var b=document.getElementById('cq-undo-panol');
     if(!b)return;
-    var has=false;
-    try{has=!!localStorage.getItem(UNDO_KEY);}catch(e){}
+    var has=!!(await cqPanolLeerCopia(UNDO_KEY));
     b.disabled=!has||undoBusy;
     b.style.opacity=(b.disabled?'.55':'1');
   }
 
-  function saveUndo(before,fn){
-    try{
-      localStorage.setItem(UNDO_KEY,JSON.stringify({state:before,fn:fn||'',ts:Date.now()}));
-      setUndoButtonState();
-    }catch(e){console.warn('No se pudo guardar Deshacer de Pañol',e);}
+  async function saveUndo(before,fn){
+    var ok=await cqPanolGuardarLocalSeguro(UNDO_KEY,JSON.stringify({state:before,fn:fn||'',ts:Date.now()}));
+    if(!ok)console.warn('No se pudo guardar Deshacer de Pañol');
+    await setUndoButtonState();
   }
 
   function wrapMutation(fn){
@@ -7578,8 +7686,7 @@ window.showConsumoCodigoDropdown=showConsumoCodigoDropdown;
 
   window.deshacerUltimaAccionPanol=async function(){
     if(undoBusy)return;
-    var raw=null;
-    try{raw=localStorage.getItem(UNDO_KEY);}catch(e){}
+    var raw=await cqPanolLeerCopia(UNDO_KEY);
     if(!raw){
       if(window.showToast)showToast('No hay una acción para deshacer');
       return;
@@ -7588,7 +7695,7 @@ window.showConsumoCodigoDropdown=showConsumoCodigoDropdown;
     var pack;
     try{pack=JSON.parse(raw);}catch(e){pack=null;}
     if(!pack||!pack.state){
-      try{localStorage.removeItem(UNDO_KEY);}catch(e){}
+      await cqPanolBorrarCopia(UNDO_KEY);
       setUndoButtonState();
       return;
     }
@@ -7613,7 +7720,7 @@ window.showConsumoCodigoDropdown=showConsumoCodigoDropdown;
       if(typeof renderActive==='function')renderActive();
       else if(typeof renderStock==='function')renderStock();
 
-      localStorage.removeItem(UNDO_KEY);
+      await cqPanolBorrarCopia(UNDO_KEY);
       if(window.showToast)showToast('✓ Deshecho también en Materiales y Gastos');
     }catch(e){
       console.warn('No se pudo completar Deshacer de Pañol en todos los módulos',e);
@@ -9302,7 +9409,7 @@ function aplicarTCPanol(value){
 
   // Mantener compatibilidad con la lógica existente de Pañol.
   try{
-    localStorage.setItem("cq_panol_ultimo_tc",String(value));
+    try{localStorage.setItem("cq_panol_ultimo_tc",String(value));}catch(e){}
   }catch(e){}
 
   const individual=document.getElementById("cf-tc");
