@@ -957,7 +957,7 @@ button[onclick="createRestorePoint()"]{display:none!important}
           import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js")
         ]);
         const { initializeApp, getApps, getApp } = appMod;
-        const { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, orderBy, limit, deleteDoc } = fs;
+        const { getFirestore, doc, setDoc, getDoc, getDocFromServer, runTransaction, collection, getDocs, query, orderBy, limit, deleteDoc } = fs;
         const { getAuth, onAuthStateChanged } = authMod;
         const firebaseConfig = {
           apiKey: "AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
@@ -975,6 +975,8 @@ button[onclick="createRestorePoint()"]{display:none!important}
         window._doc = doc;
         window._setDoc = setDoc;
         window._getDoc = getDoc;
+        window._getDocServer = getDocFromServer;
+        window._runTransaction = runTransaction;
         window._collection = collection;
         window._getDocs = getDocs;
         window._query = query;
@@ -1006,10 +1008,6 @@ button[onclick="createRestorePoint()"]{display:none!important}
         console.warn('Firebase lazy load error', e && (e.code || e.message) ? (e.code || e.message) : e);
         window._firebaseLoading = false;
         if(typeof markError === 'function') markError();
-        try{
-          cqFirebaseProblem=String(e?.message||e);
-          if(currentScreen==='home' && typeof renderHome==='function') renderHome();
-        }catch(_){}
       }
     };
   </script>
@@ -2571,6 +2569,18 @@ window.cqRevealInitialScreen=function(){
 </style>
 </head>
 <body>
+<style id="cq-verificacion-firebase-style">
+#cq-verificacion-firebase{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#f6faf8;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif}
+#cq-verificacion-firebase .card{background:#fff;border:1px solid #dce8e1;border-radius:17px;padding:26px;max-width:430px;width:100%;box-shadow:0 12px 36px #143d301e;text-align:center;color:#154939}
+#cq-verificacion-firebase h2{font-size:20px;line-height:1.3;margin:0 0 10px;font-weight:800}
+#cq-verificacion-firebase p{font-size:14px;line-height:1.55;color:#557164;margin:0 0 12px}
+#cq-verificacion-firebase button{background:#13794e;border:0;border-radius:11px;padding:11px 16px;color:white;font-size:14px;font-weight:700;cursor:pointer;display:none;margin:12px auto 0}
+</style>
+<div id="cq-verificacion-firebase" role="status" aria-live="polite"><div class="card">
+<h2 id="cq-verificacion-titulo">Cargando obras y avances reales…</h2>
+<p id="cq-verificacion-detalle">La aplicación primero verifica Firebase. No se mostrarán obras de ejemplo ni se enviarán datos antiguos.</p>
+<button type="button" id="cq-verificacion-reintentar" onclick="location.reload()">Recargar desde Firebase</button>
+</div></div>
 
 <div id="cq-access-total">
   <div class="cq-card">
@@ -2899,7 +2909,7 @@ let firebaseInitialLoadDone = false;
 function backupDateKey(d=new Date()){return d.toISOString().slice(0,10)}
 function backupTimestampKey(d=new Date()){return d.toISOString().replace(/[:.]/g,'-')}
 function currentFirebaseModeOn(){
-  return (typeof isFirebaseEnabled === 'function') ? isFirebaseEnabled() : true;
+  return (typeof firebaseEnabled === 'undefined') ? true : !!firebaseEnabled;
 }
 function backupHasData(payload){
   const obras = payload?.obrasConfig || [];
@@ -2910,16 +2920,15 @@ function backupHasData(payload){
   const hasEstado = estados && typeof estados === 'object' && Object.keys(estados).length > 0;
   return hasObras && hasConstructores && hasEstado;
 }
-function buildBackupPayload(kind='auto'){
+function buildBackupPayload(kind='auto',source){
+  const snap=source || {obrasConfig,constructoresConfig,estadosObras};
   return JSON.parse(JSON.stringify({
-    kind,
-    dateKey: backupDateKey(),
-    createdAt: new Date().toISOString(),
-    curObraId: typeof curObraId !== 'undefined' ? curObraId : null,
-    currentConstructorId: typeof currentConstructorId !== 'undefined' ? currentConstructorId : null,
-    constructoresConfig: typeof constructoresConfig !== 'undefined' ? constructoresConfig : [],
-    obrasConfig: typeof obrasConfig !== 'undefined' ? obrasConfig : [],
-    estadosObras: typeof estadosObras !== 'undefined' ? estadosObras : {}
+    kind,dateKey:backupDateKey(),createdAt:new Date().toISOString(),
+    curObraId:typeof curObraId!=='undefined'?curObraId:null,
+    currentConstructorId:typeof currentConstructorId!=='undefined'?currentConstructorId:null,
+    constructoresConfig:snap.constructoresConfig||[],
+    obrasConfig:snap.obrasConfig||[],
+    estadosObras:snap.estadosObras||{}
   }));
 }
 async function backupNow(kind='manual'){
@@ -2933,7 +2942,8 @@ async function backupNow(kind='manual'){
   }
   try{
     setFirebaseStatus('sync','Backup: guardando...');
-    const payload = await loadAllForBackup(kind);
+    const snapshot = await loadAllForBackup();
+    const payload = buildBackupPayload(kind,snapshot);
     if(!backupHasData(payload)){
       setFirebaseStatus('err','Backup cancelado: datos no cargados');
       if(kind !== 'auto') alert('Backup cancelado: todavía no se cargaron las obras/datos. Esperá unos segundos y probá de nuevo.');
@@ -2957,7 +2967,8 @@ async function ensureDailyBackup(){
   const todayKey = backupDateKey();
   if(localStorage.getItem('avance_last_auto_backup') === todayKey) return;
   try{
-    const payload = await loadAllForBackup('auto');
+    const snapshot = await loadAllForBackup();
+    const payload = buildBackupPayload('auto',snapshot);
     if(!backupHasData(payload)) return;
     const ref = window._doc(window._db,'avance_backups',todayKey);
     const snap = await window._getDoc(ref);
@@ -2997,6 +3008,8 @@ async function showBackups(){
   }
 }
 async function restoreBackup(id){
+  alert('Por seguridad, la restauración completa antigua está deshabilitada. Conservá los backups existentes y utilizá recuperación selectiva.');
+  return;
   if(!window._dbReady || !currentFirebaseModeOn()){
     alert('Activá Firebase ON para restaurar backups.');
     return;
@@ -3017,19 +3030,14 @@ async function restoreBackup(id){
     currentConstructorId = b.currentConstructorId || currentConstructorId;
     state = estadosObras[curObraId] || normalizeState(null,currentObra());
 
-    localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
-    localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));
+    localStorage.setItem('mano_obra_config',JSON.stringify({constructores:constructoresConfig,obras:obrasConfig}));
     localStorage.setItem('mano_obra_actual',curObraId);
     Object.keys(estadosObras).forEach(idObra => localStorage.setItem('mano_obra_'+idObra,JSON.stringify(estadosObras[idObra])));
 
-    const cfgToken=cqMarkConfigDirty();
-    _cqConfigRevision++;
-    await cqWriteConfigRemote({obras:obrasConfig,constructores:constructoresConfig},cfgToken);
+    await persistConfig();
     for(const o of obrasConfig){
-      const st=estadosObras[o.id];
-      if(!st) throw new Error('El backup no incluye '+o.id+'; se interrumpió la restauración.');
-      const token=cqMarkObraDirty(o.id);
-      await cqWriteObraRemote(o.id,st,token);
+      const st = estadosObras[o.id] || createDefaultState(o);
+      await window._setDoc(window._doc(window._db,'mano_obra',o.id),JSON.parse(JSON.stringify({...st,updatedAt:new Date().toISOString()})));
     }
 
     closeBackupsModal();
@@ -3058,30 +3066,21 @@ async function cleanupOldBackups(){
     for(const b of old) await window._deleteDoc(window._doc(window._db,'avance_backups',b.id));
   }catch(e){console.warn('Cleanup backups error',e);}
 }
-async function loadAllForBackup(kind='auto'){
-  if(!window._dbReady || !currentFirebaseModeOn() || !firebaseInitialLoadDone)
-    throw new Error('La sincronización completa debe finalizar antes de respaldar.');
-  // Leer SOLO la colección vigente. El esquema antiguo mano_obra/* no es fuente
-  // válida para los datos actuales y no debe reintroducir configuraciones viejas.
-  const conf=await window._getDoc(window._doc(window._db,'config','mano_obra_multiobra'));
-  if(!conf.exists()) throw new Error('No existe la configuración de Avances en Firebase.');
-  const c=conf.data() || {};
-  if(!Array.isArray(c.obras) || !c.obras.length || !Array.isArray(c.constructores))
-    throw new Error('La configuración remota está incompleta; backup cancelado.');
-  const copiaEstados={};
-  for(let i=0;i<c.obras.length;i+=6){
-    const lote=c.obras.slice(i,i+6);
-    const results=await Promise.all(lote.map(o=>window._getDoc(window._doc(window._db,'obras',o.id))));
-    for(let j=0;j<lote.length;j++){
-      if(!results[j].exists()) throw new Error('Falta el estado real de '+(lote[j].label||lote[j].id)+'; backup cancelado.');
-      copiaEstados[lote[j].id]=results[j].data();
-    }
+async function loadAllForBackup(){
+  if(!window._dbReady || !isFirebaseEnabled() || !firebaseInitialLoadDone)
+    throw new Error('No se puede respaldar antes de completar Firebase.');
+  const config=await window._getDocServer(window._doc(window._db,'config','mano_obra_multiobra'));
+  if(!config.exists() || !Array.isArray(config.data().obras) || !config.data().obras.length)
+    throw new Error('No se encontraron obras para respaldar.');
+  const lista=cqClone(config.data().obras);
+  const cons=cqClone(config.data().constructores||[]);
+  const estados={};
+  for(let i=0;i<lista.length;i+=4){
+    const lote=lista.slice(i,i+4);
+    const snaps=await Promise.all(lote.map(o=>window._getDocServer(window._doc(window._db,'obras',o.id))));
+    snaps.forEach((s,j)=>{if(!s.exists()) throw new Error('Falta la obra '+lote[j].id+' en Firebase.');estados[lote[j].id]=s.data();});
   }
-  return {
-    kind, dateKey:backupDateKey(), createdAt:new Date().toISOString(),
-    curObraId:curObraId, currentConstructorId:currentConstructorId,
-    obrasConfig:c.obras, constructoresConfig:c.constructores, estadosObras:copiaEstados
-  };
+  return {obrasConfig:lista,constructoresConfig:cons,estadosObras:estados};
 }
 
 function getSemanas() {
@@ -4741,10 +4740,7 @@ function normalizeState(s, meta={}) {
     .toLowerCase()
     .replace(/lote|l|mz|manzana|\s/g,'')
     .replace(/-/g,'/');
-  if(obraRef.includes('12/93') || obraRef.includes('13/93')){
-    s.items['18-3'] = 1;
-    s._banquinasInteriores100 = true;
-  }
+  // Los avances de Banquinas se leen de Firebase y no se fuerzan a 100%.
 
   if(!s.montos) s.montos = {};
   if(!s.customTasks) s.customTasks = {};
@@ -4763,15 +4759,6 @@ function normalizeState(s, meta={}) {
   }
   return s;
 }
-const CQ_BOOT_HAS_REAL_CACHE=(()=>{
-  try{
-    const stored=JSON.parse(localStorage.getItem('mano_obra_config')||'null');
-    return Array.isArray(stored) && stored.length>0 &&
-      !(stored.length===2 && stored.some(o=>o.id==='obra_2_99') && stored.some(o=>o.id==='obra_5_98'));
-  }catch(e){return false;}
-})();
-let cqFirebaseProblem='';
-let cqRemoteConfigConfirmed=false;
 let obrasConfig = JSON.parse(localStorage.getItem('mano_obra_config') || 'null') || DEFAULT_OBRAS.map(x=>({...x}));
 let constructoresConfig = JSON.parse(localStorage.getItem('mano_obra_constructores') || 'null') || [];
 normalizeConstructoresConfig();
@@ -4850,9 +4837,6 @@ function setFirebaseStatus(text, cls='local'){
   if(!el) return;
   el.className = 'fb-status ' + cls;
   el.textContent = text;
-  el.style.cursor=cls==='err'?'pointer':'';
-  el.title=cls==='err'?'Tocá para reintentar la sincronización':'';
-  el.onclick=cls==='err'?()=>cqRetryFirebaseNow():null;
 }
 function markSaving(){ setFirebaseStatus('Guardando…','sync'); }
 function markSaved(){ setFirebaseStatus('ON','ok'); }
@@ -4882,40 +4866,166 @@ function cqObraDirtyToken(id){ const x=cqReadDirtyObras(); return String(x[id]||
 function cqIsObraDirty(id){ return !!cqObraDirtyToken(id); }
 function cqMarkObraDirty(id){ if(!id) return ''; const x=cqReadDirtyObras(); const t=cqDirtyToken(); x[id]=t; cqWriteDirtyObras(x); return t; }
 function cqClearObraDirtyIf(id,token){ if(!id||!token) return; const x=cqReadDirtyObras(); if(String(x[id]||'')===String(token)){ delete x[id]; cqWriteDirtyObras(x); } }
+// PROTECCIÓN 04/11/2026: al iniciar, Firebase es la única fuente autorizada.
+// Los pendientes anteriores permanecen como copia local, nunca se envían al iniciar.
+const cqRemoteObraBaselines = new Map();
+const cqObraWriteQueues = new Map();
+let cqRemoteConfigBaseline = null;
+let cqConfigWriteQueue = Promise.resolve();
+let cqSyncErrorText = '';
+let cqSaveErrorShown = false;
+function cqClone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x));}
+function cqSame(a,b){
+  const stable=v=>{
+    if(Array.isArray(v)) return v.map(stable);
+    if(v && typeof v==='object'){
+      const out={}; Object.keys(v).sort().forEach(k=>{if(v[k]!==undefined) out[k]=stable(v[k]);});return out;
+    }
+    return v;
+  };
+  return JSON.stringify(stable(a))===JSON.stringify(stable(b));
+}
+function cqIsPlainObj(v){return !!v && typeof v==='object' && !Array.isArray(v);}
+function cqThreeWay(base,desired,current,path='datos'){
+  if(cqSame(desired,base)) return cqClone(current);
+  if(cqSame(current,base) || cqSame(current,desired)) return cqClone(desired);
+  if(cqIsPlainObj(base) && cqIsPlainObj(desired) && cqIsPlainObj(current)){
+    const out=cqClone(current);
+    const keys=new Set([...Object.keys(base),...Object.keys(desired)]);
+    for(const key of keys){
+      if(!cqSame(base[key],desired[key])){
+        const value=cqThreeWay(base[key],desired[key],current[key],path+'.'+key);
+        if(value===undefined) delete out[key]; else out[key]=value;
+      }
+    }
+    return out;
+  }
+  throw new Error('Otro dispositivo modificó '+path+'. Recargá desde Firebase antes de volver a editar.');
+}
+function cqMergeConfigArray(base,desired,current,label){
+  if(cqSame(base,desired)) return cqClone(current);
+  if(cqSame(base,current)) return cqClone(desired);
+  const ids=x=>Array.isArray(x)?x.map(o=>o?.id):[];
+  if(!Array.isArray(base)||!Array.isArray(desired)||!Array.isArray(current))
+    throw new Error('Conflicto al guardar '+label);
+  // Altas, bajas y reordenamientos no se pisan entre sí.
+  if(!cqSame(ids(base),ids(desired)))
+    throw new Error('Otro usuario cambió el orden o listado de '+label+'. Recargá antes de guardar.');
+  const basemap=new Map(base.map(o=>[o.id,o]));
+  const desiredmap=new Map(desired.map(o=>[o.id,o]));
+  const actualmap=new Map(current.map(o=>[o.id,o]));
+  const out=cqClone(current);
+  for(let i=0;i<out.length;i++){
+    const id=out[i].id;
+    if(basemap.has(id) && desiredmap.has(id) && !cqSame(basemap.get(id),desiredmap.get(id))){
+      out[i]=cqThreeWay(basemap.get(id),desiredmap.get(id),actualmap.get(id),label+'.'+id);
+    }
+  }
+  for(const [id,v] of desiredmap){
+    if(!actualmap.has(id) && !cqSame(v,basemap.get(id)))
+      throw new Error('La obra o constructor '+id+' fue eliminado en otro dispositivo.');
+  }
+  return out;
+}
+function cqMergeConfig(base,desired,current){
+  if(!base || !current) throw new Error('No se verificó la configuración actual de Firebase.');
+  return {
+    obras:cqMergeConfigArray(base.obras||[],desired.obras||[],current.obras||[],'obras'),
+    constructores:cqMergeConfigArray(base.constructores||[],desired.constructores||[],current.constructores||[],'constructores')
+  };
+}
+function cqFirebaseWriteAllowed(){
+  return !!(isFirebaseEnabled() && window._dbReady && firebaseInitialLoadDone && !cqSyncErrorText);
+}
+function cqProtectWrite(reason){
+  console.warn('Avances: guardado bloqueado hasta completar Firebase',reason);
+  cqShowFirebaseGate();
+}
+function cqSaveFailed(error){
+  console.warn('Avances: no se pudo guardar en Firebase',error);
+  markError();
+  if(!cqSaveErrorShown){
+    cqSaveErrorShown=true;
+    alert('El cambio no se guardó en Firebase. '+String(error?.message||error)+
+      '\n\nNo se reemplazaron los datos de otro dispositivo. Recargá Avances antes de volver a editar.');
+  }
+  cqSyncErrorText=String(error?.message||error);
+  cqShowFirebaseGate();
+}
+function cqDiscardOldPending(){
+  try{
+    const cfg=localStorage.getItem(CQ_DIRTY_CONFIG_KEY);
+    const obs=localStorage.getItem(CQ_DIRTY_OBRAS_KEY);
+    if(cfg || obs){
+      localStorage.setItem('mano_obra_pendientes_anteriores_aislados',JSON.stringify({fecha:new Date().toISOString(),configToken:cfg,obrasTokens:obs}));
+      localStorage.removeItem(CQ_DIRTY_CONFIG_KEY);
+      localStorage.removeItem(CQ_DIRTY_OBRAS_KEY);
+    }
+  }catch(e){console.warn('No se pudieron aislar pendientes antiguos',e);}
+}
+cqDiscardOldPending();
 async function cqWriteConfigRemote(snapshot,token){
-  await window._setDoc(window._doc(window._db,'config','mano_obra_multiobra'),JSON.parse(JSON.stringify(snapshot)));
-  cqClearConfigDirtyIf(token);
+  const desired=cqClone(snapshot);
+  const task=cqConfigWriteQueue.then(async()=>{
+    if(!cqFirebaseWriteAllowed()) throw new Error('Firebase todavía no terminó de cargar.');
+    const base=cqClone(cqRemoteConfigBaseline);
+    if(!base) throw new Error('Falta la configuración inicial de Firebase.');
+    const ref=window._doc(window._db,'config','mano_obra_multiobra');
+    let saved;
+    await window._runTransaction(window._db,async tr=>{
+      const snap=await tr.get(ref);
+      if(!snap.exists()) throw new Error('El listado de obras no existe en Firebase.');
+      const rem=snap.data();
+      saved=cqMergeConfig(base,desired,rem);
+      tr.update(ref,{obras:saved.obras,constructores:saved.constructores});
+    });
+    cqRemoteConfigBaseline=cqClone(saved);
+    cqClearConfigDirtyIf(token);
+    // Actualizar los campos combinados sin pisar otra edición hecha en esta misma pantalla.
+    if(cqSame({obras:obrasConfig,constructores:constructoresConfig},desired)){
+      obrasConfig=cqClone(saved.obras);constructoresConfig=cqClone(saved.constructores);
+      try{localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
+          localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));}catch(_){}
+    }
+  });
+  cqConfigWriteQueue=task.catch(()=>{});
+  return task;
 }
 async function cqWriteObraRemote(id,snapshot,token){
-  await window._setDoc(window._doc(window._db,'obras',id),JSON.parse(JSON.stringify(snapshot)));
-  cqClearObraDirtyIf(id,token);
+  const desired=cqClone(snapshot);
+  const prev=cqObraWriteQueues.get(id)||Promise.resolve();
+  const task=prev.then(async()=>{
+    if(!cqFirebaseWriteAllowed()) throw new Error('Firebase todavía no terminó de cargar.');
+    if(!cqRemoteObraBaselines.has(id)) throw new Error('No se verificó la obra '+id+' en Firebase.');
+    const base=cqClone(cqRemoteObraBaselines.get(id));
+    const ref=window._doc(window._db,'obras',id);
+    let saved;
+    await window._runTransaction(window._db,async tr=>{
+      const snap=await tr.get(ref);
+      const rem=snap.exists()?snap.data():null;
+      if(base===null && rem!==null)
+        throw new Error('La obra '+id+' ya fue creada en otra sesión.');
+      saved=cqThreeWay(base||{},desired,rem||{},'obra '+id);
+      tr.set(ref,saved);
+    });
+    cqRemoteObraBaselines.set(id,cqClone(saved));
+    cqClearObraDirtyIf(id,token);
+    // Incluye cambios de otras sesiones sin descartar ediciones locales posteriores.
+    const latest=estadosObras[id];
+    if(latest){
+      try{
+        const combined=cqThreeWay(desired,latest,saved,'obra '+id);
+        estadosObras[id]=combined;
+        if(curObraId===id) state=combined;
+        localStorage.setItem('mano_obra_'+id,JSON.stringify(combined));
+      }catch(e){console.info('Los cambios posteriores siguen pendientes',id,e.message);}
+    }
+  });
+  cqObraWriteQueues.set(id,task.catch(()=>{}));
+  return task;
 }
-async function cqFlushPendingLocalToFirebase(){
-  if(!window._dbReady || !isFirebaseEnabled()) return {configPending:cqIsConfigDirty(),obrasPending:Object.keys(cqReadDirtyObras())};
-  // Un dispositivo sin una copia real no puede subir las dos obras de ejemplo.
-  // Se sincroniza primero desde el servidor; no se escribe la demo en producción.
-  if(!CQ_BOOT_HAS_REAL_CACHE && !firebaseInitialLoadDone) return {bootProtected:true};
-
-  // Configuración primero: si se creó una obra nueva, su ID debe existir en la
-  // lista remota antes de que una lectura vieja pueda ocultarla.
-  const cfgToken=cqConfigDirtyToken();
-  if(cfgToken){
-    try{
-      const snap={obras:obrasConfig,constructores:constructoresConfig};
-      await cqWriteConfigRemote(snap,cfgToken);
-    }catch(e){ console.warn('No se pudo subir configuración pendiente',e); }
-  }
-
-  const pendientes=cqReadDirtyObras();
-  for(const [id,token] of Object.entries(pendientes)){
-    let st=estadosObras && estadosObras[id];
-    if(!st){ try{ st=JSON.parse(localStorage.getItem('mano_obra_'+id)||'null'); }catch(e){} }
-    if(!st) continue;
-    try{ await cqWriteObraRemote(id,st,token); }
-    catch(e){ console.warn('No se pudo subir obra pendiente',id,e); }
-  }
-  return {configPending:cqIsConfigDirty(),obrasPending:Object.keys(cqReadDirtyObras())};
-}
+// No reenviar al abrir cambios guardados por una versión antigua de Avances.
+async function cqFlushPendingLocalToFirebase(){return {disabled:true};}
 
 // ─── MODO FIREBASE / PRUEBA LOCAL ───────────────────────────────────────
 let firebaseModeEnabled = localStorage.getItem('mano_obra_firebase_mode') !== 'off';
@@ -5117,6 +5227,7 @@ function restoreManualPoint(){
 }
 
 function persistConfig(){
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){cqProtectWrite('config');return;}
   normalizeObrasConfig();
   localStorage.setItem('mano_obra_config', JSON.stringify(obrasConfig));
   const token=cqMarkConfigDirty();
@@ -5127,13 +5238,14 @@ function persistConfig(){
     const snapshot={obras:obrasConfig,constructores:constructoresConfig};
     cqWriteConfigRemote(snapshot,token)
       .then(markSaved)
-      .catch(e => { console.warn('Firebase config write error', e); markError(); });
+      .catch(cqSaveFailed);
   } else {
     markLocal();
   }
 }
 function currentObra(){ return obrasConfig.find(o=>o.id===curObraId) || obrasConfig[0]; }
 function persist() {
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){cqProtectWrite('obra');return;}
   const id=curObraId;
   const meta=obrasConfig.find(o=>o.id===id);
   if(Number(state?.tipoPlantas || meta?.tipoPlantas)===2 &&
@@ -5160,7 +5272,7 @@ function persist() {
     const snapshot=JSON.parse(JSON.stringify(state));
     cqWriteObraRemote(id,snapshot,token)
       .then(markSaved)
-      .catch(e => { console.warn('Firebase write error', e); markError(); });
+      .catch(cqSaveFailed);
   } else {
     markLocal();
   }
@@ -5326,7 +5438,7 @@ function switchObra(id){
   renderObraSwitch();
   updateHeaderTitle();
   showObraView();
-  cqAsegurarImportesCronogramaPlateaUnaVez();
+  // No modificar importes por abrir una obra.
   renderKPIs();
   renderSemanas();
   // La vista abre con cache local al instante. Si esta obra todavía no se leyó
@@ -5364,27 +5476,6 @@ let _cqInitialSyncRunning = false;
 let _cqForegroundSyncDone = false;
 let _cqBackgroundSyncRunning = false;
 function cqYieldUI(ms=0){ return new Promise(resolve=>setTimeout(resolve,ms)); }
-function cqFirebaseReadWithTimeout(p,description,ms=20000){
-  return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>reject(new Error(description+': Firebase no respondió en '+Math.round(ms/1000)+' segundos.')),ms);
-    Promise.resolve(p).then(v=>{clearTimeout(timer);resolve(v);},e=>{clearTimeout(timer);reject(e);});
-  });
-}
-let cqInitialRetryCount=0;
-let cqBackgroundRetryCount=0;
-function cqRetryFirebaseNow(){
-  if(!isFirebaseEnabled()) return;
-  cqFirebaseProblem='';
-  if(!window._dbReady){
-    if(window.loadFirebaseModule) window.loadFirebaseModule();
-    setFirebaseStatus('Firebase: conectando…','sync');
-  }else if(!_cqForegroundSyncDone){
-    initApp();
-  }else if(!firebaseInitialLoadDone){
-    cqStartBackgroundFullSync(curObraId);
-  }
-  if(typeof renderHome==='function' && currentScreen==='home') renderHome();
-}
 
 // ─── RENDIMIENTO AVANCES ──────────────────────────────────────────────────
 // El slider puede emitir decenas de eventos por segundo. Guardar en localStorage,
@@ -5399,6 +5490,7 @@ let _cqAvanceSummaryWeek=null;
 // interacción (click, onchange del porcentaje, soltar slider). Así un refresh
 // inmediato nunca pierde el avance aunque la escritura remota siga diferida.
 function cqCheckpointAvanceLocal(){
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()) return;
   const id=curObraId;
   if(!id || !state) return;
   state._cqUpdatedAt=Date.now();
@@ -5413,6 +5505,7 @@ function cqCheckpointAvanceLocal(){
 }
 
 function cqScheduleAvancePersist(delay=750){
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()) return;
   _cqLocallyTouchedObras.add(curObraId);
   estadosObras[curObraId]=state;
   _cqAvancePersistDirty=true;
@@ -6574,20 +6667,6 @@ function showHome(){
 function renderHome(){
   normalizeConstructoresConfig(); normalizeObrasConfig();
   const el=document.getElementById('constructores-grid'); if(!el) return;
-  const bloqueado=isFirebaseEnabled() && !CQ_BOOT_HAS_REAL_CACHE && !firebaseInitialLoadDone;
-  document.querySelectorAll('#view-home .home-main-actions button').forEach(b=>{
-    b.disabled=bloqueado;
-    if(bloqueado) b.title='Esperá a que carguen las obras reales desde Firebase';
-    else b.removeAttribute('title');
-  });
-  if(bloqueado){
-    el.innerHTML=`<div class="cq-avance-loading-real" role="status" style="grid-column:1/-1;padding:35px 18px;text-align:center;border:1px solid #dae9e2;border-radius:16px;background:#fff;color:#205443">
-      <div style="font-weight:800;font-size:16px;margin-bottom:9px">${cqFirebaseProblem?'No se pudieron cargar los avances':'Cargando obras y avances reales…'}</div>
-      <div style="font-size:12px;line-height:1.5;color:#58766b">${cqFirebaseProblem?'No se muestran datos de ejemplo para evitar confusiones. Verificá la conexión y reintentá.':'Conectando con Firebase. No se mostrarán obras de ejemplo ni valores en 0%.'}</div>
-      ${cqFirebaseProblem?'<button type="button" class="btn btn-primary" style="margin-top:15px" onclick="cqRetryFirebaseNow()">Reintentar conexión</button>':''}
-    </div>`;
-    return;
-  }
   const activos=constructoresConfig.filter(c=>!c.terminado);
   el.innerHTML = activos.map(c=>{
     const st=constructorStats(c.id);
@@ -6717,13 +6796,7 @@ function showObraView(){
   document.body.classList.remove('cq-constructor-mode');
   document.body.classList.add('cq-obra-mode');
   currentScreen='obra';
-  asegurarBanquinasInterioresNelson().then(cambio=>{
-    if(cambio){
-      renderKPIs();
-      renderSemanas();
-      if(document.getElementById('view-finanzas').style.display !== 'none') renderFinanzas();
-    }
-  });
+  // La navegación no debe modificar otras obras ni guardar datos automáticamente.
   const _hb=document.getElementById('header-home-btn'); if(_hb) _hb.style.display='inline-flex';
   if(!currentConstructorId && currentObra()?.constructorId) currentConstructorId = currentObra().constructorId;
   hideMainViews();
@@ -7293,12 +7366,6 @@ async function updateLastSyncAvance(action='guardó cambios'){
   const user=ensureAvanceUserName();
   try{await window._setDoc(window._doc(window._db,'avance_meta','last_sync'),{user,clientId:AVANCE_CLIENT_ID,action,at:new Date().toISOString(),obra:curObraId||''});}catch(e){console.warn('avance last sync',e);}
 }
-function setSyncMetaAvance(message,muted=false){
-  const el=document.getElementById('sync-meta');
-  if(!el) return;
-  el.textContent=String(message||'Sin sincronización');
-  el.classList.toggle('warn',!!muted);
-}
 async function readLastSyncAvance(){
   if(!window._dbReady || !currentFirebaseModeOn()){setSyncMetaAvance('Modo prueba',true);return;}
   try{
@@ -7447,8 +7514,7 @@ async function cqReadRemoteObra(meta, idx=0){
   if(_cqRemoteLoadingObras.has(id)) return false;
   _cqRemoteLoadingObras.add(id);
   try{
-    const snap=await cqFirebaseReadWithTimeout(window._getDoc(window._doc(window._db,'obras',id)),'Lectura de '+(meta.label||id));
-    if(!snap.exists()) throw new Error('No se encontró en Firebase el estado de '+(meta.label||id));
+    let snap=await window._getDocServer(window._doc(window._db,'obras',id));
     if(isFirebaseHistoryBlocked()) return false;
     // Si el usuario ya tocó esta obra durante la lectura, prevalece su cambio local.
     if(_cqLocallyTouchedObras.has(id) || cqIsObraDirty(id)){
@@ -7457,47 +7523,15 @@ async function cqReadRemoteObra(meta, idx=0){
     }
     if(snap.exists()){
       const rawRemote=snap.data()||{};
-      const localState=estadosObras[id] || (()=>{ try{return JSON.parse(localStorage.getItem('mano_obra_'+id)||'null');}catch(e){return null;} })();
-      const localPlatea24=
-        Number(localState?.tipoPlantas || meta?.tipoPlantas)===2 &&
-        normalizeCimentacion2P(localState?.tipoCimentacion || meta?.tipoCimentacion || '')==='platea' &&
-        (localState?.plantillaVersion===PLANTILLA_2P_PLATEA_EXCEL || meta?.plantillaVersion===PLANTILLA_2P_PLATEA_EXCEL);
-      const remoteCim=normalizeCimentacion2P(rawRemote?.tipoCimentacion || meta?.tipoCimentacion || '');
-      const remoteLegacyPlatea=(remoteCim==='platea' && rawRemote?.plantillaVersion!==PLANTILLA_2P_PLATEA_EXCEL);
-
-      // Caso crítico: Firebase aún guarda el esquema viejo de 30 semanas pero este
-      // dispositivo ya tiene la obra correcta de 24. El remoto NO se aplica:
-      // se reescribe Firebase con el estado local correcto.
-      if(localPlatea24 && remoteLegacyPlatea){
-        if(meta){
-          meta.tipoPlantas=2;
-          meta.tipoCimentacion='platea';
-          meta.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
-        }
-        localState.tipoPlantas=2;
-        localState.tipoCimentacion='platea';
-        localState.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
-        estadosObras[id]=localState;
-        try{
-          localStorage.setItem('mano_obra_'+id,JSON.stringify(localState));
-          localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
-        }catch(e){}
-        try{
-          const cfgToken=cqMarkConfigDirty();
-          const obraToken=cqMarkObraDirty(id);
-          _cqConfigRevision++;
-          await cqWriteConfigRemote({obras:obrasConfig,constructores:constructoresConfig},cfgToken);
-          await cqWriteObraRemote(id,localState,obraToken);
-        }catch(e){ console.warn('No se pudo reemplazar Platea legacy en Firebase',id,e); }
-        _cqRemoteLoadedObras.add(id);
-        return false;
-      }
-
+      // La lectura nunca repara esquemas automáticamente ni reenvía cachés locales.
+      cqRemoteObraBaselines.set(id,cqClone(rawRemote));
       const remote=normalizeState(rawRemote,meta);
       estadosObras[id]=remote;
       try{ localStorage.setItem('mano_obra_'+id,JSON.stringify(remote)); }catch(e){}
-    }else if(!estadosObras[id]){
-      estadosObras[id]=normalizeState(null,meta);
+    }else{
+      // Obra nueva aún sin documento: no se inventan avances en Firebase.
+      cqRemoteObraBaselines.set(id,null);
+      if(!estadosObras[id]) estadosObras[id]=normalizeState(null,meta);
     }
     _cqRemoteLoadedObras.add(id);
     return true;
@@ -7564,24 +7598,18 @@ function cqStartBackgroundFullSync(skipId){
       for(let i=0;i<pendientes.length;i+=batchSize){
         const lote=pendientes.slice(i,i+batchSize);
         await Promise.all(lote.map(o=>cqReadRemoteObra(o,Math.max(0,obrasConfig.findIndex(x=>x.id===o.id)))));
-        const sinLeer=lote.filter(o=>!_cqRemoteLoadedObras.has(o.id));
-        if(sinLeer.length) throw new Error('No se pudieron cargar todas las obras: '+sinLeer.map(o=>o.label||o.id).join(', '));
         // Cede el hilo entre lotes: botones, scroll y sliders siguen respondiendo.
         await cqYieldUI(8);
       }
 
-      // Antes de migraciones, sube cualquier cambio hecho mientras corría la sincronización.
-      await cqFlushPendingLocalToFirebase();
-
-      // Estas migraciones/reparaciones necesitan todas las obras disponibles,
-      // pero ya no bloquean el inicio de la app.
-      await cqRepararImportesPlateaPostFirebase(true);
-      await cqYieldUI(0);
-      await ensureProjectTypeTemplates(true);
+      // Ninguna reparación automática ni envío de cachés al completar la lectura.
+      // Las modificaciones de esquemas se harán solamente mediante acciones explícitas.
+      if(obrasConfig.some(o=>!_cqRemoteLoadedObras.has(o.id)))
+        throw new Error('No se pudieron leer todas las obras de Firebase.');
       state=estadosObras[curObraId] || state;
       firebaseInitialLoadDone=true;
-      cqFirebaseProblem='';
-      cqBackgroundRetryCount=0;
+      cqSyncErrorText='';
+      cqShowFirebaseGate();
       ensureDailyBackup();
 
       // Refresca sólo la vista vigente; jamás vuelve a Inicio por la fuerza.
@@ -7589,23 +7617,18 @@ function cqStartBackgroundFullSync(skipId){
       markSaved();
     }catch(e){
       console.warn('Firebase background sync error',e);
-      cqFirebaseProblem=String(e?.message||e);
+      cqSyncErrorText=String(e?.message||e);
+      cqShowFirebaseGate();
       markError();
-      if(currentScreen==='home') renderHome();
     }finally{
       _cqBackgroundSyncRunning=false;
-      if(cqFirebaseProblem && cqBackgroundRetryCount<2 && isFirebaseEnabled()){
-        const delay=3500*(++cqBackgroundRetryCount);
-        setTimeout(()=>{
-          if(!firebaseInitialLoadDone && _cqForegroundSyncDone) cqStartBackgroundFullSync(skipId);
-        },delay);
-      }
     }
   },180);
 }
 
 async function initApp() {
   updateFirebaseModeUI();
+  cqShowFirebaseGate();
   startAvancePresence();
 
   // FASE 1 — instantánea: siempre abre con el cache local. No se bloquea la UI
@@ -7636,50 +7659,22 @@ async function initApp() {
   setFirebaseStatus('Firebase: leyendo…','sync');
 
   try{
-    // FASE 2 — prioritaria: primero sube cualquier cambio local pendiente de una
-    // sesión anterior. Sólo después acepta datos remotos. Esto evita que un refresh
-    // recupere una configuración vieja y esconda la obra recién creada.
-    await cqFlushPendingLocalToFirebase();
-
-    const configRevisionAtRead=_cqConfigRevision;
-    const confSnap = await cqFirebaseReadWithTimeout(window._getDoc(window._doc(window._db,'config','mano_obra_multiobra')),'Configuración de obras');
+    // FASE 2: leer primero Firebase. Nunca subir pendientes de sesiones viejas.
+    const confSnap = await window._getDocServer(window._doc(window._db,'config','mano_obra_multiobra'));
     if(isFirebaseHistoryBlocked()) throw new Error('Lectura Firebase cancelada por restauración local');
-    if(!confSnap.exists() || !Array.isArray(confSnap.data()?.obras) || !confSnap.data().obras.length)
-      throw new Error('No se encontró una lista válida de obras en Firebase. No se cargará la demo.');
-    cqRemoteConfigConfirmed=true;
-    // Las marcas pendientes generadas sin una copia local real nunca deben subir
-    // las dos obras de muestra por encima de la configuración productiva.
-    if(!CQ_BOOT_HAS_REAL_CACHE){
-      try{ localStorage.removeItem(CQ_DIRTY_CONFIG_KEY); cqWriteDirtyObras({}); }catch(e){}
-    }
 
-    // Si el usuario creó/editó una obra mientras getDoc estaba esperando, esa
-    // lectura ya quedó vieja aunque su escritura haya alcanzado a terminar.
-    const configCambioDuranteLectura=(_cqConfigRevision!==configRevisionAtRead);
-    if(cqIsConfigDirty() || configCambioDuranteLectura){
-      await cqFlushPendingLocalToFirebase();
-    }else if(confSnap.exists() && Array.isArray(confSnap.data().obras) && confSnap.data().obras.length){
-      const data=confSnap.data();
-
-      // No permitir que una config remota vieja vuelva una Platea 24 semanas a 2p_v1.
-      // Si localmente esa misma obra ya está identificada como Platea, se conservan
-      // esos tres campos de esquema aunque Firebase todavía tenga metadatos antiguos.
-      const prevById=new Map((obrasConfig||[]).map(o=>[o.id,o]));
-      obrasConfig=data.obras.map(remoteMeta=>{
-        const localMeta=prevById.get(remoteMeta.id);
-        const localState=estadosObras && estadosObras[remoteMeta.id];
-        const localPlatea=
-          (Number(localMeta?.tipoPlantas)===2 && normalizeCimentacion2P(localMeta?.tipoCimentacion)==='platea') ||
-          (Number(localState?.tipoPlantas)===2 && normalizeCimentacion2P(localState?.tipoCimentacion)==='platea');
-        const remotePlatea=Number(remoteMeta?.tipoPlantas)===2 && normalizeCimentacion2P(remoteMeta?.tipoCimentacion)==='platea';
-        if(localPlatea || remotePlatea){
-          return {...remoteMeta,tipoPlantas:2,tipoCimentacion:'platea',plantillaVersion:PLANTILLA_2P_PLATEA_EXCEL};
-        }
-        return remoteMeta;
-      });
+    if(!confSnap.exists()) throw new Error('No existe la configuración de obras en Firebase.');
+    if(!Array.isArray(confSnap.data().obras) || !confSnap.data().obras.length)
+      throw new Error('La configuración de Firebase no contiene obras reales.');
+    const data=confSnap.data();
+    if(data.obras.length===2 && data.obras.some(o=>/sim[oó]n/i.test(o.constructor||o.label||''))
+       && data.obras.some(o=>/ram[oó]n/i.test(o.constructor||o.label||'')))
+      throw new Error('Firebase contiene el listado de demostración. Se canceló la carga para proteger tus avances.');
+    obrasConfig=cqClone(data.obras);
       if(Array.isArray(data.constructores)) constructoresConfig=data.constructores;
       normalizeConstructoresConfig();
       normalizeObrasConfig();
+      cqRemoteConfigBaseline=cqClone({obras:obrasConfig,constructores:constructoresConfig});
       try{
         localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
         localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));
@@ -7688,7 +7683,6 @@ async function initApp() {
         curObraId=obrasConfig[0].id;
         localStorage.setItem('mano_obra_actual',curObraId);
       }
-    }
 
     // Prioriza la obra que esté seleccionada AHORA, no la que estaba al iniciar.
     const priorityId=curObraId;
@@ -7696,19 +7690,14 @@ async function initApp() {
     if(priorityMeta){
       const idx=Math.max(0,obrasConfig.findIndex(o=>o.id===priorityId));
       const applied=await cqReadRemoteObra(priorityMeta,idx);
-      if(!applied && !_cqRemoteLoadedObras.has(priorityId))
-        throw new Error('No se pudo recuperar la obra prioritaria: '+(priorityMeta.label||priorityId));
       if(applied && curObraId===priorityId){
         state=estadosObras[priorityId] || state;
-        cqAsegurarImportesCronogramaPlateaUnaVez();
       }
       cqRefreshVisibleAfterRemote(priorityId);
     }
 
     _cqForegroundSyncDone=true;
-    cqInitialRetryCount=0;
-    cqFirebaseProblem='';
-    markSaved();
+    setFirebaseStatus('Firebase: completando obras…','sync');
     // Auth ya está listo: actualiza presencia una vez sin crear otro intervalo.
     heartbeatAvancePresence();
     readLastSyncAvance();
@@ -7720,16 +7709,33 @@ async function initApp() {
       console.info(e.message); markSaved();
     }else{
       console.warn('Firebase read error',e);
-      cqFirebaseProblem=String(e?.message||e);
+      cqSyncErrorText=String(e?.message||e);
+      cqShowFirebaseGate();
       markError();
-      if(currentScreen==='home') renderHome();
     }
   }finally{
     _cqInitialSyncRunning=false;
-    if(cqFirebaseProblem && !_cqForegroundSyncDone && cqInitialRetryCount<2 && isFirebaseEnabled()){
-      const delay=3500*(++cqInitialRetryCount);
-      setTimeout(()=>{if(!_cqForegroundSyncDone) initApp();},delay);
-    }
+  }
+}
+
+// Oculta la pantalla de ejemplo hasta que la lectura REAL de todas las obras termine.
+function cqShowFirebaseGate(){
+  const gate=document.getElementById('cq-verificacion-firebase');
+  if(!gate) return;
+  const needed=isFirebaseEnabled() && (!firebaseInitialLoadDone || !!cqSyncErrorText);
+  gate.style.display=needed?'flex':'none';
+  if(!needed) return;
+  const title=document.getElementById('cq-verificacion-titulo');
+  const detail=document.getElementById('cq-verificacion-detalle');
+  const retry=document.getElementById('cq-verificacion-reintentar');
+  if(cqSyncErrorText){
+    title.textContent='No se guardará información desactualizada';
+    detail.textContent=cqSyncErrorText+' — Cerrá las otras sesiones si están editando y recargá desde Firebase.';
+    retry.style.display='block';
+  }else{
+    title.textContent='Cargando obras y avances reales…';
+    detail.textContent='Verificando obras y certificaciones en Firebase. La pantalla quedará habilitada al terminar.';
+    retry.style.display='none';
   }
 }
 
