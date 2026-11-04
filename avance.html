@@ -4094,19 +4094,43 @@ async function saveEditObra() {
       try{
         // UNA sola transacción: alta en config + documento de obra con cronograma.
         // Si la transacción falla no quedan escrituras ni cambios locales parciales.
-        const remoteConfig=await cqCrearObraEnFirebase(newMeta,newState);
+        let remoteConfig;
+        try{
+          remoteConfig=await cqCrearObraEnFirebase(newMeta,newState,false);
+        }catch(error){
+          if(error?.code!=='CQ_OBRA_HUERFANA') throw error;
+          const previa=error.obraExistente||{};
+          const info=[
+            'Esta obra ya tiene un documento en Firebase, pero no está en el listado.',
+            '',
+            'Identificador: '+newMeta.id,
+            'Constructor guardado: '+(previa.constructor||'Sin identificar'),
+            'Número guardado: '+(previa.obraNum||'Sin indicar'),
+            'Acuerdo guardado: '+(Number.isFinite(Number(previa.acuerdo)) ? '$ '+Number(previa.acuerdo).toLocaleString('es-AR') : 'Sin indicar'),
+            '',
+            '¿Querés VOLVER A MOSTRAR esta obra en el listado?',
+            'Se conservarán INTACTOS sus avances, tareas, certificados y pagos. No se creará una segunda obra.'
+          ].join('\n');
+          if(!confirm(info)){
+            markSaved();
+            return false;
+          }
+          // Se vuelve a validar todo en una transacción antes de escribir.
+          remoteConfig=await cqCrearObraEnFirebase(newMeta,newState,true);
+        }
+        const estadoReal=remoteConfig.estadoObra||newState;
         obrasConfig=cqClone(remoteConfig.obras);
         constructoresConfig=cqClone(remoteConfig.constructores);
-        estadosObras[newMeta.id]=newState;
+        estadosObras[newMeta.id]=cqClone(estadoReal);
         normalizeObrasConfig();
         try{
           localStorage.setItem('mano_obra_config',JSON.stringify(obrasConfig));
           localStorage.setItem('mano_obra_constructores',JSON.stringify(constructoresConfig));
-          localStorage.setItem('mano_obra_'+newMeta.id,JSON.stringify(newState));
+          localStorage.setItem('mano_obra_'+newMeta.id,JSON.stringify(estadoReal));
         }catch(e){console.warn('Obra creada: no se pudo actualizar el caché local',e);}
         _cqConfigRevision++;
         curObraId=newMeta.id;
-        state=newState;
+        state=estadoReal;
         cqCreandoObra=false;
         document.getElementById('modal-obra').classList.remove('open');
         switchObra(newMeta.id);
@@ -5158,36 +5182,58 @@ async function cqWriteObraRemote(id,snapshot,token){
 }
 // CREACIÓN ATÓMICA: alta en el listado + estado/cronograma de la obra en
 // una única transacción. No depende de una baseline de obra inexistente.
-async function cqCrearObraEnFirebase(newMeta,newState){
+async function cqCrearObraEnFirebase(newMeta,newState,recuperarHuerfana=false){
   const meta=cqClone(newMeta), obra=cqClone(newState);
-  // Compartir la cola con cualquier edición de configuración ya iniciada.
+  // Comparte cola con ediciones de configuración en curso para evitar carreras.
   const task=cqConfigWriteQueue.then(async()=>{
     if(!cqFirebaseWriteAllowed()) throw new Error('Firebase no terminó de sincronizar.');
     if(!cqRemoteConfigBaseline) throw new Error('No se verificó la configuración de obras.');
     const configRef=window._doc(window._db,'config','mano_obra_multiobra');
     const obraRef=window._doc(window._db,'obras',meta.id);
     const guardado=await window._runTransaction(window._db,async tr=>{
-      // Firestore requiere leer los dos documentos antes de escribir cualquiera.
+      // Firestore requiere todas las lecturas antes de la primera escritura.
       const configSnap=await tr.get(configRef);
       const obraSnap=await tr.get(obraRef);
       if(!configSnap.exists()) throw new Error('No existe la configuración actual de Firebase.');
       const config=configSnap.data();
       if(!Array.isArray(config.obras) || !Array.isArray(config.constructores) || !config.obras.length)
         throw new Error('La configuración actual está incompleta. Se canceló el alta.');
-      if(config.obras.some(o=>o && o.id===meta.id) || obraSnap.exists())
-        throw new Error('Ya existe una obra con este identificador. Actualizá Avances y revisá la lista antes de crear otra.');
+      if(config.obras.some(o=>o && o.id===meta.id))
+        throw new Error('Esta obra ya está en el listado de Firebase. Recargá Avances antes de volver a crearla.');
       if(!config.constructores.some(c=>c && c.id===meta.constructorId))
         throw new Error('El constructor elegido ya no está disponible en Firebase. Recargá Avances.');
-      // Incorporar la obra al listado REAL obtenido dentro de la transacción:
-      // no pisar otras obras ni constructores agregados desde otro dispositivo.
+      let estadoGuardado=obra;
+      let recuperada=false;
+      if(obraSnap.exists()){
+        const existing=obraSnap.data();
+        if(!existing || typeof existing!=='object' || !existing.items || typeof existing.items!=='object' || Array.isArray(existing.items))
+          throw new Error('Existe un documento con este identificador, pero no tiene una estructura válida de avances. No se modificó.');
+        // La obra huérfana conserva su propio estado. No sobrescribirla con un
+        // cronograma nuevo ni adoptarla si pertenece a otro constructor o número.
+        if(existing.constructor && normKey(existing.constructor)!==normKey(meta.constructor))
+          throw new Error('Existe un documento de obra con ese identificador, pero pertenece a otro constructor ('+existing.constructor+'). No se modificó.');
+        if(existing.obraNum && meta.obraNum && normKey(existing.obraNum)!==normKey(meta.obraNum))
+          throw new Error('Existe un documento con otro número de obra ('+existing.obraNum+'). No se modificó.');
+        if(!recuperarHuerfana){
+          const e=new Error('La obra ya existe en Firebase, pero no está en el listado. Se puede volver a vincular sin borrar su contenido.');
+          e.code='CQ_OBRA_HUERFANA';
+          e.obraExistente={constructor:existing.constructor||'',obraNum:existing.obraNum||'',acuerdo:existing.acuerdo};
+          throw e;
+        }
+        estadoGuardado=cqClone(existing);
+        recuperada=true;
+      }else if(recuperarHuerfana){
+        throw new Error('La obra existente ya no está en Firebase. Volvé a verificar antes de continuar.');
+      }
+      // Sólo agrega el registro de la obra al listado remoto más reciente.
+      // En una recuperación NUNCA escribe sobre el documento /obras/{id}.
       const nuevoListado=[...config.obras,meta];
       tr.update(configRef,{obras:nuevoListado});
-      tr.set(obraRef,obra);
-      return {obras:nuevoListado,constructores:config.constructores};
+      if(!recuperada) tr.set(obraRef,obra);
+      return {obras:nuevoListado,constructores:config.constructores,estadoObra:estadoGuardado,recuperada};
     });
-    // Sólo después del commit quedan verificadas ambas escrituras.
-    cqRemoteConfigBaseline=cqClone(guardado);
-    cqRemoteObraBaselines.set(meta.id,cqClone(obra));
+    cqRemoteConfigBaseline=cqClone({obras:guardado.obras,constructores:guardado.constructores});
+    cqRemoteObraBaselines.set(meta.id,cqClone(guardado.estadoObra));
     _cqRemoteLoadedObras.add(meta.id);
     return guardado;
   });
