@@ -17793,9 +17793,12 @@ body:has(#modal-reporte.open) #modal-reporte{
     if(!m)return null; ensure();
     var id=Number(m.id);
     var byId=state.catalogoManual[id]||state.catalogoManual[String(id)]||null;
-    if(byId&&byId.manual!==false&&catCanon(byId.categoria))return byId;
+    // No aceptar registros de otro artículo que reutilizó este ID.
+    var identidadValida=!!(byId&&byId.nombre&&nameKey(byId.nombre)===nameKey(m.mat));
+    if(identidadValida&&byId.manual!==false&&catCanon(byId.categoria))return byId;
     var cm=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
-    if(catCanon(cm))return {categoria:catCanon(cm),nombre:m.mat,codigo:codigoDe(m),manual:true};
+    if(identidadValida&&catCanon(cm))return {categoria:catCanon(cm),nombre:m.mat,codigo:codigoDe(m),manual:true};
+    // La decisión por nombre prevalece sobre una categoría antigua por ID.
     return lockIdentidad(m.mat,codigoDe(m));
   }
   function aplicarCategoria(m,categoria,marcarManual){
@@ -17821,6 +17824,7 @@ body:has(#modal-reporte.open) #modal-reporte{
       state.categoriaManual[id]=cat;
       var old=state.catalogoManual[id]||{};
       state.catalogoManual[id]=Object.assign({},old,{
+        nombre:String(m.mat||''),codigo:codigoDe(m),
         categoria:cat,manual:true,updatedAt:new Date().toISOString()
       });
       guardarLockIdentidad(m.mat,codigoDe(m),cat,state.catalogoManual[id].updatedAt);
@@ -17832,8 +17836,9 @@ body:has(#modal-reporte.open) #modal-reporte{
     (ALL_MATS||[]).forEach(function(m){
       if(!m)return;
       var id=Number(m.id),l=state.catalogoManual[id]||state.catalogoManual[String(id)]||null;
-      var cat=l&&l.manual!==false?catCanon(l.categoria):'';
-      if(!cat){
+      var identidadValida=!!(l&&l.nombre&&nameKey(l.nombre)===nameKey(m.mat));
+      var cat=identidadValida&&l.manual!==false?catCanon(l.categoria):'';
+      if(!cat&&identidadValida){
         var c=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
         cat=catCanon(c);
       }
@@ -18950,10 +18955,11 @@ body:has(#modal-reporte.open) #modal-reporte{
   function manualPorMaterial(m){
     if(!m||!ensure())return '';
     var id=Number(m.id);
-    var cm=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
-    var can=categoriaCanon(cm); if(can)return can;
     var reg=state.catalogoManual[id]||state.catalogoManual[String(id)]||null;
-    can=reg&&reg.manual!==false?categoriaCanon(reg.categoria):'';
+    var mismaIdentidad=!!(reg&&reg.nombre&&nameKey(reg.nombre)===nameKey(m.mat));
+    var cm=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
+    var can=mismaIdentidad?categoriaCanon(cm):''; if(can)return can;
+    can=mismaIdentidad&&reg.manual!==false?categoriaCanon(reg.categoria):'';
     if(can)return can;
     var nk='name:'+nameKey(m.mat), ck='code:'+codeKey(codigoDe(m));
     var l=(nk!=='name:'?state.categoriaManualIdentidad[nk]:null)||null;
@@ -19266,21 +19272,21 @@ body:has(#modal-reporte.open) #modal-reporte{
 </script>
 
 
-<!-- CQ 04/11/2026 — catálogo manual autoritativo y diagnóstico de sobrescrituras. -->
-<script id="cq-catalogo-manual-autoritativo-v2">
-/* CQ 04/11/2026 — Catálogo autoritativo: transacciones, comprobación y auditoría.
+<!-- CQ 04/11/2026 — catálogo manual autoritativo v3: validación de identidad + cuarentena histórica. -->
+<script id="cq-catalogo-manual-autoritativo-v3">
+/* CQ 04/11/2026 — Catálogo autoritativo v3: identidad validada, transacciones y auditoría.
    El documento principal recibe escrituras de Caja/Acopio/Pañol. Las decisiones
    manuales se conservan APARTE, y nunca se da por guardado algo que no confirmó Firebase. */
 (function(){
 'use strict';
-if(window.__cqCatalogoProtegidoV2) return;
-window.__cqCatalogoProtegidoV2=true;
+if(window.__cqCatalogoProtegidoV3) return;
+window.__cqCatalogoProtegidoV3=true;
 
 var REF_COL='materiales_meta', REF_ID='catalogo_manual_autoritativo_v2';
 var LOG_KEY='cq_materiales_diagnostico_catalogo_v2';
 var CACHE_KEY='cq_materiales_catalogo_autoritativo_cache_v2';
 var autoridad={}, listo=false, iniciando=null, sincronia=null, reparando=null;
-var ultimoPrincipal=null, ultimoError='', guardando=false, reparaTimer=null;
+var ultimoPrincipal=null, ultimoError='', guardando=false, reparaTimer=null, conflictosAislados={};
 var eventos=[];
 try { eventos=JSON.parse(localStorage.getItem(LOG_KEY)||'[]')||[]; } catch(e) { eventos=[]; }
 function copia(x){return JSON.parse(JSON.stringify(x));}
@@ -19308,7 +19314,7 @@ function log(tipo,detalle){
   actualizarPanel();
 }
 function error(msg,e){ultimoError=msg+': '+String(e&&e.message||e||'');log('ERROR',ultimoError);}
-function esAuto(m){return m&&(m.autoCreated===true||String(m.comentarios||'').indexOf('Creado automáticamente desde ')===0);}
+function esAuto(m){return !!(m&&(m.autoCreated===true||/^(creado|recuperado|generado) autom[aá]ticamente desde /i.test(String(m.comentarios||''))));}
 function borrado(remote,id){return (remote.deletedMatIds||[]).some(function(x){return String(x)===String(id);});}
 function materialIgual(a,b){return String(a&&a.id)===String(b&&b.id)&&norm(a&&a.mat)===norm(b&&b.mat);}
 function registro(m,cat,manual,extras){
@@ -19317,19 +19323,27 @@ function registro(m,cat,manual,extras){
     manual:true,updatedAt:new Date().toISOString(),origen:extras||'edicion'};
 }
 function heredarLegacy(legacy,entries,main){
+  // Un ID histórico no prueba que siga siendo el mismo material: Caja y Acopio
+  // también generan IDs en la misma serie. Exigir SIEMPRE mismo nombre.
   var mapa=legacy&&legacy.registros&&typeof legacy.registros==='object'?legacy.registros:{};
   Object.keys(mapa).forEach(function(k){
     var r=mapa[k];if(!r||r.manual!==true||!limpia(r.nombre))return;
-    var id=Number(r.id);
-    var m=(main.extraMats||[]).find(function(x){return String(x.id)===String(id);}) ||
-      activos().find(function(x){return String(x.id)===String(id) && norm(x.mat)===norm(r.nombre||r.previousName);});
-    if(!m||borrado(main,id))return;
-    var actual=entries[String(id)]||null;
+    var id=Number(r.id), extras=Array.isArray(main.extraMats)?main.extraMats:[];
+    var porId=extras.find(function(x){return String(x.id)===String(id);});
+    var nombre=norm(r.nombre);
+    var m=porId&&norm(porId.mat)===nombre?porId:null;
+    if(!m)m=extras.find(function(x){return norm(x.mat)===nombre;})||null;
+    if(!m)m=activos().find(function(x){return norm(x.mat)===nombre;})||null;
+    // Si el ID fue reutilizado, NO transplantar su clasificación al nuevo ocupante.
+    if(!m||borrado(main,m.id))return;
+    var nuevoId=String(m.id), actual=entries[nuevoId]||null;
+    if(actual&&norm(actual.nombre)!==nombre)return;
     var previo=Date.parse(actual&&actual.updatedAt||'')||0;
     var nuevo=Date.parse(r.updatedAt||'')||0;
     if(actual&&previo>nuevo)return;
-    entries[String(id)]=Object.assign({},actual||{},registro(m,r.categoria,!!(actual&&actual.manualCreated), 'migracion_v1'),{
-      nombre:limpia(r.nombre),codigo:limpia(r.codigo||m.codigo),categoria:limpia(r.categoria),
+    entries[nuevoId]=Object.assign({},actual||{},registro(m,r.categoria,
+      !!(actual&&actual.manualCreated),'migracion_v1'),{
+      id:Number(m.id),nombre:limpia(m.mat),codigo:limpia(r.codigo||m.codigo),categoria:limpia(r.categoria),
       manualCreated:!!(actual&&actual.manualCreated),updatedAt:r.updatedAt||new Date().toISOString()
     });
   });
@@ -19346,6 +19360,47 @@ function primerasEntradas(main,legacy){
 }
 function actualizarCache(){
   try{localStorage.setItem(CACHE_KEY,JSON.stringify({entries:autoridad,at:new Date().toISOString()}));}catch(_e){}
+}
+async function aislarColisionesHistoricas(){
+  // Esta limpieza repara EXCLUSIVAMENTE registros importados por el código v2
+  // desde el respaldo v1 sin validar identidad. No borra un material, ni toca
+  // cargas, ni cambia el documento principal. Conserva el registro completo.
+  var resultado=await window._runTransaction(window._db,async function(tx){
+    var mp=await tx.get(base()),ba=await tx.get(respaldo());
+    if(!mp.exists()||!ba.exists())return {aislados:0};
+    var main=mp.data()||{},aux=ba.data()||{},entries=copia(aux.entries||{});
+    var archive=copia(aux.conflictosHistoricosAislados||{}), afectados=[];
+    var extra=Array.isArray(main.extraMats)?main.extraMats:[];
+    Object.keys(entries).forEach(function(k){
+      var r=entries[k];
+      if(!r||r.origen!=='migracion_v1'||r.manual!==true)return;
+      var ocupante=extra.find(function(m){return String(m.id)===String(r.id);});
+      if(!ocupante||norm(ocupante.mat)===norm(r.nombre))return;
+      var coincidePorNombre=extra.find(function(m){return norm(m.mat)===norm(r.nombre);});
+      if(coincidePorNombre){
+        // Sólo trasladar si el ID correcto no tiene otra decisión protegida.
+        var destino=String(coincidePorNombre.id),prev=entries[destino];
+        if(!prev||norm(prev.nombre)===norm(r.nombre)){
+          var movido=copia(r);movido.id=Number(coincidePorNombre.id);
+          movido.origen='migracion_v1_identidad_verificada';
+          if(!prev)entries[destino]=movido;
+          else if((Date.parse(r.updatedAt)||0)>(Date.parse(prev.updatedAt)||0))entries[destino]=movido;
+        }
+      }
+      archive[k]={registroOriginal:copia(r),ocupanteActual:limpia(ocupante.mat),
+        fechaDeteccion:new Date().toISOString(),motivo:'ID histórico reutilizado; identidad incompatible'};
+      delete entries[k];afectados.push({id:k,original:r.nombre,ocupante:ocupante.mat});
+    });
+    if(afectados.length){
+      tx.set(respaldo(),Object.assign({},aux,{version:3,entries:entries,
+        conflictosHistoricosAislados:archive,ultimaValidacionIdentidad:new Date().toISOString()}));
+    }
+    return {aislados:afectados.length,detalle:afectados};
+  });
+  if(resultado.aislados)log('COLISION_HISTORICA_AISLADA',resultado.aislados+
+    ' decisión(es) v1 con ID reutilizado; guardadas en respaldo, sin modificar Firebase principal. '+
+    JSON.stringify(resultado.detalle).slice(0,500));
+  return resultado;
 }
 function asegurarEstado(){
   if(!window.state)return false;
@@ -19425,10 +19480,18 @@ function diferencias(main,entries){
     }
     if(borrado(main,r.id))return;
     var id=String(r.id);
+    var ocupante=(main.extraMats||[]).find(function(m){return String(m&&m.id)===id;})||null;
     var ex=(main.extraMats||[]).find(function(m){return String(m&&m.id)===id&&norm(m.mat)===norm(r.nombre);})||
       (main.extraMats||[]).find(function(m){return norm(m&&m.mat)===norm(r.nombre);});
     if(ex)id=String(ex.id); // Mismo producto recreado con otro ID.
+    if(ocupante&&norm(ocupante.mat)!==norm(r.nombre)&&!ex){
+      res.push({id:id,nombre:r.nombre,tipo:'CONFLICTO_ID',remoto:ocupante.mat});
+      return; // Nunca atribuir al material protegido el subrubro del ocupante actual.
+    }
     var mat=ex||activos().find(function(m){return String(m&&m.id)===id;});
+    if(mat&&norm(mat.mat)!==norm(r.nombre)&&!ex){
+      res.push({id:id,nombre:r.nombre,tipo:'CONFLICTO_ID',remoto:mat.mat});return;
+    }
     if(r.manualCreated&&!ex)res.push({id:id,nombre:r.nombre,tipo:'ALTA_FALTANTE'});
     if(ex&&norm(ex.mat)!==norm(r.nombre))res.push({id:id,nombre:r.nombre,tipo:'NOMBRE_DISTINTO',remoto:ex.mat});
     if(ex&&limpia(ex.codigo)!==limpia(r.codigo))res.push({id:id,nombre:r.nombre,tipo:'CODIGO_DISTINTO',remoto:ex.codigo||''});
@@ -19471,6 +19534,10 @@ function prepararCambios(main,entries){
       // pero fijar el subrubro elegido a mano en ese nuevo ID.
       ex=extra.find(function(m){return norm(m.mat)===norm(r.nombre);})||null;
       if(ex)id=String(ex.id);
+    }
+    if(!ex){
+      var baseOcupada=activos().find(function(m){return String(m&&m.id)===id&&norm(m.mat)!==norm(r.nombre);});
+      if(baseOcupada){colisiones.push({id:id,remoto:baseOcupada.mat,protegido:r.nombre});return;}
     }
     if(r.manualCreated&&!ex){
       ex={id:Number(r.id),mat:r.nombre,codigo:r.codigo||'',catName:r.categoria,prom:Number(r.prom)||0,
@@ -19516,7 +19583,9 @@ function programarReparacion(motivo){
 }
 function aceptarRespaldo(datos,origen){
   var e=datos&&datos.entries&&typeof datos.entries==='object'&&!Array.isArray(datos.entries)?datos.entries:{};
-  autoridad=copia(e);listo=true;actualizarCache();
+  autoridad=copia(e);
+  conflictosAislados=copia(datos&&datos.conflictosHistoricosAislados||{});
+  listo=true;actualizarCache();
   var cambio=aplicarAutoridad();
   if(cambio){try{renderActive();}catch(_e){}}
   log('RESPALDO_LEIDO',origen+' · '+Object.keys(autoridad).length+' materiales/decisiones');
@@ -19558,6 +19627,9 @@ async function inicializar(){
         tx.set(respaldo(),{version:2,entries:entries,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
         return true;
       });
+      // Antes de activar la reparación automática, identificar las decisiones
+      // incorrectamente importadas por ID en la versión anterior.
+      await aislarColisionesHistoricas();
       var snap=await leerServidor(respaldo());
       if(!snap.exists())throw new Error('No se pudo verificar el documento independiente');
       aceptarRespaldo(snap.data(),'servidor');
@@ -19653,7 +19725,7 @@ async function transaccionCatalogo(datos,accion){
       patch.updatedAt=new Date().toISOString();
       patch.catalogoManualWriter='CQ Materiales v2';
       tx.set(base(),patch,{merge:true});
-      tx.set(respaldo(),{version:2,entries:entries,updatedAt:patch.updatedAt,lastAction:accion});
+      tx.set(respaldo(),Object.assign({},a,{version:3,entries:entries,updatedAt:patch.updatedAt,lastAction:accion}));
       return result;
     });
     var ver=await leerServidor(respaldo());
@@ -19755,7 +19827,7 @@ window.eliminarMaterialSeleccionado=eliminarMaterialSeleccionado=async function(
       var patch=prepararCambios(main,entries).patch;
       patch.updatedAt=new Date().toISOString();
       tx.set(base(),patch,{merge:true});
-      tx.set(respaldo(),{version:2,entries:entries,updatedAt:patch.updatedAt,lastAction:'eliminar'});
+      tx.set(respaldo(),Object.assign({},aux,{version:3,entries:entries,updatedAt:patch.updatedAt,lastAction:'eliminar'}));
     });
     var v=await leerServidor(respaldo());
     if(!v.exists()||!v.data().entries||!v.data().entries[String(id)]||v.data().entries[String(id)].active!==false)
@@ -19810,6 +19882,8 @@ if(loadOriginal){
 function resumen(){
   return {proteccion: listo?'ACTIVA':'SIN CONFIRMAR',materialesProtegidos:Object.values(autoridad).filter(function(r){return r&&r.active!==false;}).length,
     altasProtegidas:Object.values(autoridad).filter(function(r){return r&&r.active!==false&&r.manualCreated;}).length,
+    entradasImportadas:Object.values(autoridad).filter(function(r){return r&&String(r.origen||'').indexOf('migracion_')===0;}).length,
+    conflictosHistoricosAislados:Object.keys(conflictosAislados).length,
     diferencias:ultimoPrincipal?diferencias(ultimoPrincipal,autoridad):[],
     ultimoError:ultimoError,eventos:eventos.slice(-35)};
 }
@@ -19849,7 +19923,9 @@ window.cqDiagnosticoCatalogo=async function(){
   var r=resumen();
   if(el)el.textContent='Protección: '+r.proteccion+'\n'+
     'Materiales con decisión manual: '+r.materialesProtegidos+'\n'+
-    'Altas manuales protegidas: '+r.altasProtegidas+'\n'+
+    'Altas y entradas históricas protegidas: '+r.altasProtegidas+'\n'+
+    'Entradas heredadas/importadas: '+r.entradasImportadas+'\n'+
+    'Conflictos históricos aislados (sin borrar materiales): '+r.conflictosHistoricosAislados+'\n'+
     'Diferencias entre Firebase principal y catálogo: '+r.diferencias.length+'\n'+
     r.diferencias.slice(0,10).map(function(d){return '• '+d.nombre+': '+d.tipo+(d.remoto?' (en principal: '+d.remoto+')':'');}).join('\n')+'\n'+
     (r.ultimoError?'Último error: '+r.ultimoError+'\n':'')+
@@ -19869,7 +19945,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 document.addEventListener('firebase-ready',activar);
 document.addEventListener('cq-firebase-ready',activar);
 setTimeout(activar,450);
-log('INICIO','Protección autoritativa v2 instalada, a la espera de verificar Firebase');
+log('INICIO','Protección autoritativa v3: identidad por nombre validada; cuarentena histórica activada');
 })();
 
 </script>
