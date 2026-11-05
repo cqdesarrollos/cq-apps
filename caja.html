@@ -385,7 +385,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
    <div class="cq-carga-spinner" aria-hidden="true"></div>
    <div class="cq-carga-subtitulo">Cargando datos…</div>
    <div class="cq-carga-detalle" id="cq-carga-detalle">Sincronizando con Firebase. Evitá operar hasta que termine.</div>
-   <button type="button" class="cq-carga-btn" onclick="location.reload()">Reintentar carga</button>
+   <button type="button" class="cq-carga-btn" onclick="window.cqReintentarCargaInicialCaja?window.cqReintentarCargaInicialCaja():location.reload()">Reintentar carga</button>
  </div>
 </div>
 <script id="cq-carga-inicial-control">(function(){
@@ -393,16 +393,18 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
  var titulo=document.getElementById('cq-carga-titulo');
  var detalle=document.getElementById('cq-carga-detalle');
  var terminado=false;
+ var inicio=Date.now();
  var demora=setTimeout(function(){
-   if(terminado)return;
+   if(terminado||pantalla.classList.contains('cq-error'))return;
    pantalla.classList.add('cq-demora');
-   detalle.textContent='La conexión está tardando más de lo habitual. No se mostrará información provisoria.';
+   detalle.textContent='La conexión está tardando más de lo habitual. Seguimos intentando sin mostrar información provisoria.';
  },20000);
- function pendiente(){
+ function pendiente(mensaje){
    if(terminado)return;
    pantalla.classList.remove('cq-error','cq-demora');
+   if(Date.now()-inicio>=20000)pantalla.classList.add('cq-demora');
    titulo.textContent='Cargando Caja Chica…';
-   detalle.textContent='Sincronizando movimientos con Firebase. Evitá operar hasta que termine.';
+   detalle.textContent=mensaje||'Sincronizando movimientos con Firebase. Evitá operar hasta que termine.';
  }
  window.cqCargaInicialCaja={
    pendiente:pendiente,
@@ -2485,6 +2487,12 @@ let lastTokenCC="";
 let localRevisionCC=0;
 let retryFailuresCC=0;
 let serverReadyCC=false;
+// La lectura inicial no es un fallo sólo porque reste confirmar una escritura.
+function cqEsFalloRealInicialCC(e){
+  const status=Number(e&&e.status||0);
+  const codigo=String(e&&e.code||'');
+  return navigator.onLine===false || status===403 || codigo==='permission-denied' || retryFailuresCC>=3;
+}
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
 window.__cqCajaBuild='2026-10-22-rest-https-v3';
@@ -2818,6 +2826,11 @@ async function saveRemoteCC(snapInicialCC=null){
     console.warn("Caja Chica Firebase save",e);
     const msg=String(e&&e.message||e||'Sin conexión Firebase');
     setStatusCC("err","OFF",msg);
+    if(cqEsFalloRealInicialCC(e)){
+      window.cqCargaInicialCaja?.error('No se pudo confirmar la sincronización con Firebase. Se seguirá reintentando automáticamente.');
+    }else{
+      window.cqCargaInicialCaja?.pendiente('Firebase está tardando en confirmar los movimientos. Reintentando automáticamente…');
+    }
   }finally{
     savingCC=false;
     if(dirtyCC){
@@ -2837,6 +2850,7 @@ window.__cqCajaChicaSyncSchedule=scheduleCC;
 async function startCC(){
   if(initializedCC)return;
   initializedCC=true;
+  window.cqCargaInicialCaja?.pendiente();
   setStatusCC("checking","Sync");
   try{
     const fdb=await firebaseCC();
@@ -2917,19 +2931,25 @@ async function startCC(){
       if(navigator.onLine)timerCC=setTimeout(()=>{timerCC=null;if(!initializedCC)startCC();},5000);
     });
 
-    retryFailuresCC=0;
     if(serverReadyCC && !dirtyCC){
+      retryFailuresCC=0;
       setStatusCC("ok","ON","Firebase conectado");
       window.cqCargaInicialCaja?.completa();
     }else{
-      window.cqCargaInicialCaja?.error('La carga inicial todavía no está confirmada en Firebase. Reintentá cuando haya conexión.');
+      // Hubo lectura del servidor pero falta confirmar una escritura pendiente:
+      // mantener el bloqueo y el indicador de carga, NO presentar error falso.
+      window.cqCargaInicialCaja?.pendiente('Datos recibidos de Firebase. Confirmando cambios pendientes antes de habilitar Caja Chica…');
     }
   }catch(e){
     initialRemoteAppliedCC=false;
     initializedCC=false;
     retryFailuresCC=Math.min(retryFailuresCC+1,6);
     console.warn("Caja Chica Firebase init",e);
-    window.cqCargaInicialCaja?.error('No se pudieron leer los movimientos de Caja Chica desde Firebase. Revisá la conexión y reintentá.');
+    if(cqEsFalloRealInicialCC(e)){
+      window.cqCargaInicialCaja?.error('No se pudieron leer los movimientos desde Firebase. La aplicación seguirá reintentando automáticamente.');
+    }else{
+      window.cqCargaInicialCaja?.pendiente('Firebase está demorando la lectura de movimientos. Reintentando la conexión…');
+    }
     setStatusCC("err","OFF",String(e&&e.message||e||'No se pudo conectar con Firebase'));
     clearTimeout(timerCC);
     if(navigator.onLine){
@@ -3207,6 +3227,24 @@ async function cqReconnectFirebaseCC(){
   if(serverReadyCC&&dirtyCC)saveRemoteCC();
 }
 window.__cqReconnectFirebaseCC=cqReconnectFirebaseCC;
+window.cqReintentarCargaInicialCaja=function(){
+  if(navigator.onLine===false){
+    window.cqCargaInicialCaja?.error('El dispositivo está sin conexión. Reconectalo para sincronizar los movimientos.');
+    return;
+  }
+  window.cqCargaInicialCaja?.pendiente('Reintentando conexión y confirmación de datos con Firebase…');
+  // No reiniciar un listener ni pisar una escritura que aún está en curso.
+  if(savingCC)return;
+  if(initialRemoteAppliedCC&&serverReadyCC&&!dirtyCC){
+    window.cqCargaInicialCaja?.completa();
+  }else if(initializedCC&&initialRemoteAppliedCC&&dirtyCC){
+    clearTimeout(timerCC);timerCC=null;
+    saveRemoteCC();
+  }else if(!initializedCC){
+    clearTimeout(timerCC);timerCC=null;
+    startCC();
+  }
+};
 document.addEventListener("cq-auth-ready",startCC);
 window.addEventListener("online",()=>{cqReconnectFirebaseCC().catch(()=>{});});
 document.addEventListener('visibilitychange',()=>{
