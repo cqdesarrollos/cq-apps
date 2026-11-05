@@ -1,6 +1,7 @@
 <!-- CQ 04/11/2026 · SOLO MATERIALES v5 · catálogo autoritativo con recuperación de altas explícitas y validación estricta de identidad -->
 <!DOCTYPE html>
 <!-- CQ 13/10/2026 · permisos individuales de obra: Materiales -->
+<!-- V10: inicio paralelo y protección cargada sin transacciones redundantes; no cambia las escrituras de catálogo -->
 
 <html lang="es">
 <head>
@@ -9158,9 +9159,13 @@ async function loadFromFirebase(){
   if(!window._dbReady||!modoFirebase)return;
   try{
     setSyncStatus('Firebase: leyendo...');
-    await cargarObrasGastosMateriales();
-    var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
-    var cqV9PrincipalDisponible=snap.exists();
+    // V10: ambas lecturas son independientes. Evitar esperar config/app ANTES de
+    // pedir el documento principal; ambas se resuelven en paralelo.
+    var resultadosInicio=await Promise.all([
+      cargarObrasGastosMateriales(),
+      window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'))
+    ]);
+    var snap=resultadosInicio[1];
     if(snap.exists()){
       var d=snap.data();
       delete d.updatedAt;
@@ -9188,6 +9193,10 @@ async function loadFromFirebase(){
         // Las operaciones explícitas usan persist() con protección del catálogo.
         console.info('Materiales: normalización de obras aplicada localmente; no se reescribe catálogo desde la carga inicial');
       }
+      // V10: la pantalla sólo depende de principal + subrubros Gastos + catálogo
+      // protegido. No debe esperar reconciliación Acopio ni búsqueda de códigos.
+      // El coordinador V9 sigue impidiendo mostrar categorías provisionales.
+      if(window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.marcar('principal');
     }
     // Primero reconciliar contra los retiros que REALMENTE siguen existiendo en Acopio.
     // Esto elimina residuos como Tripoli cuando el retiro ya fue borrado.
@@ -9205,7 +9214,6 @@ async function loadFromFirebase(){
     setSyncStatus('Firebase: conectado','ok');
     readLastSync();
     renderActive();
-    if(cqV9PrincipalDisponible&&window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.marcar('principal');
   }catch(e){
     console.warn('Firebase read error',e);
     setSyncStatus('Firebase: error','err');
@@ -19869,6 +19877,29 @@ async function inicializar(){
   if(!disponible())return false;
   iniciando=(async function(){
     try{
+      // V10: el respaldo V2/V3 ya existe en Firebase. Leerlo directamente
+      // desde el servidor es suficiente para aplicar las decisiones confirmadas.
+      // Evitamos una lectura histórica y una transacción de 2 documentos
+      // innecesarias en CADA inicio. La migración sigue disponible si falta.
+      var existente=await leerServidor(respaldo());
+      if(existente.exists()){
+        var datosExistentes=existente.data()||{};
+        aceptarRespaldo(datosExistentes,'inicio directo · servidor');
+        escuchar();
+        // Mantener la limpieza histórica, pero sin bloquear la apertura.
+        // Sólo se necesita cuando siguen quedando entradas antiguas migradas.
+        var hayLegado=Object.values(datosExistentes.entries||{}).some(function(r){
+          return r&&r.origen==='migracion_v1';
+        });
+        if(hayLegado){
+          setTimeout(function(){
+            aislarColisionesHistoricas().catch(function(e){
+              console.warn('Verificación histórica de IDs (diferida)',e);
+            });
+          },1200);
+        }
+        return true;
+      }
       var legacy={};
       try{var v=await leerServidor(window._doc(window._db,'materiales_meta','subrubros_manuales_definitivos_v1'));
           if(v.exists())legacy=v.data()||{};}catch(e){log('AVISO','No se pudo leer clasificación histórica v1: '+String(e&&e.code||e));}
@@ -20232,8 +20263,11 @@ if(renderOriginal){
 }
 var startOriginal=(typeof startFirebase==='function')?startFirebase:null;
 if(startOriginal){
-  window.startFirebase=startFirebase=async function(){
-    if(disponible())await inicializar();
+  window.startFirebase=startFirebase=function(){
+    // V10: iniciar la lectura del catálogo protegido y la de tombstones en
+    // paralelo. loadFromFirebase continúa esperando la autoridad antes de leer
+    // el principal; no exponemos ni guardamos categorías sin protección.
+    if(disponible())inicializar().catch(function(e){console.warn('Inicio catálogo protegido',e);});
     return startOriginal.apply(this,arguments);
   };
 }
