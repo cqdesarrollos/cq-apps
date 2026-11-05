@@ -20303,15 +20303,26 @@ window.cqCompararSubrubrosAcopio=async function(){
           anotar(carga.matId,r.subrubro||(matLocal&&matLocal.cat),name,'retiro vinculado');
       });
     });
-    var propuestos=[],ambiguos=0;
+    var propuestos=[],ambiguos=0,conflictos=[];
     Object.keys(refs).forEach(function(k){
       var ref=refs[k],cats=Object.keys(ref.categorias);
-      if(cats.length!==1){ambiguos++;return;}
+      // Sólo lectura: mostrar las categorías contradictorias sin modificar datos.
+      if(cats.length!==1){
+        ambiguos++;
+        conflictos.push({id:k,nombre:ref.m.mat,categorias:cats});
+        return;
+      }
       var actual=catCanon((state.matCategorias||{})[k]||ref.m.catName||obtenerCategoriaMaterial(Number(k))||'');
       if(norm(actual)!==norm(cats[0]))propuestos.push({m:ref.m,actual:actual||'Sin clasificar',cat:cats[0]});
     });
-    if(!propuestos.length){alert('Comparación terminada: no hay cambios inequívocos para aplicar. '+
-      (ambiguos?ambiguos+' materiales presentan categorías contradictorias en Acopio.':''));return true;}
+    if(!propuestos.length){
+      var detalle=conflictos.map(function(c,i){
+        return (i+1)+'. '+c.nombre+' (ID '+c.id+')\n   Subrubros encontrados: '+c.categorias.join(' / ');
+      }).join('\n\n');
+      alert('Comparación terminada: no hay cambios inequívocos para aplicar. '+
+        (ambiguos?ambiguos+' materiales presentan categorías contradictorias en Acopio.\n\n'+detalle:'No quedan discrepancias claras.'));
+      return true;
+    }
     var lista=propuestos.slice(0,14).map(function(p){return '• '+p.m.mat+': '+p.actual+' → '+p.cat;}).join('\n');
     if(!confirm('Se encontraron '+propuestos.length+' subrubros diferentes en Acopio. '+
       'Se omitieron las ediciones manuales confirmadas y '+ambiguos+' identidades ambiguas.\n\n'+
