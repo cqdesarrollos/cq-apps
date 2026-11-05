@@ -1,5 +1,7 @@
+<!-- CQ 04/11/2026 · SOLO MATERIALES v5 · catálogo autoritativo con recuperación de altas explícitas y validación estricta de identidad -->
 <!DOCTYPE html>
 <!-- CQ 13/10/2026 · permisos individuales de obra: Materiales -->
+<!-- V10: inicio paralelo y protección cargada sin transacciones redundantes; no cambia las escrituras de catálogo -->
 
 <html lang="es">
 <head>
@@ -197,7 +199,7 @@ html,body{background:var(--cq-bg);}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, query, orderBy, limit, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, getDocFromServer, onSnapshot, collection, getDocs, query, orderBy, limit, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const app = initializeApp({
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
   authDomain:"cq-mano-de-obra.firebaseapp.com",
@@ -207,7 +209,7 @@ const app = initializeApp({
   appId:"1:502127540211:web:8daefc75bdaafad412c486"
 });
 const db = getFirestore(app);
-window._db=db; window._doc=doc; window._setDoc=setDoc; window._getDoc=getDoc; window._onSnapshot=onSnapshot; window._collection=collection; window._getDocs=getDocs; window._query=query; window._orderBy=orderBy; window._limit=limit; window._deleteDoc=deleteDoc; window._runTransaction=runTransaction; window._dbReady=true;
+window._db=db; window._doc=doc; window._setDoc=setDoc; window._getDoc=getDoc; window._getDocFromServer=getDocFromServer; window._onSnapshot=onSnapshot; window._collection=collection; window._getDocs=getDocs; window._query=query; window._orderBy=orderBy; window._limit=limit; window._deleteDoc=deleteDoc; window._runTransaction=runTransaction; window._dbReady=true;
 document.dispatchEvent(new Event('firebase-ready'));
 </script>
 
@@ -4603,8 +4605,39 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
   }
 }
 </style>
+<style id="cq-v9-catalogo-inicio-style">
+/* CQ V9: sólo presentación de arranque, sin escrituras en Firebase. */
+html:not(.cq-v9-catalogo-listo) .view { visibility:hidden!important; }
+#cq-v9-catalogo-inicio {
+  position:fixed;inset:0;z-index:2147483645;
+  background:linear-gradient(155deg,#f7f8f5,#edf4ef);
+  display:flex;align-items:center;justify-content:center;
+  padding:22px;font-family:'Space Grotesk',system-ui,sans-serif;color:#1c3d35;
+}
+html.cq-v9-catalogo-listo #cq-v9-catalogo-inicio {display:none!important;}
+#cq-v9-catalogo-inicio .cq-v9-card {box-sizing:border-box;width:min(390px,100%);background:#fff;
+  border:1px solid #dbe8df;border-radius:20px;padding:30px 24px;
+  text-align:center;box-shadow:0 14px 45px rgba(28,61,53,.1);}
+#cq-v9-catalogo-inicio .cq-v9-spinner {width:35px;height:35px;margin:0 auto 16px;
+  border:3px solid #d8e8de;border-top-color:#2e7d5e;border-radius:50%;animation:cq-v9-spin 1s linear infinite;}
+@keyframes cq-v9-spin {to {transform:rotate(360deg)}}
+#cq-v9-catalogo-inicio .cq-v9-title {font-size:17px;font-weight:900;margin:0 0 7px;}
+#cq-v9-catalogo-inicio .cq-v9-status {font-size:12px;line-height:1.5;color:#658072;margin:0;}
+#cq-v9-catalogo-inicio .cq-v9-retry {display:none;margin:17px auto 0;border:0;border-radius:10px;
+  padding:11px 16px;background:#1c3d35;color:white;font-weight:800;font-size:12px;cursor:pointer;}
+#cq-v9-catalogo-inicio.cq-v9-demora .cq-v9-retry {display:block;}
+#cq-v9-catalogo-inicio.cq-v9-demora .cq-v9-spinner {animation-duration:1.5s;}
+</style>
 </head>
 <body>
+<div id="cq-v9-catalogo-inicio" role="status" aria-live="polite" aria-label="Cargando catálogo de Materiales">
+  <div class="cq-v9-card">
+    <div class="cq-v9-spinner" aria-hidden="true"></div>
+    <p class="cq-v9-title">Cargando catálogo…</p>
+    <p class="cq-v9-status" id="cq-v9-catalogo-estado">Sincronizando Materiales y subrubros protegidos.</p>
+    <button class="cq-v9-retry" type="button" onclick="location.reload()">Reintentar carga</button>
+  </div>
+</div>
 
 <div id="cq-access-total">
   <div class="cq-card">
@@ -4784,7 +4817,7 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
     <div class="mfooter">
       <button class="btn btn-s" onclick="window.closeEditarNombreMat()">Cancelar</button>
       <button class="btn" style="background:#FDECEA;color:#C0392B;border:1px solid #F5C6C0" onclick="window.eliminarMaterialSeleccionado()">🗑️ Eliminar</button>
-      <button class="btn btn-p" onclick="window.guardarNombreMat()">Guardar</button>
+      <button id="cq-guardar-edicion-material" type="button" class="btn btn-p" onclick="window.guardarNombreMat()">Guardar</button>
     </div>
   </div>
 </div>
@@ -7758,7 +7791,11 @@ function mergeExtrasIntoCats(){
   // Si Pañol creó automáticamente un material con un subrubro que todavía no
   // existía como categoría, crear la categoría también para que el material
   // aparezca inmediatamente en Catálogo.
-  state.extraMats.forEach(function(m){
+  var extraVisibles=state.extraMats.concat(
+    (Array.isArray(state.materialesNuevos)?state.materialesNuevos:[])
+      .filter(function(x){return x&&!state.extraMats.some(function(y){return String(y.id)===String(x.id);});})
+  );
+  extraVisibles.forEach(function(m){
     var nombreCat=String(
       (state.matCategorias&&state.matCategorias[m.id]) ||
       m.catName ||
@@ -7783,7 +7820,7 @@ function mergeExtrasIntoCats(){
     }
   });
 
-  state.extraMats.forEach(function(m){
+  extraVisibles.forEach(function(m){
     var catName=String((state.matCategorias&&state.matCategorias[m.id])||m.catName||'VARIOS');
     var cat=CATS.find(function(c){return c.name===catName;});
     if(cat && !cat.items.some(function(x){return x.id===m.id;})){
@@ -8511,6 +8548,7 @@ function normalizeState(){
   if(!state.deletedCatNames)state.deletedCatNames=[];
   if(!state.matNombres)state.matNombres={};
   if(!state.matCodigos)state.matCodigos={};
+  if(!state.matComentarios)state.matComentarios={};
   if(!state.matCategorias)state.matCategorias={};
   if(!state.catRenames)state.catRenames={};
   if(!state.categoriaMemoria)state.categoriaMemoria={};
@@ -8729,14 +8767,25 @@ async function completarCodigosDesdeAcopioYPanol(forzar){
       normalizeState();
       localStorage.setItem(DB_KEY,JSON.stringify(state));
 
-      suppressRemoteUntil=Date.now()+1500;
-      await window._setDoc(
-        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-        JSON.parse(JSON.stringify(Object.assign({},state,{
-          updatedAt:new Date().toISOString(),
-          codigosFuentesActualizadosAt:new Date().toISOString()
-        })))
-      );
+      // CQ AUDITORÍA: completar un código jamás debe publicar otra vez
+      // las categorías, altas, bajas o cargas que había en la memoria local.
+      await window._runTransaction(window._db,async function(tx){
+        var ref=window._doc(window._db,'materiales','data_planilla_exacta_v4');
+        var snap=await tx.get(ref), remoto=snap.exists()?(snap.data()||{}):{};
+        var codigos={},extras=(remoto.extraMats||[]).concat(remoto.materialesNuevos||[]);
+        detalle.forEach(function(d){
+          var id=String(d.id);
+          var ficha=extras.find(function(m){return String(m&&m.id)===id;})||
+            (Number(id)<10000?ALL_MATS.find(function(m){return String(m.id)===id;}):null);
+          var nombre=String((remoto.matNombres||{})[id]||(ficha&&ficha.mat)||'');
+          if(!nombre||cqNombreExactoCodigo(nombre)!==cqNombreExactoCodigo(d.nombre))return;
+          if(String((remoto.matCodigos||{})[id]||'').trim())return;
+          codigos[id]=d.codigo;
+        });
+        if(Object.keys(codigos).length)tx.set(ref,{matCodigos:codigos,
+          updatedAt:new Date().toISOString(),codigosFuentesActualizadosAt:new Date().toISOString(),
+          updatedByIntegration:'cq_materiales_autocodigos'},{merge:true});
+      });
 
       try{await updateLastSync('completó códigos desde Acopio/Pañol');}catch(e){}
       renderActive();
@@ -8816,7 +8865,18 @@ async function cqGuardarMaterialesSeguro(extra){
     local.cargas=manuales.concat(Object.keys(mapa).map(function(k){return mapa[k];}));
     Object.keys(extra).forEach(function(k){local[k]=extra[k];});
     local.updatedAt=new Date().toISOString();
-    tx.set(ref,local);
+    // CQ 04/11 AUDITORÍA: persist() no puede sustituir con su copia local
+    // las decisiones que V3 acaba de guardar de forma transaccional. Para
+    // editar el catálogo existe transaccionCatalogo(), que lee ambos documentos.
+    var guardadosPorCatalogo=['extraMats','materialesNuevos','matCategorias','matNombres',
+      'matCodigos','matComentarios','catalogoManual','categoriaManual','categoriaManualIdentidad',
+      'categoriaMemoria','deletedMatIds','deletedMaterialKeys'];
+    var final=Object.assign({},remoto,local);
+    guardadosPorCatalogo.forEach(function(k){
+      if(Object.prototype.hasOwnProperty.call(remoto,k))
+        final[k]=JSON.parse(JSON.stringify(remoto[k]));
+    });
+    tx.set(ref,final);
   });
   // Adoptar también localmente la fusión que quedó confirmada en Firebase.
   var ver=await window._getDoc(ref);
@@ -9058,11 +9118,32 @@ async function cqReconciliarMaterialesConAcopioActual(){
     if(cambio){
       normalizeState();
       localStorage.setItem(DB_KEY,JSON.stringify(state));
-      suppressRemoteUntil=Date.now()+1800;
-      await window._setDoc(
-        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-        JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
-      );
+      // El origen Acopio y el destino Materiales se leen DENTRO de la misma
+      // transacción. Sólo se eliminan retiros de Acopio que realmente ya no
+      // existen: no modificar categorías ni materiales manuales en esta tarea.
+      integracionesHuerfanas=await window._runTransaction(window._db,async function(tx){
+        var ra=window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3');
+        var rm=window._doc(window._db,'materiales','data_planilla_exacta_v4');
+        var a=await tx.get(ra),m=await tx.get(rm);
+        if(!a.exists()||!m.exists())return [];
+        var raw=a.data()||{}, fuente=(raw.db&&typeof raw.db==='object')?raw.db:raw;
+        var validosActuales=new Set();
+        (fuente.acopios||[]).forEach(function(ac){(ac.retiros||[]).forEach(function(r){
+          if(ac&&ac.id!=null&&r&&r.id!=null)validosActuales.add('acopio_'+String(ac.id)+'_'+String(r.id));
+        });});
+        var doc=m.data()||{},cargas=Array.isArray(doc.cargas)?doc.cargas:[];
+        var removidos=[];
+        var limpias=cargas.filter(function(c){
+          var iid=String(c&&c.integracionId||'');
+          if(iid.indexOf('acopio_')===0&&!validosActuales.has(iid)){
+            removidos.push(iid);return false;
+          }
+          return true;
+        });
+        if(removidos.length)tx.set(rm,{cargas:limpias,
+          updatedAt:new Date().toISOString(),updatedByIntegration:'cq_materiales_acopio_huerfanos'},{merge:true});
+        return Array.from(new Set(removidos));
+      });
     }
     if(integracionesHuerfanas.length){
       await cqDesactivarIntegracionesAcopio(integracionesHuerfanas,'acopio_eliminado_fuente');
@@ -9078,8 +9159,13 @@ async function loadFromFirebase(){
   if(!window._dbReady||!modoFirebase)return;
   try{
     setSyncStatus('Firebase: leyendo...');
-    await cargarObrasGastosMateriales();
-    var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+    // V10: ambas lecturas son independientes. Evitar esperar config/app ANTES de
+    // pedir el documento principal; ambas se resuelven en paralelo.
+    var resultadosInicio=await Promise.all([
+      cargarObrasGastosMateriales(),
+      window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'))
+    ]);
+    var snap=resultadosInicio[1];
     if(snap.exists()){
       var d=snap.data();
       delete d.updatedAt;
@@ -9103,10 +9189,14 @@ async function loadFromFirebase(){
         console.warn('Materiales: eliminadas '+depAcopioCorte.removidas+' carga(s) de Acopio del esquema anterior al 05/08/2026.');
       }
       if(migro){
-        try{
-          await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()})));
-        }catch(err){console.warn('No se pudo persistir la unificación de obras',err);}
+        // Lectura normalizada: no sobrescribir automáticamente el documento completo.
+        // Las operaciones explícitas usan persist() con protección del catálogo.
+        console.info('Materiales: normalización de obras aplicada localmente; no se reescribe catálogo desde la carga inicial');
       }
+      // V10: la pantalla sólo depende de principal + subrubros Gastos + catálogo
+      // protegido. No debe esperar reconciliación Acopio ni búsqueda de códigos.
+      // El coordinador V9 sigue impidiendo mostrar categorías provisionales.
+      if(window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.marcar('principal');
     }
     // Primero reconciliar contra los retiros que REALMENTE siguen existiendo en Acopio.
     // Esto elimina residuos como Tripoli cuando el retiro ya fue borrado.
@@ -9309,17 +9399,30 @@ function esMaterialAutomaticoIntegracion(mat){
 }
 
 function limpiarMaterialAutomaticoSinUso(matId){
-  var mat=ALL_MATS.find(function(m){return m.id===matId;});
+  var mat=ALL_MATS.find(function(m){return String(m.id)===String(matId);});
   if(!mat || !esMaterialAutomaticoIntegracion(mat))return false;
 
-  var sigueUsado=(state.cargas||[]).some(function(c){return c.matId===matId;});
+  // CQ 04/11 — compatible con Acopio actual: una ficha creada por integracion
+  // puede haber sido EDITADA y clasificada manualmente luego. Si conserva
+  // lock de identidad no debe eliminarse al borrar/reasignar el ultimo retiro.
+  var actualNombre=String((state.matNombres||{})[matId]||mat.mat||'').trim();
+  function ident(v){return String(v||'').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+  var lock=(state.catalogoManual||{})[matId]||null;
+  var protegidoId=!!(lock&&lock.manual===true&&lock.nombre&&ident(lock.nombre)===ident(actualNombre));
+  var lockNombre=(state.categoriaManualIdentidad||{})['name:'+ident(actualNombre)];
+  var protegidoNombre=!!(lockNombre&&lockNombre.manual===true&&lockNombre.nombre&&
+    ident(lockNombre.nombre)===ident(actualNombre));
+  if(protegidoId||protegidoNombre)return false;
+
+  var sigueUsado=(state.cargas||[]).some(function(c){return String(c.matId)===String(matId);});
   if(sigueUsado)return false;
 
-  state.extraMats=(state.extraMats||[]).filter(function(m){return m.id!==matId;});
+  state.extraMats=(state.extraMats||[]).filter(function(m){return String(m.id)!==String(matId);});
   CATS.forEach(function(c){
-    c.items=(c.items||[]).filter(function(m){return m.id!==matId;});
+    c.items=(c.items||[]).filter(function(m){return String(m.id)!==String(matId);});
   });
-  ALL_MATS=ALL_MATS.filter(function(m){return m.id!==matId;});
+  ALL_MATS=ALL_MATS.filter(function(m){return String(m.id)!==String(matId);});
 
   if(state.matCategorias)delete state.matCategorias[matId];
   if(state.matCodigos)delete state.matCodigos[matId];
@@ -9602,10 +9705,12 @@ async function procesarSnapshotIntegraciones(snapshot){
             integrationId:ev.integrationId||''
           });
 
-          // Caja Gerencia ya materializa sus cargas directamente en data_planilla_exacta_v4.
-          // materiales_integraciones queda sólo como auditoría. Reprocesarla acá generaba una
-          // segunda escritura y podía regrabar un snapshot parcial cuando un gasto tenía varias obras.
-          if(origenEv==='caja_gerencia')return;
+          // Todas las apps CQ actuales (Caja Gerencia, Caja Chica, Acopio y Pañol)
+          // graban primero una transacción en el documento principal de Materiales.
+          // Los documentos materiales_integraciones son sólo auditoría: importarlos
+          // otra vez creaba un SEGUNDO escritor y podía reabrir cargas eliminadas.
+          if(origenEv==='caja_gerencia'||origenEv==='caja_chica'||
+             origenEv==='acopio'||origenEv==='panol')return;
 
           if(aplicarIntegracion(ev))cambio=true;
         }catch(e){
@@ -9770,11 +9875,9 @@ async function startFirebase(){
             readLastSync();
 
             if(migro){
-              suppressRemoteUntil=Date.now()+1200;
-              window._setDoc(
-                window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-                JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()}))
-              ).catch(function(e){console.warn(e);});
+              // Un listener jamás debe publicar un snapshot transformado al mismo
+              // documento: así se evitan bucles y el borrado de cambios concurrentes.
+              console.info('Materiales: actualización de obra normalizada sólo en memoria');
             }
           },
           function(e){
@@ -9848,6 +9951,46 @@ function toggleModoFirebase(){
     setSyncMeta('Modo prueba',true);
   }
 }
+// V9: la pantalla se libera sólo cuando existen las tres fuentes de lectura.
+// No guarda ni altera el estado; la última aplicación de autoridad usa la rutina V8.
+window.__cqV9InicioCatalogo=(function(){
+  var listo={principal:false,subrubros:false,autoridad:false};
+  var publicado=false;
+  function estado(){
+    var el=document.getElementById('cq-v9-catalogo-estado');if(!el)return;
+    var faltan=[];
+    if(!listo.principal)faltan.push('datos de Materiales');
+    if(!listo.subrubros)faltan.push('subrubros de Gastos');
+    if(!listo.autoridad)faltan.push('clasificaciones protegidas');
+    el.textContent=faltan.length?'Sincronizando '+faltan.join(', ')+'.':'Clasificaciones verificadas.';
+  }
+  function comprobar(){
+    if(publicado||!listo.principal||!listo.subrubros||!listo.autoridad)return;
+    try{
+      if(typeof window.__cqV9AplicarAutoridadInicio!=='function' || !window.__cqV9AplicarAutoridadInicio()){
+        estado();return;
+      }
+      publicado=true;
+      document.documentElement.classList.add('cq-v9-catalogo-listo');
+    }catch(e){
+      console.warn('Materiales: catálogo todavía no listo para mostrar',e);
+      estado();
+    }
+  }
+  function marcar(parte){
+    if(Object.prototype.hasOwnProperty.call(listo,parte))listo[parte]=true;
+    estado();comprobar();
+  }
+  // Si falla una lectura, no exponer datos locales como si fueran confirmados.
+  setTimeout(function(){
+    if(publicado)return;
+    var pantalla=document.getElementById('cq-v9-catalogo-inicio');
+    if(pantalla)pantalla.classList.add('cq-v9-demora');
+    estado();
+  },18000);
+  return {marcar:marcar,comprobar:comprobar,estado:estado};
+})();
+
 // Render local inmediato para que la app nunca quede esperando una pantalla vacía.
 normalizeState();
 updateModoUI();
@@ -10121,11 +10264,17 @@ function calcProm(matId){
   if(!vals.length) return null;
   return vals.reduce(function(a,b){return a+b;},0)/vals.length;
 }
-function getExtraMats(){return state.extraMats||[];}
+function getExtraMats(){
+  var principales=state.extraMats||[];
+  var heredados=(state.materialesNuevos||[]).filter(function(x){
+    return x&&!principales.some(function(y){return String(y.id)===String(x.id);});
+  });
+  return principales.concat(heredados);
+}
 function getAllMats(){
-  var extra=getExtraMats();
-  if(!extra.length) return ALL_MATS;
-  return ALL_MATS.concat(extra);
+  var porId=new Map();
+  ALL_MATS.concat(getExtraMats()).forEach(function(m){if(m&&m.id!=null)porId.set(String(m.id),m);});
+  return Array.from(porId.values());
 }
 
 // Normalizar categorías y materiales
@@ -10588,7 +10737,7 @@ function cqAbrirComentarioReporte(ev,matId,obraNom,material,valor){
  setTimeout(function(){try{txt.focus();}catch(e){}},40);
 }
 function cqCerrarComentarioReporte(){document.getElementById('cq-report-comment-modal')?.classList.remove('open');cqReporteComentarioActual=null;}
-async function cqPersistirComentariosReporte(){
+async function cqPersistirComentariosReporte(clave,valor){
   // El comentario forma parte del mismo estado de Materiales, pero no dejamos que
   // un error de localStorage bloquee el guardado en Firebase ni la interfaz.
   normalizeState();
@@ -10598,11 +10747,16 @@ async function cqPersistirComentariosReporte(){
   if(window._dbReady&&modoFirebase){
     try{
       setSyncStatus('Firebase: guardando...');
-      suppressRemoteUntil=Date.now()+1200;
-      await window._setDoc(
-        window._doc(window._db,'materiales','data_planilla_exacta_v4'),
-        JSON.parse(JSON.stringify({...state,updatedAt:new Date().toISOString()}))
-      );
+      if(!window._runTransaction)throw new Error('Firebase transaccional no disponible');
+      var ref=window._doc(window._db,'materiales','data_planilla_exacta_v4');
+      await window._runTransaction(window._db,async function(tx){
+        var snap=await tx.get(ref), d=snap.exists()?(snap.data()||{}):{};
+        var comentarios=Object.assign({},d.reporteComentarios||{});
+        if(valor)comentarios[String(clave)]=String(valor);
+        else delete comentarios[String(clave)];
+        tx.set(ref,{reporteComentarios:comentarios,updatedAt:new Date().toISOString(),
+          updatedByIntegration:'cq_materiales_comentario'},{merge:true});
+      });
       try{await updateLastSync('guardó comentario de reporte');}catch(e){}
       setSyncStatus('Firebase: guardado','ok');
       return true;
@@ -10626,7 +10780,7 @@ async function cqGuardarComentarioReporte(){
   cqCerrarComentarioReporte();
   renderReporteCompartido();
   try{
-    await cqPersistirComentariosReporte();
+    await cqPersistirComentariosReporte(key,t);
     if(typeof showToast==='function')showToast('✓ Comentario guardado');
   }catch(e){
     alert('El comentario quedó en pantalla, pero Firebase no pudo guardarlo. Revisá la conexión.');
@@ -10635,10 +10789,11 @@ async function cqGuardarComentarioReporte(){
 async function cqEliminarComentarioReporte(){
   if(!cqReporteComentarioActual)return;
   if(!state.reporteComentarios)state.reporteComentarios={};
-  delete state.reporteComentarios[cqReporteComentarioActual.key];
+  var keyEliminar=cqReporteComentarioActual.key;
+  delete state.reporteComentarios[keyEliminar];
   cqCerrarComentarioReporte();
   renderReporteCompartido();
-  try{await cqPersistirComentariosReporte();if(typeof showToast==='function')showToast('✓ Comentario eliminado');}
+  try{await cqPersistirComentariosReporte(keyEliminar,'');if(typeof showToast==='function')showToast('✓ Comentario eliminado');}
   catch(e){alert('Se eliminó en pantalla, pero Firebase no pudo guardar el cambio.');}
 }
 document.addEventListener('click',function(e){var m=document.getElementById('cq-report-comment-modal');if(m&&e.target===m)cqCerrarComentarioReporte();});
@@ -11448,8 +11603,8 @@ function openEditarNombreMat(){
     catEl.innerHTML=categoriasActivas().map(function(c){return '<option value="'+escapeHtml(c.name)+'">'+escapeHtml(c.name)+'</option>';}).join('');
     catEl.value=obtenerCategoriaMaterial(mat.id)||'VARIOS';
   }
-  var comentarioActual='';
-  if(state.extraMats){
+  var comentarioActual=String((state.matComentarios&&state.matComentarios[mat.id])||'');
+  if(!comentarioActual&&state.extraMats){
     var extra=state.extraMats.find(function(m){return m.id===mat.id;});
     if(extra) comentarioActual=extra.comentarios||'';
   }
@@ -15242,6 +15397,7 @@ window.abrirGraficoDirecto = function(){
       var cambiosDefault=rebuild()||0;
       rotular();
       if(typeof renderActive==='function')renderActive();
+      if(window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.marcar('subrubros');
 
       // Guardar una sola vez la reclasificación automática de los que estaban sin asignar.
       if(cambiosDefault>0 && typeof persist==='function'){
@@ -17793,9 +17949,12 @@ body:has(#modal-reporte.open) #modal-reporte{
     if(!m)return null; ensure();
     var id=Number(m.id);
     var byId=state.catalogoManual[id]||state.catalogoManual[String(id)]||null;
-    if(byId&&byId.manual!==false&&catCanon(byId.categoria))return byId;
+    // No aceptar registros de otro artículo que reutilizó este ID.
+    var identidadValida=!!(byId&&byId.nombre&&nameKey(byId.nombre)===nameKey(m.mat));
+    if(identidadValida&&byId.manual!==false&&catCanon(byId.categoria))return byId;
     var cm=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
-    if(catCanon(cm))return {categoria:catCanon(cm),nombre:m.mat,codigo:codigoDe(m),manual:true};
+    if(identidadValida&&catCanon(cm))return {categoria:catCanon(cm),nombre:m.mat,codigo:codigoDe(m),manual:true};
+    // La decisión por nombre prevalece sobre una categoría antigua por ID.
     return lockIdentidad(m.mat,codigoDe(m));
   }
   function aplicarCategoria(m,categoria,marcarManual){
@@ -17821,6 +17980,7 @@ body:has(#modal-reporte.open) #modal-reporte{
       state.categoriaManual[id]=cat;
       var old=state.catalogoManual[id]||{};
       state.catalogoManual[id]=Object.assign({},old,{
+        nombre:String(m.mat||''),codigo:codigoDe(m),
         categoria:cat,manual:true,updatedAt:new Date().toISOString()
       });
       guardarLockIdentidad(m.mat,codigoDe(m),cat,state.catalogoManual[id].updatedAt);
@@ -17832,8 +17992,9 @@ body:has(#modal-reporte.open) #modal-reporte{
     (ALL_MATS||[]).forEach(function(m){
       if(!m)return;
       var id=Number(m.id),l=state.catalogoManual[id]||state.catalogoManual[String(id)]||null;
-      var cat=l&&l.manual!==false?catCanon(l.categoria):'';
-      if(!cat){
+      var identidadValida=!!(l&&l.nombre&&nameKey(l.nombre)===nameKey(m.mat));
+      var cat=identidadValida&&l.manual!==false?catCanon(l.categoria):'';
+      if(!cat&&identidadValida){
         var c=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
         cat=catCanon(c);
       }
@@ -18950,10 +19111,11 @@ body:has(#modal-reporte.open) #modal-reporte{
   function manualPorMaterial(m){
     if(!m||!ensure())return '';
     var id=Number(m.id);
-    var cm=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
-    var can=categoriaCanon(cm); if(can)return can;
     var reg=state.catalogoManual[id]||state.catalogoManual[String(id)]||null;
-    can=reg&&reg.manual!==false?categoriaCanon(reg.categoria):'';
+    var mismaIdentidad=!!(reg&&reg.nombre&&nameKey(reg.nombre)===nameKey(m.mat));
+    var cm=String(state.categoriaManual[id]||state.categoriaManual[String(id)]||'').trim();
+    var can=mismaIdentidad?categoriaCanon(cm):''; if(can)return can;
+    can=mismaIdentidad&&reg.manual!==false?categoriaCanon(reg.categoria):'';
     if(can)return can;
     var nk='name:'+nameKey(m.mat), ck='code:'+codeKey(codigoDe(m));
     var l=(nk!=='name:'?state.categoriaManualIdentidad[nk]:null)||null;
@@ -19266,266 +19428,1045 @@ body:has(#modal-reporte.open) #modal-reporte{
 </script>
 
 
-<!-- CQ 04/11/2026 — fuente independiente para el SUBRUBRO elegido a mano.
-     Caja/Acopio/Pañol siguen usando materiales/data_planilla_exacta_v4;
-     ese documento compartido NO es una fuente fiable de decisiones manuales. -->
-<script id="cq-clasificacion-manual-cloud-definitiva-v1">
+<!-- CQ 04/11/2026 — catálogo manual autoritativo v3: validación de identidad + cuarentena histórica. -->
+<script id="cq-catalogo-manual-autoritativo-v3">
+/* CQ 04/11/2026 — Catálogo autoritativo v3: identidad validada, transacciones y auditoría.
+   El documento principal recibe escrituras de Caja/Acopio/Pañol. Las decisiones
+   manuales se conservan APARTE, y nunca se da por guardado algo que no confirmó Firebase. */
 (function(){
-  'use strict';
-  if(window.__cqClasificacionManualCloudV1)return;
-  window.__cqClasificacionManualCloudV1=true;
+'use strict';
+if(window.__cqCatalogoProtegidoV3) return;
+window.__cqCatalogoProtegidoV3=true;
 
-  var CACHE_KEY='cq_materiales_subrubros_manuales_cloud_v1';
-  var COLLECTION='materiales_meta';
-  var DOCUMENT='subrubros_manuales_definitivos_v1';
-  var records={};
-  var pendientes={};
-  var cargando=null;
-  var cloudLoaded=false;
-  var unsubscribe=null;
-  var applying=false;
-  var guardando=false;
-
-  function normalizar(s){
-    return String(s||'').toLowerCase().normalize('NFD')
-      .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
-  }
-  function keyNombre(nombre){var n=normalizar(nombre);return n?'name:'+n:'';}
-  function copia(v){return JSON.parse(JSON.stringify(v));}
-  function cacheGuardar(){
-    try{localStorage.setItem(CACHE_KEY,JSON.stringify(records));}catch(e){console.warn('Materiales: caché subrubros',e);}
-  }
-  function cacheLeer(){
-    try{
-      var x=JSON.parse(localStorage.getItem(CACHE_KEY)||'{}');
-      return x&&typeof x==='object'&&!Array.isArray(x)?x:{};
-    }catch(e){return {};}
-  }
-  records=cacheLeer();
-
-  function firestoreListo(){return !!(window._dbReady&&window._db&&window._doc&&window._getDoc&&window._runTransaction&&modoFirebase);}
-  function refCloud(){return window._doc(window._db,COLLECTION,DOCUMENT);}
-  function categoriaReal(nombre){
-    var k=normalizar(nombre);if(!k)return '';
-    var c=(window.CATS||[]).find(function(x){
-      if(!x||normalizar(x.name)!==k)return false;
-      try{if(typeof isCatDeleted==='function'&&isCatDeleted(x.name))return false;}catch(e){}
-      return true;
-    });
-    return c?c.name:'';
-  }
-  function obtenerMateriales(){return Array.isArray(window.ALL_MATS)?window.ALL_MATS:[];}
-  function asegurarEstructuras(){
-    if(!window.state)return false;
-    ['matCategorias','categoriaManual','catalogoManual','categoriaManualIdentidad','categoriaMemoria']
-      .forEach(function(k){if(!state[k]||typeof state[k]!=='object')state[k]={};});
+var REF_COL='materiales_meta', REF_ID='catalogo_manual_autoritativo_v2';
+var LOG_KEY='cq_materiales_diagnostico_catalogo_v2';
+var CACHE_KEY='cq_materiales_catalogo_autoritativo_cache_v2';
+var autoridad={}, listo=false, iniciando=null, sincronia=null, reparando=null;
+var ultimoPrincipal=null, ultimoError='', guardando=false, reparaTimer=null, conflictosAislados={};
+// Serializar operaciones manuales del catálogo (el bloqueo anterior rechazaba
+// guardados cuando otra verificación de Firebase aún estaba en curso).
+var colaTransaccionesCatalogo=Promise.resolve(), edicionManualEnCurso=false;
+var eventos=[];
+try { eventos=JSON.parse(localStorage.getItem(LOG_KEY)||'[]')||[]; } catch(e) { eventos=[]; }
+function copia(x){return JSON.parse(JSON.stringify(x));}
+function norm(x){return String(x==null?'':x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+function limpia(x){return String(x==null?'':x).trim();}
+// Sólo una alta/edición confirmada por el usuario puede revivir una ficha
+// que otra app marcó como borrada. Las importaciones históricas no lo hacen.
+function decisionExplicita(r){return !!(r&&r.manual===true&&
+  (r.origen==='nuevo'||r.origen==='editar'||r.origen==='baja'||r.confirmadaEnMateriales===true));}
+function entradasConfirmadas(entries){
+  var out={};Object.keys(entries||{}).forEach(function(k){
+    if(decisionExplicita(entries[k]))out[k]=entries[k];
+  });return out;
+}
+function ocupanteRemoto(main,id){
+  var extra=(main.extraMats||[]).concat(main.materialesNuevos||[])
+    .find(function(m){return m&&String(m.id)===String(id);});
+  if(extra)return limpia((main.matNombres||{})[id]||extra.mat);
+  return limpia((main.matNombres||{})[id]);
+}
+function identidadOcupadaPorOtro(main,r,permitirNombreAnterior){
+  var ocupante=ocupanteRemoto(main,r.id);
+  return !!(ocupante&&norm(ocupante)!==norm(r.nombre)&&
+    !(permitirNombreAnterior&&norm(ocupante)===norm(permitirNombreAnterior)));
+}
+function base(){return window._doc(window._db,'materiales','data_planilla_exacta_v4');}
+function respaldo(){return window._doc(window._db,REF_COL,REF_ID);}
+function disponible(){return !!(window._dbReady&&window._db&&window._doc&&window._runTransaction&&window._getDoc&&modoFirebase);}
+function leerServidor(ref){return (window._getDocFromServer||window._getDoc)(ref);}
+function activos(){return Array.isArray(window.ALL_MATS)?window.ALL_MATS:[];}
+function catCanon(cat){
+  var n=norm(cat);
+  var c=(window.CATS||[]).find(function(x){
+    if(!x||norm(x.name)!==n || n.indexOf('sin subrubro')>=0)return false;
+    try{if(typeof isCatDeleted==='function'&&isCatDeleted(x.name))return false;}catch(e){}
     return true;
-  }
-  function protegerCategoria(mat,reg){
-    if(!mat||!reg)return false;
-    var cat=categoriaReal(reg.categoria);
-    if(!cat)return false; // No inventar subrubros ni restaurar categorías eliminadas.
-    var id=String(mat.id),antes=String(state.matCategorias[id]||mat.catName||'');
-    state.matCategorias[id]=cat;
-    state.categoriaManual[id]=cat;
-    state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{}, {
-      nombre:String(mat.mat||''),codigo:String(reg.codigo||''),
-      categoria:cat,manual:true,updatedAt:reg.updatedAt||new Date().toISOString()
+  });
+  return c?c.name:'';
+}
+function log(tipo,detalle){
+  var e={fecha:new Date().toISOString(),tipo:tipo,detalle:detalle||''};
+  eventos.push(e); if(eventos.length>80)eventos=eventos.slice(-80);
+  try{localStorage.setItem(LOG_KEY,JSON.stringify(eventos));}catch(_e){}
+  try{console.info('[CQ catálogo]',tipo,detalle||'');}catch(_e){}
+  actualizarPanel();
+}
+function error(msg,e){ultimoError=msg+': '+String(e&&e.message||e||'');log('ERROR',ultimoError);}
+function esAuto(m){return !!(m&&(m.autoCreated===true||/^(creado|recuperado|generado) autom[aá]ticamente desde /i.test(String(m.comentarios||''))));}
+function borrado(remote,id){return (remote.deletedMatIds||[]).some(function(x){return String(x)===String(id);});}
+function materialIgual(a,b){return String(a&&a.id)===String(b&&b.id)&&norm(a&&a.mat)===norm(b&&b.mat);}
+function registro(m,cat,manual,extras){
+  return {id:Number(m.id),nombre:limpia(m.mat),codigo:limpia(m.codigo||''),categoria:limpia(cat||m.catName||''),
+    comentarios:limpia(m.comentarios||''),prom:Number(m.prom)||0,manualCreated:manual===true,
+    manual:true,updatedAt:new Date().toISOString(),origen:extras||'edicion'};
+}
+function heredarLegacy(legacy,entries,main){
+  // Un ID histórico no prueba que siga siendo el mismo material: Caja y Acopio
+  // también generan IDs en la misma serie. Exigir SIEMPRE mismo nombre.
+  var mapa=legacy&&legacy.registros&&typeof legacy.registros==='object'?legacy.registros:{};
+  Object.keys(mapa).forEach(function(k){
+    var r=mapa[k];if(!r||r.manual!==true||!limpia(r.nombre))return;
+    var id=Number(r.id), extras=Array.isArray(main.extraMats)?main.extraMats:[];
+    var porId=extras.find(function(x){return String(x.id)===String(id);});
+    var nombre=norm(r.nombre);
+    var m=porId&&norm(porId.mat)===nombre?porId:null;
+    if(!m)m=extras.find(function(x){return norm(x.mat)===nombre;})||null;
+    if(!m)m=activos().find(function(x){return norm(x.mat)===nombre;})||null;
+    // Si el ID fue reutilizado, NO transplantar su clasificación al nuevo ocupante.
+    if(!m||borrado(main,m.id))return;
+    var nuevoId=String(m.id), actual=entries[nuevoId]||null;
+    if(actual&&norm(actual.nombre)!==nombre)return;
+    var previo=Date.parse(actual&&actual.updatedAt||'')||0;
+    var nuevo=Date.parse(r.updatedAt||'')||0;
+    if(actual&&previo>nuevo)return;
+    entries[nuevoId]=Object.assign({},actual||{},registro(m,r.categoria,
+      !!(actual&&actual.manualCreated),'migracion_v1'),{
+      id:Number(m.id),nombre:limpia(m.mat),codigo:limpia(r.codigo||m.codigo),categoria:limpia(r.categoria),
+      manualCreated:!!(actual&&actual.manualCreated),updatedAt:r.updatedAt||new Date().toISOString()
     });
-    var nk=keyNombre(mat.mat);
-    if(nk){
-      state.categoriaManualIdentidad[nk]={
-        nombre:String(mat.mat||''),codigo:String(reg.codigo||''),
-        categoria:cat,manual:true,updatedAt:reg.updatedAt||new Date().toISOString()
-      };
-      // No aplicar reglas sólo por código: puede estar repetido en otro producto.
-      state.categoriaMemoria[nk]=cat;
+  });
+}
+function primerasEntradas(main,legacy){
+  var result={};
+  (main.extraMats||[]).forEach(function(m){
+    if(!m||m.id==null||esAuto(m)||borrado(main,m.id))return;
+    var cat=limpia((main.matCategorias||{})[m.id]||m.catName);
+    result[String(m.id)]=registro(m,cat,true,'migracion_catalogo');
+  });
+  heredarLegacy(legacy,result,main);
+  return result;
+}
+function actualizarCache(){
+  try{localStorage.setItem(CACHE_KEY,JSON.stringify({entries:autoridad,at:new Date().toISOString()}));}catch(_e){}
+}
+async function aislarColisionesHistoricas(){
+  // Esta limpieza repara EXCLUSIVAMENTE registros importados por el código v2
+  // desde el respaldo v1 sin validar identidad. No borra un material, ni toca
+  // cargas, ni cambia el documento principal. Conserva el registro completo.
+  var resultado=await window._runTransaction(window._db,async function(tx){
+    var mp=await tx.get(base()),ba=await tx.get(respaldo());
+    if(!mp.exists()||!ba.exists())return {aislados:0};
+    var main=mp.data()||{},aux=ba.data()||{},entries=copia(aux.entries||{});
+    var archive=copia(aux.conflictosHistoricosAislados||{}), afectados=[];
+    var extra=Array.isArray(main.extraMats)?main.extraMats:[];
+    Object.keys(entries).forEach(function(k){
+      var r=entries[k];
+      if(!r||r.origen!=='migracion_v1'||r.manual!==true)return;
+      var ocupante=extra.find(function(m){return String(m.id)===String(r.id);});
+      if(!ocupante||norm(ocupante.mat)===norm(r.nombre))return;
+      var coincidePorNombre=extra.find(function(m){return norm(m.mat)===norm(r.nombre);});
+      if(coincidePorNombre){
+        // Sólo trasladar si el ID correcto no tiene otra decisión protegida.
+        var destino=String(coincidePorNombre.id),prev=entries[destino];
+        if(!prev||norm(prev.nombre)===norm(r.nombre)){
+          var movido=copia(r);movido.id=Number(coincidePorNombre.id);
+          movido.origen='migracion_v1_identidad_verificada';
+          if(!prev)entries[destino]=movido;
+          else if((Date.parse(r.updatedAt)||0)>(Date.parse(prev.updatedAt)||0))entries[destino]=movido;
+        }
+      }
+      archive[k]={registroOriginal:copia(r),ocupanteActual:limpia(ocupante.mat),
+        fechaDeteccion:new Date().toISOString(),motivo:'ID histórico reutilizado; identidad incompatible'};
+      delete entries[k];afectados.push({id:k,original:r.nombre,ocupante:ocupante.mat});
+    });
+    if(afectados.length){
+      tx.set(respaldo(),Object.assign({},aux,{version:3,entries:entries,
+        conflictosHistoricosAislados:archive,ultimaValidacionIdentidad:new Date().toISOString()}));
     }
-    mat.catName=cat;
-    (state.extraMats||[]).forEach(function(x){if(String(x&&x.id)===id)x.catName=cat;});
-    (state.materialesNuevos||[]).forEach(function(x){if(String(x&&x.id)===id)x.catName=cat;});
-    var destino=(window.CATS||[]).find(function(c){return c.name===cat;});
-    // Evitar reconstruir todas las categorías si el material ya está bien ubicado.
-    if(destino&&(normalizar(antes)!==normalizar(cat)||!destino.items.some(function(x){return String(x&&x.id)===id;}))){
-      (window.CATS||[]).forEach(function(c){
-        if(Array.isArray(c.items))c.items=c.items.filter(function(x){return String(x&&x.id)!==id;});
-      });
-      destino.items.push(mat);
+    return {aislados:afectados.length,detalle:afectados};
+  });
+  if(resultado.aislados)log('COLISION_HISTORICA_AISLADA',resultado.aislados+
+    ' decisión(es) v1 con ID reutilizado; guardadas en respaldo, sin modificar Firebase principal. '+
+    JSON.stringify(resultado.detalle).slice(0,500));
+  return resultado;
+}
+function asegurarEstado(){
+  if(!window.state)return false;
+  ['extraMats','matCategorias','matNombres','matCodigos','matComentarios','catalogoManual','categoriaManual','categoriaManualIdentidad','categoriaMemoria']
+    .forEach(function(k){if(!state[k]||typeof state[k]!=='object')state[k]=(k==='extraMats'?[]:{});});
+  return true;
+}
+var aplicando=false;
+function aplicarAutoridad(){
+  if(aplicando||!listo||!asegurarEstado())return false;
+  aplicando=true;var cambio=false;
+  try{
+    Object.keys(autoridad).forEach(function(k){
+      var r=autoridad[k]; if(!r||r.manual!==true||r.active===false||!r.nombre||!Number.isFinite(Number(r.id)))return;
+      var id=Number(r.id);
+      // Los registros migrados se conservan para consulta, pero NO prevalecen
+      // sobre las clasificaciones actuales de Acopio ni las de otras aplicaciones.
+      if(!decisionExplicita(r))return;
+      var marcadaBorrada=typeof isMatDeleted==='function'&&isMatDeleted(id);
+      if(marcadaBorrada&&!decisionExplicita(r))return;
+      // Una decisión antigua puede apuntar a un ID reutilizado. Nunca activarla
+      // si la identidad actualmente visible pertenece a otro artículo.
+      var ocupanteState=(state.extraMats||[]).concat(state.materialesNuevos||[])
+        .find(function(x){return x&&String(x.id)===String(id);});
+      if(ocupanteState&&norm(ocupanteState.mat)!==norm(r.nombre)&&
+          !(r.origen==='editar'&&r.nombreAnterior&&norm(ocupanteState.mat)===norm(r.nombreAnterior))){
+        logDiscrepanciaUnaVez('ocupante_state:'+id,'ID '+id+' ocupado por '+ocupanteState.mat+' (protegido: '+r.nombre+')');
+        return;
+      }
+      var cat=catCanon(r.categoria);if(!cat)return; // Espera al catálogo de subrubros de Gastos.
+      if(marcadaBorrada&&decisionExplicita(r)){
+        state.deletedMatIds=(state.deletedMatIds||[]).filter(function(x){return String(x)!==String(id);});
+        var claveBorrada='name:'+norm(r.nombre).replace(/ /g,'');
+        state.deletedMaterialKeys=(state.deletedMaterialKeys||[]).filter(function(k){return k!==claveBorrada;});
+        cambio=true;
+      }
+      var m=activos().find(function(x){return String(x&&x.id)===String(id);});
+      if(m&&norm(m.mat)!==norm(r.nombre)){
+        // Autorizar únicamente el renombre confirmado de ESE artículo.
+        if(!(r.origen==='editar'&&r.nombreAnterior&&norm(m.mat)===norm(r.nombreAnterior))){
+          m=activos().find(function(x){return norm(x&&x.mat)===norm(r.nombre);})||null;
+          if(!m){logDiscrepanciaUnaVez('id_reutilizado:'+id,'ID '+id+' corresponde a otro material, no '+r.nombre);return;}
+          id=Number(m.id);
+        }
+      }
+      if(!m){
+        // Acopio/Caja pueden recrear un producto con otro ID: identificar por NOMBRE.
+        m=activos().find(function(x){return norm(x&&x.mat)===norm(r.nombre);})||null;
+        if(m)id=Number(m.id);
+      }
+      if(!m&&r.manualCreated){
+        m={id:id,mat:r.nombre,codigo:r.codigo||'',catName:cat,comentarios:r.comentarios||'',prom:Number(r.prom)||0,data:[]};
+        ALL_MATS.push(m);cambio=true;
+      }
+      if(!m)return;
+      // Aunque ALL_MATS conserve el registro en memoria, una escritura externa
+      // puede haber borrado la ficha del array de Firebase. Reponer la ficha en
+      // extraMats es necesario para que persista al recargar en otro dispositivo.
+      if(r.manualCreated&&!state.extraMats.some(function(x){return String(x.id)===String(id)&&norm(x.mat)===norm(r.nombre);})){ 
+        if(!state.extraMats.some(function(x){return String(x.id)===String(id);})){
+          state.extraMats.push({id:id,mat:r.nombre,codigo:r.codigo||'',catName:cat,
+            comentarios:r.comentarios||'',prom:Number(r.prom)||0,data:[],manualCreated:true});
+          cambio=true;
+        }
+      }
+      var ex=state.extraMats.find(function(x){return String(x.id)===String(id);});
+      if(ex){
+        if(norm(ex.catName)!==norm(cat)||ex.mat!==r.nombre||limpia(ex.codigo)!==limpia(r.codigo))cambio=true;
+        ex.mat=r.nombre;ex.codigo=r.codigo||'';ex.catName=cat;ex.comentarios=r.comentarios||'';
+      }
+      if(norm(state.matCategorias[id])!==norm(cat)||norm(m.catName)!==norm(cat))cambio=true;
+      state.matCategorias[id]=cat;state.categoriaManual[id]=cat;
+      state.matNombres[id]=r.nombre;state.matCodigos[id]=r.codigo||'';
+      state.matComentarios[id]=r.comentarios||'';
+      var lock={nombre:r.nombre,codigo:r.codigo||'',categoria:cat,manual:true,updatedAt:r.updatedAt};
+      state.catalogoManual[id]=Object.assign({},state.catalogoManual[id]||{},lock);
+      state.categoriaManualIdentidad['name:'+norm(r.nombre)]=Object.assign({},lock);
+      state.categoriaMemoria['name:'+norm(r.nombre)]=cat;
+      m.mat=r.nombre;m.codigo=r.codigo||'';m.catName=cat;m.comentarios=r.comentarios||'';
+      var destino=(window.CATS||[]).find(function(c){return c.name===cat;});
+      var correctamenteUbicado=destino&&destino.items&&destino.items.some(function(x){return String(x.id)===String(id);});
+      if(!correctamenteUbicado){
+        (window.CATS||[]).forEach(function(c){
+          c.items=(c.items||[]).filter(function(x){return String(x.id)!==String(id);});
+        });
+        if(destino)destino.items.push(m);
+      }
+    });
+    if(cambio){try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(_e){}}
+    return cambio;
+  } finally{aplicando=false;}
+}
+var discrepanciasMostradas={};
+function logDiscrepanciaUnaVez(key,msg){
+  if(discrepanciasMostradas[key])return;
+  discrepanciasMostradas[key]=true;log('CONFLICTO',msg);
+}
+function diferencias(main,entries){
+  var res=[];
+  Object.keys(entries).forEach(function(k){
+    var r=entries[k];if(!r||r.manual!==true)return;
+    if(r.active===false){
+      var clave='name:'+norm(r.nombre).replace(/ /g,'');
+      var aparece=(main.extraMats||[]).some(function(m){return String(m.id)===String(r.id)||norm(m.mat)===norm(r.nombre);});
+      if(!borrado(main,r.id)||aparece||(main.deletedMaterialKeys||[]).indexOf(clave)<0)
+        res.push({id:String(r.id),nombre:r.nombre,tipo:'BAJA_REAPARECIDA'});
+      return;
     }
-    return normalizar(antes)!==normalizar(cat);
-  }
-  function aplicarRegistros(){
-    if(applying||!asegurarEstructuras())return false;
-    applying=true;
+    var id=String(r.id);
+    var ocupante=(main.extraMats||[]).concat(main.materialesNuevos||[])
+      .find(function(m){return String(m&&m.id)===id;})||null;
+    if(borrado(main,r.id)){
+      if(decisionExplicita(r)&&!identidadOcupadaPorOtro(main,r))
+        res.push({id:id,nombre:r.nombre,tipo:'ALTA_MANUAL_MARCADA_BORRADA'});
+      return;
+    }
+    var ex=(main.extraMats||[]).find(function(m){return String(m&&m.id)===id&&norm(m.mat)===norm(r.nombre);})||
+      (main.extraMats||[]).find(function(m){return norm(m&&m.mat)===norm(r.nombre);});
+    if(ex)id=String(ex.id); // Mismo producto recreado con otro ID.
+    if(ocupante&&norm(ocupante.mat)!==norm(r.nombre)&&!ex){
+      res.push({id:id,nombre:r.nombre,tipo:'CONFLICTO_ID',remoto:ocupante.mat});
+      return; // Nunca atribuir al material protegido el subrubro del ocupante actual.
+    }
+    var mat=ex||activos().find(function(m){return String(m&&m.id)===id;});
+    if(mat&&norm(mat.mat)!==norm(r.nombre)&&!ex&&
+        !(r.origen==='editar'&&r.nombreAnterior&&norm(mat.mat)===norm(r.nombreAnterior)&&
+          norm((main.matNombres||{})[id])===norm(r.nombre))){
+      res.push({id:id,nombre:r.nombre,tipo:'CONFLICTO_ID',remoto:mat.mat});return;
+    }
+    if(r.manualCreated&&!ex)res.push({id:id,nombre:r.nombre,tipo:'ALTA_FALTANTE'});
+    if(ex&&norm(ex.mat)!==norm(r.nombre))res.push({id:id,nombre:r.nombre,tipo:'NOMBRE_DISTINTO',remoto:ex.mat});
+    if(ex&&limpia(ex.codigo)!==limpia(r.codigo))res.push({id:id,nombre:r.nombre,tipo:'CODIGO_DISTINTO',remoto:ex.codigo||''});
+    var cat=limpia((main.matCategorias||{})[id]||(ex&&ex.catName)||'');
+    if(norm(cat)!==norm(r.categoria))res.push({id:id,nombre:r.nombre,tipo:'SUBRUBRO_DISTINTO',remoto:cat});
+    if(decisionExplicita(r)){
+      var comentarioServidor=limpia((main.matComentarios||{})[id]||(ex&&ex.comentarios)||'');
+      if(comentarioServidor!==limpia(r.comentarios))
+        res.push({id:id,nombre:r.nombre,tipo:'OBSERVACIONES_DISTINTAS'});
+    }
+    var remotoNombre=limpia((main.matNombres||{})[id]);
+    if(!r.manualCreated&&remotoNombre&&norm(remotoNombre)!==norm(r.nombre))res.push({id:id,nombre:r.nombre,tipo:'RENOMBRE_DISTINTO',remoto:remotoNombre});
+    if(r.manualCreated&&mat&&norm(mat.mat)!==norm(r.nombre)&&!ex)res.push({id:id,nombre:r.nombre,tipo:'COLISION_ID',remoto:mat.mat});
+  });
+  return res;
+}
+function prepararCambios(main,entries,renombresAutorizados){
+  renombresAutorizados=renombresAutorizados||{};
+  var extra=copia(Array.isArray(main.extraMats)?main.extraMats:[]),
+      matCategorias=Object.assign({},main.matCategorias||{}),matNombres=Object.assign({},main.matNombres||{}),
+      matCodigos=Object.assign({},main.matCodigos||{}),matComentarios=Object.assign({},main.matComentarios||{}),
+      catManual=Object.assign({},main.catalogoManual||{}),
+      categoriaManual=Object.assign({},main.categoriaManual||{});
+  var changed=false, colisiones=[];
+  var deletedIds=Array.isArray(main.deletedMatIds)?main.deletedMatIds.slice():[];
+  var deletedNames=Array.isArray(main.deletedMaterialKeys)?main.deletedMaterialKeys.slice():[];
+  Object.keys(entries).forEach(function(k){
+    var r=entries[k];if(!r||r.manual!==true)return;
+    if(r.active===false){
+      // Una baja protegida antigua NO debe eliminar a otro producto que hoy use su ID.
+      var ocupanteBaja=(extra.concat(main.materialesNuevos||[]))
+        .find(function(x){return String(x&&x.id)===String(r.id);});
+      if((ocupanteBaja&&norm(ocupanteBaja.mat)!==norm(r.nombre))||
+          (!ocupanteBaja&&identidadOcupadaPorOtro(main,r))){
+        colisiones.push({id:String(r.id),remoto:ocupanteBaja?ocupanteBaja.mat:ocupanteRemoto(main,r.id),protegido:r.nombre,tipo:'BAJA_ID_RECICLADO'});
+        return;
+      }
+      var key='name:'+norm(r.nombre).replace(/ /g,'');
+      if(!deletedIds.some(function(x){return String(x)===String(r.id);})) {deletedIds.push(r.id);changed=true;}
+      if(key&&deletedNames.indexOf(key)<0){deletedNames.push(key);changed=true;}
+      var largo=extra.length;
+      extra=extra.filter(function(x){return String(x.id)!==String(r.id)&&norm(x.mat)!==norm(r.nombre);});
+      if(extra.length!==largo)changed=true;
+      return;
+    }
+    var id=String(r.id), ex=extra.find(function(m){return String(m.id)===id;});
+    var autorizado=renombresAutorizados[id]||
+      (r.origen==='editar'?limpia(r.nombreAnterior):'');
+    var nombreRemoto=ocupanteRemoto(main,id);
+    if(nombreRemoto&&norm(nombreRemoto)!==norm(r.nombre)&&
+        !(autorizado&&norm(nombreRemoto)===norm(autorizado))){
+      // Si el artículo fue recreado bajo otro ID, sólo seguirlo por nombre exacto.
+      var otroPorNombre=extra.find(function(m){return norm(m.mat)===norm(r.nombre);});
+      if(!otroPorNombre){colisiones.push({id:id,remoto:nombreRemoto,protegido:r.nombre,tipo:'IDENTIDAD_ID'});return;}
+      ex=otroPorNombre;id=String(ex.id);
+    }
+    if(ex&&norm(ex.mat)!==norm(r.nombre)){
+      if(!(autorizado&&String(ex.id)===String(r.id)&&norm(ex.mat)===norm(autorizado))){
+        var mismoNombre=extra.find(function(m){return norm(m.mat)===norm(r.nombre);});
+        if(!mismoNombre){colisiones.push({id:id,remoto:ex.mat,protegido:r.nombre});return;}
+        ex=mismoNombre;id=String(ex.id);
+      }
+    }
+    if(borrado(main,r.id)){
+      if(!decisionExplicita(r)||identidadOcupadaPorOtro(main,r,autorizado))return;
+      deletedIds=deletedIds.filter(function(x){return String(x)!==String(r.id);});changed=true;
+    }
+    if(decisionExplicita(r)){
+      var claveActiva='name:'+norm(r.nombre).replace(/ /g,'');
+      var limpias=deletedNames.filter(function(x){return x!==claveActiva;});
+      if(limpias.length!==deletedNames.length){deletedNames=limpias;changed=true;}
+    }
+    if(!ex){
+      // La integración recreó el mismo artículo con un ID nuevo: conservarlo,
+      // pero fijar el subrubro elegido a mano en ese nuevo ID.
+      ex=extra.find(function(m){return norm(m.mat)===norm(r.nombre);})||null;
+      if(ex)id=String(ex.id);
+    }
+    if(!ex){
+      var baseOcupada=activos().find(function(m){return String(m&&m.id)===id&&norm(m.mat)!==norm(r.nombre);});
+      if(baseOcupada&&!(autorizado&&norm(baseOcupada.mat)===norm(autorizado))){
+        colisiones.push({id:id,remoto:baseOcupada.mat,protegido:r.nombre});return;
+      }
+    }
+    if(r.manualCreated&&!ex){
+      ex={id:Number(r.id),mat:r.nombre,codigo:r.codigo||'',catName:r.categoria,prom:Number(r.prom)||0,
+          comentarios:r.comentarios||'',data:[],manualCreated:true};
+      extra.push(ex);changed=true;
+    }
+    if(ex){
+      if(ex.mat!==r.nombre||limpia(ex.codigo)!==limpia(r.codigo)||norm(ex.catName)!==norm(r.categoria)||limpia(ex.comentarios)!==limpia(r.comentarios))changed=true;
+      ex.mat=r.nombre;ex.codigo=r.codigo||'';ex.catName=r.categoria;ex.comentarios=r.comentarios||'';
+    }
+    if(norm(matCategorias[id])!==norm(r.categoria)||limpia(matNombres[id])!==limpia(r.nombre)||
+        limpia(matCodigos[id])!==limpia(r.codigo)||limpia(matComentarios[id])!==limpia(r.comentarios))changed=true;
+    matCategorias[id]=r.categoria;matNombres[id]=r.nombre;matCodigos[id]=r.codigo||'';
+    matComentarios[id]=r.comentarios||'';
+    categoriaManual[id]=r.categoria;
+    catManual[id]=Object.assign({},catManual[id]||{}, {nombre:r.nombre,codigo:r.codigo||'',categoria:r.categoria,manual:true,updatedAt:r.updatedAt});
+  });
+  return {changed:changed,collisions:colisiones,patch:{extraMats:extra,matCategorias:matCategorias,matNombres:matNombres,
+    matCodigos:matCodigos,matComentarios:matComentarios,catalogoManual:catManual,
+    categoriaManual:categoriaManual,deletedMatIds:deletedIds,deletedMaterialKeys:deletedNames}};
+}
+async function reconciliar(origen){
+  if(reparando||guardando||!listo||!disponible())return false;
+  reparando=(async function(){
     try{
-      var cambio=false;
-      obtenerMateriales().forEach(function(m){
-        if(!m)return;
-        try{if(typeof isMatDeleted==='function'&&isMatDeleted(m.id))return;}catch(e){}
-        var key=keyNombre(m.mat);
-        var reg=key?records[key]:null;
-        // Respaldo de renombres a medio sincronizar: el ID y el nombre viejo deben coincidir.
-        if(!reg){
-          Object.keys(records).some(function(k){
-            var r=records[k];
-            if(r&&String(r.id)===String(m.id)&&normalizar(r.previousName)===normalizar(m.mat)&&r.previousName){reg=r;return true;}
-            return false;
-          });
-        }
-        if(reg&&reg.manual===true)cambio=protegerCategoria(m,reg)||cambio;
+      var resultado=await window._runTransaction(window._db,async function(tx){
+        var mainSnap=await tx.get(base()), auxSnap=await tx.get(respaldo());
+        if(!mainSnap.exists()||!auxSnap.exists())throw new Error('Documento principal o catálogo protegido inexistente');
+        var main=mainSnap.data()||{}, entries=entradasConfirmadas(auxSnap.data().entries||{});
+        var p=prepararCambios(main,entries);
+        if(p.collisions.length)log('CONFLICTO_ID',JSON.stringify(p.collisions).slice(0,350));
+        if(p.changed)tx.set(base(),Object.assign({},p.patch,{updatedAt:new Date().toISOString(),catalogoReparadoAt:new Date().toISOString()}),{merge:true});
+        return {cambio:p.changed,colisiones:p.collisions.length};
       });
-      return cambio;
-    }finally{applying=false;}
+      if(resultado.cambio)log('REPARACION','Firebase principal restaurado desde catálogo independiente ('+origen+')');
+      return !!resultado.cambio;
+    }catch(e){error('No se pudo reparar documento principal',e);return false;}
+    finally{reparando=null;}
+  })();
+  return reparando;
+}
+function programarReparacion(motivo){
+  if(!listo||!disponible()||guardando)return;
+  // Las importaciones históricas se ven en el diagnóstico, pero NO autorizan
+  // reescrituras automáticas de todo el catálogo compartido con otras apps.
+  if(!ultimoPrincipal||!diferencias(ultimoPrincipal,entradasConfirmadas(autoridad)).length)return;
+  clearTimeout(reparaTimer);
+  reparaTimer=setTimeout(function(){reconciliar(motivo);},650);
+}
+function aceptarRespaldo(datos,origen){
+  var e=datos&&datos.entries&&typeof datos.entries==='object'&&!Array.isArray(datos.entries)?datos.entries:{};
+  autoridad=copia(e);
+  conflictosAislados=copia(datos&&datos.conflictosHistoricosAislados||{});
+  listo=true;actualizarCache();
+  var cambio=aplicarAutoridad();
+  if(cambio){try{renderActive();}catch(_e){}}
+  log('RESPALDO_LEIDO',origen+' · '+Object.keys(autoridad).length+' materiales/decisiones');
+  if(window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.marcar('autoridad');
+  if(ultimoPrincipal&&diferencias(ultimoPrincipal,entradasConfirmadas(autoridad)).length)programarReparacion('cambios recibidos');
+}
+function escuchar(){
+  if(sincronia||!disponible()||!window._onSnapshot)return;
+  sincronia=window._onSnapshot(respaldo(),function(snap){
+    if(snap.exists())aceptarRespaldo(snap.data(),'suscripción');
+  },function(e){error('Suscripción catálogo independiente',e);});
+  // El listener principal permite identificar cuándo Caja/Acopio/Pañol
+  // devolvieron una categoría o borraron un alta, SIN asumir quién escribió.
+  window._onSnapshot(base(),function(snap){
+    if(!snap.exists())return;
+    ultimoPrincipal=snap.data()||{};
+    if(!listo)return;
+    var dif=diferencias(ultimoPrincipal,entradasConfirmadas(autoridad));
+    if(dif.length){
+      var ejemplo=dif.slice(0,4).map(function(x){return x.nombre+' ['+x.tipo+']';}).join('; ');
+      log('SOBRESCRITURA_DETECTADA',dif.length+' diferencias en Firebase principal: '+ejemplo);
+      programarReparacion('snapshot del documento compartido');
+    }
+  },function(e){error('Suscripción documento principal',e);});
+}
+async function inicializar(){
+  if(listo){escuchar();return true;}
+  if(iniciando)return iniciando;
+  if(!disponible())return false;
+  iniciando=(async function(){
+    try{
+      // V10: el respaldo V2/V3 ya existe en Firebase. Leerlo directamente
+      // desde el servidor es suficiente para aplicar las decisiones confirmadas.
+      // Evitamos una lectura histórica y una transacción de 2 documentos
+      // innecesarias en CADA inicio. La migración sigue disponible si falta.
+      var existente=await leerServidor(respaldo());
+      if(existente.exists()){
+        var datosExistentes=existente.data()||{};
+        aceptarRespaldo(datosExistentes,'inicio directo · servidor');
+        escuchar();
+        // Mantener la limpieza histórica, pero sin bloquear la apertura.
+        // Sólo se necesita cuando siguen quedando entradas antiguas migradas.
+        var hayLegado=Object.values(datosExistentes.entries||{}).some(function(r){
+          return r&&r.origen==='migracion_v1';
+        });
+        if(hayLegado){
+          setTimeout(function(){
+            aislarColisionesHistoricas().catch(function(e){
+              console.warn('Verificación histórica de IDs (diferida)',e);
+            });
+          },1200);
+        }
+        return true;
+      }
+      var legacy={};
+      try{var v=await leerServidor(window._doc(window._db,'materiales_meta','subrubros_manuales_definitivos_v1'));
+          if(v.exists())legacy=v.data()||{};}catch(e){log('AVISO','No se pudo leer clasificación histórica v1: '+String(e&&e.code||e));}
+      var creado=await window._runTransaction(window._db,async function(tx){
+        var principal=await tx.get(base()), aux=await tx.get(respaldo());
+        if(!principal.exists())throw new Error('No existe materiales/data_planilla_exacta_v4');
+        if(aux.exists())return false;
+        var entries=primerasEntradas(principal.data()||{},legacy);
+        tx.set(respaldo(),{version:2,entries:entries,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+        return true;
+      });
+      // Antes de activar la reparación automática, identificar las decisiones
+      // incorrectamente importadas por ID en la versión anterior.
+      await aislarColisionesHistoricas();
+      var snap=await leerServidor(respaldo());
+      if(!snap.exists())throw new Error('No se pudo verificar el documento independiente');
+      aceptarRespaldo(snap.data(),'servidor');
+      if(creado)log('MIGRACION','Catálogo manual inicial copiado desde Firebase principal y decisiones antiguas');
+      escuchar();
+      return true;
+    }catch(e){error('No se pudo iniciar protección del catálogo',e);return false;}
+    finally{iniciando=null;}
+  })();
+  return iniciando;
+}
+
+function camposEditor(m,elems){
+  return {id:m&&Number(m.id),nombreOriginal:m?limpia(m.mat):'',nombre:limpia(document.getElementById(elems.n).value),
+    codigo:limpia((document.getElementById(elems.c)||{}).value),
+    categoria:catCanon((document.getElementById(elems.cat)||{}).value),
+    comentarios:limpia((document.getElementById(elems.obs)||{}).value),
+    prom:Number((document.getElementById(elems.prom)||{}).value)||0};
+}
+function checkDatos(d){
+  if(!d.nombre){alert('Ingresá un nombre.');return false;}
+  if(!d.categoria){alert('Elegí un subrubro válido de Gastos.');return false;}
+  return true;
+}
+function guardarNuevaEntrada(entries,main,d,accion){
+  var extras=(Array.isArray(main.extraMats)?main.extraMats:[])
+    .concat(Array.isArray(main.materialesNuevos)?main.materialesNuevos:[]);
+  // Sólo la copia REMOTA y el documento independiente deciden si un alta existe.
+  // ALL_MATS puede conservar un alta local que Firebase ya borró: no la reutilizamos.
+  // Los materiales de ID >=10000 también pueden provenir de una integración
+  // (Acopio/Caja/Pañol) y estar visibles en ALL_MATS sin estar aún en extraMats.
+  // Para altas nuevas seguimos usando sólo Firebase, evitando reciclar un ID
+  // que la pantalla conserva de un guardado viejo.
+  var conocidos=activos().filter(function(m){return m&&Number(m.id)<10000;});
+  var visiblePorId=accion==='editar'?activos().find(function(m){return m&&String(m.id)===String(d.id);}):null;
+  var enRespaldo=Object.keys(entries).map(function(k){var r=entries[k];return r&&r.active!==false?{id:r.id,mat:r.nombre,codigo:r.codigo,catName:r.categoria,manualCreated:r.manualCreated}:null;}).filter(Boolean);
+  var existentes=extras.concat(conocidos,enRespaldo).filter(function(m,i,a){return a.findIndex(function(x){return String(x.id)===String(m.id);})===i;});
+  var enNombre=existentes.find(function(m){return norm(m.mat)===norm(d.nombre) && !borrado(main,m.id);});
+  var id;
+  if(accion==='editar'){
+    id=Number(d.id);
+    var viejo=existentes.find(function(m){return String(m.id)===String(id);});
+    // No rechazar un artículo visible sólo por tener ID dinámico: puede haber
+    // llegado desde un movimiento, matNombres o un estado legado sin extraMats.
+    // La identidad remota se valida SIEMPRE antes de aceptarlo.
+    var nombreOriginal=norm(d.nombreOriginal);
+    var vistoCorrecto=visiblePorId&&nombreOriginal&&norm(visiblePorId.mat)===nombreOriginal;
+    var fichaRemota=extras.find(function(m){return m&&String(m.id)===String(id);})||null;
+    var nombreDeFirebase=ocupanteRemoto(main,id);
+    if(fichaRemota&&nombreOriginal&&norm(fichaRemota.mat)!==nombreOriginal)
+      throw new Error('El ID '+id+' pertenece en Firebase a otro material ('+fichaRemota.mat+'). No se modificó.');
+    if(nombreDeFirebase&&nombreOriginal&&norm(nombreDeFirebase)!==nombreOriginal)
+      throw new Error('El material cambió en Firebase mientras lo editabas (ID '+id+': '+nombreDeFirebase+'). Recargá antes de continuar.');
+    if(!viejo||norm(viejo.mat)!==nombreOriginal){
+      if(!vistoCorrecto)throw new Error('La identidad del material seleccionado no coincide. Recargá el catálogo.');
+      // Si el respaldo viejo reutilizó este ID, no aceptarlo como identidad.
+      // Reemplazar la referencia de edición con la ficha visible verificada.
+      viejo=visiblePorId;
+      if(!existentes.some(function(m){return String(m.id)===String(id);}))existentes.push(viejo);
+    }
+    if(!viejo)throw new Error('El material original ya no existe en el catálogo');
+    // El nombre persistido tiene prioridad sobre la copia visible, pero nunca
+    // confundimos una referencia vieja por ID con un artículo diferente.
+    var nombreVigente=nombreDeFirebase||limpia(viejo.mat);
+    if(nombreOriginal&&norm(nombreVigente)!==nombreOriginal)
+      throw new Error('El material cambió en Firebase mientras lo editabas. Recargá antes de continuar.');
+    var duplicado=existentes.find(function(m){return String(m.id)!==String(id) && norm(m.mat)===norm(d.nombre)&&!borrado(main,m.id);});
+    if(duplicado)throw new Error('Ya existe otro material con ese nombre. No se fusionaron productos automáticamente.');
+  }else if(enNombre){
+    id=Number(enNombre.id);
+    if(window.__cqMaterialesEmployeeRO)throw new Error('El material ya existe. En modo solo lectura no se puede modificar.');
+  }else{
+    var max=9999;
+    existentes.forEach(function(m){var n=Number(m&&m.id);if(Number.isFinite(n)&&n>max)max=n;});
+    // Los IDs de materiales borrados y cargas históricas tampoco pueden reciclarse.
+    (main.deletedMatIds||[]).forEach(function(k){var n=Number(k);if(Number.isFinite(n)&&n>max)max=n;});
+    (main.cargas||[]).forEach(function(c){var n=Number(c&&c.matId);if(Number.isFinite(n)&&n>max)max=n;});
+    Object.keys(entries).forEach(function(k){var n=Number(k);if(Number.isFinite(n)&&n>max)max=n;});
+    id=max+1;
   }
-  function aceptarRemoto(datos){
-    var r=datos&&datos.registros&&typeof datos.registros==='object'&&!Array.isArray(datos.registros)?datos.registros:{};
-    // Firebase es la verdad compartida. Sólo se exceptúa una edición de ESTE equipo aún pendiente.
-    records=copia(r);
-    Object.keys(pendientes).forEach(function(k){records[k]=pendientes[k];});
-    cloudLoaded=true;
-    cacheGuardar();
-    var cambio=aplicarRegistros();
-    if(cambio){
-      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(e){}
-      try{renderActive();}catch(e){}
+  var extraActual=extras.find(function(m){return String(m.id)===String(id);});
+  var yaCreado=!!(extraActual||entries[String(id)]&&entries[String(id)].manualCreated);
+  var actual=extraActual||conocidos.find(function(m){return String(m.id)===String(id);})||
+    (accion==='editar'&&visiblePorId?visiblePorId:null);
+  var necesitaFichaPersistente=accion==='editar'&&Number(id)>=10000&&
+    !extras.some(function(m){return String(m.id)===String(id);});
+  var viejoNombre=limpia((main.matNombres||{})[id]||(actual&&actual.mat)||d.nombreOriginal);
+  var reg={id:id,nombre:d.nombre,nombreAnterior:accion==='editar'?viejoNombre:'',
+    codigo:d.codigo,categoria:d.categoria,comentarios:d.comentarios,
+    prom:accion==='editar'?(Number(actual&&actual.prom)||0):d.prom,
+    confirmadaEnMateriales:true,manualCreated:necesitaFichaPersistente||
+      ((!actual||!!extraActual||yaCreado)&&!(actual&&esAuto(actual))),
+    manual:true,updatedAt:new Date().toISOString(),origen:accion};
+  if(accion==='nuevo'&&!enNombre)reg.manualCreated=true;
+  if(entries[String(id)]&&entries[String(id)].manualCreated)reg.manualCreated=true;
+  // Una ficha auto-creada que el usuario corrigió manualmente se vuelve permanente.
+  if(accion==='editar'&&extraActual)reg.manualCreated=true;
+  Object.keys(entries).forEach(function(key){
+    var anterior=entries[key];
+    if(anterior&&anterior.active===false&&norm(anterior.nombre)===norm(d.nombre))delete entries[key];
+  });
+  entries[String(id)]=reg;
+  // Evitar que un borrado antiguo del mismo nombre impida el alta explícita.
+  if(accion==='nuevo'&&!enNombre){
+    main.deletedMatIds=(main.deletedMatIds||[]).filter(function(x){return String(x)!==String(id);});
+    if(Array.isArray(main.deletedMaterialKeys))main.deletedMaterialKeys=main.deletedMaterialKeys.filter(function(x){return x!=='name:'+norm(d.nombre).replace(/ /g,'');});
+  }
+  if(viejoNombre&&norm(viejoNombre)!==norm(d.nombre)){
+    main.cargas=(main.cargas||[]).map(function(c){
+      if(!c)return c;
+      if(String(c.matId)===String(id))return Object.assign({},c,{matName:d.nombre});
+      return c;
+    });
+  }
+  return {id:id,reg:reg,existia:!!enNombre,nombreAnterior:viejoNombre};
+}
+async function transaccionCatalogo(datos,accion){
+  // Cada operación espera su turno sin perder el contenido del formulario.
+  // No se acumulan reintentos por doble toque: guardarNombreMat controla eso.
+  var liberarTurno;
+  var turnoAnterior=colaTransaccionesCatalogo;
+  colaTransaccionesCatalogo=new Promise(function(resolve){liberarTurno=resolve;});
+  await turnoAnterior;
+  if(guardando){
+    liberarTurno();
+    throw new Error('Se está eliminando otro material. Esperá que termine antes de editar.');
+  }
+  guardando=true;
+  try{
+    if(!disponible())throw new Error('Firebase no está conectado. No se confirmó ningún guardado.');
+    if(!(await inicializar()))throw new Error(ultimoError||'No se pudo verificar la copia independiente del catálogo.');
+    var lista=Array.isArray(datos)?datos:[datos],resultado=[];
+    setSyncStatus('Firebase: verificando catálogo...');
+    var hecho=await window._runTransaction(window._db,async function(tx){
+      var sm=await tx.get(base()),sa=await tx.get(respaldo());
+      if(!sm.exists()||!sa.exists())throw new Error('Falta uno de los dos documentos de Firebase');
+      var main=copia(sm.data()||{}), a=copia(sa.data()||{}), entries=copia(a.entries||{}), result=[];
+      var renombresAutorizados={};
+      for(var i=0;i<lista.length;i++){
+        var guardado=guardarNuevaEntrada(entries,main,lista[i],accion);
+        result.push(guardado);
+        if(accion==='editar'&&guardado.nombreAnterior&&
+           norm(guardado.nombreAnterior)!==norm(lista[i].nombre))
+          renombresAutorizados[String(guardado.id)]=guardado.nombreAnterior;
+      }
+      var soloEditados={};
+      result.forEach(function(g){soloEditados[String(g.id)]=entries[String(g.id)];});
+      var revision=prepararCambios(main,soloEditados,renombresAutorizados);
+      if(revision.collisions.some(function(c){return result.some(function(r){return String(r.id)===String(c.id);});}))
+        throw new Error('ID en conflicto: no se aplicó la edición al material equivocado');
+      var patch=revision.patch;
+      // La transacción lee el último estado de Firebase: no pisa cargas nuevas.
+      if(main.cargas)patch.cargas=main.cargas;
+      patch.updatedAt=new Date().toISOString();
+      patch.catalogoManualWriter='CQ Materiales v7 (ediciones serializadas)';
+      tx.set(base(),patch,{merge:true});
+      var respaldoNuevo=Object.assign({},a,{version:3,entries:entries,updatedAt:patch.updatedAt,lastAction:accion});
+      tx.set(respaldo(),respaldoNuevo);
+      // runTransaction sólo termina una vez que Firestore acepta ambas escrituras.
+      return {resultados:result,respaldoNuevo:respaldoNuevo};
+    });
+    var confirmados=hecho.resultados;
+    // La transacción ya fue aceptada por Firestore. Una lectura posterior puede
+    // encontrar una edición concurrente, lo cual NO equivale a 'no se guardó'.
+    var ver=null, discrepancia='';
+    for(var intento=0;intento<3;intento++){
+      ver=await leerServidor(respaldo());
+      var guardados=ver.exists()?(ver.data().entries||{}):{};
+      discrepancia='';
+      confirmados.forEach(function(x){
+        var r=guardados[String(x.id)],esperado=x.reg;
+        if(!r||norm(r.nombre)!==norm(esperado.nombre)||
+          norm(r.categoria)!==norm(esperado.categoria)||
+          limpia(r.comentarios)!==limpia(esperado.comentarios)){
+          discrepancia='ID '+x.id+' ('+esperado.nombre+'): esperado '+esperado.categoria+
+            ', remoto '+(r?(String(r.nombre)+' / '+String(r.categoria)):'SIN REGISTRO');
+        }
+      });
+      if(!discrepancia)break;
+      if(intento<2)await new Promise(function(resolve){setTimeout(resolve,350*(intento+1));});
+    }
+    if(discrepancia){
+      // Guardar localmente el resultado confirmado POR LA TRANSACCIÓN; no
+      // sobreescribir otra identidad con una lectura posterior sospechosa.
+      aceptarRespaldo(hecho.respaldoNuevo,'transacción aceptada; escritura externa detectada');
+      log('REEMPLAZO_POSTERIOR',discrepancia);
+      throw new Error('Firebase aceptó la edición, pero al volver a leer el respaldo encontró otra versión. '+
+        discrepancia+'. Cerrá otras pestañas de Materiales y exportá el diagnóstico. No se reintentó a ciegas.');
+    }
+    aceptarRespaldo(ver.data(),'guardado confirmado por transacción y lectura de servidor');
+    log('GUARDADO_CONFIRMADO',accion+' · '+confirmados.map(function(x){return x.reg.nombre+' (#'+x.id+', '+x.reg.categoria+')';}).join('; '));
+    setSyncStatus('Firebase: catálogo guardado','ok');
+    // Las escrituras de otras aplicaciones pueden alterar el documento principal más tarde.
+    // El listener lo repara con los datos confirmados de la copia independiente.
+    try{var principal=await leerServidor(base());if(principal.exists()){
+      ultimoPrincipal=principal.data();if(diferencias(ultimoPrincipal,autoridad).length)programarReparacion('verificación postguardado');
+    }}catch(e){log('AVISO','Sin lectura secundaria del principal: '+String(e&&e.message||e));}
+    aplicarAutoridad();
+    try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(_e){}
+    try{renderActive();}catch(e){console.warn(e);}
+    return confirmados;
+  }catch(e){error('Guardado no completado o verificación posterior fallida',e);setSyncStatus('Firebase: revisar guardado','err');throw e;}
+  finally{
+    guardando=false;
+    // Liberar incluso tras un error de red/validación: una edición fallida
+    // no puede bloquear para siempre las siguientes operaciones.
+    liberarTurno();
+    if(ultimoPrincipal&&listo&&diferencias(ultimoPrincipal,autoridad).length)programarReparacion('fin de guardado');
+  }
+}
+
+var botonNuevo=document.getElementById('nuevo-mat-nombre'); // Sin efecto en otras pantallas.
+window.guardarNuevoMat=guardarNuevoMat=async function(){
+  var d=camposEditor(null,{n:'nuevo-mat-nombre',c:'nuevo-mat-codigo',cat:'nuevo-mat-cat',obs:'nuevo-mat-comentarios',prom:'nuevo-mat-prom'});
+  if(!checkDatos(d))return false;
+  if(window.__cqMaterialesEmployeeRO&&d.codigo){
+    var cd=limpia(d.codigo).toLowerCase();
+    if(activos().some(function(m){return limpia((typeof getMatCodigo==='function'?getMatCodigo(m):m.codigo)||'').toLowerCase()===cd})){
+      alert('Ese código ya existe. En modo solo lectura no podés modificar un artículo existente.');return false;
     }
   }
-  function escuchar(){
-    if(unsubscribe||!window._onSnapshot||!firestoreListo())return;
-    unsubscribe=window._onSnapshot(refCloud(),function(snap){
-      aceptarRemoto(snap.exists()?snap.data():{});
-    },function(e){console.warn('Materiales: suscripción subrubros manuales',e);});
+  try{
+    var creado=await transaccionCatalogo(d,'nuevo');
+    selectedCargaMat=creado[0].id;
+    try{localStorage.setItem(LAST_CARGA_MAT_KEY,String(creado[0].id));}catch(_e){}
+    closeNuevoMat();showToast('✓ Material '+(creado[0].existia?'actualizado':'agregado')+' y confirmado en Firebase');
+    return true;
+  }catch(e){alert('No se pudo guardar el material. No se cerró la ventana.\n\n'+String(e&&e.message||e));return false;}
+};
+window.guardarNombreMat=guardarNombreMat=async function(){
+  // Un Enter seguido de tocar Guardar, o dos toques rápidos, son UNA edición.
+  if(edicionManualEnCurso)return false;
+  if(window.__cqMaterialesEmployeeRO){alert('Solo lectura · No se puede modificar');return false;}
+  var id=Number(selectedCargaMat);
+  var m=activos().find(function(x){return String(x.id)===String(id);});
+  if(!m){alert('No se encontró el material para editar.');return false;}
+  var d=camposEditor(m,{n:'editar-mat-nombre-input',c:'editar-mat-codigo',cat:'editar-mat-cat',obs:'editar-mat-comentarios'});
+  if(!checkDatos(d))return false;
+  edicionManualEnCurso=true;
+  var botonGuardar=document.getElementById('cq-guardar-edicion-material');
+  if(botonGuardar){botonGuardar.disabled=true;botonGuardar.textContent='Guardando…';}
+  try{
+    setSyncStatus('Firebase: guardando edición...');
+    await transaccionCatalogo(d,'editar');
+    closeEditarNombreMat();showToast('✓ Nombre, subrubro y observaciones confirmados en Firebase');
+    return true;
+  }catch(e){
+    var mensaje=String(e&&e.message||e);
+    var aceptado=mensaje.indexOf('Firebase aceptó la edición')===0;
+    alert((aceptado?'La edición fue aceptada, pero otra sincronización cambió el respaldo. '+
+      'La ventana sigue abierta para revisar.':'No se pudo completar y verificar la edición. La ventana sigue abierta.')+
+      '\n\n'+mensaje);
+    return false;
+  }finally{
+    edicionManualEnCurso=false;
+    if(botonGuardar){botonGuardar.disabled=false;botonGuardar.textContent='Guardar';}
   }
-  async function cargarCloud(){
-    if(!firestoreListo())return;
-    if(cloudLoaded){escuchar();return;}
-    if(cargando)return cargando;
-    cargando=(async function(){
-      try{
-        var snap=await window._getDoc(refCloud());
-        aceptarRemoto(snap.exists()?snap.data():{});
-        escuchar();
-      }catch(e){
-        console.warn('Materiales: no se pudo leer la clasificación manual independiente',e);
-        // No detener el resto de Materiales por una caída transitoria de esta lectura.
-      }finally{cargando=null;}
-    })();
-    return cargando;
-  }
+};
+window.procesarCargaMasivaCatalogo=procesarCargaMasivaCatalogo=async function(){
+  if(window.__cqMaterialesEmployeeRO){alert('Solo lectura · No se puede hacer carga masiva');return false;}
+  var cat=catCanon((document.getElementById('catalogo-masiva-cat')||{}).value);
+  var nombres=(typeof lineasCatalogoMasiva==='function')?lineasCatalogoMasiva('catalogo-masiva-materiales'):[];
+  var codigos=(typeof lineasCatalogoMasiva==='function')?lineasCatalogoMasiva('catalogo-masiva-codigos'):[];
+  var datos=[];
+  nombres.forEach(function(n,i){
+    n=limpia(n);if(n)datos.push({nombre:n,codigo:limpia(codigos[i]),categoria:cat,comentarios:'',prom:0});
+  });
+  if(!cat||!datos.length){alert('Ingresá materiales y elegí un subrubro válido.');return false;}
+  if(datos.length>100){alert('Ingresá 100 materiales o menos por vez para confirmar todos los guardados.');return false;}
+  try{
+    await transaccionCatalogo(datos,'nuevo');
+    closeCargaMasivaCatalogo();showToast('✓ '+datos.length+' materiales confirmados en Firebase');return true;
+  }catch(e){alert('La carga masiva NO se confirmó. Revisá la ventana.\n\n'+String(e&&e.message||e));return false;}
+};
 
-  async function escribirDecision(reg){
-    if(!firestoreListo())return;
-    var k=keyNombre(reg.nombre);
-    if(!k)throw new Error('Material sin nombre');
-    // Transacción que conserva las decisiones de otros materiales/otros dispositivos.
+
+// La baja manual también se escribe en ambos documentos para que una copia vieja
+// no haga resucitar un material borrado del catálogo.
+window.eliminarMaterialSeleccionado=eliminarMaterialSeleccionado=async function(){
+  if(window.__cqMaterialesEmployeeRO){alert('Solo lectura · No se puede eliminar');return false;}
+  var id=Number(selectedCargaMat);
+  var m=activos().find(function(x){return String(x.id)===String(id);});
+  if(!m){alert('No se encontró el material.');return false;}
+  if(typeof CALCULATED_MATS!=='undefined'&&CALCULATED_MATS[id]){
+    alert('Este material es calculado y no se puede eliminar.');return false;
+  }
+  var n=(state.cargas||[]).filter(function(c){return String(c&&c.matId)===String(id);}).length;
+  if(!confirm('¿Eliminar "'+m.mat+'" del catálogo? '+(n?'Las '+n+' cargas históricas se conservan. ':'')+'No volverá por una sincronización.'))return false;
+  if(guardando){alert('Esperá a que finalice el guardado anterior.');return false;}
+  guardando=true;
+  try{
+    if(!(await inicializar()))throw new Error(ultimoError||'No está disponible el respaldo independiente');
+    var nombre=limpia(m.mat);
     await window._runTransaction(window._db,async function(tx){
-      var ref=refCloud();
-      var snap=await tx.get(ref);
-      var data=snap.exists()?(snap.data()||{}):{};
-      var mapa=data.registros&&typeof data.registros==='object'?copia(data.registros):{};
-      mapa[k]=reg;
-      tx.set(ref,{registros:mapa,updatedAt:new Date().toISOString()});
+      var sm=await tx.get(base()),sa=await tx.get(respaldo());
+      if(!sm.exists()||!sa.exists())throw new Error('No se pudo leer Firebase');
+      var main=sm.data()||{},aux=sa.data()||{},entries=copia(aux.entries||{});
+      entries[String(id)]=Object.assign({},entries[String(id)]||{},
+        {id:id,nombre:nombre,manual:true,active:false,origen:'baja',updatedAt:new Date().toISOString()});
+      var soloBaja={};soloBaja[String(id)]=entries[String(id)];
+      var patch=prepararCambios(main,soloBaja).patch;
+      patch.updatedAt=new Date().toISOString();
+      tx.set(base(),patch,{merge:true});
+      tx.set(respaldo(),Object.assign({},aux,{version:3,entries:entries,updatedAt:patch.updatedAt,lastAction:'eliminar'}));
     });
-    delete pendientes[k];
-    records[k]=reg;
-    cacheGuardar();
-  }
+    var v=await leerServidor(respaldo());
+    if(!v.exists()||!v.data().entries||!v.data().entries[String(id)]||v.data().entries[String(id)].active!==false)
+      throw new Error('Firebase no confirmó la eliminación');
+    aceptarRespaldo(v.data(),'eliminación confirmada');
+    if(!Array.isArray(state.deletedMatIds))state.deletedMatIds=[];
+    if(!state.deletedMatIds.some(function(x){return String(x)===String(id);}))state.deletedMatIds.push(id);
+    if(!Array.isArray(state.deletedMaterialKeys))state.deletedMaterialKeys=[];
+    var key='name:'+norm(nombre).replace(/ /g,'');
+    if(state.deletedMaterialKeys.indexOf(key)<0)state.deletedMaterialKeys.push(key);
+    state.extraMats=(state.extraMats||[]).filter(function(x){return String(x.id)!==String(id);});
+    ALL_MATS=ALL_MATS.filter(function(x){return String(x.id)!==String(id)||id<10000;});
+    (CATS||[]).forEach(function(c){c.items=(c.items||[]).filter(function(x){return String(x.id)!==String(id)||id<10000;});});
+    try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(_e){}
+    try{closeEditarNombreMat();}catch(_e){}
+    try{renderActive();}catch(_e){}
+    showToast('✓ Material eliminado y baja confirmada en Firebase');
+    log('BAJA_CONFIRMADA',nombre+' (#'+id+')');return true;
+  }catch(e){error('NO SE CONFIRMÓ la eliminación',e);alert('No se pudo confirmar la baja en Firebase.\n\n'+String(e&&e.message||e));return false;}
+  finally{guardando=false;}
+};
 
-  // IMPORTANTE: se ejecuta DESPUÉS de todos los parches históricos del archivo.
-  // De ese modo la última palabra del estado/catálogo es la decisión explícita del usuario.
-  var normalizarAntes=(typeof normalizeState==='function')?normalizeState:null;
-  if(normalizarAntes){
-    window.normalizeState=normalizeState=function(){
-      var r=normalizarAntes.apply(this,arguments);
-      aplicarRegistros();
-      return r;
-    };
-  }
-  var iniciarAntes=(typeof startFirebase==='function')?startFirebase:null;
-  if(iniciarAntes){
-    window.startFirebase=startFirebase=async function(){
-      if(firestoreListo())await cargarCloud();
-      return iniciarAntes.apply(this,arguments);
-    };
-  }
-  var cargarAntes=(typeof loadFromFirebase==='function')?loadFromFirebase:null;
-  if(cargarAntes){
-    window.loadFromFirebase=loadFromFirebase=async function(){
-      if(firestoreListo())await cargarCloud();
-      var res=await cargarAntes.apply(this,arguments);
-      aplicarRegistros();
-      return res;
-    };
-  }
-
-  // Guardar en la base lateral ANTES de que los procesos antiguos ejecuten persist()
-  // y reintroduzcan un shadow viejo. Si Firebase falla, NO informar éxito ficticio.
-  var guardarAntes=(typeof guardarNombreMat==='function')?guardarNombreMat:null;
-  if(guardarAntes){
-    window.guardarNombreMat=guardarNombreMat=async function(){
-      if(guardando)return;
-      guardando=true;
-      try{
-      var el=document.getElementById('editar-mat-cat');
-      var nom=document.getElementById('editar-mat-nombre-input');
-      var cod=document.getElementById('editar-mat-codigo');
-      var nombre=String(nom&&nom.value||'').trim();
-      var categoria=categoriaReal(el&&el.value);
-      var id=Number(window.selectedCargaMat!=null?window.selectedCargaMat:selectedCargaMat);
-      var actual=obtenerMateriales().find(function(m){return Number(m&&m.id)===id;});
-      if(!nombre||!categoria||!actual)return guardarAntes.apply(this,arguments);
-      var key=keyNombre(nombre);
-      var previo=records[key];
-      var registro={
-        nombre:nombre,previousName:String(actual.mat||''),
-        codigo:String(cod&&cod.value||''),id:id,
-        categoria:categoria,manual:true,updatedAt:new Date().toISOString()
-      };
-      records[key]=registro;
-      if(firestoreListo())pendientes[key]=registro;
-      cacheGuardar();
-      aplicarRegistros();
-      if(firestoreListo()){
-        try{
-          setSyncStatus('Firebase: guardando subrubro...');
-          await escribirDecision(registro);
-        }catch(e){
-          console.error('Materiales: no se guardó el subrubro manual en Firebase',e);
-          if(previo)records[key]=previo;else delete records[key];
-          delete pendientes[key];
-          cacheGuardar();
-          setSyncStatus('Firebase: ERROR al guardar subrubro','err');
-          alert('No se pudo guardar el subrubro en Firebase. Revisá la conexión e intentá nuevamente. No se cerró la edición.');
-          return;
-        }
-      }
-      var resultado=await guardarAntes.apply(this,arguments);
-      aplicarRegistros();
-      cacheGuardar();
-      try{localStorage.setItem(DB_KEY,JSON.stringify(state));}catch(e){}
-      // Refuerzo liviano del documento compartido SIN reescribir las cargas de Caja/Acopio.
-      if(firestoreListo()&&window._setDoc){
-        var matFinal=obtenerMateriales().find(function(m){return keyNombre(m&&m.mat)===key;});
-        if(matFinal){
-          var campos={matCategorias:{}};
-          campos.matCategorias[String(matFinal.id)]=categoria;
-          try{
-            await window._setDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'),campos,{merge:true});
-          }catch(e){console.warn('Materiales: pendiente reflejar subrubro en planilla principal',e);}
-        }
-      }
-      return resultado;
-      }finally{guardando=false;}
-    };
-  }
-
-  // Proteger visualmente el catálogo desde el primer render, incluso sin conexión.
-  aplicarRegistros();
-  document.addEventListener('firebase-ready',function(){cargarCloud();});
-  document.addEventListener('cq-firebase-ready',function(){cargarCloud();});
-  window.cqSubrubrosManualesDiagnostico=function(){
-    return {firebaseCargado:cloudLoaded,clasificaciones:Object.keys(records).length,
-      pendientes:Object.keys(pendientes).length};
+// El orden importa: al final de todas las normalizaciones anteriores, reestablecer
+// la decisión manual que figura en el documento independiente.
+var normalizarOriginal=(typeof normalizeState==='function')?normalizeState:null;
+if(normalizarOriginal){
+  window.normalizeState=normalizeState=function(){
+    var r=normalizarOriginal.apply(this,arguments);aplicarAutoridad();return r;
   };
+}
+window.__cqV9AplicarAutoridadInicio=function(){
+  if(!listo)return false;
+  aplicarAutoridad();
+  try{renderActive();}catch(_e){}
+  return true;
+};
+if(window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.comprobar();
+var renderOriginal=(typeof renderCatalogo==='function')?renderCatalogo:null;
+if(renderOriginal){
+  window.renderCatalogo=renderCatalogo=function(){
+    aplicarAutoridad();var r=renderOriginal.apply(this,arguments);asegurarPanel();return r;
+  };
+}
+var startOriginal=(typeof startFirebase==='function')?startFirebase:null;
+if(startOriginal){
+  window.startFirebase=startFirebase=function(){
+    // V10: iniciar la lectura del catálogo protegido y la de tombstones en
+    // paralelo. loadFromFirebase continúa esperando la autoridad antes de leer
+    // el principal; no exponemos ni guardamos categorías sin protección.
+    if(disponible())inicializar().catch(function(e){console.warn('Inicio catálogo protegido',e);});
+    return startOriginal.apply(this,arguments);
+  };
+}
+var loadOriginal=(typeof loadFromFirebase==='function')?loadFromFirebase:null;
+if(loadOriginal){
+  window.loadFromFirebase=loadFromFirebase=async function(){
+    if(disponible())await inicializar();
+    var res=await loadOriginal.apply(this,arguments);aplicarAutoridad();return res;
+  };
+}
+
+function resumen(){
+  return {proteccion: listo?'ACTIVA':'SIN CONFIRMAR',materialesProtegidos:Object.values(autoridad).filter(function(r){return r&&r.active!==false;}).length,
+    altasProtegidas:Object.values(autoridad).filter(function(r){return r&&r.active!==false&&r.manualCreated;}).length,
+    entradasImportadas:Object.values(autoridad).filter(function(r){return r&&String(r.origen||'').indexOf('migracion_')===0;}).length,
+    conflictosHistoricosAislados:Object.keys(conflictosAislados).length,
+    diferencias:ultimoPrincipal?diferencias(ultimoPrincipal,entradasConfirmadas(autoridad)):[],
+    ultimoError:ultimoError,eventos:eventos.slice(-35)};
+}
+function asegurarPanel(){
+  if(document.getElementById('cq-catalogo-diag-v2'))return;
+  var view=document.getElementById('view-catalogo');if(!view)return;
+  var box=document.createElement('div');box.id='cq-catalogo-diag-v2';
+  box.style.cssText='margin:8px 0 12px;padding:10px 13px;background:#eef4f1;border:1px solid #cbded5;border-radius:12px;font-size:11px;color:#214b3b;';
+  box.innerHTML='<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">'+
+    '<span id="cq-catalogo-diag-estado" style="flex:1;min-width:160px">Verificando catálogo protegido...</span>'+ 
+    '<button type="button" id="cq-catalogo-acopio-btn" onclick="window.cqCompararSubrubrosAcopio()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700;cursor:pointer">Comparar Acopio</button>'+ 
+    '<button type="button" id="cq-catalogo-diag-toggle" aria-expanded="false" onclick="window.cqAlternarDiagnosticoCatalogo()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700;cursor:pointer">Ver diagnóstico</button></div>'+ 
+    '<div id="cq-catalogo-diag-panel" style="display:none;margin-top:9px;padding-top:9px;border-top:1px solid #cbded5">'+
+    '<div style="text-align:right"><button type="button" onclick="window.cqExportarDiagnosticoMateriales()" style="padding:6px 9px;border:1px solid #b9d6c7;border-radius:8px;background:white;color:#23563f;font-weight:700;cursor:pointer">Exportar diagnóstico</button></div>'+ 
+    '<div id="cq-catalogo-diag-detalle" style="white-space:pre-wrap;margin-top:9px;line-height:1.5;max-height:250px;overflow:auto"></div></div>';
+  var anchor=document.getElementById('catalogo-content');
+  if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(box,anchor);else view.insertBefore(box,view.firstChild);
+  actualizarPanel();
+}
+function actualizarPanel(){
+  var el=document.getElementById('cq-catalogo-diag-estado');if(!el)return;
+  var r=resumen(),n=r.diferencias.length;
+  el.textContent=(listo?'✓ Catálogo manual protegido · ':'⚠ Protección sin confirmar · ')+
+     r.materialesProtegidos+' registros · '+(n?n+' diferencias en Firebase (reparación automática)':'sin diferencias detectadas');
+  if(ultimoError)el.textContent+=' · último error disponible en diagnóstico';
+}
+// Panel cerrado por defecto: sin lecturas extra de Firebase hasta que el usuario lo abra.
+window.cqAlternarDiagnosticoCatalogo=function(){
+  asegurarPanel();
+  var panel=document.getElementById('cq-catalogo-diag-panel');
+  var boton=document.getElementById('cq-catalogo-diag-toggle');
+  if(!panel||!boton)return;
+  var abrir=panel.style.display==='none';
+  panel.style.display=abrir?'block':'none';
+  boton.textContent=abrir?'Ocultar diagnóstico':'Ver diagnóstico';
+  boton.setAttribute('aria-expanded',abrir?'true':'false');
+  if(abrir)window.cqDiagnosticoCatalogo();
+};
+window.cqDiagnosticoCatalogo=async function(){
+  asegurarPanel();
+  var el=document.getElementById('cq-catalogo-diag-detalle');
+  if(el){el.style.display='block';el.textContent='Consultando directamente Firebase...';}
+  try{
+    if(disponible()){
+      await inicializar();
+      var resultados=await Promise.all([leerServidor(base()),leerServidor(respaldo())]);
+      if(resultados[0].exists())ultimoPrincipal=resultados[0].data();
+      if(resultados[1].exists())aceptarRespaldo(resultados[1].data(),'diagnóstico manual');
+    }
+  }catch(e){error('Lectura de diagnóstico',e);}
+  var r=resumen();
+  if(el)el.textContent='Protección: '+r.proteccion+'\n'+
+    'Materiales con decisión manual: '+r.materialesProtegidos+'\n'+
+    'Altas y entradas históricas protegidas: '+r.altasProtegidas+'\n'+
+    'Entradas heredadas/importadas: '+r.entradasImportadas+'\n'+
+    'Conflictos históricos aislados (sin borrar materiales): '+r.conflictosHistoricosAislados+'\n'+
+    'Diferencias entre Firebase principal y catálogo: '+r.diferencias.length+'\n'+
+    r.diferencias.slice(0,10).map(function(d){return '• '+d.nombre+': '+d.tipo+(d.remoto?' (en principal: '+d.remoto+')':'');}).join('\n')+'\n'+
+    (r.ultimoError?'Último error: '+r.ultimoError+'\n':'')+
+    'Últimos eventos:\n'+r.eventos.slice(-8).map(function(x){return x.fecha+' · '+x.tipo+' · '+x.detalle;}).join('\n');
+  actualizarPanel();return r;
+};
+window.cqExportarDiagnosticoMateriales=function(){
+  var contenido=JSON.stringify(Object.assign({generadoEn:new Date().toISOString()},resumen()),null,2);
+  var blob=new Blob([contenido],{type:'application/json'}),url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='diagnostico_materiales_firebase.json';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},5000);
+};
+
+// CQ 04/11 — Auditoría segura Acopio → Materiales.
+// NO modifica Acopio, ni toca las cargas: propone sólo subrubros inequívocos.
+function catAcopioCanon(categoria){
+  var directa=catCanon(categoria);if(directa)return directa;
+  var equivalencias={
+    'hierros':'HIERROS','cemento':'CEMENTO Y HERCAL',
+    'revoques':'REVOQUES Y YESO','ladrillos':'LADRILLOS',
+    'impermeabilizantes':'IMPERMEABILIZANTES','viguetas':'VIGUETAS'
+  };
+  var base=equivalencias[norm(categoria)];if(!base)return '';
+  var c=(window.CATS||[]).find(function(c){
+    if(!c||!c.name)return false;
+    if(typeof isCatDeleted==='function'&&isCatDeleted(c.name))return false;
+    return norm(c.name)===norm(base)||norm(c._baseName||'')===norm(base);
+  });
+  return c?c.name:'';
+}
+window.cqCompararSubrubrosAcopio=async function(){
+  if(!disponible()){alert('Conectá Firebase antes de comparar los subrubros.');return false;}
+  var b=document.getElementById('cq-catalogo-acopio-btn');
+  if(b){b.disabled=true;b.textContent='Comparando...';}
+  try{
+    if(!(await inicializar()))throw new Error('No se pudo leer el catálogo protegido');
+    var snap=await leerServidor(window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3'));
+    if(!snap.exists())throw new Error('No existe el documento principal de Acopio');
+    var dbA=(snap.data()||{}).db||{},acopios=Array.isArray(dbA.acopios)?dbA.acopios:[];
+    var refs={},cargasAcopio={};
+    (state.cargas||[]).forEach(function(c){
+      if(!c||!c.integracionId)return;
+      var iid=String(c.integracionId);
+      if(iid.indexOf('acopio_')===0)cargasAcopio[iid]=c;
+    });
+    function anotar(id,cat,nombre,origen){
+      id=String(id||'');cat=catAcopioCanon(cat);if(!id||!cat||norm(cat)==='varios')return;
+      var m=activos().find(function(x){return String(x&&x.id)===id;});
+      if(!m||typeof isMatDeleted==='function'&&isMatDeleted(m.id))return;
+      // El vínculo por retiro sirve sólo si también coincide el nombre de origen.
+      if(nombre&&norm(m.mat)!==norm(nombre)){
+        var evento=(state.cargas||[]).find(function(c){return c&&String(c.matId)===id&&
+          norm(c.materialNameOrigen||'')===norm(nombre);});
+        if(!evento)return;
+      }
+      var manual=Object.values(autoridad).some(function(r){return decisionExplicita(r)&&r.active!==false&&
+        (String(r.id)===id||norm(r.nombre)===norm(m.mat));});
+      if(manual)return;
+      var k=id;refs[k]=refs[k]||{m:m,categorias:{},fuentes:[]};
+      refs[k].categorias[cat]=true;refs[k].fuentes.push(origen);
+    }
+    acopios.forEach(function(a){
+      var mats=Array.isArray(a&&a.mats)?a.mats:[];
+      mats.forEach(function(am){
+        if(!am||!limpia(am.nom))return;
+        var candidatas=activos().filter(function(m){return !isMatDeleted(m.id)&&norm(m.mat)===norm(am.nom);});
+        if(candidatas.length===1)anotar(candidatas[0].id,am.cat,am.nom,'ficha de Acopio');
+      });
+      (Array.isArray(a&&a.retiros)?a.retiros:[]).forEach(function(r){
+        if(!r||r.materialesSyncEstado==='omitido')return;
+        var key='acopio_'+String(a.id)+'_'+String(r.id);
+        var carga=cargasAcopio[key];if(!carga)return;
+        var matLocal=mats.find(function(am){return String(am&&am.id)===String(r.matId);});
+        var name=limpia(r.materialName||(matLocal&&matLocal.nom)||'');
+        // El mismo retiro linkeado con el mismo nombre, sin confiar sólo en el ID.
+        if(name&&norm(carga.materialNameOrigen||carga.matName||'')===norm(name))
+          anotar(carga.matId,r.subrubro||(matLocal&&matLocal.cat),name,'retiro vinculado');
+      });
+    });
+    var propuestos=[],ambiguos=0,conflictos=[];
+    Object.keys(refs).forEach(function(k){
+      var ref=refs[k],cats=Object.keys(ref.categorias);
+      // Sólo lectura: mostrar las categorías contradictorias sin modificar datos.
+      if(cats.length!==1){
+        ambiguos++;
+        conflictos.push({id:k,nombre:ref.m.mat,categorias:cats});
+        return;
+      }
+      var actual=catCanon((state.matCategorias||{})[k]||ref.m.catName||obtenerCategoriaMaterial(Number(k))||'');
+      if(norm(actual)!==norm(cats[0]))propuestos.push({m:ref.m,actual:actual||'Sin clasificar',cat:cats[0]});
+    });
+    if(!propuestos.length){
+      var detalle=conflictos.map(function(c,i){
+        return (i+1)+'. '+c.nombre+' (ID '+c.id+')\n   Subrubros encontrados: '+c.categorias.join(' / ');
+      }).join('\n\n');
+      alert('Comparación terminada: no hay cambios inequívocos para aplicar. '+
+        (ambiguos?ambiguos+' materiales presentan categorías contradictorias en Acopio.\n\n'+detalle:'No quedan discrepancias claras.'));
+      return true;
+    }
+    var lista=propuestos.slice(0,14).map(function(p){return '• '+p.m.mat+': '+p.actual+' → '+p.cat;}).join('\n');
+    if(!confirm('Se encontraron '+propuestos.length+' subrubros diferentes en Acopio. '+
+      'Se omitieron las ediciones manuales confirmadas y '+ambiguos+' identidades ambiguas.\n\n'+
+      lista+(propuestos.length>14?'\n... y '+(propuestos.length-14)+' más':'')+
+      '\n\n¿Guardar estas categorías desde Materiales? Quedarán como decisiones manuales protegidas.'))return false;
+    var hechos=0;
+    for(var i=0;i<propuestos.length;i+=8){
+      var lote=propuestos.slice(i,i+8).map(function(p){return {
+        id:Number(p.m.id),nombreOriginal:p.m.mat,nombre:p.m.mat,
+        codigo:limpia((state.matCodigos||{})[p.m.id]||p.m.codigo),
+        categoria:p.cat,comentarios:limpia((state.matComentarios||{})[p.m.id]||p.m.comentarios),prom:Number(p.m.prom)||0
+      };});
+      await transaccionCatalogo(lote,'editar');hechos+=lote.length;
+    }
+    alert('Confirmadas '+hechos+' clasificaciones desde Acopio en el catálogo protegido.');
+    return true;
+  }catch(e){error('Comparación Acopio',e);alert('No se completó la comparación con Acopio.\n\n'+String(e&&e.message||e));return false;}
+  finally{if(b){b.disabled=false;b.textContent='Comparar Acopio';}}
+};
+
+// Nombre compatible con diagnóstico anterior, ahora con origen de verdad conocido.
+window.cqSubrubrosManualesDiagnostico=function(){return resumen();};
+function activar(){asegurarPanel();if(disponible())inicializar();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',activar,{once:true});else activar();
+document.addEventListener('firebase-ready',activar);
+document.addEventListener('cq-firebase-ready',activar);
+setTimeout(activar,450);
+log('INICIO','Protección autoritativa v3: identidad por nombre validada; cuarentena histórica activada');
 })();
+
 </script>
