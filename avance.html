@@ -6013,16 +6013,35 @@ function cerrarDetalleCertificacion(){
   if(bg) bg.remove();
 }
 
-function renderCertificadosMini(atrasoSemanas, semanasPrevistas, semanasCompletasConsecutivas){
+// Sumar fracciones de semanas, sin exigir que las anteriores estén completas.
+// Una semana al 50% + otra al 50% equivalen a una semana ejecutada.
+// Se usa el mismo umbral de "Completa" (99%) que el resto del módulo.
+function calcAtrasoSemanasProporcional(cantidadCertificados, porcentajesSemana){
+  const porcentajes=Array.isArray(porcentajesSemana) ? porcentajesSemana : [];
+  const semanasPrevistas=Math.min(Math.max(0,Number(cantidadCertificados)||0),porcentajes.length);
+  const semanasEjecutadas=porcentajes.reduce((s,p)=>{
+    const valor=Math.max(0,Math.min(1,Number(p)||0));
+    return s+(valor>=0.99?1:valor);
+  },0);
+  const atrasoReal=Math.max(0,semanasPrevistas-semanasEjecutadas);
+  // Presentación en décimas, evitando falsos "0,0 sem." por redondeo.
+  const atrasoMostrado=Math.round((atrasoReal+Number.EPSILON)*10)/10;
+  return {semanasPrevistas,semanasEjecutadas,atrasoReal,atrasoMostrado};
+}
+
+function renderCertificadosMini(atrasoInfo){
   const certs=getCertificados().slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'') || (parseInt(b.num)||0)-(parseInt(a.num)||0));
   if(!certs.length) return '';
   const total=certs.reduce((s,c)=>s+(Number(c.monto)||0),0);
-  // Indicador sólo visual: no toca certificados, importes, avances ni Firebase.
-  const atraso=Math.max(0,Number(atrasoSemanas)||0);
-  const infoAtraso=`${certs.length} certificados · ${semanasPrevistas} semanas previstas · ${semanasCompletasConsecutivas} semanas consecutivas completas desde S1`;
+  // Sólo visual. No altera pagos, certificados, avances ni datos de Firebase.
+  const atraso=Math.max(0,Number(atrasoInfo&&atrasoInfo.atrasoMostrado)||0);
+  const ejecutadas=Number(atrasoInfo&&atrasoInfo.semanasEjecutadas)||0;
+  const previstas=Number(atrasoInfo&&atrasoInfo.semanasPrevistas)||0;
+  const numeroAR=n=>Number(n).toLocaleString('es-AR',{maximumFractionDigits:1,minimumFractionDigits:1});
+  const infoAtraso=`${certs.length} certificados · ${numeroAR(previstas)} semanas previstas · ${numeroAR(ejecutadas)} semanas equivalentes ejecutadas (incluye avances parciales)`;
   return `<div class="kpi cert-list-card cert-collapsible" style="grid-column:1/-1">
     <button type="button" class="cert-collapse-btn" onclick="toggleCertificadosLista(this)">
-      <span class="cert-collapse-left"><span class="cert-collapse-icon">✓</span><strong>Certificados</strong><small>${certs.length}</small><span class="cert-week-delay ${atraso>0?'is-late':'is-on-time'}" title="${infoAtraso}">${atraso>0?`Atraso: ${atraso} sem.`:'Al día'}</span></span>
+      <span class="cert-collapse-left"><span class="cert-collapse-icon">✓</span><strong>Certificados</strong><small>${certs.length}</small><span class="cert-week-delay ${atraso>0?'is-late':'is-on-time'}" title="${infoAtraso}">${atraso>0?`Atraso: ${numeroAR(atraso)} sem.`:'Al día'}</span></span>
       <span class="cert-collapse-total">${fmt(total)}</span>
       <span class="cert-collapse-arrow">⌄</span>
     </button>
@@ -6155,25 +6174,24 @@ function renderKPIs(ctx){
   // Así una tarea incluida en un certificado (aunque su avance luego cambie)
   // continúa computándose como pagada.
   const totalPagado = cert + pf.neto;
-  let semComp=0, semParcial=0, semCompletasConsecutivas=0;
-  let secuenciaInterrumpida=false;
+  let semComp=0, semParcial=0;
   const semanasKpi=getSemanas();
+  const progresoSemanalReal=[];
+  // Sólo la semana con "Conforme de obra" puede necesitar un segundo cálculo
+  // para el KPI financiero: no duplicar cálculos pesados de todas las semanas.
+  const refConformeKpi=calcCtx.brecha>0 ? findConformeTaskRef() : null;
   semanasKpi.forEach(s=>{
-    const p=calcSemana(s,calcCtx.brecha).pctSem;
-    // Mismo umbral "Completa" que usa el resto de Avances.
-    // El orden proviene de getSemanas(), que contempla inserciones y reordenamientos.
-    if(p>=0.99){
-      semComp++;
-      if(!secuenciaInterrumpida) semCompletasConsecutivas++;
-    }else{
-      if(p>0) semParcial++;
-      secuenciaInterrumpida=true;
-    }
+    // Avance físico de tareas: el ajuste financiero no cuenta como obra ejecutada.
+    const real=calcSemana(s,0).pctSem;
+    const p=(refConformeKpi && Number(refConformeKpi.semNum)===Number(s.num))
+      ? calcSemana(s,calcCtx.brecha).pctSem : real;
+    if(p>=0.99) semComp++;
+    else if(p>0) semParcial++;
+    progresoSemanalReal.push(real);
   });
-  // Cada certificado representa una semana prevista. No exigir más semanas
-  // que las existentes cuando el cronograma fue reducido o ya está terminado.
-  const semanasPrevistas=Math.min(getCertificados().length,semanasKpi.length);
-  const atrasoSemanas=Math.max(0,semanasPrevistas-semCompletasConsecutivas);
+  // Cada certificado equivale a una semana, incluso con tareas intercaladas
+  // y semanas parcialmente avanzadas. getSemanas() incorpora altas, bajas y orden.
+  const atrasoInfo=calcAtrasoSemanasProporcional(getCertificados().length,progresoSemanalReal);
 
   document.getElementById('pct-total').textContent = (pctTotal*100).toFixed(1)+'%';
   document.getElementById('prog-fill').style.width = (pctTotal*100).toFixed(1)+'%';
@@ -6183,7 +6201,7 @@ function renderKPIs(ctx){
     <div class="kpi"><div class="kpi-card-row">${kpiIcon('dev')}<div class="kpi-content"><div class="kpi-label">Devengado avances</div><div class="kpi-val">${fmt(totalDev)}</div><div class="kpi-sub">de ${fmt(obraTotal)} total</div></div></div></div>
     <div class="kpi"><div class="kpi-card-row">${kpiIcon('pagos')}<div class="kpi-content"><div class="kpi-label">Pagos fuera de avance</div><div class="kpi-val ${pf.neto>0?'red':pf.neto<0?'green':''}">${pf.neto>=0?'+':''}${fmt(pf.neto)}</div><div class="kpi-sub">${pf.neto>0?'en contra del constructor':pf.neto<0?'a favor del constructor':'sin pagos fuera'}</div>${(()=>{ const co=calcConformeObra(calcCtx.brecha); return `<div style="margin-top:6px;padding-top:5px;border-top:1px solid #EEF4EE;font-size:10px;color:#7A9E82;font-weight:700;letter-spacing:.02em">Conforme de obra: <span style="color:${co.saldoAjustado<0?'#C0392B':'#163D35'};font-size:11px">${fmt(co.saldoAjustado)}</span></div>`; })()}</div></div></div>
     <div class="kpi"><div class="kpi-card-row">${kpiIcon('saldo')}<div class="kpi-content"><div class="kpi-label">Saldo constructor</div><div class="kpi-val red">${fmt(state.acuerdo-totalPagado)}</div><div class="kpi-sub">sobre acuerdo ${fmt(state.acuerdo)}</div></div></div></div>
-    ${renderCertificadosMini(atrasoSemanas,semanasPrevistas,semCompletasConsecutivas)}
+    ${renderCertificadosMini(atrasoInfo)}
     <div class="kpi" style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:10px">
       <div><div class="kpi-label">Reporte para constructor</div><div class="kpi-sub">Certificado, pendiente y total por actividad</div></div>
       <button class="cert-detail-btn" style="background:#163D35;color:#fff;border:0;border-radius:8px;padding:9px 12px;font-weight:900" onclick="openReporteConstructor()">Ver reporte</button>
