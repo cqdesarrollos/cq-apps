@@ -349,8 +349,66 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
   .cq-home-backup-pair{gap:4px!important}
 }
 </style>
+<style id="cq-carga-inicial-estilo">
+/* Pantalla de seguridad: no permite operar sobre una copia local antes de sincronizar. */
+#cq-carga-inicial{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;background:#f5f6f3;padding:18px;color:#173c32;font-family:Arial,Helvetica,sans-serif;overscroll-behavior:contain;touch-action:none}
+#cq-carga-inicial.cq-listo{display:none!important}
+#cq-carga-inicial .cq-carga-card{width:min(350px,100%);text-align:center;padding:28px 22px;background:white;border:1px solid #dce9e0;border-radius:20px;box-shadow:0 16px 50px #122d251c}
+#cq-carga-inicial .cq-carga-marca{display:inline-flex;align-items:center;justify-content:center;background:#102d59;color:white;border-radius:12px;width:54px;height:54px;margin-bottom:14px;font-size:21px;letter-spacing:-1px;font-weight:900}
+#cq-carga-inicial .cq-carga-spinner{width:31px;height:31px;border:3px solid #dceee5;border-top-color:#19a96f;border-radius:50%;animation:cq-giro-cargando .85s linear infinite;margin:0 auto 15px}
+#cq-carga-inicial.cq-error .cq-carga-spinner{animation:none;border-color:#d75b51;border-top-color:#d75b51;opacity:.75}
+@keyframes cq-giro-cargando{to{transform:rotate(360deg)}}
+#cq-carga-inicial .cq-carga-titulo{font-size:18px;font-weight:900;line-height:1.25}
+#cq-carga-inicial .cq-carga-detalle{font-size:12px;line-height:1.55;color:#6b8176;margin-top:9px}
+#cq-carga-inicial .cq-carga-btn{display:none;background:#176c52;color:white;padding:11px 17px;border:none;border-radius:10px;font-weight:800;margin:17px auto 0;cursor:pointer;font-size:12px}
+#cq-carga-inicial.cq-error .cq-carga-btn,#cq-carga-inicial.cq-demora .cq-carga-btn{display:block}
+@media(prefers-reduced-motion:reduce){#cq-carga-inicial .cq-carga-spinner{animation-duration:2s}}
+</style>
 </head>
-<body>
+<body aria-busy="true">
+<div id="cq-carga-inicial" role="status" aria-live="polite" aria-label="Cargando datos verificados">
+ <div class="cq-carga-card">
+   <div class="cq-carga-marca">CQ</div>
+   <div class="cq-carga-spinner" aria-hidden="true"></div>
+   <div class="cq-carga-titulo" id="cq-carga-titulo">Cargando Caja Chica…</div>
+   <div class="cq-carga-detalle" id="cq-carga-detalle">Sincronizando con Firebase. Evitá operar hasta que termine.</div>
+   <button type="button" class="cq-carga-btn" onclick="location.reload()">Reintentar carga</button>
+ </div>
+</div>
+<script id="cq-carga-inicial-control">(function(){
+ var pantalla=document.getElementById('cq-carga-inicial');
+ var titulo=document.getElementById('cq-carga-titulo');
+ var detalle=document.getElementById('cq-carga-detalle');
+ var terminado=false;
+ var demora=setTimeout(function(){
+   if(terminado)return;
+   pantalla.classList.add('cq-demora');
+   detalle.textContent='La conexión está tardando más de lo habitual. No se mostrará información provisoria.';
+ },20000);
+ function pendiente(){
+   if(terminado)return;
+   pantalla.classList.remove('cq-error','cq-demora');
+   titulo.textContent='Cargando Caja Chica…';
+   detalle.textContent='Sincronizando movimientos con Firebase. Evitá operar hasta que termine.';
+ }
+ window.cqCargaInicialCaja={
+   pendiente:pendiente,
+   completa:function(){
+     if(terminado)return;
+     terminado=true;clearTimeout(demora);
+     pantalla.classList.add('cq-listo');
+     pantalla.setAttribute('aria-hidden','true');
+     document.body.removeAttribute('aria-busy');
+   },
+   error:function(mensaje){
+     if(terminado)return;
+     pantalla.classList.remove('cq-demora');pantalla.classList.add('cq-error');
+     titulo.textContent='No se pudo sincronizar';
+     detalle.textContent=mensaje||'No hay una lectura confirmada de Firebase. Los datos locales permanecen bloqueados.';
+   }
+ };
+})();</script>
+
 
 <div id="cq-access-total">
   <div class="cq-card">
@@ -2402,6 +2460,7 @@ let unsubCC=null;
 let timerCC=null;
 let savingCC=false;
 let initializedCC=false;
+ let initialRemoteAppliedCC=false;
 let applyingRemoteCC=false;
 let dirtyCC=localStorage.getItem(DIRTY_KEY)==="1";
 let baseTokenCC=localStorage.getItem(BASE_TOKEN_KEY)||"";
@@ -2728,6 +2787,8 @@ async function saveRemoteCC(){
     try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
     retryFailuresCC=0;
     setStatusCC("ok","ON","Firebase conectado");
+    // Si el guardado inicial estaba pendiente, liberar recién tras confirmarlo.
+    if(initialRemoteAppliedCC && !dirtyCC)window.cqCargaInicialCaja?.completa();
   }catch(e){
     fallo=true;
     retryFailuresCC=Math.min(retryFailuresCC+1,6);
@@ -2798,6 +2859,8 @@ async function startCC(){
       await saveRemoteCC();
     }
 
+    // Lectura inicial del servidor procesada y aplicada a la interfaz.
+    initialRemoteAppliedCC=true;
     unsubCC=onSnapshot(ref,s=>{
       if(Date.now()<suppressCCUntil||savingCC||dirtyCC||timerCC)return;
       if(!s.exists()||!s.data()||!s.data().state)return;
@@ -2832,11 +2895,18 @@ async function startCC(){
     });
 
     retryFailuresCC=0;
-    setStatusCC("ok","ON","Firebase conectado");
+    if(serverReadyCC && !dirtyCC){
+      setStatusCC("ok","ON","Firebase conectado");
+      window.cqCargaInicialCaja?.completa();
+    }else{
+      window.cqCargaInicialCaja?.error('La carga inicial todavía no está confirmada en Firebase. Reintentá cuando haya conexión.');
+    }
   }catch(e){
+    initialRemoteAppliedCC=false;
     initializedCC=false;
     retryFailuresCC=Math.min(retryFailuresCC+1,6);
     console.warn("Caja Chica Firebase init",e);
+    window.cqCargaInicialCaja?.error('No se pudieron leer los movimientos de Caja Chica desde Firebase. Revisá la conexión y reintentá.');
     setStatusCC("err","OFF",String(e&&e.message||e||'No se pudo conectar con Firebase'));
     clearTimeout(timerCC);
     if(navigator.onLine){
