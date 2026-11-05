@@ -4785,7 +4785,7 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
     <div class="mfooter">
       <button class="btn btn-s" onclick="window.closeEditarNombreMat()">Cancelar</button>
       <button class="btn" style="background:#FDECEA;color:#C0392B;border:1px solid #F5C6C0" onclick="window.eliminarMaterialSeleccionado()">🗑️ Eliminar</button>
-      <button class="btn btn-p" onclick="window.guardarNombreMat()">Guardar</button>
+      <button id="cq-guardar-edicion-material" type="button" class="btn btn-p" onclick="window.guardarNombreMat()">Guardar</button>
     </div>
   </div>
 </div>
@@ -19361,6 +19361,9 @@ var LOG_KEY='cq_materiales_diagnostico_catalogo_v2';
 var CACHE_KEY='cq_materiales_catalogo_autoritativo_cache_v2';
 var autoridad={}, listo=false, iniciando=null, sincronia=null, reparando=null;
 var ultimoPrincipal=null, ultimoError='', guardando=false, reparaTimer=null, conflictosAislados={};
+// Serializar operaciones manuales del catálogo (el bloqueo anterior rechazaba
+// guardados cuando otra verificación de Firebase aún estaba en curso).
+var colaTransaccionesCatalogo=Promise.resolve(), edicionManualEnCurso=false;
 var eventos=[];
 try { eventos=JSON.parse(localStorage.getItem(LOG_KEY)||'[]')||[]; } catch(e) { eventos=[]; }
 function copia(x){return JSON.parse(JSON.stringify(x));}
@@ -19922,7 +19925,16 @@ function guardarNuevaEntrada(entries,main,d,accion){
   return {id:id,reg:reg,existia:!!enNombre,nombreAnterior:viejoNombre};
 }
 async function transaccionCatalogo(datos,accion){
-  if(guardando)throw new Error('Hay otro guardado en proceso. No se realizó ninguna sobrescritura.');
+  // Cada operación espera su turno sin perder el contenido del formulario.
+  // No se acumulan reintentos por doble toque: guardarNombreMat controla eso.
+  var liberarTurno;
+  var turnoAnterior=colaTransaccionesCatalogo;
+  colaTransaccionesCatalogo=new Promise(function(resolve){liberarTurno=resolve;});
+  await turnoAnterior;
+  if(guardando){
+    liberarTurno();
+    throw new Error('Se está eliminando otro material. Esperá que termine antes de editar.');
+  }
   guardando=true;
   try{
     if(!disponible())throw new Error('Firebase no está conectado. No se confirmó ningún guardado.');
@@ -19950,7 +19962,7 @@ async function transaccionCatalogo(datos,accion){
       // La transacción lee el último estado de Firebase: no pisa cargas nuevas.
       if(main.cargas)patch.cargas=main.cargas;
       patch.updatedAt=new Date().toISOString();
-      patch.catalogoManualWriter='CQ Materiales v6 (identidad dinámica verificada)';
+      patch.catalogoManualWriter='CQ Materiales v7 (ediciones serializadas)';
       tx.set(base(),patch,{merge:true});
       var respaldoNuevo=Object.assign({},a,{version:3,entries:entries,updatedAt:patch.updatedAt,lastAction:accion});
       tx.set(respaldo(),respaldoNuevo);
@@ -19998,7 +20010,13 @@ async function transaccionCatalogo(datos,accion){
     try{renderActive();}catch(e){console.warn(e);}
     return confirmados;
   }catch(e){error('Guardado no completado o verificación posterior fallida',e);setSyncStatus('Firebase: revisar guardado','err');throw e;}
-  finally{guardando=false;if(ultimoPrincipal&&listo&&diferencias(ultimoPrincipal,autoridad).length)programarReparacion('fin de guardado');}
+  finally{
+    guardando=false;
+    // Liberar incluso tras un error de red/validación: una edición fallida
+    // no puede bloquear para siempre las siguientes operaciones.
+    liberarTurno();
+    if(ultimoPrincipal&&listo&&diferencias(ultimoPrincipal,autoridad).length)programarReparacion('fin de guardado');
+  }
 }
 
 var botonNuevo=document.getElementById('nuevo-mat-nombre'); // Sin efecto en otras pantallas.
@@ -20020,15 +20038,21 @@ window.guardarNuevoMat=guardarNuevoMat=async function(){
   }catch(e){alert('No se pudo guardar el material. No se cerró la ventana.\n\n'+String(e&&e.message||e));return false;}
 };
 window.guardarNombreMat=guardarNombreMat=async function(){
+  // Un Enter seguido de tocar Guardar, o dos toques rápidos, son UNA edición.
+  if(edicionManualEnCurso)return false;
   if(window.__cqMaterialesEmployeeRO){alert('Solo lectura · No se puede modificar');return false;}
   var id=Number(selectedCargaMat);
   var m=activos().find(function(x){return String(x.id)===String(id);});
   if(!m){alert('No se encontró el material para editar.');return false;}
   var d=camposEditor(m,{n:'editar-mat-nombre-input',c:'editar-mat-codigo',cat:'editar-mat-cat',obs:'editar-mat-comentarios'});
   if(!checkDatos(d))return false;
+  edicionManualEnCurso=true;
+  var botonGuardar=document.getElementById('cq-guardar-edicion-material');
+  if(botonGuardar){botonGuardar.disabled=true;botonGuardar.textContent='Guardando…';}
   try{
+    setSyncStatus('Firebase: guardando edición...');
     await transaccionCatalogo(d,'editar');
-    closeEditarNombreMat();showToast('✓ Subrubro y material confirmados en Firebase');
+    closeEditarNombreMat();showToast('✓ Nombre, subrubro y observaciones confirmados en Firebase');
     return true;
   }catch(e){
     var mensaje=String(e&&e.message||e);
@@ -20037,6 +20061,9 @@ window.guardarNombreMat=guardarNombreMat=async function(){
       'La ventana sigue abierta para revisar.':'No se pudo completar y verificar la edición. La ventana sigue abierta.')+
       '\n\n'+mensaje);
     return false;
+  }finally{
+    edicionManualEnCurso=false;
+    if(botonGuardar){botonGuardar.disabled=false;botonGuardar.textContent='Guardar';}
   }
 };
 window.procesarCargaMasivaCatalogo=procesarCargaMasivaCatalogo=async function(){
