@@ -3430,7 +3430,11 @@ async function verificarGastosPanol(){
         m.gastosSyncEstado=next;m.gastosSyncError=err;m.gastosSyncAt=new Date().toISOString();cambio=true;
       }
     });
-    if(cambio){await persist();if(curTab==='obras')renderObrasTab();}
+    if(cambio){
+      // Estado de verificación calculado: no sobreescribir TODO el stock en Firebase
+      // por el resultado de una lectura de Gastos. Se recalcula en cada inicio.
+      if(curTab==='obras')renderObrasTab();
+    }
   }finally{verificandoGastosPanol=false;}
 }
 // CQ 30/08/2026 — ahorro de lecturas Firebase.
@@ -3558,6 +3562,7 @@ var cqSyncStatusTimerPanol=null;
 function setSyncStatus(txt,cls){
   var el=document.getElementById('sync-status');
   if(!el) return;
+  if(cls!=='err')el.removeAttribute('title');
   if(cqSyncStatusTimerPanol){clearTimeout(cqSyncStatusTimerPanol);cqSyncStatusTimerPanol=null;}
   el.textContent=txt;
   el.className='sync-status'+(cls?' '+cls:'');
@@ -3964,16 +3969,46 @@ async function persist(opts){
       }
 
       panolAllowEmptyWriteOnce=false;
+      window.__cqPanolUltimoErrorGuardado=null;
       setSyncStatus(copiaLocalGuardada?'Sincronizado':'Sincronizado · sin copia local','ok');
       return true;
     }catch(e){
-      console.warn('Firebase error',e);
-      setSyncStatus('🟠 Error al guardar','err');
+      console.warn('Firebase error al guardar Pañol',e);
+      var codigo=String(e&&e.code||'');
+      var detalle=String(e&&e.message||e||'Error no identificado').slice(0,330);
+      var texto='🟠 Error al guardar';
+      if(/permission-denied|unauthenticated/.test(codigo))texto='🟠 Sin permiso para guardar';
+      else if(/resource-exhausted/.test(codigo))texto='🟠 Límite Firebase';
+      else if(/unavailable|deadline-exceeded/.test(codigo))texto='🟠 Firebase sin conexión';
+      else if(/invalid-argument/.test(codigo)||/longer than|maximum size|1 ?mib/i.test(detalle))texto='🟠 Error de tamaño de datos';
+      else if(/demoró más/.test(detalle))texto='🟠 Guardado demorado';
+      window.__cqPanolUltimoErrorGuardado={codigo:codigo||'sin código',detalle:detalle,fecha:new Date().toISOString()};
+      setSyncStatus(texto,'err');
+      var indicador=document.getElementById('sync-status');
+      if(indicador){
+        indicador.title='Tocar para ver el motivo del error';
+        indicador.style.cursor='pointer';
+      }
       return false;
     }
   }
   return true;
 }
+
+// Una vez fallido un guardado, el error se muestra con detalle al pulsar el
+// indicador. No se finge una sincronización exitosa ni se reintenta a ciegas.
+(function(){
+  var boton=document.getElementById('sync-status');
+  if(!boton)return;
+  boton.addEventListener('click',function(){
+    var x=window.__cqPanolUltimoErrorGuardado;
+    if(!x)return;
+    alert('Pañol · No se pudo confirmar el guardado en Firebase.\n\n'
+      +'Código: '+x.codigo+'\n'
+      +'Detalle: '+x.detalle+'\n\n'
+      +'Evitá volver a registrar la misma entrada o salida hasta revisar la sincronización.');
+  });
+})();
 
 async function loadFromFirebase(){
   if(!window._dbReady)return false;
@@ -4031,8 +4066,8 @@ async function loadFromFirebase(){
       mensajeOk='Recuperado · '+rescate.origen;
     }
 
-    // Conservamos esta verificación de integridad histórica antes de habilitar entradas/salidas.
-    try{await cqLimpiarTechiCau29_77Panol();}catch(e){console.warn(e);}
+    // La limpieza histórica corre después del primer render: una reparación
+    // de terceros no debe impedir la apertura de Pañol ni demorar el stock.
     // Iniciar el resguardo local ANTES de renderizar, para serializar cualquier
     // guardado automático que una vista pueda activar al dibujarse.
     var copiaConfirmada=panolClonarEstado(state);
@@ -4051,6 +4086,9 @@ async function loadFromFirebase(){
     // Tareas auxiliares, sin bloquear el acceso una vez confirmado el stock.
     cqPanolCacheInicialEnCurso.then(function(){
       cqPanolMigrarCopiasViejas().catch(function(e){console.warn(e);});
+      // Corre sólo cuando hay registros históricos pendientes de limpieza.
+      // No se ejecuta durante la sincronización inicial.
+      cqLimpiarTechiCau29_77Panol().catch(function(e){console.warn(e);});
     });
     panolGuardarBackupFirebase(copiaConfirmada,'carga válida desde Firebase').catch(function(e){console.warn(e);});
     return true;
@@ -4075,6 +4113,9 @@ function startFirebase(){
     // y copias en paralelo con la consulta que permite habilitar la pantalla.
     unsub=window._onSnapshot(window._doc(window._db,DOC_COL,DOC_ID),async function(snap){
       if(Date.now()<suppressRemoteUntil)return;
+      // Si un guardado no fue confirmado, no reemplazar lo pendiente por un
+      // snapshot de otra sesión. La situación requiere diagnóstico antes de operar.
+      if(window.__cqPanolUltimoErrorGuardado)return;
       if(snap.metadata&&(snap.metadata.fromCache||snap.metadata.hasPendingWrites))return;
       if(!snap.exists())return;
       var datos=snap.data()||{};
@@ -4088,12 +4129,17 @@ function startFirebase(){
         return;
       }
       cqPanolFirmaRemota=firma;
+      // Nunca permitir que el respaldo del arranque sobreescriba este snapshot
+      // después de que el listener reciba datos más recientes.
+      await cqPanolCacheInicialEnCurso;
       state=panolClonarEstado(d);
       normalizeState();
-      var cachéActualizado=await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
-      await panolGuardarBackupLocal(state,'snapshot Firebase');
+      var copiaSnapshot=panolClonarEstado(state);
+      var cachéActualizado=await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(copiaSnapshot));
+      await panolGuardarBackupLocal(copiaSnapshot,'snapshot Firebase');
       cqLimpiarTechiCau29_77Panol().catch(function(e){console.warn(e);});
-      setSyncStatus(cachéActualizado?'Actualizado':'Firebase ON · memoria local llena','ok');
+      if(!window.__cqPanolUltimoErrorGuardado)
+        setSyncStatus(cachéActualizado?'Actualizado':'Firebase ON · memoria local llena','ok');
       renderActive();
       panolGuardarBackupFirebase(state,'snapshot válido').catch(function(e){console.warn(e);});
     },function(e){
@@ -5140,7 +5186,11 @@ function toggleLotes(prodId){
   document.getElementById('lotes-'+prodId).classList.toggle('open');
 }
 
-function cargarProductoUnitario(){
+async function cargarProductoUnitario(){
+  if(window.__cqPanolUltimoErrorGuardado){
+    alert('Hay un guardado de Pañol sin confirmar. No registres otra entrada hasta revisar el error de la barra superior.');
+    return;
+  }
   var subRaw=(document.getElementById('cf-subrubro').value||'').trim();
   var subrubro=validarSubrubroEntradaPanol(subRaw);
   if(!subrubro){alert('Elegí un subrubro de Gastos para este producto.');return;}
@@ -5174,14 +5224,20 @@ function cargarProductoUnitario(){
   markRecent(productoCargado.id);
   if(tipoCambio)setLastTC(tipoCambio);
 
+  // Una carga real se confirma sólo después de recibir la confirmación de Firebase.
+  // Si falla, conservar los campos para diagnosticar; no mostrar un éxito falso.
+  var confirmado=await persist();
+  renderStock();
+  if(confirmado===false){
+    showToast('⚠ No se confirmó en Firebase. No repitas la carga; tocá el aviso superior.','err');
+    return;
+  }
   document.getElementById('cf-codigo').value='';
   document.getElementById('cf-producto').value='';
   document.getElementById('cf-cantidad').value='';
   document.getElementById('cf-precio').value='';
   cfMaterialSeleccionadoPanol=null;
   cfNuevoProductoManual=false;
-
-  persist();renderStock();
   showToast(precio===0?'✓ Cantidad cargada sin precio':'✓ Cargado al stock');
 }
 
@@ -5258,7 +5314,11 @@ function parsearLineaMasiva(linea){
   if(partes.length<4) partes=linea.split(/\s{2,}/);
   return partes.map(function(p){return p.trim();});
 }
-function procesarCargaMasiva(){
+async function procesarCargaMasiva(){
+  if(window.__cqPanolUltimoErrorGuardado){
+    alert('Hay un guardado de Pañol sin confirmar. No repitas ni agregues cargas hasta revisar el error de la barra superior.');
+    return;
+  }
   var subRaw=(document.getElementById('masiva-subrubro').value||'').trim();
   var subrubro=validarSubrubroEntradaPanol(subRaw);
   if(!subrubro){alert('Elegí un subrubro de Gastos para este lote.');return;}
@@ -5308,8 +5368,13 @@ function procesarCargaMasiva(){
   }
   if(!ok&&!errores.length){alert('Cargá al menos una fila.');return;}
   if(hayPrecio&&tipoCambio)setLastTC(tipoCambio);
-  persist();cerrarModal('modal-masiva');renderStock();
-
+  var confirmado=await persist();
+  renderStock();
+  if(confirmado===false){
+    showToast('⚠ No se confirmó la carga masiva. No la repitas; tocá el aviso superior.','err');
+    return;
+  }
+  cerrarModal('modal-masiva');
   if(errores.length)alert('Se cargaron '+ok+' productos.\n\nProblemas:\n'+errores.join('\n'));
   else showToast('✓ '+ok+' productos cargados al Pañol');
 }
@@ -6130,14 +6195,15 @@ function cqProgramarReparacionMaterialesPanol(mov){
       await sincronizarConsumoConMateriales(actual,true,prod);
       actual.materialesSyncEstado='ok';
       actual.materialesSyncError='';
-      try{await persist();}catch(_e){}
+      // El listener de Materiales determina el punto verde; no publicar stock
+      // completo en Firebase para guardar sólo este indicador.
     }catch(e){
       var actualErr=state.movimientos.find(function(x){
         return x && String(x.id)===String(mov.id);
       })||mov;
       actualErr.materialesSyncEstado='error';
       actualErr.materialesSyncError='No se pudo reparar Materiales: '+String(e&&e.message||e);
-      try{await persist();}catch(_e){}
+      // Evitar sobrescribir el stock por un error en otra integración.
       console.warn('Reparación automática Pañol → Materiales',e);
     }finally{
       cqReparandoMaterialesPanol.delete(String(iid));
@@ -6572,7 +6638,8 @@ async function cqLimpiarTechiCau29_77Panol(){
   var afectados=state.movimientos.filter(function(m){
     if(m.tipo!=='salida')return false;
     var prod=state.productos.find(function(p){return p.id===m.prodId;})||null;
-    return cqEsTechiCau29_77(m,prod);
+    return cqEsTechiCau29_77(m,prod)
+      && String(m.gastosSyncError||'')!=='Limpieza forzada Techi Cau 29/77';
   });
   if(!afectados.length)return false;
 
@@ -6781,6 +6848,10 @@ function cqEncolarSyncConsumoPanol(movId,meta){
 }
 
 async function registrarConsumo(){
+  if(window.__cqPanolUltimoErrorGuardado){
+    alert('Hay un guardado de Pañol sin confirmar. No registres otra salida hasta revisar el error de la barra superior.');
+    return;
+  }
   var prod=getProductoDesdeConsumoInput();
   var prodId=prod?prod.id:'';
   var cantidad=parseFloat(document.getElementById('consumo-cantidad').value);
@@ -6886,7 +6957,12 @@ async function registrarConsumo(){
     usuario:usuario||'—',detalle:res.detalle
   };
   state.movimientos.push(mov);
-  await persist();
+  var confirmado=await persist();
+  if(confirmado===false){
+    // Conservamos el formulario y el movimiento pendiente; no repetir la salida.
+    showToast('⚠ No se confirmó la salida. No la repitas; tocá el aviso superior.','err');
+    return;
+  }
   delete cqConsumoDraftsPanol[String(curObra||'')];
 
   document.getElementById('consumo-cantidad').value='';
