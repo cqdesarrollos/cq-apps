@@ -19834,7 +19834,12 @@ function guardarNuevaEntrada(entries,main,d,accion){
     .concat(Array.isArray(main.materialesNuevos)?main.materialesNuevos:[]);
   // Sólo la copia REMOTA y el documento independiente deciden si un alta existe.
   // ALL_MATS puede conservar un alta local que Firebase ya borró: no la reutilizamos.
-  var conocidos=activos().filter(function(m){return Number(m&&m.id)<10000;});
+  // Los materiales de ID >=10000 también pueden provenir de una integración
+  // (Acopio/Caja/Pañol) y estar visibles en ALL_MATS sin estar aún en extraMats.
+  // Para altas nuevas seguimos usando sólo Firebase, evitando reciclar un ID
+  // que la pantalla conserva de un guardado viejo.
+  var conocidos=activos().filter(function(m){return m&&Number(m.id)<10000;});
+  var visiblePorId=accion==='editar'?activos().find(function(m){return m&&String(m.id)===String(d.id);}):null;
   var enRespaldo=Object.keys(entries).map(function(k){var r=entries[k];return r&&r.active!==false?{id:r.id,mat:r.nombre,codigo:r.codigo,catName:r.categoria,manualCreated:r.manualCreated}:null;}).filter(Boolean);
   var existentes=extras.concat(conocidos,enRespaldo).filter(function(m,i,a){return a.findIndex(function(x){return String(x.id)===String(m.id);})===i;});
   var enNombre=existentes.find(function(m){return norm(m.mat)===norm(d.nombre) && !borrado(main,m.id);});
@@ -19842,10 +19847,29 @@ function guardarNuevaEntrada(entries,main,d,accion){
   if(accion==='editar'){
     id=Number(d.id);
     var viejo=existentes.find(function(m){return String(m.id)===String(id);});
+    // No rechazar un artículo visible sólo por tener ID dinámico: puede haber
+    // llegado desde un movimiento, matNombres o un estado legado sin extraMats.
+    // La identidad remota se valida SIEMPRE antes de aceptarlo.
+    var nombreOriginal=norm(d.nombreOriginal);
+    var vistoCorrecto=visiblePorId&&nombreOriginal&&norm(visiblePorId.mat)===nombreOriginal;
+    var fichaRemota=extras.find(function(m){return m&&String(m.id)===String(id);})||null;
+    var nombreDeFirebase=ocupanteRemoto(main,id);
+    if(fichaRemota&&nombreOriginal&&norm(fichaRemota.mat)!==nombreOriginal)
+      throw new Error('El ID '+id+' pertenece en Firebase a otro material ('+fichaRemota.mat+'). No se modificó.');
+    if(nombreDeFirebase&&nombreOriginal&&norm(nombreDeFirebase)!==nombreOriginal)
+      throw new Error('El material cambió en Firebase mientras lo editabas (ID '+id+': '+nombreDeFirebase+'). Recargá antes de continuar.');
+    if(!viejo||norm(viejo.mat)!==nombreOriginal){
+      if(!vistoCorrecto)throw new Error('La identidad del material seleccionado no coincide. Recargá el catálogo.');
+      // Si el respaldo viejo reutilizó este ID, no aceptarlo como identidad.
+      // Reemplazar la referencia de edición con la ficha visible verificada.
+      viejo=visiblePorId;
+      if(!existentes.some(function(m){return String(m.id)===String(id);}))existentes.push(viejo);
+    }
     if(!viejo)throw new Error('El material original ya no existe en el catálogo');
-    // Si otro dispositivo reusó el ID, impedir que una edición manual lo renombre.
-    var nombreVigente=ocupanteRemoto(main,id)||limpia(viejo.mat);
-    if(d.nombreOriginal&&norm(nombreVigente)!==norm(d.nombreOriginal))
+    // El nombre persistido tiene prioridad sobre la copia visible, pero nunca
+    // confundimos una referencia vieja por ID con un artículo diferente.
+    var nombreVigente=nombreDeFirebase||limpia(viejo.mat);
+    if(nombreOriginal&&norm(nombreVigente)!==nombreOriginal)
       throw new Error('El material cambió en Firebase mientras lo editabas. Recargá antes de continuar.');
     var duplicado=existentes.find(function(m){return String(m.id)!==String(id) && norm(m.mat)===norm(d.nombre)&&!borrado(main,m.id);});
     if(duplicado)throw new Error('Ya existe otro material con ese nombre. No se fusionaron productos automáticamente.');
@@ -19863,13 +19887,17 @@ function guardarNuevaEntrada(entries,main,d,accion){
   }
   var extraActual=extras.find(function(m){return String(m.id)===String(id);});
   var yaCreado=!!(extraActual||entries[String(id)]&&entries[String(id)].manualCreated);
-  var actual=extraActual||conocidos.find(function(m){return String(m.id)===String(id);});
+  var actual=extraActual||conocidos.find(function(m){return String(m.id)===String(id);})||
+    (accion==='editar'&&visiblePorId?visiblePorId:null);
+  var necesitaFichaPersistente=accion==='editar'&&Number(id)>=10000&&
+    !extras.some(function(m){return String(m.id)===String(id);});
   var viejoNombre=limpia((main.matNombres||{})[id]||(actual&&actual.mat)||d.nombreOriginal);
   var reg={id:id,nombre:d.nombre,nombreAnterior:accion==='editar'?viejoNombre:'',
     codigo:d.codigo,categoria:d.categoria,comentarios:d.comentarios,
     prom:accion==='editar'?(Number(actual&&actual.prom)||0):d.prom,
-    confirmadaEnMateriales:true,manualCreated:(!actual||!!extraActual||yaCreado)&&
-      !(actual&&esAuto(actual)),manual:true,updatedAt:new Date().toISOString(),origen:accion};
+    confirmadaEnMateriales:true,manualCreated:necesitaFichaPersistente||
+      ((!actual||!!extraActual||yaCreado)&&!(actual&&esAuto(actual))),
+    manual:true,updatedAt:new Date().toISOString(),origen:accion};
   if(accion==='nuevo'&&!enNombre)reg.manualCreated=true;
   if(entries[String(id)]&&entries[String(id)].manualCreated)reg.manualCreated=true;
   // Una ficha auto-creada que el usuario corrigió manualmente se vuelve permanente.
@@ -19922,7 +19950,7 @@ async function transaccionCatalogo(datos,accion){
       // La transacción lee el último estado de Firebase: no pisa cargas nuevas.
       if(main.cargas)patch.cargas=main.cargas;
       patch.updatedAt=new Date().toISOString();
-      patch.catalogoManualWriter='CQ Materiales v3';
+      patch.catalogoManualWriter='CQ Materiales v6 (identidad dinámica verificada)';
       tx.set(base(),patch,{merge:true});
       var respaldoNuevo=Object.assign({},a,{version:3,entries:entries,updatedAt:patch.updatedAt,lastAction:accion});
       tx.set(respaldo(),respaldoNuevo);
