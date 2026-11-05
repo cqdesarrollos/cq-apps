@@ -4604,8 +4604,39 @@ body{background:linear-gradient(180deg,#f8faf8 0%,#f3f5f3 100%)!important;color:
   }
 }
 </style>
+<style id="cq-v9-catalogo-inicio-style">
+/* CQ V9: sólo presentación de arranque, sin escrituras en Firebase. */
+html:not(.cq-v9-catalogo-listo) .view { visibility:hidden!important; }
+#cq-v9-catalogo-inicio {
+  position:fixed;inset:0;z-index:2147483645;
+  background:linear-gradient(155deg,#f7f8f5,#edf4ef);
+  display:flex;align-items:center;justify-content:center;
+  padding:22px;font-family:'Space Grotesk',system-ui,sans-serif;color:#1c3d35;
+}
+html.cq-v9-catalogo-listo #cq-v9-catalogo-inicio {display:none!important;}
+#cq-v9-catalogo-inicio .cq-v9-card {box-sizing:border-box;width:min(390px,100%);background:#fff;
+  border:1px solid #dbe8df;border-radius:20px;padding:30px 24px;
+  text-align:center;box-shadow:0 14px 45px rgba(28,61,53,.1);}
+#cq-v9-catalogo-inicio .cq-v9-spinner {width:35px;height:35px;margin:0 auto 16px;
+  border:3px solid #d8e8de;border-top-color:#2e7d5e;border-radius:50%;animation:cq-v9-spin 1s linear infinite;}
+@keyframes cq-v9-spin {to {transform:rotate(360deg)}}
+#cq-v9-catalogo-inicio .cq-v9-title {font-size:17px;font-weight:900;margin:0 0 7px;}
+#cq-v9-catalogo-inicio .cq-v9-status {font-size:12px;line-height:1.5;color:#658072;margin:0;}
+#cq-v9-catalogo-inicio .cq-v9-retry {display:none;margin:17px auto 0;border:0;border-radius:10px;
+  padding:11px 16px;background:#1c3d35;color:white;font-weight:800;font-size:12px;cursor:pointer;}
+#cq-v9-catalogo-inicio.cq-v9-demora .cq-v9-retry {display:block;}
+#cq-v9-catalogo-inicio.cq-v9-demora .cq-v9-spinner {animation-duration:1.5s;}
+</style>
 </head>
 <body>
+<div id="cq-v9-catalogo-inicio" role="status" aria-live="polite" aria-label="Cargando catálogo de Materiales">
+  <div class="cq-v9-card">
+    <div class="cq-v9-spinner" aria-hidden="true"></div>
+    <p class="cq-v9-title">Cargando catálogo…</p>
+    <p class="cq-v9-status" id="cq-v9-catalogo-estado">Sincronizando Materiales y subrubros protegidos.</p>
+    <button class="cq-v9-retry" type="button" onclick="location.reload()">Reintentar carga</button>
+  </div>
+</div>
 
 <div id="cq-access-total">
   <div class="cq-card">
@@ -9129,6 +9160,7 @@ async function loadFromFirebase(){
     setSyncStatus('Firebase: leyendo...');
     await cargarObrasGastosMateriales();
     var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+    var cqV9PrincipalDisponible=snap.exists();
     if(snap.exists()){
       var d=snap.data();
       delete d.updatedAt;
@@ -9173,6 +9205,7 @@ async function loadFromFirebase(){
     setSyncStatus('Firebase: conectado','ok');
     readLastSync();
     renderActive();
+    if(cqV9PrincipalDisponible&&window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.marcar('principal');
   }catch(e){
     console.warn('Firebase read error',e);
     setSyncStatus('Firebase: error','err');
@@ -9910,6 +9943,46 @@ function toggleModoFirebase(){
     setSyncMeta('Modo prueba',true);
   }
 }
+// V9: la pantalla se libera sólo cuando existen las tres fuentes de lectura.
+// No guarda ni altera el estado; la última aplicación de autoridad usa la rutina V8.
+window.__cqV9InicioCatalogo=(function(){
+  var listo={principal:false,subrubros:false,autoridad:false};
+  var publicado=false;
+  function estado(){
+    var el=document.getElementById('cq-v9-catalogo-estado');if(!el)return;
+    var faltan=[];
+    if(!listo.principal)faltan.push('datos de Materiales');
+    if(!listo.subrubros)faltan.push('subrubros de Gastos');
+    if(!listo.autoridad)faltan.push('clasificaciones protegidas');
+    el.textContent=faltan.length?'Sincronizando '+faltan.join(', ')+'.':'Clasificaciones verificadas.';
+  }
+  function comprobar(){
+    if(publicado||!listo.principal||!listo.subrubros||!listo.autoridad)return;
+    try{
+      if(typeof window.__cqV9AplicarAutoridadInicio!=='function' || !window.__cqV9AplicarAutoridadInicio()){
+        estado();return;
+      }
+      publicado=true;
+      document.documentElement.classList.add('cq-v9-catalogo-listo');
+    }catch(e){
+      console.warn('Materiales: catálogo todavía no listo para mostrar',e);
+      estado();
+    }
+  }
+  function marcar(parte){
+    if(Object.prototype.hasOwnProperty.call(listo,parte))listo[parte]=true;
+    estado();comprobar();
+  }
+  // Si falla una lectura, no exponer datos locales como si fueran confirmados.
+  setTimeout(function(){
+    if(publicado)return;
+    var pantalla=document.getElementById('cq-v9-catalogo-inicio');
+    if(pantalla)pantalla.classList.add('cq-v9-demora');
+    estado();
+  },18000);
+  return {marcar:marcar,comprobar:comprobar,estado:estado};
+})();
+
 // Render local inmediato para que la app nunca quede esperando una pantalla vacía.
 normalizeState();
 updateModoUI();
@@ -15316,6 +15389,7 @@ window.abrirGraficoDirecto = function(){
       var cambiosDefault=rebuild()||0;
       rotular();
       if(typeof renderActive==='function')renderActive();
+      if(window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.marcar('subrubros');
 
       // Guardar una sola vez la reclasificación automática de los que estaban sin asignar.
       if(cambiosDefault>0 && typeof persist==='function'){
@@ -19767,6 +19841,7 @@ function aceptarRespaldo(datos,origen){
   var cambio=aplicarAutoridad();
   if(cambio){try{renderActive();}catch(_e){}}
   log('RESPALDO_LEIDO',origen+' · '+Object.keys(autoridad).length+' materiales/decisiones');
+  if(window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.marcar('autoridad');
   if(ultimoPrincipal&&diferencias(ultimoPrincipal,entradasConfirmadas(autoridad)).length)programarReparacion('cambios recibidos');
 }
 function escuchar(){
@@ -20142,6 +20217,13 @@ if(normalizarOriginal){
     var r=normalizarOriginal.apply(this,arguments);aplicarAutoridad();return r;
   };
 }
+window.__cqV9AplicarAutoridadInicio=function(){
+  if(!listo)return false;
+  aplicarAutoridad();
+  try{renderActive();}catch(_e){}
+  return true;
+};
+if(window.__cqV9InicioCatalogo)window.__cqV9InicioCatalogo.comprobar();
 var renderOriginal=(typeof renderCatalogo==='function')?renderCatalogo:null;
 if(renderOriginal){
   window.renderCatalogo=renderCatalogo=function(){
