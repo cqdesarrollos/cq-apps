@@ -5544,10 +5544,13 @@ function constructorStats(cid){
 function obraStats(o){
   const st=estadosObras[o.id] || normalizeState(null,o);
   const oldState=state; state=st;
-  const t=calcTotal(); const pf=calcPagosFuera(); const cert=sumCertificados();
+  const t=calcTotal();
+  const pf=calcPagosFuera();
+  const cert=sumCertificados();
+  const atrasoInfo=getAtrasoInfoActualObra();
   const saldo=(st.acuerdo||0) - (cert + pf.neto);
   state=oldState;
-  return {pct:t.pctTotal||0, saldo};
+  return {pct:t.pctTotal||0, saldo, atrasoInfo};
 }
 
 function defaultObraColor(idx){
@@ -6029,6 +6032,22 @@ function calcAtrasoSemanasProporcional(cantidadCertificados, porcentajesSemana){
   return {semanasPrevistas,semanasEjecutadas,atrasoReal,atrasoMostrado};
 }
 
+
+function getAtrasoInfoActualObra(){
+  const semanas=getSemanas();
+  const progresoSemanalReal=[];
+  let semComp=0, semParcial=0;
+  semanas.forEach(s=>{
+    // Avance físico real de la semana. Los ajustes financieros no cuentan como obra ejecutada.
+    const real=calcSemana(s,0).pctSem;
+    if(real>=0.99) semComp++;
+    else if(real>0) semParcial++;
+    progresoSemanalReal.push(real);
+  });
+  const atrasoInfo=calcAtrasoSemanasProporcional(getCertificados().length,progresoSemanalReal);
+  return {...atrasoInfo, semComp, semParcial};
+}
+
 function renderCertificadosMini(atrasoInfo){
   const certs=getCertificados().slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'') || (parseInt(b.num)||0)-(parseInt(a.num)||0));
   if(!certs.length) return '';
@@ -6174,24 +6193,8 @@ function renderKPIs(ctx){
   // Así una tarea incluida en un certificado (aunque su avance luego cambie)
   // continúa computándose como pagada.
   const totalPagado = cert + pf.neto;
-  let semComp=0, semParcial=0;
-  const semanasKpi=getSemanas();
-  const progresoSemanalReal=[];
-  // Sólo la semana con "Conforme de obra" puede necesitar un segundo cálculo
-  // para el KPI financiero: no duplicar cálculos pesados de todas las semanas.
-  const refConformeKpi=calcCtx.brecha>0 ? findConformeTaskRef() : null;
-  semanasKpi.forEach(s=>{
-    // Avance físico de tareas: el ajuste financiero no cuenta como obra ejecutada.
-    const real=calcSemana(s,0).pctSem;
-    const p=(refConformeKpi && Number(refConformeKpi.semNum)===Number(s.num))
-      ? calcSemana(s,calcCtx.brecha).pctSem : real;
-    if(p>=0.99) semComp++;
-    else if(p>0) semParcial++;
-    progresoSemanalReal.push(real);
-  });
-  // Cada certificado equivale a una semana, incluso con tareas intercaladas
-  // y semanas parcialmente avanzadas. getSemanas() incorpora altas, bajas y orden.
-  const atrasoInfo=calcAtrasoSemanasProporcional(getCertificados().length,progresoSemanalReal);
+  const atrasoInfo=getAtrasoInfoActualObra();
+  let semComp=Number(atrasoInfo.semComp)||0, semParcial=Number(atrasoInfo.semParcial)||0;
 
   document.getElementById('pct-total').textContent = (pctTotal*100).toFixed(1)+'%';
   document.getElementById('prog-fill').style.width = (pctTotal*100).toFixed(1)+'%';
@@ -6953,13 +6956,21 @@ function openConstructor(cid){
   const el=document.getElementById('constructor-obras');
   el.innerHTML = obs.map(o=>{
     const st=obraStats(o);
+    const numeroAR=n=>Number(n).toLocaleString('es-AR',{maximumFractionDigits:1,minimumFractionDigits:1});
+    const atraso=Math.max(0,Number(st?.atrasoInfo?.atrasoMostrado)||0);
+    const semanasPrevistas=Number(st?.atrasoInfo?.semanasPrevistas)||0;
+    const semanasEjecutadas=Number(st?.atrasoInfo?.semanasEjecutadas)||0;
+    const atrasoTexto=semanasPrevistas>0 ? (atraso>0 ? `Atraso ${numeroAR(atraso)} sem.` : 'Al día') : '';
+    const atrasoTitle=semanasPrevistas>0
+      ? `${semanasPrevistas} certificados · ${numeroAR(semanasEjecutadas)} semanas equivalentes ejecutadas (incluye avances parciales)`
+      : 'Sin certificados';
     return `<div class="obra-card" style="--obra-color:${c?.color || o.color || '#E8A838'}" onclick="if(_lpFired){_lpFired=false;return;} switchObra('${o.id}')"
       onmousedown="lpStart(event,'obra','${o.id}')" onmouseup="lpCancel()" onmouseleave="lpCancel()" onmousemove="lpMove(event)"
       ontouchstart="lpStart(event,'obra','${o.id}')" ontouchend="lpCancel()" ontouchcancel="lpCancel()" ontouchmove="lpMove(event)">
       <div class="obra-card-title">${escHtml(o.label)}</div>
       <div class="obra-card-sub">${escHtml(o.constructor || c?.nombre || '')} · saldo ${fmt(st.saldo)}</div>
       <div class="obra-card-progress"><div style="width:${(st.pct*100).toFixed(0)}%"></div></div>
-      <div class="home-card-meta">Avance ${(st.pct*100).toFixed(1)}%</div>
+      <div class="home-card-meta obra-card-meta-line"><span>Avance ${(st.pct*100).toFixed(1)}%</span>${atrasoTexto?`<span class="obra-atraso-chip ${atraso>0?'is-late':'is-on-time'}" title="${escHtml(atrasoTitle)}">${atrasoTexto}</span>`:''}</div>
     </div>`;
   }).join('') || '<div class="empty">Este constructor todavía no tiene obras asignadas.</div>';
 }
@@ -10459,6 +10470,41 @@ html.cq-employee-readonly-avances .avance-input{
 }
 @media(max-width:700px){
   .cert-collapse-left .cert-week-delay{font-size:8px!important;padding:3px 6px!important;}
+}
+
+/* CQ: atraso también visible en la tarjeta resumen de cada obra. */
+.obra-card-meta-line{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+  flex-wrap:wrap!important;
+}
+.obra-atraso-chip{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  white-space:nowrap!important;
+  font-size:.88em!important;
+  line-height:1.15!important;
+  font-weight:900!important;
+  letter-spacing:0!important;
+  border-radius:999px!important;
+  padding:4px 8px!important;
+  border:1px solid transparent!important;
+}
+.obra-atraso-chip.is-late{
+  color:#AD3932!important;
+  background:#FFF0EE!important;
+  border-color:#F5CFCB!important;
+}
+.obra-atraso-chip.is-on-time{
+  color:#176A46!important;
+  background:#E5F4EA!important;
+  border-color:#CBE7D4!important;
+}
+@media(max-width:700px){
+  .obra-atraso-chip{font-size:.8em!important;padding:3px 6px!important;}
 }
 </style>
 
