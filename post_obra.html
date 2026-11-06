@@ -1904,18 +1904,38 @@ function render(){
  const visible=db.issues.filter(i=>(!q||[i.work,i.cat,i.subcat,i.desc,i.responsible,i.contractor,i.diagnosis,i.action,i.notes].join(' ').toLowerCase().includes(q))&&matches('work',i.work)&&matches('cat',i.cat)&&matches('priority',i.priority)&&matches('status',i.status));
  const works=new Map();
  visible.forEach(i=>{const work=i.work||'Sin obra';if(!works.has(work))works.set(work,[]);works.get(work).push(i)});
- const entries=[...works.entries()].sort((a,b)=>a[0].localeCompare(b[0],'es',{numeric:true}));
- if(!initializedGroups&&entries.length){entries.forEach(([w])=>expandedWorks.add(w));initializedGroups=true}
- const totalClaims=new Set(visible.map(claimKey)).size;
- $('groupedSummary').textContent=`${entries.length} obras · ${totalClaims} reclamos · ${visible.length} cargas`;
- // El estado general de cada obra y reclamo siempre se calcula con TODAS sus cargas,
- // incluso cuando el usuario aplica filtros a la tabla.
+ // El estado y el orden de cada obra se calculan con TODAS sus cargas,
+ // incluso cuando el usuario aplica filtros a las filas visibles.
  const byClaim=new Map(),byWork=new Map();
  db.issues.forEach(i=>{
    const key=claimKey(i),work=i.work||'Sin obra';
    if(!byClaim.has(key))byClaim.set(key,[]);byClaim.get(key).push(i);
    if(!byWork.has(work))byWork.set(work,[]);byWork.get(work).push(i);
  });
+ // Primero las obras con pendientes o trabajos en proceso: la fecha del reclamo
+ // ABIERTO más antiguo define su prioridad (más días abiertos = más arriba).
+ // Después las obras totalmente resueltas: fecha del reclamo más RECIENTE
+ // (más nuevas arriba, las más antiguas al final).
+ const workSortInfo=new Map();
+ works.forEach((_,work)=>{
+   const all=byWork.get(work)||[];
+   const unresolved=all.filter(i=>i.status!=='Resuelto');
+   const isOpen=unresolved.length>0;
+   const dates=(isOpen?unresolved:all).map(i=>String(i.claim||'')).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+   workSortInfo.set(work,{isOpen,date:isOpen?(dates[0]||'0000-00-00'):(dates[dates.length-1]||'')});
+ });
+ const entries=[...works.entries()].sort(([nameA],[nameB])=>{
+   const a=workSortInfo.get(nameA),b=workSortInfo.get(nameB);
+   if(a.isOpen!==b.isOpen)return a.isOpen?-1:1;
+   if(a.date!==b.date){
+     if(a.isOpen)return a.date<b.date?-1:1;
+     return a.date>b.date?-1:1;
+   }
+   return nameA.localeCompare(nameB,'es',{numeric:true});
+ });
+ if(!initializedGroups&&entries.length){entries.forEach(([w])=>expandedWorks.add(w));initializedGroups=true}
+ const totalClaims=new Set(visible.map(claimKey)).size;
+ $('groupedSummary').textContent=`${entries.length} obras · ${totalClaims} reclamos · ${visible.length} cargas`;
  const eyeSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></svg>';
  const trashSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>';
  $('tbody').innerHTML=entries.length?entries.map(([work,items])=>{
