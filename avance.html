@@ -6226,6 +6226,12 @@ function renderSemanas(){
   // renderSemanas() corre en muchas interacciones; hacer esa revisión en cada render
   // generaba demora perceptible al marcar tareas, especialmente en tablet.
   const cont=document.getElementById('semanas-container');
+  // Mantener las semanas desplegadas al guardar/editar sin abrir semanas de otra obra.
+  const mismaObra=cont.dataset.cqSemanasObraId===String(curObraId);
+  const semanasAbiertas=mismaObra
+    ? Array.from(cont.querySelectorAll('.semana-items.open'), el=>el.id)
+    : [];
+  const scrollAntes=mismaObra && semanasAbiertas.length ? window.scrollY : null;
   const calcCtx=buildCalcContext();
   const semanasActuales=getSemanas();
   const globalInput=document.getElementById('all-weeks-total');
@@ -6306,6 +6312,19 @@ function renderSemanas(){
       </div>
     </div>`;
   }).join('');
+  cont.dataset.cqSemanasObraId=String(curObraId);
+  semanasAbiertas.forEach(id=>{
+    const items=document.getElementById(id);
+    if(!items) return;
+    items.classList.add('open');
+    const chev=document.getElementById('chev-'+id.slice(3));
+    if(chev) chev.classList.add('open');
+  });
+  if(scrollAntes!==null){
+    requestAnimationFrame(()=>{
+      if(cont.dataset.cqSemanasObraId===String(curObraId)) window.scrollTo(0,scrollAntes);
+    });
+  }
 }
 
 function toggleSemana(num){
