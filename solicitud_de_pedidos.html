@@ -3466,7 +3466,7 @@ window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
     var rows=window._cqPreviewRows||[];
     if(!rows.length){alert('Marcá al menos un ítem.');return}
     try{
-      var W=1200,H=1800,M=38,CW=W-M*2,MAXY=H-64;
+      var W=1200,H=1800,M=38,CW=W-M*2,TOPY=160,FOOTER_Y=H-64,SAFE_GAP=16;
       var navy='#10265f',dark='#21352e',muted='#6e7c75',green='#1f4d40',line='#dde5e1',soft='#f5f8f6';
       var logo=await loadImg(window._cqShareLogo||'');
 
@@ -3491,65 +3491,101 @@ window.CQ_SOLPED_OBSERVACION_GENERAL_V73=true;
         ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(M+180,45);ctx.lineTo(M+180,116);ctx.stroke();
         ctx.fillStyle='#fff';ctx.font='700 41px Arial';ctx.fillText('SOLICITUD DE PEDIDOS',M+210,82);
         ctx.fillStyle='#dce5e1';ctx.font='22px Arial';ctx.fillText('CQ Desarrollos',M+210,112);
-        var pg={canvas:c,ctx:ctx,y:160};pages.push(pg);return pg;
+        var pg={canvas:c,ctx:ctx,y:TOPY};pages.push(pg);return pg;
       }
 
-      var pg=newPage(),ctx=pg.ctx,y=pg.y;
+      function ensurePage(pg){ return pg||newPage(); }
 
-      for(var gi=0;gi<groups.length;gi++){
-        var g=groups[gi],hue=hueFor(g.obra),head=hsl(hue,46,93),stripe=hsl(hue,57,55),body=hsl(hue,28,98);
+      function buildGroupMeta(g){
+        var hue=hueFor(g.obra),head=hsl(hue,46,93),stripe=hsl(hue,57,55),body=hsl(hue,28,98);
         var title='Obra '+g.obra,obsTxt=g.obs.length?'Observación: '+g.obs.join(' · '):'';
-
-        ctx.font='700 25px Arial';var titleW=ctx.measureText(title).width;
-        ctx.font='700 22px Arial';var obsAvail=Math.max(260,CW-110-titleW);
-        var obsLines=obsTxt?wrapLines(ctx,obsTxt,obsAvail):[];
+        var measCtx=(pages[0]&&pages[0].ctx)||(document.createElement('canvas').getContext('2d'));
+        measCtx.font='700 25px Arial';var titleW=measCtx.measureText(title).width;
+        measCtx.font='700 22px Arial';var obsAvail=Math.max(260,CW-110-titleW);
+        var obsLines=obsTxt?wrapLines(measCtx,obsTxt,obsAvail):[];
         var headH=Math.max(92,40+(Math.max(1,obsLines.length)*28));
-        var th=44;
-
-        var metas=[],bodyH=0;
+        var contHeadH=76, th=44;
+        var metas=[];
         for(var ri=0;ri<g.items.length;ri++){
           var item=g.items[ri].x||{};
-          ctx.font='700 19px Arial';var prod=wrapLines(ctx,String(item.material||item.nombre||''),650);
-          ctx.font='italic bold 16px Arial';var note=item.nota?wrapLines(ctx,'Obs.: '+String(item.nota||''),650):[];
+          measCtx.font='700 19px Arial';var prod=wrapLines(measCtx,String(item.material||item.nombre||''),650);
+          measCtx.font='italic bold 16px Arial';var note=item.nota?wrapLines(measCtx,'Obs.: '+String(item.nota||''),650):[];
           var rh=Math.max(66,22+prod.length*23+note.length*20+(note.length?6:0));
-          metas.push({prod:prod,note:note,h:rh});bodyH+=rh;
+          metas.push({prod:prod,note:note,h:rh});
         }
-        var totalH=headH+th+bodyH+8;
-        if(y+totalH>MAXY){pg=newPage();ctx=pg.ctx;y=pg.y}
+        return {hue:hue,head:head,stripe:stripe,body:body,title:title,titleW:titleW,obsLines:obsLines,headH:headH,contHeadH:contHeadH,th:th,metas:metas};
+      }
+
+      function drawChunk(pg,meta,g,start,end,isCont){
+        var ctx=pg.ctx,y=pg.y;
+        var headH=isCont?meta.contHeadH:meta.headH;
+        var rowsH=0; for(var i=start;i<end;i++) rowsH += meta.metas[i].h;
+        var totalH=headH+meta.th+rowsH+8;
 
         ctx.fillStyle='#fff';roundRect(ctx,M,y,CW,totalH,18);ctx.fill();ctx.strokeStyle='#e2e8e4';ctx.lineWidth=2;roundRect(ctx,M,y,CW,totalH,18);ctx.stroke();
-        ctx.fillStyle=stripe;ctx.fillRect(M,y,12,totalH);
-        ctx.fillStyle=head;ctx.fillRect(M+12,y,CW-12,headH);
+        ctx.fillStyle=meta.stripe;ctx.fillRect(M,y,12,totalH);
+        ctx.fillStyle=meta.head;ctx.fillRect(M+12,y,CW-12,headH);
 
-        ctx.fillStyle=dark;ctx.font='700 25px Arial';ctx.fillText(title,M+34,y+34);
-        if(obsLines.length){
+        ctx.fillStyle=dark;ctx.font='700 25px Arial';ctx.fillText(meta.title+(isCont?' (continúa)':''),M+34,y+34);
+        if(!isCont && meta.obsLines.length){
           ctx.fillStyle=green;ctx.font='700 22px Arial';
-          var ox=M+52+titleW;
-          ctx.fillText(obsLines[0],ox,y+38);
-          for(var oi=1;oi<obsLines.length;oi++)ctx.fillText(obsLines[oi],M+34,y+38+oi*28);
+          var ox=M+52+meta.titleW;
+          ctx.fillText(meta.obsLines[0],ox,y+38);
+          for(var oi=1;oi<meta.obsLines.length;oi++)ctx.fillText(meta.obsLines[oi],M+34,y+38+oi*28);
         }
 
         var ty=y+headH;
-        ctx.fillStyle=soft;ctx.fillRect(M+12,ty,CW-12,th);
+        ctx.fillStyle=soft;ctx.fillRect(M+12,ty,CW-12,meta.th);
         ctx.fillStyle=muted;ctx.font='700 16px Arial';
         ctx.fillText('PRODUCTO',M+50,ty+28);ctx.fillText('CANT.',M+800,ty+28);ctx.fillText('PRIORIDAD',M+925,ty+28);
 
-        var ry=ty+th;
-        for(var ii=0;ii<g.items.length;ii++){
-          var row=g.items[ii],p=row.p||{},x=row.x||{},meta=metas[ii];
-          ctx.fillStyle=body;ctx.fillRect(M+12,ry,CW-12,meta.h);
-          ctx.strokeStyle=line;ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(M+12,ry+meta.h);ctx.lineTo(W-M,ry+meta.h);ctx.stroke();
+        var ry=ty+meta.th;
+        for(var ii=start;ii<end;ii++){
+          var row=g.items[ii],p=row.p||{},x=row.x||{},rm=meta.metas[ii];
+          ctx.fillStyle=meta.body;ctx.fillRect(M+12,ry,CW-12,rm.h);
+          ctx.strokeStyle=line;ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(M+12,ry+rm.h);ctx.lineTo(W-M,ry+rm.h);ctx.stroke();
           ctx.fillStyle=dark;ctx.font='700 19px Arial';
-          for(var pi=0;pi<meta.prod.length;pi++)ctx.fillText(meta.prod[pi],M+50,ry+28+pi*23);
-          if(meta.note.length){ctx.fillStyle=green;ctx.font='italic bold 16px Arial';var ny=ry+28+meta.prod.length*23+3;for(var ni=0;ni<meta.note.length;ni++)ctx.fillText(meta.note[ni],M+50,ny+ni*20)}
+          for(var pi=0;pi<rm.prod.length;pi++)ctx.fillText(rm.prod[pi],M+50,ry+28+pi*23);
+          if(rm.note.length){ctx.fillStyle=green;ctx.font='italic bold 16px Arial';var ny=ry+28+rm.prod.length*23+3;for(var ni=0;ni<rm.note.length;ni++)ctx.fillText(rm.note[ni],M+50,ny+ni*20)}
           ctx.fillStyle=dark;ctx.font='700 23px Arial';ctx.fillText(String(qty(x)||'-'),M+812,ry+34);
-          var urg=pri(p,x)==='Urgente';ctx.fillStyle=urg?'#ffe7e4':'#fff4d7';roundRect(ctx,M+905,ry+15,190,40,20);ctx.fill();
-          ctx.fillStyle=urg?'#b43c34':'#8b681b';ctx.font='700 18px Arial';ctx.textAlign='center';ctx.fillText(pri(p,x),M+1000,ry+41);ctx.textAlign='left';
-          ry+=meta.h;
+          var urgente=pri(p,x)==='Urgente';ctx.fillStyle=urgente?'#ffe7e4':'#fff4d7';roundRect(ctx,M+905,ry+15,190,40,20);ctx.fill();
+          ctx.fillStyle=urgente?'#b43c34':'#8b681b';ctx.font='700 18px Arial';ctx.textAlign='center';ctx.fillText(pri(p,x),M+1000,ry+41);ctx.textAlign='left';
+          ry += rm.h;
         }
-        y+=totalH+16;
+        pg.y += totalH + SAFE_GAP;
       }
 
+      var pg=null;
+      for(var gi=0;gi<groups.length;gi++){
+        var g=groups[gi],meta=buildGroupMeta(g),idx=0,firstChunk=true;
+        while(idx<meta.metas.length){
+          pg=ensurePage(pg);
+          var usableBottom=FOOTER_Y;
+          var baseH=(firstChunk?meta.headH:meta.contHeadH)+meta.th+8;
+          var avail=usableBottom-pg.y;
+          if(avail<baseH+66){
+            if(pg.y>TOPY){ pg=newPage(); avail=usableBottom-pg.y; }
+          }
+          var takeStart=idx,takeH=0;
+          while(idx<meta.metas.length){
+            var nextH=takeH+meta.metas[idx].h;
+            if(baseH+nextH<=usableBottom-pg.y || (idx===takeStart && pg.y===TOPY)){
+              takeH=nextH; idx++;
+            }else{
+              break;
+            }
+          }
+          if(idx===takeStart){
+            if(pg.y>TOPY){ pg=newPage(); continue; }
+            idx=Math.min(meta.metas.length,takeStart+1);
+          }
+          drawChunk(pg,meta,g,takeStart,idx,!firstChunk);
+          firstChunk=false;
+          if(idx<meta.metas.length) pg=newPage();
+        }
+      }
+
+      if(!pages.length) pages.push(newPage());
       for(var pn=0;pn<pages.length;pn++){
         var pc=pages[pn].ctx;pc.fillStyle=muted;pc.font='19px Arial';pc.fillText('CQ Desarrollos · Solicitud de materiales',M,H-23);pc.textAlign='right';pc.fillText('Página '+(pn+1)+' de '+pages.length,W-M,H-23);pc.textAlign='left';
       }
