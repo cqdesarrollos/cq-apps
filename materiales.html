@@ -19760,7 +19760,12 @@ function prepararCambios(main,entries,renombresAutorizados){
     var nombreRemoto=ocupanteRemoto(main,id);
     if(nombreRemoto&&norm(nombreRemoto)!==norm(r.nombre)&&
         !(autorizado&&norm(nombreRemoto)===norm(autorizado))){
-      // Si el artículo fue recreado bajo otro ID, sólo seguirlo por nombre exacto.
+      // Nunca mover una EDICIÓN a otro ID sólo por compartir el nombre.
+      if(r.origen==='editar'){
+        colisiones.push({id:id,remoto:nombreRemoto,protegido:r.nombre,tipo:'IDENTIDAD_ID'});
+        return;
+      }
+      // Sólo las reconciliaciones no editoriales pueden seguir por nombre.
       var otroPorNombre=extra.find(function(m){return norm(m.mat)===norm(r.nombre);});
       if(!otroPorNombre){colisiones.push({id:id,remoto:nombreRemoto,protegido:r.nombre,tipo:'IDENTIDAD_ID'});return;}
       ex=otroPorNombre;id=String(ex.id);
@@ -19781,9 +19786,10 @@ function prepararCambios(main,entries,renombresAutorizados){
       var limpias=deletedNames.filter(function(x){return x!==claveActiva;});
       if(limpias.length!==deletedNames.length){deletedNames=limpias;changed=true;}
     }
-    if(!ex){
-      // La integración recreó el mismo artículo con un ID nuevo: conservarlo,
-      // pero fijar el subrubro elegido a mano en ese nuevo ID.
+    if(!ex && r.origen!=='editar'){
+      // La reconciliación de registros antiguos puede seguir un artículo por
+      // nombre. En una EDICIÓN explícita, sin embargo, sólo se modifica su ID:
+      // dos fichas del mismo nombre no deben fusionarse ni pisarse entre sí.
       ex=extra.find(function(m){return norm(m.mat)===norm(r.nombre);})||null;
       if(ex)id=String(ex.id);
     }
@@ -19980,8 +19986,13 @@ function guardarNuevaEntrada(entries,main,d,accion){
     var nombreVigente=nombreDeFirebase||limpia(viejo.mat);
     if(nombreOriginal&&norm(nombreVigente)!==nombreOriginal)
       throw new Error('El material cambió en Firebase mientras lo editabas. Recargá antes de continuar.');
-    var duplicado=existentes.find(function(m){return String(m.id)!==String(id) && norm(m.mat)===norm(d.nombre)&&!borrado(main,m.id);});
-    if(duplicado)throw new Error('Ya existe otro material con ese nombre. No se fusionaron productos automáticamente.');
+    // Una coincidencia que YA existía no puede impedir editar el subrubro,
+    // código u observaciones del material seleccionado. Sólo bloquear cuando
+    // el usuario intenta RENOMBRARLO a un nombre ocupado por otro ID.
+    if(norm(d.nombre)!==nombreOriginal){
+      var duplicado=existentes.find(function(m){return String(m.id)!==String(id) && norm(m.mat)===norm(d.nombre)&&!borrado(main,m.id);});
+      if(duplicado)throw new Error('Ya existe otro material con ese nombre. No se fusionaron productos automáticamente.');
+    }
   }else if(enNombre){
     id=Number(enNombre.id);
     if(window.__cqMaterialesEmployeeRO)throw new Error('El material ya existe. En modo solo lectura no se puede modificar.');
