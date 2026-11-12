@@ -3053,13 +3053,31 @@ function calcTirMensual(flows){
   const positivas=roots.filter(r=>r>=0);
   return positivas.length?positivas[0]:roots[roots.length-1];
 }
-function calcPayback(flows){
-  if(!flows?.length)return null;let cum=0,everNeg=false;
-  for(let i=0;i<flows.length;i++){
-    const prev=cum;cum+=flows[i];if(cum<0)everNeg=true;
-    if(everNeg&&prev<0&&cum>=0&&flows[i]>0)return i+((-prev)/flows[i]);
+function calcPayback(flows, firstInvestmentIndex=0){
+  // Recuperacion real: solo meses con dinero del cliente efectivamente
+  // imputado como ingreso. No se interpola un cobro mensual a un dia ficticio.
+  if(!Array.isArray(flows)||!flows.length)return null;
+  const EPS=0.005, balances=[];
+  let saldo=0, tuvoInversionPendiente=false;
+  for(const raw of flows){
+    saldo+=Number(raw)||0;
+    balances.push(saldo);
+    if(saldo < -EPS)tuvoInversionPendiente=true;
   }
-  if(!everNeg)return 0;return null;
+  if(!tuvoInversionPendiente)return 0;
+  // Si una venta/anticipo devuelve dinero temporalmente pero despues vuelve
+  // a requerir aportes propios, aun no se recupero toda la inversion.
+  if(saldo < -EPS)return null;
+  const origen=Number.isInteger(firstInvestmentIndex)&&firstInvestmentIndex>=0
+    ?Math.min(firstInvestmentIndex,flows.length-1):0;
+  for(let i=0;i<balances.length;i++){
+    const anterior=i?balances[i-1]:0;
+    if(anterior < -EPS && balances[i]>=-EPS &&
+       balances.slice(i).every(v=>v>=-EPS)){
+      return Math.max(0,i-origen);
+    }
+  }
+  return null;
 }
 function calcularMetricasFinancieras(fin,gastos){
   const cuotas=normalizarCuotasDetalle(fin),venta=parseFloat(fin?.venta)||0,ventaMes=String(fin?.ventaMes||'');
@@ -3077,12 +3095,12 @@ function calcularMetricasFinancieras(fin,gastos){
   const tirRoots=!faltanMeses?calcTirRootsMensuales(flows):[];
   const tirMensual=tirRoots.length?(tirRoots.find(r=>r>=0) ?? tirRoots[tirRoots.length-1]):null;
   const tirAnual=tirMensual!==null&&tirMensual>-1?Math.pow(1+tirMensual,12)-1:null;
-  const payback=!faltanMeses?calcPayback(flows):null;
+  const payback=!faltanMeses?calcPayback(flows,meses.findIndex(m=>(costosMes[m]||0)>0)):null;
   const capitalCosto=costoTotal>0?capitalMax/costoTotal:null;
   return{cuotas,venta,ventaMes,costosMes,costoTotal,totalIngresos,margen,meses,flows,faltanMeses,capitalMax,roe,tirMensual,tirAnual,tirRoots,tirMultiple:tirRoots.length>1,payback,capitalCosto};
 }
 function fmtPctFin(v){return v===null||!Number.isFinite(v)?'—':(v*100).toFixed(1)+'%'}
-function fmtPaybackFin(v){return v===null||!Number.isFinite(v)?'—':(v===0?'0 meses':(v<1?v.toFixed(1)+' mes':v.toFixed(1)+' meses'))}
+function fmtPaybackFin(v){if(v===null||!Number.isFinite(v))return '—';const n=Math.round(v*10)/10,txt=Number.isInteger(n)?String(n):n.toFixed(1);return txt+(n===1?' mes':' meses')}
 
 function getComisionFin(fin,totalIngresos){
   fin=fin||{};const modo=fin.comisionModo||((parseFloat(fin.comisionManual)||parseFloat(fin.comision)||0)>0?'manual':'auto');
@@ -9299,7 +9317,7 @@ calcularMetricasFinancieras=function(fin,gastos){
   const ingresosMes={};if(venta>0&&/^\d{4}-\d{2}$/.test(ventaMes))ingresosMes[ventaMes]=(ingresosMes[ventaMes]||0)+venta;cuotas.forEach(c=>{if(c.monto>0&&/^\d{4}-\d{2}$/.test(c.mes))ingresosMes[c.mes]=(ingresosMes[c.mes]||0)+c.monto});
   const totalIngresos=venta+cuotas.reduce((a,c)=>a+c.monto,0),comision=getComisionFin(fin,totalIngresos);
   const commissionMes=/^\d{4}-\d{2}$/.test(ventaMes)?ventaMes:Object.keys(ingresosMes).sort()[0]||'';const ajustesMes={};if(comision>0&&commissionMes)ajustesMes[commissionMes]=(ajustesMes[commissionMes]||0)+comision;
-  const mesesConDatos=[...Object.keys(costosMes),...Object.keys(ingresosMes),...Object.keys(ajustesMes)].sort();const faltanMeses=(venta>0&&!ventaMes)||cuotas.some(c=>c.monto>0&&!c.mes);const meses=mesesConDatos.length?rangoMeses(mesesConDatos[0],mesesConDatos[mesesConDatos.length-1]):[];const flows=meses.map(m=>(ingresosMes[m]||0)-(costosMes[m]||0)-(ajustesMes[m]||0));let cum=0,minCum=0;flows.forEach(v=>{cum+=v;if(cum<minCum)minCum=cum});const capitalMax=Math.max(0,-minCum),margen=totalIngresos-costoTotal-comision,roe=capitalMax>0?margen/capitalMax:null;const tirRoots=!faltanMeses?calcTirRootsMensuales(flows):[];const tirMensual=tirRoots.length?(tirRoots.find(r=>r>=0)??tirRoots[tirRoots.length-1]):null;const tirAnual=tirMensual!==null&&tirMensual>-1?Math.pow(1+tirMensual,12)-1:null;const payback=!faltanMeses?calcPayback(flows):null;const capitalCosto=costoTotal>0?capitalMax/costoTotal:null;return{cuotas,venta,ventaMes,costosMes,costoTotal,totalIngresos,comision,margen,meses,flows,faltanMeses,capitalMax,roe,tirMensual,tirAnual,tirRoots,tirMultiple:tirRoots.length>1,payback,capitalCosto};
+  const mesesConDatos=[...Object.keys(costosMes),...Object.keys(ingresosMes),...Object.keys(ajustesMes)].sort();const faltanMeses=(venta>0&&!ventaMes)||cuotas.some(c=>c.monto>0&&!c.mes);const meses=mesesConDatos.length?rangoMeses(mesesConDatos[0],mesesConDatos[mesesConDatos.length-1]):[];const flows=meses.map(m=>(ingresosMes[m]||0)-(costosMes[m]||0)-(ajustesMes[m]||0));let cum=0,minCum=0;flows.forEach(v=>{cum+=v;if(cum<minCum)minCum=cum});const capitalMax=Math.max(0,-minCum),margen=totalIngresos-costoTotal-comision,roe=capitalMax>0?margen/capitalMax:null;const tirRoots=!faltanMeses?calcTirRootsMensuales(flows):[];const tirMensual=tirRoots.length?(tirRoots.find(r=>r>=0)??tirRoots[tirRoots.length-1]):null;const tirAnual=tirMensual!==null&&tirMensual>-1?Math.pow(1+tirMensual,12)-1:null;const payback=!faltanMeses?calcPayback(flows,meses.findIndex(m=>(costosMes[m]||0)>0)):null;const capitalCosto=costoTotal>0?capitalMax/costoTotal:null;return{cuotas,venta,ventaMes,costosMes,costoTotal,totalIngresos,comision,margen,meses,flows,faltanMeses,capitalMax,roe,tirMensual,tirAnual,tirRoots,tirMultiple:tirRoots.length>1,payback,capitalCosto};
 }
 
 // Filtros de periodo y prorrateo de costos fijos desde OFICINA
@@ -9424,7 +9442,7 @@ function cqUnitCardHTML(k){
 function cqPrepareFinModal(){
   const modal=document.getElementById('modal-fin');if(!modal)return;const body=modal.querySelector('.mbody'),ttl=modal.querySelector('.modal-ttl');if(!body)return;
   if(ttl)ttl.textContent='Venta por unidad';
-  body.innerHTML=`${cqUnitCardHTML('A')}${cqUnitCardHTML('B')}<div class="fin-unit-help">Cada unidad guarda su precio inicial, cuotas, comisión porcentual y estado/fecha de venta. Los indicadores y Reporte financiero suman automáticamente ambas unidades.</div>`;
+  body.innerHTML=`${cqUnitCardHTML('A')}${cqUnitCardHTML('B')}<div class="fin-unit-help">Para calcular el Payback, cargá en el anticipo y en cada cuota el <strong>mes de cobro real del cliente</strong>, no el de firma ni una fecha estimada. Los gastos se descuentan según sus fechas. El Payback se expresa en meses desde el primer desembolso hasta la recuperación sostenida del capital; las fechas se registran por mes, no por día.</div>`;
 }
 function cqAddUnitCuota(k,valor='',mes=''){
   const list=document.getElementById(`fin-${k}-cuotas`);if(!list)return;let monto=valor,ym=mes;if(valor&&typeof valor==='object'){monto=valor.monto||'';ym=valor.mes||''}
@@ -9460,7 +9478,7 @@ calcularMetricasFinancieras=function(fin,gastos){
   fin=fin||{};const us=cqFinUnits(fin),costosMes={};let costoTotal=0;(gastos||[]).forEach(g=>{const ym=String(g.fecha||'').slice(0,7),usd=toUSD(g.monto,g.moneda,g.tc);costoTotal+=usd;if(/^\d{4}-\d{2}$/.test(ym))costosMes[ym]=(costosMes[ym]||0)+usd});
   const ingresosMes={},ajustesMes={},cuotas=[];let venta=0,totalIngresos=0,comision=0,faltanMeses=false;const ventaMeses=[];
   ['A','B'].forEach(k=>{const u=us[k],ut=cqUnitTotal(u),uc=cqUnitCommission(u);venta+=u.venta;totalIngresos+=ut;comision+=uc;if(u.venta>0){if(/^\d{4}-\d{2}$/.test(u.ventaMes)){ingresosMes[u.ventaMes]=(ingresosMes[u.ventaMes]||0)+u.venta;ventaMeses.push(u.ventaMes)}else faltanMeses=true}(u.cuotasDetalle||[]).forEach(c=>{cuotas.push({...c,unidad:k});if(c.monto>0){if(/^\d{4}-\d{2}$/.test(c.mes))ingresosMes[c.mes]=(ingresosMes[c.mes]||0)+c.monto;else faltanMeses=true}});if(uc>0){const cm=/^\d{4}-\d{2}$/.test(u.ventaMes)?u.ventaMes:(u.cuotasDetalle||[]).map(c=>c.mes).filter(m=>/^\d{4}-\d{2}$/.test(m)).sort()[0]||'';if(cm)ajustesMes[cm]=(ajustesMes[cm]||0)+uc;else faltanMeses=true}});
-  const mesesConDatos=[...Object.keys(costosMes),...Object.keys(ingresosMes),...Object.keys(ajustesMes)].sort(),meses=mesesConDatos.length?rangoMeses(mesesConDatos[0],mesesConDatos[mesesConDatos.length-1]):[],flows=meses.map(m=>(ingresosMes[m]||0)-(costosMes[m]||0)-(ajustesMes[m]||0));let cum=0,minCum=0;flows.forEach(v=>{cum+=v;if(cum<minCum)minCum=cum});const capitalMax=Math.max(0,-minCum),margen=totalIngresos-costoTotal-comision,roe=capitalMax>0?margen/capitalMax:null,tirRoots=!faltanMeses?calcTirRootsMensuales(flows):[],tirMensual=tirRoots.length?(tirRoots.find(r=>r>=0)??tirRoots[tirRoots.length-1]):null,tirAnual=tirMensual!==null&&tirMensual>-1?Math.pow(1+tirMensual,12)-1:null,payback=!faltanMeses?calcPayback(flows):null,capitalCosto=costoTotal>0?capitalMax/costoTotal:null;
+  const mesesConDatos=[...Object.keys(costosMes),...Object.keys(ingresosMes),...Object.keys(ajustesMes)].sort(),meses=mesesConDatos.length?rangoMeses(mesesConDatos[0],mesesConDatos[mesesConDatos.length-1]):[],flows=meses.map(m=>(ingresosMes[m]||0)-(costosMes[m]||0)-(ajustesMes[m]||0));let cum=0,minCum=0;flows.forEach(v=>{cum+=v;if(cum<minCum)minCum=cum});const capitalMax=Math.max(0,-minCum),margen=totalIngresos-costoTotal-comision,roe=capitalMax>0?margen/capitalMax:null,tirRoots=!faltanMeses?calcTirRootsMensuales(flows):[],tirMensual=tirRoots.length?(tirRoots.find(r=>r>=0)??tirRoots[tirRoots.length-1]):null,tirAnual=tirMensual!==null&&tirMensual>-1?Math.pow(1+tirMensual,12)-1:null,payback=!faltanMeses?calcPayback(flows,meses.findIndex(m=>(costosMes[m]||0)>0)):null,capitalCosto=costoTotal>0?capitalMax/costoTotal:null;
   return{cuotas,venta,ventaMes:ventaMeses.sort()[0]||'',costosMes,costoTotal,totalIngresos,comision,margen,meses,flows,faltanMeses,capitalMax,roe,tirMensual,tirAnual,tirRoots,tirMultiple:tirRoots.length>1,payback,capitalCosto,unidadesDetalle:us};
 }
 
@@ -14891,5 +14909,54 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
     return `<div class="cq-fin-multi-shell"><div class="rep-fin-metric-tabs">${tabs}</div><div class="cq-fin-selected-charts">${charts}</div></div>`;
   };
   try{renderRepFinChart=window.renderRepFinChart;}catch(e){}
+})();
+</script>
+
+
+<!-- CQ ajuste puntual · Payback consistente por obra en Reporte financiero -->
+<script id="cq-fix-payback-unificado-v1">
+(function(){
+  'use strict';
+  // El prorrateo de gastos generales debe afectar el resultado neto y
+  // los indicadores ajustados, pero no cambiar el plazo de recuperación
+  // del flujo propio de cada proyecto al verlo en el reporte consolidado.
+  const calcularFilasAnterior = window.repFinRowsData;
+  if (typeof calcularFilasAnterior === 'function') {
+    window.repFinRowsData = function(){
+      const filas = calcularFilasAnterior.apply(this, arguments);
+      if (!Array.isArray(filas)) return filas;
+      return filas.map(r => {
+        if (!r || !r.adjusted || !r.direct) return r;
+        return {
+          ...r,
+          adjusted: { ...r.adjusted, payback: r.direct.payback ?? null }
+        };
+      });
+    };
+    try { repFinRowsData = window.repFinRowsData; } catch(e) {}
+  }
+
+  // Mantener explicada la definición para que no se confunda con el
+  // ROE / TIR y otros indicadores que sí incluyen gastos prorrateados.
+  const renderAnterior = window.renderReporteFinancieroComparativo;
+  if (typeof renderAnterior === 'function') {
+    window.renderReporteFinancieroComparativo = function(){
+      const salida = renderAnterior.apply(this, arguments);
+      try {
+        const nota = document.querySelector('#reporte-financiero .rep-mini-note');
+        if (nota) {
+          nota.textContent = (nota.textContent || '')
+            .replace(/Capital máximo, ROE, TIR, Payback y Capital\/Costo/g,
+                     'Capital máximo, ROE, TIR y Capital/Costo');
+          const aclaracion = ' Payback: calculado con los ingresos y egresos propios de cada obra, sin prorrateos de Oficina ni Post obras, igual que en el resumen individual.';
+          if (!nota.textContent.includes('Payback: calculado con')) {
+            nota.textContent += aclaracion;
+          }
+        }
+      } catch (e) { console.warn('Nota Payback:', e); }
+      return salida;
+    };
+    try { renderReporteFinancieroComparativo = window.renderReporteFinancieroComparativo; } catch(e) {}
+  }
 })();
 </script>

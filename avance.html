@@ -188,6 +188,10 @@ html,body{min-height:100%;background:#F7F6F3;color:#1C2B22;font-family:'Space Gr
 .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:#A8BFA8;line-height:1}
 .modal-close:hover{color:#1C2B22}
 .modal-body{padding:16px 20px}
+/* Selector de obra modelo: permite usar el formulario en teléfono horizontal. */
+#modal-obra .modal{max-height:94dvh;display:flex;flex-direction:column}
+#modal-obra .modal-body{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+#modal-obra .modal-hd,#modal-obra .modal-footer{flex-shrink:0}
 .field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px}
 .field label{font-size:10px;font-weight:700;color:#7A9E82;letter-spacing:.06em;text-transform:uppercase}
 .field input,.field select,.field textarea{background:#F7F6F3;border:1px solid #DDE8DE;border-radius:6px;padding:8px 10px;color:#1C2B22;font-size:13px;font-family:'Space Grotesk',sans-serif;outline:none;transition:border-color .15s}
@@ -3772,6 +3776,7 @@ function openNuevaObra() {
   const tipoWrap=document.getElementById('eo-tipo-wrap'); if(tipoWrap) tipoWrap.style.display='block';
   const tipoSel=document.getElementById('eo-tipo'); if(tipoSel) tipoSel.value='1';
   const cimSel=document.getElementById('eo-cimentacion'); if(cimSel) cimSel.value='pilotes';
+  const modeloSel=document.getElementById('eo-modelo'); if(modeloSel) modeloSel.value='';
   updateFoundationSelectorVisibility();
   renderConstructorSelect(currentConstructorId || constructoresConfig[0]?.id);
   const selC=constructoresConfig.find(c=>c.id===(currentConstructorId || constructoresConfig[0]?.id));
@@ -3835,11 +3840,15 @@ function findLatestTwoStoryAny(){
   if(candidatas.length) return candidatas[candidatas.length-1];
   return findCristianObra();
 }
-function cloneStateAsNewProject(plantilla,newMeta,tipo){
+function cloneStateAsNewProject(plantilla,newMeta,tipo,metaModelo=null){
   if(!plantilla) return createDefaultState({...newMeta,tipoPlantas:tipo});
   const nuevo=deepClone(plantilla);
   nuevo.tipoPlantas=tipo;
-  nuevo.plantillaVersion = tipo===2 ? (plantilla.plantillaVersion||'2p_v1') : '1p_detallada_v1';
+  // Tomar una FOTOGRAFÍA del cronograma base de la obra elegida.
+  // Ninguna lectura, edición o sincronización futura consulta la obra modelo.
+  nuevo.baseSemanasPropias=deepClone(getBaseSemanasForProject(plantilla,metaModelo||newMeta));
+  nuevo.plantillaVersion = tipo===2 ? (plantilla.plantillaVersion||'2p_v1')
+    : (plantilla.plantillaVersion||metaModelo?.plantillaVersion||'1p_legacy');
   if(tipo===2) nuevo.tipoCimentacion=normalizeCimentacion2P(newMeta.tipoCimentacion || plantilla.tipoCimentacion || '');
   else delete nuevo.tipoCimentacion;
   nuevo.constructor=newMeta.constructor||'Constructor';
@@ -3849,6 +3858,14 @@ function cloneStateAsNewProject(plantilla,newMeta,tipo){
   const base=getBaseSemanasForProject(nuevo,newMeta);
   base.forEach(sem=>(sem.items||[]).forEach((it,i)=>{ nuevo.items[`${sem.num}-${i}`]=0; }));
   if(nuevo.customTasks){ Object.keys(nuevo.customTasks).forEach(sem=>{ nuevo.customTasks[sem]=(nuevo.customTasks[sem]||[]).map(t=>({...t,avance:0})); }); }
+  // Las semanas agregadas o modificadas también deben nacer sin avances.
+  if(Array.isArray(nuevo.customWeeks)) nuevo.customWeeks=nuevo.customWeeks.map(w=>({
+    ...w, items:(w.items||[]).map(it=>({...it,avance:0}))
+  }));
+  Object.keys(nuevo.weekOverrides||{}).forEach(num=>{
+    const w=nuevo.weekOverrides[num];
+    if(w && Array.isArray(w.items)) nuevo.weekOverrides[num]={...w,items:w.items.map(it=>({...it,avance:0}))};
+  });
   nuevo.pagosFuera=[];
   nuevo.certificados=[];
   nuevo.certLocks={};
@@ -3862,6 +3879,8 @@ function cloneStateAsNewProject(plantilla,newMeta,tipo){
   delete nuevo._plateaFinanceRepairedV2;
   delete nuevo._templateSourceId;
   delete nuevo._templateSourceLabel;
+  delete nuevo._cqUpdatedAt;
+  nuevo._modeloDesvinculadoV1=true;
   return normalizeState(nuevo,{...newMeta,tipoPlantas:tipo});
 }
 function resetFoundationWeeksForNewTwoStory(st,cimentacion){
@@ -3877,80 +3896,70 @@ function resetFoundationWeeksForNewTwoStory(st,cimentacion){
     Object.keys(st.montos||{}).forEach(k=>{ if(String(k).startsWith(n+'-')) delete st.montos[k]; });
   });
   const foundation = cim==='pilotes' ? SEMANAS_2P_PILOTES_INICIO : SEMANAS_2P_PLATEA_INICIO;
+  if(Array.isArray(st.baseSemanasPropias)){
+    st.baseSemanasPropias=[...st.baseSemanasPropias.filter(w=>Number(w.num)>4),...deepClone(foundation)]
+      .sort((a,b)=>Number(a.num)-Number(b.num));
+  }
   foundation.forEach(sem=>(sem.items||[]).forEach((it,i)=>{ st.items[`${sem.num}-${i}`]=0; }));
   return st;
 }
-function createStateFromLatestTemplate(newMeta,tipo){
+// Obras seleccionables como modelo. En 2 plantas evita mezclar pilotes y platea.
+function modelosDisponiblesParaObra(tipo,cimentacion=''){
   tipo=Number(tipo)===2?2:1;
-  const cim=tipo===2 ? normalizeCimentacion2P(newMeta.tipoCimentacion) : '';
-  const plantillaVersion = (tipo===2 && cim==='platea')
-    ? PLANTILLA_2P_PLATEA_EXCEL
-    : (tipo===2 ? '2p_v1' : '1p_detallada_v1');
-  const metaConVersion = {...newMeta, plantillaVersion, ...(tipo===2?{tipoCimentacion:cim}:{})};
-
-  // 2 plantas + Platea: la última obra de este mismo sistema pasa a ser el modelo.
-  // Copia semanas, tareas, orden, importes y demás ajustes, pero reinicia avances,
-  // certificados y pagos para que la obra nueva nazca limpia.
-  if(tipo===2 && cim==='platea'){
-    const refMeta=findLatestObraByTipo(2,'platea');
-    const ref=refMeta ? estadosObras[refMeta.id] : null;
-    if(ref){
-      const nuevo=cloneStateAsNewProject(ref,metaConVersion,2);
-      nuevo.tipoCimentacion='platea';
-      nuevo.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
-      nuevo._templateSourceId=refMeta.id;
-      nuevo._templateSourceLabel=refMeta.label||refMeta.obraNum||refMeta.id;
-      return normalizeState(nuevo,metaConVersion);
-    }
-
-    // Sólo si todavía no existe ninguna obra 2P + Platea usa el cronograma inicial.
-    const nuevo=createDefaultState(metaConVersion);
-    const commonMeta=findLatestTwoStoryAny();
-    const common=commonMeta ? estadosObras[commonMeta.id] : null;
-    if(common){
-      nuevo.acuerdo=Number(common.acuerdo)>0?Number(common.acuerdo):nuevo.acuerdo;
-      nuevo.acuerdoComentario=common.acuerdoComentario||'';
-      nuevo.itemsCQ=deepClone(common.itemsCQ||nuevo.itemsCQ);
-    }
-    nuevo._plateaInitialTemplate=true;
-    return normalizeState(nuevo,metaConVersion);
-  }
-
-  // Para 2 plantas con pilotes, mantiene la lógica existente de tomar la última
-  // obra del mismo sistema como modelo.
-  if(tipo===2 && cim){
-    const exactMeta=findLatestObraByTipo(2,cim);
-    const exact=exactMeta ? estadosObras[exactMeta.id] : null;
-    if(exact) return cloneStateAsNewProject(exact,metaConVersion,2);
-
-    const commonMeta=findLatestTwoStoryAny();
-    const common=commonMeta ? estadosObras[commonMeta.id] : null;
-    if(common){
-      const nuevo=cloneStateAsNewProject(common,metaConVersion,2);
-      resetFoundationWeeksForNewTwoStory(nuevo,cim);
-      return normalizeState(nuevo,metaConVersion);
-    }
-    return normalizeState(createDefaultState(metaConVersion),metaConVersion);
-  }
-
-  const plantillaMeta=findLatestObraByTipo(tipo);
-  const plantilla=plantillaMeta ? estadosObras[plantillaMeta.id] : null;
-  if(plantilla) return cloneStateAsNewProject(plantilla,metaConVersion,tipo);
-
+  const cim=tipo===2?normalizeCimentacion2P(cimentacion):'';
+  return obrasConfig.filter(o=>{
+    const st=estadosObras[o.id];
+    if(!st) return false;
+    const t=Number(st.tipoPlantas||o.tipoPlantas||1)===2?2:1;
+    if(t!==tipo) return false;
+    return tipo!==2 || (!!cim && getObraCimentacion(o)===cim);
+  }).reverse(); // la última creada queda preseleccionada
+}
+function crearEstadoModeloInicial(metaConVersion,tipo,cim){
   const nuevo=createDefaultState(metaConVersion);
-  // Primera obra con la nueva plantilla de 1 planta: toma de 29.77 solo los
-  // parámetros generales, sin arrastrar el esquema incompleto anterior.
-  if(tipo===1){
-    const ref=obrasConfig.find(isL29M77);
-    const old=ref?estadosObras[ref.id]:null;
-    if(old){
-      nuevo.acuerdo=Number(old.acuerdo)>0?Number(old.acuerdo):nuevo.acuerdo;
-      nuevo.acuerdoComentario=old.acuerdoComentario||'';
-      nuevo.itemsCQ=deepClone(old.itemsCQ||nuevo.itemsCQ);
-    }
-  }
+  // El cronograma inicial también queda desacoplado de futuras versiones base.
+  nuevo.baseSemanasPropias=deepClone(getBaseSemanasForProject(nuevo,metaConVersion));
+  nuevo._modeloDesvinculadoV1=true;
+  if(tipo===2 && cim==='platea') nuevo._plateaInitialTemplate=true;
   return normalizeState(nuevo,metaConVersion);
 }
+function createStateFromLatestTemplate(newMeta,tipo,modeloElegidoId=''){
+  tipo=Number(tipo)===2?2:1;
+  const cim=tipo===2 ? normalizeCimentacion2P(newMeta.tipoCimentacion) : '';
+  const plantillaVersion=(tipo===2 && cim==='platea') ? PLANTILLA_2P_PLATEA_EXCEL
+    : (tipo===2?'2p_v1':'1p_detallada_v1');
+  const metaConVersion={...newMeta,plantillaVersion,...(tipo===2?{tipoCimentacion:cim}:{})};
+  const candidatos=modelosDisponiblesParaObra(tipo,cim);
+  const id=modeloElegidoId || (candidatos[0]?.id||'__base__');
+  if(id==='__base__') return crearEstadoModeloInicial(metaConVersion,tipo,cim);
+
+  const modeloMeta=candidatos.find(o=>o.id===id);
+  if(!modeloMeta || !estadosObras[modeloMeta.id])
+    throw new Error('La obra modelo elegida ya no está disponible. Seleccioná otra.');
+  const fuente=estadosObras[modeloMeta.id];
+  // Se copian semanas, tareas, cambios, importes y orden UNA SOLA VEZ;
+  // quedan guardados dentro del nuevo documento, no vinculados al origen.
+  const nuevo=cloneStateAsNewProject(fuente,metaConVersion,tipo,modeloMeta);
+  if(tipo===2){
+    nuevo.tipoCimentacion=cim;
+    nuevo.plantillaVersion=(cim==='platea')?PLANTILLA_2P_PLATEA_EXCEL:'2p_v1';
+  }
+  nuevo._templateSourceId=modeloMeta.id; // histórico informativo, nunca se consulta
+  nuevo._templateSourceLabel=modeloMeta.label||modeloMeta.obraNum||modeloMeta.id;
+  return normalizeState(nuevo,metaConVersion);
+}
+function actualizarSelectorModeloObra(tipo,cim){
+  const sel=document.getElementById('eo-modelo');
+  if(!sel) return null;
+  const anterior=sel.value;
+  const candidatos=modelosDisponiblesParaObra(tipo,cim);
+  sel.innerHTML=candidatos.map(o=>`<option value="${escHtml(o.id)}">${escHtml(o.label||o.obraNum||o.id)}</option>`).join('')
+    + '<option value="__base__">Plantilla inicial (sin copiar otra obra)</option>';
+  sel.value=(anterior && (anterior==='__base__'||candidatos.some(o=>o.id===anterior)))
+    ? anterior : (candidatos[0]?.id||'__base__');
+  return candidatos.find(o=>o.id===sel.value)||null;
+}
+
 function updateFoundationSelectorVisibility(){
   const tipo=Number(document.getElementById('eo-tipo')?.value||1)===2?2:1;
   const wrap=document.getElementById('eo-cimentacion-wrap');
@@ -3960,32 +3969,21 @@ function updatePlantTemplateHint(setAgreement=false){
   const tipo=Number(document.getElementById('eo-tipo')?.value||1)===2?2:1;
   updateFoundationSelectorVisibility();
   const cim=tipo===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value||'pilotes') : '';
-  const meta=tipo===2 ? findLatestObraByTipo(2,cim) : findLatestObraByTipo(1);
+  const meta=actualizarSelectorModeloObra(tipo,cim);
   const hint=document.getElementById('eo-template-hint');
   if(hint){
-    if(tipo===1){
-      hint.innerHTML=meta
-        ? `<strong>Modelo:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
-        : `<strong>Modelo inicial:</strong> plantilla detallada de 1 planta con zapata corrida.`;
-    }else if(cim==='platea'){
-      hint.innerHTML=meta
-        ? `<strong>Modelo Platea:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia sus últimas modificaciones de semanas, tareas, orden e importes.`
-        : `<strong>Modelo inicial Platea:</strong> cronograma base de 24 semanas. A partir de la siguiente obra se copiará la última obra Platea creada.`;
-    }else if(meta){
-      hint.innerHTML=`<strong>Modelo Pilotes:</strong> ${escHtml(meta.label||meta.obraNum||meta.id)} · copia las últimas modificaciones de ese mismo sistema.`;
-    }else{
-      const common=findLatestTwoStoryAny();
-      hint.innerHTML=`<strong>Primer proyecto 2 plantas · Pilotes:</strong> S1–S4 se crean con este sistema de fundación${common ? ` y desde S5 toma como referencia ${escHtml(common.label||common.obraNum||common.id)}.` : '.'}`;
-    }
+    const nombre=meta?escHtml(meta.label||meta.obraNum||meta.id):'';
+    hint.innerHTML=meta
+      ? `<strong>Se copiará ${nombre} una sola vez.</strong> Después podrás cambiar semanas, tareas e importes sin volver a importar nada del modelo.`
+      : `<strong>Plantilla inicial de ${tipo} planta${tipo===2?'s':''}${tipo===2?' ('+escHtml(cim)+')':''}.</strong> Esta obra tendrá su propio cronograma editable.`;
   }
   if(setAgreement){
-    let st=meta?estadosObras[meta.id]:null;
-    if(!st && tipo===2){ const common=findLatestTwoStoryAny(); st=common?estadosObras[common.id]:null; }
-    if(!st && tipo===1){ const ref=obrasConfig.find(isL29M77); st=ref?estadosObras[ref.id]:null; }
+    const st=meta?estadosObras[meta.id]:null;
     const inp=document.getElementById('eo-acuerdo');
     if(inp) inp.value=Number(st?.acuerdo)>0?Number(st.acuerdo):OBRA_ACORDADA_DEFAULT;
   }
 }
+
 function buildCristianTwoStoryState(meta,old){
   old=old||createDefaultState(meta);
   const nuevo=createDefaultState({...meta,tipoPlantas:2});
@@ -4071,9 +4069,14 @@ async function saveEditObra() {
     const tipoPlantas = Number(document.getElementById('eo-tipo')?.value || 1) === 2 ? 2 : 1;
     const tipoCimentacion = tipoPlantas===2 ? normalizeCimentacion2P(document.getElementById('eo-cimentacion')?.value || 'pilotes') : '';
     const newMeta = { id: makeObraId(finalLabel), label: finalLabel, constructor: constructorNombre, constructorId, obraNum: n || '', color, tipoPlantas, ...(tipoPlantas===2?{tipoCimentacion}:{}), plantillaVersion: tipoPlantas===2 ? (tipoCimentacion==='platea' ? PLANTILLA_2P_PLATEA_EXCEL : '2p_v1') : '1p_detallada_v1', createdAt:new Date().toISOString() };
-    // Primero preparar el estado, tomando la última obra como modelo, sin alterar
-    // el listado real ni cambiar la obra seleccionada hasta finalizar Firebase.
-    const newState=createStateFromLatestTemplate(newMeta,tipoPlantas);
+    // Copiar el modelo ELEGIDO en un estado nuevo e independiente.
+    // El origen nunca se vuelve a consultar al editar ni al recargar.
+    let newState;
+    try{
+      const modeloId=document.getElementById('eo-modelo')?.value||'';
+      newState=createStateFromLatestTemplate(newMeta,tipoPlantas,modeloId);
+    }catch(e){ alert(String(e?.message||e)); return false; }
+    newMeta.plantillaVersion=newState.plantillaVersion;
     newState.acuerdo=a>0?a:newState.acuerdo;
     if(tipoPlantas===2 && tipoCimentacion==='platea' && newState._plateaInitialTemplate){
       const perfilFin=cqBuscarReferenciaFinanciera2P(newMeta.id);
@@ -4810,6 +4813,10 @@ function cqAsegurarImportesCronogramaPlateaUnaVez(){
 }
 
 function getBaseSemanasForProject(st,meta){
+  // La obra es propietaria de su estructura. Nunca la vuelve a tomar del modelo
+  // ni de una constante global después de haber sido creada/editada.
+  if(Array.isArray(st?.baseSemanasPropias) && st.baseSemanasPropias.length)
+    return st.baseSemanasPropias;
   const tipo=Number(st?.tipoPlantas || meta?.tipoPlantas || 1)===2?2:1;
   if(tipo===2){
     const cim=normalizeCimentacion2P(st?.tipoCimentacion || meta?.tipoCimentacion || '');
@@ -5470,6 +5477,12 @@ function persist() {
       meta.tipoCimentacion='platea';
       meta.plantillaVersion=PLANTILLA_2P_PLATEA_EXCEL;
     }
+  }
+  // Compatibilidad de obras existentes: la primera edición congela su esquema
+  // actual, sin modificar semanas, tareas, montos ni certificaciones previas.
+  if(!Array.isArray(state.baseSemanasPropias) || !state.baseSemanasPropias.length){
+    state.baseSemanasPropias=deepClone(getBaseSemanasForProject(state,meta));
+    state._modeloDesvinculadoV1=true;
   }
   state._cqUpdatedAt=Date.now();
   estadosObras[id] = state;
@@ -6226,6 +6239,12 @@ function renderSemanas(){
   // renderSemanas() corre en muchas interacciones; hacer esa revisión en cada render
   // generaba demora perceptible al marcar tareas, especialmente en tablet.
   const cont=document.getElementById('semanas-container');
+  // Mantener las semanas desplegadas al guardar/editar sin abrir semanas de otra obra.
+  const mismaObra=cont.dataset.cqSemanasObraId===String(curObraId);
+  const semanasAbiertas=mismaObra
+    ? Array.from(cont.querySelectorAll('.semana-items.open'), el=>el.id)
+    : [];
+  const scrollAntes=mismaObra && semanasAbiertas.length ? window.scrollY : null;
   const calcCtx=buildCalcContext();
   const semanasActuales=getSemanas();
   const globalInput=document.getElementById('all-weeks-total');
@@ -6306,6 +6325,19 @@ function renderSemanas(){
       </div>
     </div>`;
   }).join('');
+  cont.dataset.cqSemanasObraId=String(curObraId);
+  semanasAbiertas.forEach(id=>{
+    const items=document.getElementById(id);
+    if(!items) return;
+    items.classList.add('open');
+    const chev=document.getElementById('chev-'+id.slice(3));
+    if(chev) chev.classList.add('open');
+  });
+  if(scrollAntes!==null){
+    requestAnimationFrame(()=>{
+      if(cont.dataset.cqSemanasObraId===String(curObraId)) window.scrollTo(0,scrollAntes);
+    });
+  }
 }
 
 function toggleSemana(num){
@@ -8044,7 +8076,7 @@ setTimeout(() => {
       <div class="field"><label>Constructor</label><input type="text" id="eo-constructor" placeholder="Nombre del constructor"></div>
       <div class="field"><label>Asignar a constructor</label><select id="eo-constructor-id"></select></div>
       <div class="field"><label>Número de obra</label><input type="text" id="eo-num" placeholder="Ej: 2/99"></div>
-      <div class="field" id="eo-tipo-wrap" style="display:none"><label>Tipo de proyecto</label><select id="eo-tipo" onchange="updatePlantTemplateHint(true)"><option value="1">1 planta</option><option value="2">2 plantas</option></select><div class="field" id="eo-cimentacion-wrap" style="display:none;margin-top:10px"><label>Sistema de fundación</label><select id="eo-cimentacion" onchange="updatePlantTemplateHint(true)"><option value="pilotes">Pilotes</option><option value="platea">Platea</option></select></div><div class="hint" id="eo-template-hint" style="margin-top:6px;padding:7px 9px"></div></div>
+      <div class="field" id="eo-tipo-wrap" style="display:none"><label>Tipo de proyecto</label><select id="eo-tipo" onchange="updatePlantTemplateHint(true)"><option value="1">1 planta</option><option value="2">2 plantas</option></select><div class="field" id="eo-cimentacion-wrap" style="display:none;margin-top:10px"><label>Sistema de fundación</label><select id="eo-cimentacion" onchange="updatePlantTemplateHint(true)"><option value="pilotes">Pilotes</option><option value="platea">Platea</option></select></div><div class="field" style="margin-top:10px"><label>Copiar cronograma de la obra modelo</label><select id="eo-modelo" onchange="updatePlantTemplateHint(true)"></select></div><div class="hint" id="eo-template-hint" style="margin-top:6px;padding:7px 9px"></div></div>
       <div class="field"><label>Monto total acordado ($)</label><input type="number" id="eo-acuerdo" min="0" step="100000" placeholder="38000000"></div>
       <div class="field"><label>Color del botón</label><input type="color" id="eo-color" value="#E8A838"></div>
     </div>
