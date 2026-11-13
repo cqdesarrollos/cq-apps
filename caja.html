@@ -547,7 +547,7 @@ body.cq-caja-cargando > .wrap{visibility:hidden!important}
     <button type="button" class="cq-materiales-btn" id="ccMaterialesBtn" onclick="openCantidadMaterialesCC()">Agregar a Materiales</button>
   </div>
 </div>
-<div class="field full" id="commentField"><label id="mNotesLabel">Comentario</label><textarea id="mNotes" placeholder="Comentario opcional" rows="3"></textarea></div></form></div><div class="modal-ft"><button class="btn btn-light" onclick="closeModal('movementModal')"><span class="btn-icon">✕</span>Cancelar</button><button class="btn btn-primary" onclick="document.getElementById('movementForm').requestSubmit()"><span class="btn-icon">💾</span>Guardar</button></div></div></div>
+<div class="field full" id="commentField"><label id="mNotesLabel">Comentario</label><textarea id="mNotes" placeholder="Comentario opcional" rows="3"></textarea></div></form></div><div id="cq-caja-save-hint"></div><div class="modal-ft"><button class="btn btn-light" onclick="closeModal('movementModal')"><span class="btn-icon">✕</span>Cancelar</button><button class="btn btn-primary" id="movementSaveBtn" type="submit" form="movementForm"><span class="btn-icon">💾</span>Guardar</button></div></div></div>
 
 <div class="modal-bg" id="ccMaterialesModal"><div class="modal">
   <div class="modal-hd"><h3>Agregar a Materiales</h3><button class="close" onclick="closeModal('ccMaterialesModal')">×</button></div>
@@ -565,6 +565,40 @@ body.cq-caja-cargando > .wrap{visibility:hidden!important}
   </div>
   <div class="modal-ft"><button class="btn btn-light" onclick="closeModal('ccMaterialesModal')">Cancelar</button><button class="btn btn-primary" onclick="confirmCantidadMaterialesCC()">Confirmar</button></div>
 </div></div>
+
+
+<style id="cq-guardar-movimientos-ui">
+#cq-caja-save-feedback{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99998;width:min(94vw,420px);padding:12px 16px;border-radius:12px;background:#173e33;color:#fff;font:700 12px/1.45 system-ui,sans-serif;box-shadow:0 10px 30px #0004;display:none;text-align:center}
+#cq-caja-save-feedback.show{display:block}
+#cq-caja-save-feedback.wait{background:#685021}
+#cq-caja-save-feedback.err{background:#9d3229}
+#cq-caja-save-feedback.ok{background:#116a46}
+#cq-caja-save-hint{font:700 11px/1.4 system-ui,sans-serif;color:#a83227;padding:0 18px 7px;display:none}
+#movementSaveBtn:disabled{opacity:.65;cursor:wait}
+</style>
+<div id="cq-caja-save-feedback" role="status" aria-live="polite"></div>
+<script id="cq-guardar-movimientos-feedback">
+(function(){
+  let hideTimer=null;
+  window.cqCajaAvisoGuardado=function(kind,message){
+    const el=document.getElementById('cq-caja-save-feedback');
+    if(!el)return;
+    clearTimeout(hideTimer);
+    el.className='show '+(kind||'wait');
+    el.textContent=String(message||'');
+    if(kind==='ok')hideTimer=setTimeout(()=>{el.classList.remove('show');},3500);
+  };
+  const form=document.getElementById('movementForm');
+  if(form)form.addEventListener('invalid',function(ev){
+    const hint=document.getElementById('cq-caja-save-hint');
+    if(!hint)return;
+    const el=ev.target;
+    const field=el&&el.id==='mDate'?'fecha':el&&el.id==='mAmount'?'importe':el&&el.id==='mTc'?'tipo de cambio':'campo';
+    hint.textContent='Revisá el '+field+'. No se grabó el movimiento.';
+    hint.style.display='block';
+  },true);
+})();
+</script>
 
 <script>
 const KEY='cq_caja_chica_v1';
@@ -618,12 +652,24 @@ function load(){
     exchangeRateUpdatedAt:tcCache>0?tcCacheAt:''
   };
 }
-function saveLocalCC(){localStorage.setItem(KEY,JSON.stringify(db))}
-function save(){
-  saveLocalCC();
-  if(typeof window.__cqCajaChicaSyncSchedule==='function'){
-    try{window.__cqCajaChicaSyncSchedule();}catch(e){console.warn(e);}
+function saveLocalCC(){
+  try{
+    localStorage.setItem(KEY,JSON.stringify(db));
+    window.__cqCajaErrorGuardadoLocalCC='';
+    return true;
+  }catch(e){
+    window.__cqCajaErrorGuardadoLocalCC=String(e&&e.message||e||'No se pudo almacenar en el dispositivo');
+    console.warn('Caja Chica: almacenamiento local lleno o no disponible',e);
+    return false;
   }
+}
+function save(){
+  const guardadoLocal=saveLocalCC();
+  // Una falla de localStorage NUNCA debe impedir la escritura en Firebase.
+  if(typeof window.__cqCajaChicaSyncSchedule==='function'){
+    try{window.__cqCajaChicaSyncSchedule();}catch(e){console.warn('Sincronización de Caja Chica',e);}
+  }
+  return guardadoLocal;
 }
 let cqUndoState=null;
 let cqUndoRunning=false;
@@ -1973,6 +2019,10 @@ window.loadGastosConfigCC=loadGastosConfigCC;window.verifyGastosCC=verifyGastosC
 
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.view).classList.add('active');if(b.dataset.view==='reportes')renderReports()});
 async function openMovement(type,id=''){
+  // Cada apertura habilita una nueva operación; un doble toque en Guardar
+  // nunca debe volver a insertar el mismo movimiento.
+  const form=document.getElementById('movementForm');
+  if(form)delete form.dataset.ccGuardadoEnEstaApertura;
   const m=id?db.movements.find(x=>x.id===id):null;
   const actualType=m?.type||type;
   document.getElementById('movementId').value=m?.id||'';
@@ -2015,8 +2065,17 @@ function selectDestination(v){
 }
 function fillWorks(){fillWorksFromGastos(document.getElementById('mWork')?.value||'')}
 function fillConcepts(){}
+let cqGuardandoFormularioMovimientoCC=false;
 function saveMovement(e){
   e.preventDefault();
+  if(cqGuardandoFormularioMovimientoCC ||
+     document.getElementById('movementForm')?.dataset.ccGuardadoEnEstaApertura==='1')return;
+  cqGuardandoFormularioMovimientoCC=true;
+  const boton=document.getElementById('movementSaveBtn');
+  if(boton)boton.disabled=true;
+  const hint=document.getElementById('cq-caja-save-hint');
+  if(hint)hint.style.display='none';
+  try{
 
   const id=document.getElementById('movementId').value;
   const type=document.getElementById('movementType').value;
@@ -2124,8 +2183,19 @@ function saveMovement(e){
   }else{
     db.movements.push(...items);
   }
+  // Fijar la identidad antes de iniciar cualquier proceso asíncrono.
+  const formGuardado=document.getElementById('movementForm');
+  if(formGuardado)formGuardado.dataset.ccGuardadoEnEstaApertura='1';
+  if(!id&&items.length===1)document.getElementById('movementId').value=items[0].id;
 
-  save();
+  // Guardar primero en este dispositivo y programar la escritura a Firebase.
+  // No decir "guardado" antes de que Firebase confirme.
+  const localConfirmado=save();
+  window.__cqMovimientoEsperandoFirebase=true;
+  window.__cqMovimientoTipoPendiente=(type==='gasto'?'Gasto':'Ingreso');
+  if(typeof window.cqCajaAvisoGuardado==='function')window.cqCajaAvisoGuardado('wait',
+    localConfirmado?'Guardando '+window.__cqMovimientoTipoPendiente.toLowerCase()+' en Firebase…'
+      :'No se pudo guardar en el dispositivo. Intentando confirmar en Firebase; no cierres ni recargues.');
   closeModal('movementModal');
   render();
 
@@ -2175,6 +2245,13 @@ function saveMovement(e){
       deleteLinkedMaterialesCC(before).catch(err=>console.warn('Caja Chica → Materiales (quitar vínculo anterior)',err));
     }
   });
+  }catch(e){
+    console.error('Caja Chica: error al grabar movimiento',e);
+    alert('No se pudo completar el guardado: '+String(e&&e.message||e));
+  }finally{
+    cqGuardandoFormularioMovimientoCC=false;
+    if(boton)boton.disabled=false;
+  }
 }
 async function deleteMovement(id){
   const sid=String(id||'');
@@ -2537,6 +2614,9 @@ let baseTokenCC=localStorage.getItem(BASE_TOKEN_KEY)||"";
 let dirtyBaseCC=localStorage.getItem(DIRTY_BASE_KEY)||"";
 let suppressCCUntil=0;
 let lastTokenCC="";
+// Última lectura verificada y su updateTime. Evita volver a leer todo el documento
+// al grabar cada gasto, pero detecta cambios ajenos mediante precondición Firebase.
+let cqUltimoSnapshotConfirmadoCC=null;
 // CQ 28/08/2026 — contador de cambios locales para evitar que una escritura
 // Firebase en curso borre un movimiento creado/modificado mientras esperaba.
 let localRevisionCC=0;
@@ -2562,7 +2642,7 @@ function cqCajaLiberarSiListaCC(){
 }
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
-window.__cqCajaBuild='2026-11-12-inicio-sin-escritura-automatica';
+window.__cqCajaBuild='2026-11-12-guardar-gasto-corregido';
 
 function cqTimeoutCC(promise,ms,label='Firebase'){
   let t;
@@ -2830,11 +2910,12 @@ async function saveRemoteCC(snapInicio=null){
 
     // Leer remoto para no pisar movimientos de otro dispositivo.
     let remoteState=null;
+    let latest=null;
     try{
       // En el arranque, reutilizar la lectura YA confirmada por Firebase.
       // Evita una segunda GET de un documento grande que antes expiraba y
       // dejaba "Cargando Caja Chica" bloqueado innecesariamente.
-      const latest=snapInicio||await cqTimeoutCC(getDocFromServer(ref),8000,'Lectura Firebase Caja Chica');
+      latest=snapInicio||cqUltimoSnapshotConfirmadoCC||await cqTimeoutCC(getDocFromServer(ref),8000,'Lectura Firebase Caja Chica');
       cqSetServerReadyCC(true,'');
       if(latest.exists()&&latest.data()&&latest.data().state){
         remoteState=normalizeCC(latest.data().state);
@@ -2868,14 +2949,20 @@ async function saveRemoteCC(snapInicio=null){
 
     const token=new Date().toISOString();
     suppressCCUntil=Date.now()+1600;
-    await cqTimeoutCC(setDoc(ref,{
+    const versionRemota=latest&&latest._updateTime?String(latest._updateTime):'';
+    const respuesta=await cqTimeoutCC(setDoc(ref,{
       state,
       updatedAt:token,
       updatedAtServer:serverTimestamp(),
       updatedBy:String(window._cqUsuarioActual||"")
-    },snapInicio&&snapInicio._updateTime
-      ?{merge:false,__updateTime:snapInicio._updateTime}
+    },versionRemota
+      ?{merge:false,__updateTime:versionRemota}
       :{merge:false}),9000,'Escritura Firebase Caja Chica');
+    // Nunca reutilizar una versión de Firebase si la escritura no devolvió
+    // otra updateTime. Ante un conflicto (409/412) se releerá y fusionará.
+    cqUltimoSnapshotConfirmadoCC=respuesta&&respuesta.updateTime
+      ?{exists:()=>true,data:()=>({state,updatedAt:token}),_updateTime:String(respuesta.updateTime)}
+      :null;
     lastTokenCC=token;
     setBaseTokenCC(token);
 
@@ -2895,6 +2982,8 @@ async function saveRemoteCC(snapInicio=null){
     fallo=true;
     retryFailuresCC=Math.min(retryFailuresCC+1,6);
     console.warn("Caja Chica Firebase save",e);
+    // Al fallar, no volver a escribir sobre una versión remota quizá antigua.
+    cqUltimoSnapshotConfirmadoCC=null;
     const msg=String(e&&e.message||e||'Sin conexión Firebase');
     setStatusCC("err","OFF",msg);
   }finally{
@@ -2910,6 +2999,16 @@ async function saveRemoteCC(snapInicio=null){
       }
     }else if(!fallo){
       cqCajaLiberarSiListaCC();
+    }
+    if(window.__cqMovimientoEsperandoFirebase){
+      if(!fallo && !dirtyCC){
+        window.__cqMovimientoEsperandoFirebase=false;
+        if(typeof window.cqCajaAvisoGuardado==='function')
+          window.cqCajaAvisoGuardado('ok',String(window.__cqMovimientoTipoPendiente||'Movimiento')+' confirmado en Firebase.');
+      }else if(fallo){
+        if(typeof window.cqCajaAvisoGuardado==='function')
+          window.cqCajaAvisoGuardado('err','No se confirmó en Firebase. El movimiento sigue pendiente; revisá el estado OFF y no borres los datos del navegador.');
+      }
     }
   }
   return !fallo;
@@ -2949,6 +3048,7 @@ async function startCC(){
     const fdb=await firebaseCC();
     const ref=doc(fdb,CC_COL,CC_DOC);
     const snap=await cqTimeoutCC(getDocFromServer(ref),8000,'Conexión inicial Firebase');
+    cqUltimoSnapshotConfirmadoCC=snap;
     cqSetServerReadyCC(true,'');
     const local=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));
     const migrated=localStorage.getItem(MIGRATION_KEY)==="1";
@@ -3007,6 +3107,9 @@ async function startCC(){
     }
 
     unsubCC=onSnapshot(ref,s=>{
+      // Guardar la versión auténtica incluso si ahora hay una escritura pendiente;
+      // la precondición de Firebase evitará sobrescribir cambios de otro equipo.
+      cqUltimoSnapshotConfirmadoCC=s;
       if(Date.now()<suppressCCUntil||savingCC||dirtyCC||timerCC)return;
       if(!s.exists()||!s.data()||!s.data().state)return;
       const token=String(s.data().updatedAt||"");
