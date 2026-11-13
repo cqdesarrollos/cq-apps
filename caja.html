@@ -2542,9 +2542,27 @@ let lastTokenCC="";
 let localRevisionCC=0;
 let retryFailuresCC=0;
 let serverReadyCC=false;
+// La primera apertura debe esperar la lectura y cualquier sincronización inicial real.
+// Se libera sólo al quedar ON estable: nunca mientras el encabezado muestre Sync.
+let cqCajaLecturaInicialTerminadaCC=false;
+let cqCajaTimerLiberacionCC=null;
+function cqCajaLiberarSiListaCC(){
+  if(window.__cqCajaInicialConfirmada || !cqCajaLecturaInicialTerminadaCC ||
+     !initializedCC || !serverReadyCC || dirtyCC || savingCC || timerCC)return;
+  clearTimeout(cqCajaTimerLiberacionCC);
+  // Pequeño margen para integrar las actualizaciones iniciales del TC y de Gerencia.
+  cqCajaTimerLiberacionCC=setTimeout(()=>{
+    cqCajaTimerLiberacionCC=null;
+    if(!window.__cqCajaInicialConfirmada && cqCajaLecturaInicialTerminadaCC &&
+       initializedCC && serverReadyCC && !dirtyCC && !savingCC && !timerCC &&
+       document.querySelector('.cq-firebase-status')?.classList.contains('ok')){
+      if(typeof window.cqSetCargaCaja==='function')window.cqSetCargaCaja('ok');
+    }
+  },550);
+}
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
-window.__cqCajaBuild='2026-10-22-rest-https-v3';
+window.__cqCajaBuild='2026-11-12-cargando-sync-real';
 
 function cqTimeoutCC(promise,ms,label='Firebase'){
   let t;
@@ -2715,6 +2733,10 @@ function mergeMigrationCC(remote,local){
   };
 }
 function setStatusCC(state,text,title=''){
+  if(state!=='ok' && !window.__cqCajaInicialConfirmada){
+    clearTimeout(cqCajaTimerLiberacionCC);
+    cqCajaTimerLiberacionCC=null;
+  }
   const el=document.querySelector(".cq-firebase-status");
   if(el){
     el.classList.remove("ok","err","checking");
@@ -2722,8 +2744,15 @@ function setStatusCC(state,text,title=''){
     el.textContent=text;
     el.title=title||text;
   }
-  if(state==='ok')cqSetServerReadyCC(true,'');
-  else if(state==='err')cqSetServerReadyCC(false,title||text);
+  if(state==='ok'){
+    cqSetServerReadyCC(true,'');
+    cqCajaLiberarSiListaCC();
+  }else if(state==='err'){
+    cqSetServerReadyCC(false,title||text);
+    if(!window.__cqCajaInicialConfirmada && cqCajaLecturaInicialTerminadaCC &&
+       typeof window.cqSetCargaCaja==='function')
+      window.cqSetCargaCaja('error','La lectura se completó, pero Firebase no terminó la sincronización: '+(title||text)+'. Tocá Reintentar.');
+  }
 }
 function markDirtyCC(){
   if(applyingRemoteCC)return;
@@ -2869,6 +2898,15 @@ async function saveRemoteCC(){
       clearTimeout(timerCC);
       const delay=fallo?Math.min(30000,2000*Math.pow(2,retryFailuresCC-1)):180;
       timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},delay);
+      // Todavía queda algo por publicar: la apertura inicial sigue protegida.
+      if(!fallo && !window.__cqCajaInicialConfirmada){
+        setStatusCC('checking','Sync','Terminando cambios pendientes de Caja Chica…');
+        if(typeof window.cqSetCargaCaja==='function')
+          window.cqSetCargaCaja('loading','Terminando sincronización de movimientos y saldos…');
+      }
+    }else if(!fallo){
+      // La escritura inicial se confirmó; sólo ahora puede desaparecer "Cargando".
+      cqCajaLiberarSiListaCC();
     }
   }
 }
@@ -2882,6 +2920,11 @@ window.__cqCajaChicaSyncSchedule=scheduleCC;
 async function startCC(){
   if(initializedCC)return;
   initializedCC=true;
+  if(!window.__cqCajaInicialConfirmada){
+    cqCajaLecturaInicialTerminadaCC=false;
+    clearTimeout(cqCajaTimerLiberacionCC);
+    cqCajaTimerLiberacionCC=null;
+  }
   if(!window.__cqCajaInicialConfirmada && typeof window.cqSetCargaCaja==='function')
     window.cqSetCargaCaja('loading');
   setStatusCC("checking","Sync");
@@ -2972,11 +3015,17 @@ async function startCC(){
     });
 
     retryFailuresCC=0;
-    setStatusCC("ok","ON","Firebase conectado");
-    // Mostrar Caja Chica sólo después de leer y aplicar el estado del servidor.
-    // Las escrituras automáticas pendientes continúan con su estado Sync/ON/OFF.
-    if(!window.__cqCajaInicialConfirmada && typeof window.cqSetCargaCaja==='function')
-      window.cqSetCargaCaja('ok');
+    cqCajaLecturaInicialTerminadaCC=true;
+    // No abrir mientras se encuentre pendiente un guardado de la carga inicial.
+    // Antes se ocultaba "Cargando" acá y 300 ms después volvía a aparecer "Sync".
+    if(dirtyCC || savingCC || timerCC){
+      setStatusCC('checking','Sync','Terminando sincronización inicial…');
+      if(!window.__cqCajaInicialConfirmada && typeof window.cqSetCargaCaja==='function')
+        window.cqSetCargaCaja('loading','Terminando sincronización inicial de Caja Chica…');
+    }else{
+      setStatusCC('ok','ON','Firebase conectado');
+      cqCajaLiberarSiListaCC();
+    }
   }catch(e){
     initializedCC=false;
     retryFailuresCC=Math.min(retryFailuresCC+1,6);
@@ -3420,21 +3469,27 @@ function aplicarTipoCambioGerencia(data,forzar=false){
   if(!(value>0))return false;
   window.cqTcGerenciaCC=value;
 
-  // Guardar por separado el último TC CONFIRMADO de Caja Gerencia.
-  // Ese valor es el que se muestra instantáneamente en el próximo arranque,
-  // mientras Firebase consulta si hubo una actualización.
+  // Una lectura repetida del MISMO TC no es un cambio de Caja Chica.
+  // Antes se actualizaba el timestamp y se llamaba save() siempre, creando
+  // escrituras "Sync" en cada apertura, foco y actualización del listener.
+  const tieneEstado=typeof db!=="undefined" && !!db;
+  const haCambiado=!tieneEstado || Number(db.exchangeRate)!==value ||
+    String(db.exchangeRateSource||'')!=='gerencia';
+  const confirmadoEn=tieneEstado && !haCambiado && db.exchangeRateUpdatedAt
+    ?String(db.exchangeRateUpdatedAt):new Date().toISOString();
   try{
-    localStorage.setItem('cq_tc_gerencia_confirmado_v1',JSON.stringify({
-      value:value,
-      confirmedAt:new Date().toISOString(),
-      source:'Caja Gerencia'
-    }));
+    const anterior=JSON.parse(localStorage.getItem('cq_tc_gerencia_confirmado_v1')||'null');
+    if(!anterior || Number(anterior.value)!==value || haCambiado){
+      localStorage.setItem('cq_tc_gerencia_confirmado_v1',JSON.stringify({
+        value:value,confirmedAt:confirmadoEn,source:'Caja Gerencia'
+      }));
+    }
   }catch(e){}
 
-  if(typeof db!=="undefined"){
+  if(tieneEstado && haCambiado){
     db.exchangeRate=value;
     db.exchangeRateSource='gerencia';
-    db.exchangeRateUpdatedAt=new Date().toISOString();
+    db.exchangeRateUpdatedAt=confirmadoEn;
     try{save();}catch(e){}
   }
 
