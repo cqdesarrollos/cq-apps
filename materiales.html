@@ -1,4 +1,4 @@
-<!-- CQ 04/11/2026 · SOLO MATERIALES v5 · catálogo autoritativo con recuperación de altas explícitas y validación estricta de identidad -->
+<!-- CQ 13/11/2026 · SOLO MATERIALES v5.1 · ID nuevo reservado en todas las fuentes sin perder protección de identidad -->
 <!DOCTYPE html>
 <!-- CQ 13/10/2026 · permisos individuales de obra: Materiales -->
 <!-- V10: inicio paralelo y protección cargada sin transacciones redundantes; no cambia las escrituras de catálogo -->
@@ -19997,13 +19997,29 @@ function guardarNuevaEntrada(entries,main,d,accion){
     id=Number(enNombre.id);
     if(window.__cqMaterialesEmployeeRO)throw new Error('El material ya existe. En modo solo lectura no se puede modificar.');
   }else{
+    // Un ID nuevo debe quedar libre en TODO el catálogo visible y remoto.
+    // Las integraciones pueden crear IDs >= 10000 sin registrarlos aún en
+    // extraMats: la numeración anterior omitía esos IDs y chocaba al guardar.
     var max=9999;
-    existentes.forEach(function(m){var n=Number(m&&m.id);if(Number.isFinite(n)&&n>max)max=n;});
-    // Los IDs de materiales borrados y cargas históricas tampoco pueden reciclarse.
-    (main.deletedMatIds||[]).forEach(function(k){var n=Number(k);if(Number.isFinite(n)&&n>max)max=n;});
-    (main.cargas||[]).forEach(function(c){var n=Number(c&&c.matId);if(Number.isFinite(n)&&n>max)max=n;});
-    Object.keys(entries).forEach(function(k){var n=Number(k);if(Number.isFinite(n)&&n>max)max=n;});
+    function reservarId(valor){
+      var n=Number(valor);
+      if(Number.isSafeInteger(n)&&n>=10000&&n>max)max=n;
+    }
+    existentes.forEach(function(m){if(m)reservarId(m.id);});
+    // Incluir materiales dinámicos visibles, pero sin reutilizar ni confiar
+    // en su identidad: son sólo IDs reservados para el alta nueva.
+    activos().forEach(function(m){if(m)reservarId(m.id);});
+    (main.deletedMatIds||[]).forEach(reservarId);
+    (main.cargas||[]).forEach(function(c){if(c)reservarId(c.matId);});
+    Object.keys(entries).forEach(reservarId);
+    // Hay IDs creados por otras apps que persisten sólo en mapas de Firebase,
+    // incluso después de que cambie el array de materiales.
+    ['matNombres','matCategorias','matCodigos','matComentarios',
+      'catalogoManual','categoriaManual','categoriaManualIdentidad','categoriaMemoria'].forEach(function(campo){
+      Object.keys(main[campo]||{}).forEach(reservarId);
+    });
     id=max+1;
+    if(!Number.isSafeInteger(id))throw new Error('No hay un ID seguro disponible para el nuevo material.');
   }
   var extraActual=extras.find(function(m){return String(m.id)===String(id);});
   var yaCreado=!!(extraActual||entries[String(id)]&&entries[String(id)].manualCreated);
@@ -20073,8 +20089,13 @@ async function transaccionCatalogo(datos,accion){
       var soloEditados={};
       result.forEach(function(g){soloEditados[String(g.id)]=entries[String(g.id)];});
       var revision=prepararCambios(main,soloEditados,renombresAutorizados);
-      if(revision.collisions.some(function(c){return result.some(function(r){return String(r.id)===String(c.id);});}))
-        throw new Error('ID en conflicto: no se aplicó la edición al material equivocado');
+      var choque=revision.collisions.find(function(c){
+        return result.some(function(r){return String(r.id)===String(c.id);});
+      });
+      if(choque)
+        throw new Error('ID en conflicto (#'+choque.id+'). Material solicitado: '+
+          String(choque.protegido||'sin nombre')+'. Ocupante detectado: '+
+          String(choque.remoto||'sin identificar')+'. No se modificó ningún material.');
       var patch=revision.patch;
       // La transacción lee el último estado de Firebase: no pisa cargas nuevas.
       if(main.cargas)patch.cargas=main.cargas;
