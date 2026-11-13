@@ -458,7 +458,7 @@ body.cq-caja-cargando > .wrap{visibility:hidden!important}
     if(mensaje)mensaje.textContent=estado==='error'?'No se pudo actualizar Caja Chica':'Cargando datos...';
     if(detalle)detalle.textContent=descripcion||(estado==='error'
       ?'Firebase no confirmó la información actual. Revisá la conexión o los permisos y tocá Reintentar.'
-      :'Actualizando movimientos, saldos y registros');
+      :'Leyendo movimientos y saldos actualizados desde Firebase');
   }
   window.cqSetCargaCaja=actualizar;
   window.cqReintentarCargaCaja=function(){
@@ -2562,7 +2562,7 @@ function cqCajaLiberarSiListaCC(){
 }
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
-window.__cqCajaBuild='2026-11-12-cargando-sync-real';
+window.__cqCajaBuild='2026-11-12-inicio-sin-escritura-automatica';
 
 function cqTimeoutCC(promise,ms,label='Firebase'){
   let t;
@@ -2818,8 +2818,8 @@ function refreshCC(){
   }}catch(e){}
   try{if(typeof render==="function")render();}catch(e){console.warn(e);}
 }
-async function saveRemoteCC(){
-  if(savingCC||!dirtyCC)return;
+async function saveRemoteCC(snapInicio=null){
+  if(savingCC||!dirtyCC)return false;
   savingCC=true;
   let revisionGuardada=localRevisionCC;
   let fallo=false;
@@ -2831,7 +2831,10 @@ async function saveRemoteCC(){
     // Leer remoto para no pisar movimientos de otro dispositivo.
     let remoteState=null;
     try{
-      const latest=await cqTimeoutCC(getDocFromServer(ref),8000,'Lectura Firebase Caja Chica');
+      // En el arranque, reutilizar la lectura YA confirmada por Firebase.
+      // Evita una segunda GET de un documento grande que antes expiraba y
+      // dejaba "Cargando Caja Chica" bloqueado innecesariamente.
+      const latest=snapInicio||await cqTimeoutCC(getDocFromServer(ref),8000,'Lectura Firebase Caja Chica');
       cqSetServerReadyCC(true,'');
       if(latest.exists()&&latest.data()&&latest.data().state){
         remoteState=normalizeCC(latest.data().state);
@@ -2870,7 +2873,9 @@ async function saveRemoteCC(){
       updatedAt:token,
       updatedAtServer:serverTimestamp(),
       updatedBy:String(window._cqUsuarioActual||"")
-    },{merge:false}),9000,'Escritura Firebase Caja Chica');
+    },snapInicio&&snapInicio._updateTime
+      ?{merge:false,__updateTime:snapInicio._updateTime}
+      :{merge:false}),9000,'Escritura Firebase Caja Chica');
     lastTokenCC=token;
     setBaseTokenCC(token);
 
@@ -2898,17 +2903,16 @@ async function saveRemoteCC(){
       clearTimeout(timerCC);
       const delay=fallo?Math.min(30000,2000*Math.pow(2,retryFailuresCC-1)):180;
       timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},delay);
-      // Todavía queda algo por publicar: la apertura inicial sigue protegida.
       if(!fallo && !window.__cqCajaInicialConfirmada){
         setStatusCC('checking','Sync','Terminando cambios pendientes de Caja Chica…');
         if(typeof window.cqSetCargaCaja==='function')
           window.cqSetCargaCaja('loading','Terminando sincronización de movimientos y saldos…');
       }
     }else if(!fallo){
-      // La escritura inicial se confirmó; sólo ahora puede desaparecer "Cargando".
       cqCajaLiberarSiListaCC();
     }
   }
+  return !fallo;
 }
 function scheduleCC(){
   markDirtyCC();
@@ -2916,6 +2920,19 @@ function scheduleCC(){
   timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},250);
 }
 window.__cqCajaChicaSyncSchedule=scheduleCC;
+
+// Distinguir diferencias reales de cambios cosméticos del JSON de Firebase.
+// La reconstrucción de campos de sincronización y el mismo TC con otra hora
+// no deben generar una segunda sincronización automática al ingresar.
+function cqCambioRealInicialCC(next,remote){
+  const remotoNormalizado=mergeMigrationCC(remote,remote);
+  const paraComparar={...next};
+  if(Number(paraComparar.exchangeRate)===Number(remotoNormalizado.exchangeRate) &&
+     String(paraComparar.exchangeRateSource||'')===String(remotoNormalizado.exchangeRateSource||'')){
+    paraComparar.exchangeRateUpdatedAt=remotoNormalizado.exchangeRateUpdatedAt;
+  }
+  return JSON.stringify(paraComparar)!==JSON.stringify(remotoNormalizado);
+}
 
 async function startCC(){
   if(initializedCC)return;
@@ -2940,45 +2957,53 @@ async function startCC(){
       const remote=normalizeCC(snap.data().state);
       lastTokenCC=String(snap.data().updatedAt||"");
 
-      // CQ multi-dispositivo v2: una marca dirty sólo se reanuda si nació
-      // exactamente sobre la misma versión remota. Si es legacy o Firebase
-      // cambió desde otro equipo, remoto gana y se evita el rollback.
+      // Una marca dirty antigua no habilita a publicar una copia vieja.
       if(dirtyCC && (!dirtyBaseCC || !lastTokenCC || dirtyBaseCC!==lastTokenCC)){
-        console.warn("Caja Chica: se descartó una marca local pendiente antigua para no sobrescribir Firebase.");
+        console.warn("Caja Chica: marca local pendiente antigua descartada por seguridad.");
         clearDirtyCC();
       }
 
-      // CQ multi-dispositivo v3: NUNCA reemplazar el estado local completo por
-      // una copia remota. Se fusionan por ID y las eliminaciones explícitas viajan
-      // en deletedMovementIds. Esto protege un movimiento recién creado si una
-      // versión vieja de Netlify publica un snapshot atrasado.
-      const next=mergeMigrationCC(remote,local);
-      applyingRemoteCC=true;
-      window.__cqCajaChicaSetState(next);
-      refreshCC();
-      applyingRemoteCC=false;
-
-      if(dirtyCC || JSON.stringify(next)!==JSON.stringify(remote)){
-        if(!dirtyCC)markDirtyCC();
-        // La LECTURA principal ya se confirmó desde el servidor y se aplicó.
-        // A diferencia de Acopio, el merge de Caja Chica puede generar una
-        // escritura automática (incluso por diferencias de orden o listas).
-        // Esa escritura NO es un requisito para poder ver el estado ya leído:
-        // si tarda/falla, el guardado seguirá reintentándose por el mecanismo
-        // existente, sin disparar un falso error de carga inicial.
-        clearTimeout(timerCC);
-        timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},300);
+      if(dirtyCC){
+        // Sólo se necesita escribir al ingresar si realmente hay cambios
+        // locales pendientes y basados en la versión correcta del servidor.
+        const next=mergeMigrationCC(remote,local);
+        applyingRemoteCC=true;
+        window.__cqCajaChicaSetState(next);
+        refreshCC();
+        applyingRemoteCC=false;
+        if(cqCambioRealInicialCC(next,remote)){
+          // Reutiliza el snapshot inicial y protege contra cambios de otra
+          // sesión con la precondición de updateTime del documento remoto.
+          const confirmado=await saveRemoteCC(snap);
+          if(!confirmado)throw new Error('No se pudo guardar un cambio local pendiente. Firebase mantiene los datos originales.');
+        }else{
+          clearDirtyCC();
+          setBaseTokenCC(lastTokenCC);
+        }
       }else{
-        try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
+        // Recuperar sólo diferencias reales de la copia local, como un
+        // movimiento legítimo que pudo faltar tras un rollback anterior.
+        // No escribir jamás por campos auxiliares vacíos u orden de listas.
+        const next=mergeMigrationCC(remote,local);
+        const recuperarLocal=cqCambioRealInicialCC(next,remote);
+        applyingRemoteCC=true;
+        window.__cqCajaChicaSetState(recuperarLocal?next:remote);
+        refreshCC();
+        applyingRemoteCC=false;
         setBaseTokenCC(lastTokenCC);
-        clearDirtyCC();
+        if(recuperarLocal){
+          markDirtyCC();
+          const confirmado=await saveRemoteCC(snap);
+          if(!confirmado)throw new Error('No se pudo recuperar un movimiento local pendiente.');
+        }
       }
+      try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
     }else{
-      // Primera instalación compartida: publicar el estado local actual.
+      // Sin documento en Firebase: la primera creación sí exige un guardado.
       markDirtyCC();
-      await saveRemoteCC();
-      if(dirtyCC || savingCC || !serverReadyCC)
-        throw new Error('Todavía no se pudo confirmar la creación de Caja Chica en Firebase.');
+      const confirmado=await saveRemoteCC(snap);
+      if(!confirmado || dirtyCC)
+        throw new Error('No se pudo confirmar la creación de Caja Chica en Firebase.');
     }
 
     unsubCC=onSnapshot(ref,s=>{
