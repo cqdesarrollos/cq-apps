@@ -652,14 +652,105 @@ function load(){
     exchangeRateUpdatedAt:tcCache>0?tcCacheAt:''
   };
 }
+// Respaldo local de Caja Chica exclusivamente. No elimina ni modifica
+// almacenamiento de Materiales, Acopio, Pañol u otros módulos CQ.
+// IndexedDB tiene un cupo independiente del pequeño localStorage del origen.
+const cqRespaldoCajaCC=(function(){
+  const BD='cq_caja_chica_respaldo_idb_v1', ALMACEN='estado', CLAVE='principal';
+  let apertura=null;
+  let cola=Promise.resolve();
+  function abrir(){
+    if(!window.indexedDB)return Promise.reject(new Error('IndexedDB no disponible'));
+    if(!apertura){
+      apertura=new Promise((resolve,reject)=>{
+        let pedido;
+        try{pedido=indexedDB.open(BD,1);}catch(e){reject(e);return;}
+        pedido.onupgradeneeded=()=>{
+          if(!pedido.result.objectStoreNames.contains(ALMACEN))pedido.result.createObjectStore(ALMACEN);
+        };
+        pedido.onsuccess=()=>resolve(pedido.result);
+        pedido.onerror=()=>reject(pedido.error||new Error('No se pudo abrir respaldo local'));
+        pedido.onblocked=()=>reject(new Error('Otra pestaña bloqueó el respaldo local'));
+      }).catch(e=>{apertura=null;throw e;});
+    }
+    return apertura;
+  }
+  async function operacion(modo,realizar){
+    const bd=await abrir();
+    return new Promise((resolve,reject)=>{
+      let resultado=null, tx;
+      try{
+        tx=bd.transaction(ALMACEN,modo);
+        const r=realizar(tx.objectStore(ALMACEN));
+        r.onsuccess=()=>{resultado=r.result;};
+        r.onerror=()=>reject(r.error||new Error('Falló el respaldo local'));
+        tx.oncomplete=()=>resolve(resultado);
+        tx.onerror=()=>reject(tx.error||new Error('Falló la transacción del respaldo'));
+        tx.onabort=()=>reject(tx.error||new Error('Se interrumpió el respaldo'));
+      }catch(e){reject(e);}
+    });
+  }
+  function enCola(fn){
+    cola=cola.catch(()=>{}).then(fn);
+    return cola;
+  }
+  return {
+    guardar(json){
+      // Tomar una foto inmutable ahora: otros procesos pueden editar db mientras
+      // IndexedDB termina de escribir.
+      const estado=JSON.parse(json);
+      return enCola(()=>operacion('readwrite',s=>s.put({estado,pendiente:true,fecha:Date.now()},CLAVE)));
+    },
+    leer(){return cola.catch(()=>{}).then(()=>operacion('readonly',s=>s.get(CLAVE)));},
+    confirmar(){
+      return enCola(async()=>{
+        const previo=await operacion('readonly',s=>s.get(CLAVE));
+        if(previo&&previo.pendiente){
+          await operacion('readwrite',s=>s.put({...previo,pendiente:false,confirmadoEn:Date.now()},CLAVE));
+        }
+        return true;
+      });
+    }
+  };
+})();
+let cqRespaldoCajaPendienteDeConfirmarCC=false;
+let cqRespaldoCajaConfirmandoCC=false;
+function cqConfirmarRespaldoCajaCC(){
+  if(!cqRespaldoCajaPendienteDeConfirmarCC || cqRespaldoCajaConfirmandoCC ||
+     typeof dirtyCC==='undefined' || dirtyCC || savingCC || timerCC)return;
+  cqRespaldoCajaPendienteDeConfirmarCC=false;
+  cqRespaldoCajaConfirmandoCC=true;
+  cqRespaldoCajaCCConfirmacionPendiente();
+}
+function cqRespaldoCajaCCConfirmacionPendiente(){
+  cqRespaldoCajaCC.confirmar().catch(e=>{
+    cqRespaldoCajaPendienteDeConfirmarCC=true;
+    console.warn('Caja Chica: no se pudo marcar el respaldo como confirmado',e);
+  }).finally(()=>{cqRespaldoCajaConfirmandoCC=false;});
+}
 function saveLocalCC(){
+  let json='';
   try{
-    localStorage.setItem(KEY,JSON.stringify(db));
+    json=JSON.stringify(db);
+    localStorage.setItem(KEY,json);
     window.__cqCajaErrorGuardadoLocalCC='';
     return true;
   }catch(e){
     window.__cqCajaErrorGuardadoLocalCC=String(e&&e.message||e||'No se pudo almacenar en el dispositivo');
-    console.warn('Caja Chica: almacenamiento local lleno o no disponible',e);
+    console.warn('Caja Chica: localStorage no aceptó el estado; usando respaldo IndexedDB',e);
+    // No descartar movimientos ni borrar datos de otras aplicaciones.
+    cqRespaldoCajaPendienteDeConfirmarCC=true;
+    try{
+      window.__cqCajaRespaldoPendientePromise=cqRespaldoCajaCC.guardar(json||JSON.stringify(db))
+        .then(()=>true,err=>{
+          window.__cqCajaErrorRespaldoAlternativoCC=String(err&&err.message||err);
+          console.warn('Caja Chica: falló también el respaldo IndexedDB',err);
+          return false;
+        });
+    }catch(err){
+      window.__cqCajaErrorRespaldoAlternativoCC=String(err&&err.message||err);
+      window.__cqCajaRespaldoPendientePromise=Promise.resolve(false);
+    }
     return false;
   }
 }
@@ -2195,7 +2286,17 @@ function saveMovement(e){
   window.__cqMovimientoTipoPendiente=(type==='gasto'?'Gasto':'Ingreso');
   if(typeof window.cqCajaAvisoGuardado==='function')window.cqCajaAvisoGuardado('wait',
     localConfirmado?'Guardando '+window.__cqMovimientoTipoPendiente.toLowerCase()+' en Firebase…'
-      :'No se pudo guardar en el dispositivo. Intentando confirmar en Firebase; no cierres ni recargues.');
+      :'Guardando respaldo local alternativo y confirmando el gasto en Firebase…');
+  if(!localConfirmado){
+    const respaldo=window.__cqCajaRespaldoPendientePromise;
+    if(respaldo)respaldo.then(ok=>{
+      // No sobrescribir una confirmación Firebase que ya haya llegado.
+      if(!window.__cqMovimientoEsperandoFirebase)return;
+      if(typeof window.cqCajaAvisoGuardado==='function')window.cqCajaAvisoGuardado(ok?'wait':'err',
+        ok?'Respaldo local creado. Esperando confirmación de Firebase…'
+          :'No se pudo crear el respaldo local. No cierres ni recargues hasta confirmar Firebase.');
+    });
+  }
   closeModal('movementModal');
   render();
 
@@ -2642,7 +2743,7 @@ function cqCajaLiberarSiListaCC(){
 }
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
-window.__cqCajaBuild='2026-11-12-guardar-gasto-corregido';
+window.__cqCajaBuild='2026-11-12-respaldo-local-indexeddb';
 
 function cqTimeoutCC(promise,ms,label='Firebase'){
   let t;
@@ -2826,6 +2927,7 @@ function setStatusCC(state,text,title=''){
   }
   if(state==='ok'){
     cqSetServerReadyCC(true,'');
+    cqConfirmarRespaldoCajaCC();
     cqCajaLiberarSiListaCC();
   }else if(state==='err'){
     cqSetServerReadyCC(false,title||text);
@@ -2998,6 +3100,7 @@ async function saveRemoteCC(snapInicio=null){
           window.cqSetCargaCaja('loading','Terminando sincronización de movimientos y saldos…');
       }
     }else if(!fallo){
+      cqConfirmarRespaldoCajaCC();
       cqCajaLiberarSiListaCC();
     }
     if(window.__cqMovimientoEsperandoFirebase){
@@ -3045,6 +3148,23 @@ async function startCC(){
     window.cqSetCargaCaja('loading');
   setStatusCC("checking","Sync");
   try{
+    // Si localStorage se quedó sin cupo al grabar, recuperar ANTES de comparar
+    // con la versión del servidor. Nunca usar un respaldo ya confirmado para
+    // reemplazar movimientos más nuevos de Firebase.
+    try{
+      const respaldo=await cqRespaldoCajaCC.leer();
+      if(respaldo&&respaldo.pendiente&&respaldo.estado&&Array.isArray(respaldo.estado.movements)){
+        const localActual=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));
+        const pendiente=normalizeCC(respaldo.estado);
+        applyingRemoteCC=true;
+        window.__cqCajaChicaSetState(mergeMigrationCC(localActual,pendiente));
+        applyingRemoteCC=false;
+        cqRespaldoCajaPendienteDeConfirmarCC=true;
+      }
+    }catch(err){
+      applyingRemoteCC=false;
+      console.warn('Caja Chica: respaldo local alternativo no disponible',err);
+    }
     const fdb=await firebaseCC();
     const ref=doc(fdb,CC_COL,CC_DOC);
     const snap=await cqTimeoutCC(getDocFromServer(ref),8000,'Conexión inicial Firebase');
