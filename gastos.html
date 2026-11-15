@@ -1884,79 +1884,12 @@ html body #cq-startup-splash .cq-splash-msg::before{
 html body #cq-startup-splash .cq-splash-dots{display:none!important;}
 @keyframes cqBootSpinV14{to{transform:rotate(360deg)}}
 </style>
-
-<style id="cq-total-ars-gastos-v1">
-/* Cuatro tarjetas en dos columnas, sólo en la solapa Gastos. */
-html body #view-gastos .kpi-row{
-  display:grid!important;
-  grid-template-columns:repeat(2,minmax(0,1fr))!important;
-  gap:10px!important;
-  margin:8px 0 12px!important;
-  background:transparent!important;
-  border:0!important;
-  box-shadow:none!important;
-  overflow:visible!important;
-}
-html body #view-gastos .kpi{
-  box-sizing:border-box!important;
-  width:100%!important;
-  min-width:0!important;
-  min-height:73px!important;
-  height:73px!important;
-  padding:12px 14px!important;
-  display:flex!important;
-  flex-direction:column!important;
-  align-items:flex-start!important;
-  justify-content:center!important;
-  text-align:left!important;
-  border-radius:15px!important;
-  border:1px solid rgba(6,30,85,.11)!important;
-  box-shadow:0 5px 14px rgba(6,30,85,.07)!important;
-}
-html body #view-gastos .kpi-lbl{
-  font-size:10px!important;
-  font-weight:850!important;
-  line-height:1.15!important;
-  letter-spacing:.055em!important;
-  margin-bottom:5px!important;
-  color:#5C6875!important;
-}
-html body #view-gastos .kpi-val{
-  font-size:clamp(13px,2.2vw,20px)!important;
-  font-weight:900!important;
-  line-height:1.1!important;
-  letter-spacing:-.035em!important;
-  overflow-wrap:anywhere!important;
-  color:#102033!important;
-}
-html body #view-gastos .kpi.cq-kpi-usd{background:linear-gradient(120deg,#fff,#E5F0FF)!important}
-html body #view-gastos .kpi.cq-kpi-usd::before{background:#2587F0!important}
-html body #view-gastos .kpi.cq-kpi-ars{background:linear-gradient(120deg,#fff,#E5FFF7)!important}
-html body #view-gastos .kpi.cq-kpi-ars::before{background:#00BDAA!important}
-html body #view-gastos .kpi.cq-kpi-mo{background:linear-gradient(120deg,#fff,#FFF1DB)!important}
-html body #view-gastos .kpi.cq-kpi-mo::before{background:#E39A13!important}
-html body #view-gastos .kpi.cq-kpi-obra{background:linear-gradient(120deg,#fff,#E4F9ED)!important;align-items:flex-start!important;text-align:left!important}
-html body #view-gastos .kpi.cq-kpi-obra::before{background:#009B55!important}
-html body #view-gastos .kpi.cq-kpi-obra .kpi-lbl{color:#467059!important}
-html body #view-gastos .kpi.cq-kpi-obra .kpi-val{font-size:clamp(14px,2.3vw,20px)!important}
-html body #view-gastos .kpi.cq-kpi-obra.cq-obra-oficina{background:linear-gradient(120deg,#fff,#F3EFFF)!important}
-html body #view-gastos .kpi.cq-kpi-obra.cq-obra-acopio{background:linear-gradient(120deg,#fff,#E5FFF8)!important}
-html body #view-gastos .kpi .cq-kpi-icon{display:none!important}
-@media(max-width:650px){
-  html body #view-gastos .kpi-row{gap:8px!important;margin-bottom:11px!important}
-  html body #view-gastos .kpi{min-height:70px!important;height:70px!important;padding:10px 11px!important;border-radius:13px!important}
-  html body #view-gastos .kpi-lbl{font-size:9.5px!important;line-height:1.12!important;margin-bottom:5px!important;letter-spacing:.035em!important}
-  html body #view-gastos .kpi-val{font-size:clamp(12px,3.55vw,17px)!important;letter-spacing:-.04em!important}
-  html body #view-gastos .kpi.cq-kpi-obra .kpi-val{font-size:clamp(13px,3.6vw,17px)!important}
-}
-@media(max-width:360px){
-  html body #view-gastos .kpi-row{gap:6px!important}
-  html body #view-gastos .kpi{padding:9px 8px!important}
-  html body #view-gastos .kpi-lbl{font-size:8.5px!important}
-  html body #view-gastos .kpi-val{font-size:12px!important}
+<style id="cq-kpi-ars-legibilidad">
+/* Mantiene las tres tarjetas originales; ajusta solo cifras largas en pesos. */
+@media(max-width:700px){
+  #view-gastos .kpi.cq-kpi-ars .kpi-val{font-size:clamp(10px,3vw,15px)!important;letter-spacing:-.04em!important;overflow-wrap:anywhere}
 }
 </style>
-
 </head>
 <body>
 
@@ -2769,10 +2702,9 @@ function renderFilters(){
 }
 function renderKPIs(){
   const gastos=filteredGastos(false);
-  const {totUSD,byCat,count}=calcTotales(gastos);
-  // Total ARS sobre los mismos movimientos filtrados que el total USD.
-  // Para importes USD se respeta el tipo de cambio registrado en el gasto.
-  const totARS=gastos.reduce((acum,g)=>acum+toARS(Number(g.monto)||0,g.moneda,Number(g.tc)||getDefaultTC()),0);
+  const {totUSD}=calcTotales(gastos);
+  // Total en pesos sobre los mismos gastos filtrados que componen el total USD.
+  const totARS=gastos.reduce((suma,g)=>suma+toARS(Number(g.monto)||0,g.moneda,Number(g.tc)||getDefaultTC()),0);
   const cat=document.getElementById('filtro-cat')?.value||'';
   const sub=getFiltroSubrubro();
   const mes=getMonthFilter();
@@ -2782,12 +2714,10 @@ function renderKPIs(){
   const tipo=isOficinaObra(curObra)?'oficina':(isAcopioObra(curObra)?'acopio':'obra');
   const icon=tipo==='oficina'?'🏢':(tipo==='acopio'?'📦':'🏗');
   const obraCls=tipo==='oficina'?'cq-obra-oficina':(tipo==='acopio'?'cq-obra-acopio':'');
-  const moVal=isObraSimple(curObra)?0:(byCat.mo+byCat.ext);
 
   document.getElementById('kpi-row').innerHTML=
-    `<div class="kpi cq-kpi-usd"><div class="kpi-lbl">Total filtrado USD</div><div class="kpi-val">${fmt(totUSD,'usd')}</div><div class="kpi-sub">${filtroTxt}</div></div>
-     <div class="kpi cq-kpi-ars"><div class="kpi-lbl">Total filtrado ARS</div><div class="kpi-val">${fmt(totARS,'ars')}</div><div class="kpi-sub">${filtroTxt}</div></div>
-     <div class="kpi cq-kpi-mo"><div class="kpi-lbl">MO cargada</div><div class="kpi-val o">${fmt(moVal,'usd')}</div><div class="kpi-sub">${isObraSimple(curObra)?'No aplica':'según filtros aplicados'}</div></div>
+    `<div class="kpi"><div class="kpi-lbl">Total filtrado</div><div class="kpi-val">${fmt(totUSD,'usd')}</div><div class="kpi-sub">${filtroTxt}</div></div>
+     <div class="kpi cq-kpi-ars"><div class="kpi-lbl">Total filtrado $</div><div class="kpi-val">${fmt(totARS,'ars')}</div><div class="kpi-sub">${filtroTxt}</div></div>
      <div class="kpi cq-kpi-obra ${obraCls}"><span class="cq-kpi-icon">${icon}</span><div class="kpi-lbl">OBRA ACTUAL</div><div class="kpi-val">${obraTxt}</div></div>`;
 }
 
