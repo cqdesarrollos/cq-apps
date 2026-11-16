@@ -627,13 +627,76 @@ button,
 
 
 <style id="cq-gerencia-only-css">
-#cq-gerencia-only{position:fixed;inset:0;z-index:2147483647;background:#153b32;color:#fff;display:flex;align-items:center;justify-content:center;padding:22px;font-family:Arial,Helvetica,sans-serif}
-#cq-gerencia-only.ok{display:none}
-#cq-gerencia-only .box{width:100%;max-width:370px;text-align:center;padding:24px 20px;border:1px solid rgba(255,255,255,.15);border-radius:22px;background:rgba(255,255,255,.08);box-shadow:0 22px 60px rgba(0,0,0,.25)}
-#cq-gerencia-only .ico{font-size:32px;margin-bottom:8px}
-#cq-gerencia-only .ttl{font-size:18px;font-weight:900}
-#cq-gerencia-only .msg{font-size:11px;line-height:1.5;color:#cce0d7;margin-top:7px}
-#cq-gerencia-only .back{display:none;margin:15px auto 0;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;border-radius:12px;padding:9px 14px;font-weight:900;cursor:pointer}
+#cq-gerencia-only{
+  position:fixed;inset:0;z-index:2147483647;
+  background:
+    radial-gradient(circle at 50% 40%,rgba(255,255,255,.07),transparent 34%),
+    linear-gradient(160deg,#173C33 0%,#1C3D35 48%,#244B40 100%);
+  color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  padding:22px;
+  font-family:'Space Grotesk',Arial,Helvetica,sans-serif;
+  opacity:1;
+  transition:opacity .18s ease,visibility .18s ease;
+}
+#cq-gerencia-only.ok,
+#cq-gerencia-only.hidden{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+#cq-gerencia-only .box{
+  width:100%;max-width:260px;text-align:center;
+  padding:22px 20px 20px;
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:24px;
+  background:rgba(255,255,255,.055);
+  box-shadow:0 24px 70px rgba(5,25,20,.24);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+#cq-gerencia-only .loader-brand{
+  width:54px;height:54px;margin:0 auto 14px;
+  border-radius:17px;
+  display:grid;place-items:center;
+  background:rgba(255,255,255,.09);
+  border:1px solid rgba(255,255,255,.13);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+  font-size:25px;
+}
+#cq-gerencia-only .ttl{
+  font-size:17px;font-weight:850;letter-spacing:-.01em;
+}
+#cq-gerencia-only .msg{
+  font-size:10px;line-height:1.45;color:#BDD0C7;margin-top:5px;
+  min-height:15px;
+}
+#cq-gerencia-only .loader-dots{
+  display:flex;justify-content:center;gap:6px;margin-top:15px;
+}
+#cq-gerencia-only .loader-dots i{
+  width:6px;height:6px;border-radius:50%;
+  display:block;background:#8ED7B4;
+  animation:cqLoadPulse 1s infinite ease-in-out;
+}
+#cq-gerencia-only .loader-dots i:nth-child(2){animation-delay:.14s}
+#cq-gerencia-only .loader-dots i:nth-child(3){animation-delay:.28s}
+@keyframes cqLoadPulse{
+  0%,80%,100%{transform:scale(.72);opacity:.35}
+  40%{transform:scale(1);opacity:1}
+}
+#cq-gerencia-only .back{
+  display:none;margin:15px auto 0;
+  border:1px solid rgba(255,255,255,.16);
+  background:rgba(255,255,255,.08);
+  color:#fff;border-radius:12px;
+  padding:9px 14px;font-weight:850;cursor:pointer;
+}
+@media(max-width:520px){
+  #cq-gerencia-only .box{max-width:230px;padding:19px 17px 18px;border-radius:21px}
+  #cq-gerencia-only .loader-brand{width:48px;height:48px;border-radius:15px;font-size:22px}
+  #cq-gerencia-only .ttl{font-size:15px}
+}
 </style>
 
 
@@ -1633,11 +1696,12 @@ nav.tabs button[data-tab="presentacion"]::before{content:"🎬"!important}
 </head>
 <body>
 
-<div id="cq-gerencia-only">
+<div id="cq-gerencia-only" aria-live="polite">
  <div class="box">
-  <div class="ico">🔐</div>
-  <div class="ttl">Verificando Gerencia</div>
-  <div class="msg" id="cq-gerencia-only-msg">Comprobando usuario y autorización…</div>
+  <div class="loader-brand">⌁</div>
+  <div class="ttl">Cargando Índice CQ</div>
+  <div class="msg" id="cq-gerencia-only-msg">Preparando datos…</div>
+  <div class="loader-dots" aria-hidden="true"><i></i><i></i><i></i></div>
   <button class="back" id="cq-gerencia-only-back" onclick="history.back()">← Volver</button>
  </div>
 </div>
@@ -2085,7 +2149,15 @@ const CQ_HISTORICAL_BACKFILL = [
   // 5.94 sigue abierta comercialmente: A fue preventa y B continúa sin vender al cierre de Oct-2026.
   {code:'5.94', inicio:['2025',11], fin:['2026',6], archived:false,
    ventas:{A:['2025',10,'vendida_pozo']},
-   openUnits:{B:{unsoldThrough:['2026',10]}}}
+   openUnits:{B:{unsoldThrough:['2026',10]}}},
+  // Fechas de inicio confirmadas por CQ (noviembre 2026).
+  // Backfill SOLO constructivo: preserva las ventas, unidades y fechas comerciales.
+  // Las fechas de finalizacion se conservan del historial de obras exportado.
+  {code:'3.85',   inicio:['2025',4],  fin:['2026',1], operationalOnly:true},
+  {code:'25.100', inicio:['2025',8],  fin:['2026',3], operationalOnly:true},
+  {code:'19.99',  inicio:['2025',9],  fin:['2026',4], operationalOnly:true},
+  {code:'4.100',  inicio:['2025',10], fin:['2026',6], operationalOnly:true},
+  {code:'25.82',  inicio:['2025',12], fin:['2026',8], operationalOnly:true}
 ];
 
 function cqSameCasaPayload(a,b){
@@ -4868,7 +4940,12 @@ function clearCache(){
 }
 function deny(t){
  clearCache();
- if(box){box.classList.remove("ok");box.classList.remove("hidden");box.style.display="flex"}
+ if(box){
+   box.classList.remove("ok");box.classList.remove("hidden");
+   box.style.display="flex";
+   const dots=box.querySelector(".loader-dots");
+   if(dots)dots.style.display="none";
+ }
  if(msg)msg.textContent=t;
  if(back)back.style.display="inline-block";
 }
@@ -4877,7 +4954,10 @@ function expose(profile){
  window._cqUsuarioActual=profile.nombre;
  try{localStorage.setItem("cq_usuario_actual",profile.nombre)}catch(e){}
  document.documentElement.classList.add("cq-fast-1h-financieros");
- if(box){box.classList.add("ok");box.classList.add("hidden");box.style.display="none"}
+ if(box){
+   box.classList.add("ok");box.classList.add("hidden");
+   setTimeout(()=>{ if(box)box.style.display="none"; },190);
+ }
  document.dispatchEvent(new CustomEvent("cq-auth-ready",{detail:profile}));
 }
 function fromCache(c,email){
