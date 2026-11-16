@@ -9464,7 +9464,7 @@ function cqUnitCardHTML(k){
       <div id="fin-${k}-cuotas-total" class="fin-unit-total-cuotas">Total cuotas: U$S 0</div>
     </div>
     <div class="fin-unit-commission"><span class="lbl">Comisión</span><span class="pct-wrap"><input type="number" id="fin-${k}-comision-pct" min="0" step="0.01" placeholder="2.5" oninput="cqUpdateUnitPreview('${k}')"></span><span id="fin-${k}-comision-calc" class="calc">U$S 0</span></div>
-    <div class="fin-unit-status"><span class="lbl">Venta</span><select id="fin-${k}-etapa"><option value="">Sin vender</option><option value="pozo">En pozo</option><option value="estructura">Estructura</option><option value="terminaciones">Terminaciones</option><option value="terminada">Finalizada</option></select><input type="date" id="fin-${k}-fecha" aria-label="Fecha venta Unidad ${k}"></div>
+    <div class="fin-unit-status"><span class="lbl">Venta</span><select id="fin-${k}-etapa" onchange="cqFinUnidadEtapaCambiada('${k}')"><option value="">Sin vender</option><option value="pozo">En pozo</option><option value="estructura">Estructura</option><option value="terminaciones">Terminaciones</option><option value="terminada">Finalizada</option></select><input type="date" id="fin-${k}-fecha" aria-label="Fecha venta Unidad ${k}"></div>
   </div>`;
 }
 function cqPrepareFinModal(){
@@ -9477,11 +9477,21 @@ function cqAddUnitCuota(k,valor='',mes=''){
   const row=document.createElement('div');row.className='fin-unit-cuota-row';row.innerHTML=`<input type="number" class="fin-unit-cuota-monto" min="0" step="0.01" placeholder="U$S" value="${monto!==''?String(monto):''}" oninput="cqUpdateUnitPreview('${k}')"><input type="month" class="fin-unit-cuota-mes" value="${ym||''}" aria-label="Mes cuota Unidad ${k}"><button type="button" class="btn-del fin-unit-cuota-del" onclick="this.closest('.fin-unit-cuota-row').remove();cqEnsureUnitCuota('${k}');cqUpdateUnitPreview('${k}')">✕</button>`;list.appendChild(row);cqUpdateUnitPreview(k)
 }
 function cqEnsureUnitCuota(k){const list=document.getElementById(`fin-${k}-cuotas`);if(list&&!list.querySelector('.fin-unit-cuota-row'))cqAddUnitCuota(k)}
+// Una unidad sin vender no tiene fecha de venta. El campo queda deshabilitado
+// para evitar que una fecha vieja obligue a declarar una venta inexistente.
+function cqFinUnidadEtapaCambiada(k){
+  const etapa=document.getElementById(`fin-${k}-etapa`);
+  const fecha=document.getElementById(`fin-${k}-fecha`);
+  if(!etapa||!fecha)return;
+  if(!etapa.value)fecha.value='';
+  fecha.disabled=!etapa.value;
+  fecha.title=etapa.value?'Fecha efectiva de venta':'Sin vender: no corresponde fecha de venta';
+}
 function cqReadUnitModal(k,validate=false){
   const venta=Math.max(0,parseFloat(document.getElementById(`fin-${k}-venta`)?.value)||0),ventaMes=document.getElementById(`fin-${k}-venta-mes`)?.value||'';
   const cuotas=[];document.querySelectorAll(`#fin-${k}-cuotas .fin-unit-cuota-row`).forEach(r=>{const monto=Math.max(0,parseFloat(r.querySelector('.fin-unit-cuota-monto')?.value)||0),mes=r.querySelector('.fin-unit-cuota-mes')?.value||'';if(monto>0)cuotas.push({monto,mes})});
-  const comisionPct=Math.max(0,parseFloat(document.getElementById(`fin-${k}-comision-pct`)?.value)||0),etapa=document.getElementById(`fin-${k}-etapa`)?.value||'',fechaVenta=document.getElementById(`fin-${k}-fecha`)?.value||'';
-  if(validate){if(venta>0&&!ventaMes)throw new Error(`Seleccioná el mes del precio de venta inicial de la Unidad ${k}.`);for(const c of cuotas)if(c.monto>0&&!c.mes)throw new Error(`Seleccioná el mes de todas las cuotas de la Unidad ${k}.`);if(etapa&&!fechaVenta)throw new Error(`Ingresá la fecha de venta de la Unidad ${k}.`);if(!etapa&&fechaVenta)throw new Error(`Elegí la etapa de venta de la Unidad ${k}.`)}
+  const comisionPct=Math.max(0,parseFloat(document.getElementById(`fin-${k}-comision-pct`)?.value)||0),etapa=document.getElementById(`fin-${k}-etapa`)?.value||'',fechaVenta=etapa?(document.getElementById(`fin-${k}-fecha`)?.value||''):'';
+  if(validate){if(venta>0&&!ventaMes)throw new Error(`Seleccioná el mes del precio de venta inicial de la Unidad ${k}.`);for(const c of cuotas)if(c.monto>0&&!c.mes)throw new Error(`Seleccioná el mes de todas las cuotas de la Unidad ${k}.`);if(etapa&&!fechaVenta)throw new Error(`Ingresá la fecha de venta de la Unidad ${k}.`);}
   return{venta,ventaMes,cuotasDetalle:cuotas,comisionPct,etapa,fechaVenta};
 }
 function cqUpdateUnitPreview(k){
@@ -9490,7 +9500,7 @@ function cqUpdateUnitPreview(k){
 }
 openModalFin=function(){
   cqPrepareFinModal();const fin=getS().financiero||{},us=cqFinUnits(fin);
-  ['A','B'].forEach(k=>{const u=us[k];document.getElementById(`fin-${k}-venta`).value=u.venta||'';document.getElementById(`fin-${k}-venta-mes`).value=u.ventaMes||'';document.getElementById(`fin-${k}-comision-pct`).value=Number.isFinite(Number(u.comisionPct))?u.comisionPct:2.5;document.getElementById(`fin-${k}-etapa`).value=u.etapa||'';document.getElementById(`fin-${k}-fecha`).value=u.fechaVenta||'';const list=document.getElementById(`fin-${k}-cuotas`);list.innerHTML='';if(u.cuotasDetalle?.length)u.cuotasDetalle.forEach(q=>cqAddUnitCuota(k,q));else cqAddUnitCuota(k);cqUpdateUnitPreview(k)});
+  ['A','B'].forEach(k=>{const u=us[k];document.getElementById(`fin-${k}-venta`).value=u.venta||'';document.getElementById(`fin-${k}-venta-mes`).value=u.ventaMes||'';document.getElementById(`fin-${k}-comision-pct`).value=Number.isFinite(Number(u.comisionPct))?u.comisionPct:2.5;document.getElementById(`fin-${k}-etapa`).value=u.etapa||'';document.getElementById(`fin-${k}-fecha`).value=u.fechaVenta||'';cqFinUnidadEtapaCambiada(k);const list=document.getElementById(`fin-${k}-cuotas`);list.innerHTML='';if(u.cuotasDetalle?.length)u.cuotasDetalle.forEach(q=>cqAddUnitCuota(k,q));else cqAddUnitCuota(k);cqUpdateUnitPreview(k)});
   openModal('modal-fin');
 }
 saveFinanciero=function(){
@@ -12205,7 +12215,7 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
     cqPrepareFinModal();
     const fin=getS().financiero||{},us=cqFinUnits(fin);
     const p=document.getElementById('fin-presupuesto-obra');if(p)p.value=fin.presupuestoObra ?? fin.presupuesto ?? '';
-    ['A','B'].forEach(k=>{const u=us[k];document.getElementById(`fin-${k}-venta`).value=u.venta||'';document.getElementById(`fin-${k}-venta-mes`).value=u.ventaMes||'';document.getElementById(`fin-${k}-comision-pct`).value=Number.isFinite(Number(u.comisionPct))?u.comisionPct:2.5;document.getElementById(`fin-${k}-etapa`).value=u.etapa||'';document.getElementById(`fin-${k}-fecha`).value=u.fechaVenta||'';const list=document.getElementById(`fin-${k}-cuotas`);list.innerHTML='';if(u.cuotasDetalle?.length)u.cuotasDetalle.forEach(q=>cqAddUnitCuota(k,q));else cqAddUnitCuota(k);cqUpdateUnitPreview(k)});
+    ['A','B'].forEach(k=>{const u=us[k];document.getElementById(`fin-${k}-venta`).value=u.venta||'';document.getElementById(`fin-${k}-venta-mes`).value=u.ventaMes||'';document.getElementById(`fin-${k}-comision-pct`).value=Number.isFinite(Number(u.comisionPct))?u.comisionPct:2.5;document.getElementById(`fin-${k}-etapa`).value=u.etapa||'';document.getElementById(`fin-${k}-fecha`).value=u.fechaVenta||'';cqFinUnidadEtapaCambiada(k);const list=document.getElementById(`fin-${k}-cuotas`);list.innerHTML='';if(u.cuotasDetalle?.length)u.cuotasDetalle.forEach(q=>cqAddUnitCuota(k,q));else cqAddUnitCuota(k);cqUpdateUnitPreview(k)});
     openModal('modal-fin');
     setTimeout(()=>{try{document.getElementById('fin-presupuesto-obra')?.focus({preventScroll:true})}catch(e){}},50);
   };
