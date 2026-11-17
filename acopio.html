@@ -3765,6 +3765,7 @@ body.cq-acopio-cargando{overflow:hidden!important}
       <button class="btn btn-p" onclick="openNuevoAcopio()">+ Nuevo acopio</button>
       <button class="btn archivo-btn" onclick="showArchivados()">📦 Archivados <span class="archivo-count" id="archivo-count">0</span></button>
     </div>
+    <button type="button" id="cq-global-summary-btn" class="btn btn-s" onclick="abrirResumenGeneralAcopios()"><span class="cq-global-summary-ico">▦</span> Resumen general de acopios · Todos los retiros</button>
     <div id="acopios-list"></div>
   </div>
   <div id="home-archivados-panel" class="archivo-panel">
@@ -3779,6 +3780,62 @@ body.cq-acopio-cargando{overflow:hidden!important}
   </div>
 </div>
 
+
+<!-- VISTA GENERAL: CONSULTA DE TODOS LOS ACOPIOS (incluye archivados) -->
+<div id="view-reporte-global" class="main" style="display:none">
+  <div class="cq-global-header">
+    <div><h2 class="cq-global-title">Resumen general de acopios</h2><div class="cq-global-subtitle">Todos los retiros de todos los acopios, incluidos los archivados</div></div>
+    <button type="button" class="btn btn-s cq-global-back" onclick="abrirMenuAcopios()">← Volver</button>
+  </div>
+  <button type="button" class="btn btn-p btn-full cq-rep-whatsapp" onclick="cqGlobalRepPDFWhatsApp()">📲 Enviar PDF por WhatsApp</button>
+  <button type="button" id="cq-global-filtros-toggle" class="cq-rep-filtros-toggle" onclick="cqGlobalRepToggleFilters()">
+    <span>⚙ Filtros del reporte</span><span id="cq-global-filtros-resumen">Todos los retiros</span><span class="cq-rep-filtros-arrow">⌄</span>
+  </button>
+  <div class="filter-card cq-rep-filtros-panel" id="cq-global-filtros-panel">
+    <div class="cq-rep-filter-grid">
+      <div class="fld cq-rep-filter-fld">
+        <label>Obra</label>
+        <select id="cq-global-obra-filter" multiple aria-hidden="true" tabindex="-1" style="display:none"></select>
+        <div class="cq-rep-multi" id="cq-global-obra-multi">
+          <button type="button" class="cq-rep-multi-btn" onclick="cqGlobalRepToggleMulti('obra',event)"><span id="cq-global-obra-label">Todas las obras</span><span class="cq-rep-multi-arrow">⌄</span></button>
+          <div class="cq-rep-multi-panel">
+            <div class="cq-rep-search"><span>⌕</span><input id="cq-global-obra-search" placeholder="Buscar obra..." oninput="cqGlobalRepOptions('obra')" autocomplete="off"></div>
+            <div class="cq-rep-actions"><button type="button" onclick="cqGlobalRepToggleAll('obra',event)">Todos</button><button type="button" class="cq-rep-ok" onclick="cqGlobalRepConfirm('obra',event)">OK</button></div>
+            <div class="cq-rep-options" id="cq-global-obra-options"></div>
+          </div>
+        </div>
+      </div>
+      <div class="fld cq-rep-filter-fld">
+        <label>Subrubro</label>
+        <select id="cq-global-subrubro-filter" multiple aria-hidden="true" tabindex="-1" style="display:none"></select>
+        <div class="cq-rep-multi" id="cq-global-subrubro-multi">
+          <button type="button" class="cq-rep-multi-btn" onclick="cqGlobalRepToggleMulti('subrubro',event)"><span id="cq-global-subrubro-label">Todos los subrubros</span><span class="cq-rep-multi-arrow">⌄</span></button>
+          <div class="cq-rep-multi-panel">
+            <div class="cq-rep-search"><span>⌕</span><input id="cq-global-subrubro-search" placeholder="Buscar subrubro..." oninput="cqGlobalRepOptions('subrubro')" autocomplete="off"></div>
+            <div class="cq-rep-actions"><button type="button" onclick="cqGlobalRepToggleAll('subrubro',event)">Todos</button><button type="button" class="cq-rep-ok" onclick="cqGlobalRepConfirm('subrubro',event)">OK</button></div>
+            <div class="cq-rep-options" id="cq-global-subrubro-options"></div>
+          </div>
+        </div>
+      </div>
+      <div class="fld cq-rep-filter-fld cq-rep-producto">
+        <label>Producto</label>
+        <select id="cq-global-producto-filter" multiple aria-hidden="true" tabindex="-1" style="display:none"></select>
+        <div class="cq-rep-multi" id="cq-global-producto-multi">
+          <button type="button" class="cq-rep-multi-btn" onclick="cqGlobalRepToggleMulti('producto',event)"><span id="cq-global-producto-label">Todos los productos</span><span class="cq-rep-multi-arrow">⌄</span></button>
+          <div class="cq-rep-multi-panel">
+            <div class="cq-rep-search"><span>⌕</span><input id="cq-global-producto-search" placeholder="Buscar producto..." oninput="cqGlobalRepOptions('producto')" autocomplete="off"></div>
+            <div class="cq-rep-actions"><button type="button" onclick="cqGlobalRepToggleAll('producto',event)">Todos</button><button type="button" class="cq-rep-ok" onclick="cqGlobalRepConfirm('producto',event)">OK</button></div>
+            <div class="cq-rep-options" id="cq-global-producto-options"></div>
+          </div>
+        </div>
+      </div>
+      <div class="fld"><label>Desde</label><input type="date" id="cq-global-desde" onchange="cqGlobalRepRender()"></div>
+      <div class="fld"><label>Hasta</label><input type="date" id="cq-global-hasta" onchange="cqGlobalRepRender()"></div>
+    </div>
+    <button type="button" class="cq-rep-limpiar" onclick="cqGlobalRepClear()">↺ Limpiar todos los filtros</button>
+  </div>
+  <div id="cq-global-reporte-content"></div>
+</div>
 
 <!-- ═══════════════ ENTREGAS PENDIENTES ═══════════════ -->
 <div id="view-entregas-pendientes" class="main" style="display:none">
@@ -6206,7 +6263,7 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 var cqSeccionAcopio='menu';
 
 function cqOcultarVistasRaiz(){
-  var ids=['view-menu-acopio','view-home','view-entregas-pendientes','view-acopio'];
+  var ids=['view-menu-acopio','view-home','view-entregas-pendientes','view-acopio','view-reporte-global'];
   ids.forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
   var tabs=document.getElementById('tabs-acopio');if(tabs)tabs.style.display='none';
 }
@@ -6255,6 +6312,7 @@ function cqVolverAcopio(){
     abrirMenuAcopios();
     return;
   }
+  if(cqSeccionAcopio==='resumen-general'){abrirMenuAcopios();return;}
   if(cqSeccionAcopio==='acopios' || cqSeccionAcopio==='entregas'){
     goHome();
     return;
@@ -16247,6 +16305,319 @@ document.addEventListener('click',function(e){
 })();
 </script>
 
+<style id="cq-global-summary-style">
+/* CQ: resumen general -- mismo lenguaje gráfico que Reporte por obra. */
+#cq-global-summary-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:0 0 15px;padding:13px!important;min-height:45px!important;font-size:12px!important;border-radius:12px!important;white-space:normal}
+#cq-global-summary-btn .cq-global-summary-ico{font-size:17px;line-height:1}
+#view-reporte-global{padding-top:6px!important}
+#view-reporte-global .cq-global-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 11px}
+#view-reporte-global .cq-global-title{font-weight:900;font-size:17px;color:var(--green);line-height:1.12}
+#view-reporte-global .cq-global-subtitle{font-size:10px;font-weight:700;color:#7A9E82;margin-top:4px;line-height:1.4}
+#view-reporte-global .cq-global-back{font-size:10px!important;padding:7px 9px!important;min-height:31px!important;flex:0 0 auto}
+#view-reporte-global .cq-rep-whatsapp{width:auto!important;min-width:0!important;max-width:210px!important;min-height:29px!important;height:29px!important;padding:4px 10px!important;margin:4px 0 7px auto!important;display:block!important;border-radius:8px!important;font-size:8.5px!important;letter-spacing:0!important}
+#view-reporte-global .cq-rep-mat{font-weight:900!important;color:#173F32!important}
+#view-reporte-global .cq-rep-kpis .kpi-sub{font-weight:900!important;color:#315F4C!important}
+#view-reporte-global .cq-rep-kpis .kpi-val{overflow-wrap:anywhere}
+#view-reporte-global .cq-global-origen{display:block;margin-top:3px;color:#718A7A;font-size:8px;line-height:1.25;font-weight:700}
+#view-reporte-global .cq-global-foot-total{background:linear-gradient(90deg,#DCECDF,#EAF5EE);border:1px solid #CCDCCE;border-radius:11px;display:flex;align-items:center;justify-content:space-between;padding:12px 13px;gap:9px;color:#174638;margin:13px 0 17px}
+#view-reporte-global .cq-global-foot-total>strong{font-weight:900;font-size:12px}
+#view-reporte-global .cq-global-foot-total>span{font-weight:900;font:900 16px var(--mono);text-align:right}
+#view-reporte-global .cq-global-foot-total small{display:block;font-size:9px;font-weight:700;margin-top:3px;color:#4C7860}
+#view-reporte-global .cq-rep-filtros-toggle #cq-global-filtros-resumen{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#7A5B8F;font-size:9px;font-weight:800}
+@media(max-width:560px){
+ #view-reporte-global .cq-global-title{font-size:15px}
+ #view-reporte-global .cq-global-back{padding:6px 8px!important;font-size:9px!important}
+ #view-reporte-global .cq-global-foot-total>span{font-size:13px}
+ #cq-global-summary-btn{font-size:11px!important}
+}
+</style>
+<script id="cq-global-summary-script">
+/* CQ — Resumen consolidado de retiros de todos los acopios, sin alterar la lógica de cada acopio. */
+(function(){
+'use strict';
+var TYPES=['obra','subrubro','producto'];
+var globalRowsCache=[];
+var currentResult=null;
+var filtrosConstruidos=false;
+
+function el(id){return document.getElementById(id);}
+function norm(v){return String(v==null?'':v).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');}
+function html(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function gid(type,suffix){return 'cq-global-'+type+(suffix?'-'+suffix:'');}
+function config(type){return {select:gid(type,'filter'),wrap:gid(type,'multi'),label:gid(type,'label'),search:gid(type,'search'),opts:gid(type,'options'),any:({'obra':'Todas las obras','subrubro':'Todos los subrubros','producto':'Todos los productos'})[type]};}
+function acopioObraLabel(r,a,lookup){
+  if(r.obraHistorica)return String(r.obraHistorica).trim();
+  if(r.gastosObraId){
+    var ob=lookup[String(r.gastosObraId)];
+    if(ob)return String(ob.label||ob.short||ob.id).trim();
+  }
+  var obras=Array.isArray(a.obras)?a.obras:[];
+  var i=Number(r.obraIdx);
+  return String((Number.isInteger(i)&&i>=0?obras[i]:'')||'Obra').trim();
+}
+function productKey(m){
+  var code=norm(m.cod||'');
+  var label=norm(m.nom||'');
+  var unit=norm(m.unidad||'');
+  // Identifica el mismo producto entre distintos acopios aunque los matId sean distintos.
+  return (code?'codigo:'+code+'|':'')+'material:'+label+'|unidad:'+unit;
+}
+function sourceRows(){
+  var lookup={};
+  try{getObrasGastosAllObjects().forEach(function(x){lookup[String(x.id)]=x;});}catch(_e){}
+  var all=[];
+  (DB.acopios||[]).forEach(function(a){
+    var mats={};
+    (a.mats||[]).forEach(function(m){if(m&&m.id!=null)mats[String(m.id)]=m;});
+    (a.retiros||[]).forEach(function(r){
+      var m=mats[String(r.matId)];
+      if(!m)return; // Coincide con el criterio del reporte individual.
+      var obra=acopioObraLabel(r,a,lookup);
+      var cantidad=Number(r.qty)||0;
+      var importe=cantidad*(Number(m.precioAcord)||0);
+      var tc=Number(a.tc)||TC_DEFAULT;
+      var cat=String(m.cat||'Sin subrubro').trim()||'Sin subrubro';
+      all.push({a:a,r:r,m:m,obra:obra,obraKey:norm(obra),sub:String(r.subrubro||'').trim(),subKey:norm(r.subrubro||''),productKey:productKey(m),
+        cat:cat,catKey:norm(cat),cantidad:cantidad,importe:importe,dolares:importe/tc,acopioNombre:String(a.nombre||'Acopio')});
+    });
+  });
+  return all;
+}
+function selected(type){
+  var s=el(config(type).select);
+  return s?Array.from(s.selectedOptions||[]).map(function(x){return String(x.value);}):[];
+}
+function buildOptions(type,prev){
+  var c=config(type),s=el(c.select);if(!s)return;
+  var map=new Map();
+  globalRowsCache.forEach(function(x){
+    var key,label;
+    if(type==='obra'){key=x.obraKey;label=x.obra;}
+    else if(type==='subrubro'){key=x.subKey;label=x.sub;}
+    else{key=x.productKey;label=x.m.nom+(x.m.cod?' · '+x.m.cod:'');}
+    if(key&&!map.has(key))map.set(key,label);
+  });
+  var opts=Array.from(map,function(pair){return {key:pair[0],label:pair[1]};});
+  opts.sort(function(a,b){return a.label.localeCompare(b.label,'es',{numeric:true,sensitivity:'base'});});
+  s.innerHTML=opts.map(function(x){return '<option value="'+html(x.key)+'"'+(prev.indexOf(x.key)>=0?' selected':'')+'>'+html(x.label)+'</option>';}).join('');
+  updateLabel(type);renderOptions(type);
+}
+function rebuildFilters(){
+  var prev={};TYPES.forEach(function(t){prev[t]=selected(t);});
+  globalRowsCache=sourceRows();
+  TYPES.forEach(function(t){buildOptions(t,prev[t]);});
+  filtrosConstruidos=true;
+}
+function updateLabel(type){
+  var c=config(type),s=el(c.select),l=el(c.label);if(!s||!l)return;
+  var arr=Array.from(s.selectedOptions||[]);
+  l.textContent=!arr.length?c.any:arr.length===1?arr[0].textContent:arr.slice(0,2).map(function(x){return x.textContent;}).join(' · ')+(arr.length>2?' · +'+(arr.length-2):'');
+}
+function renderOptions(type){
+  var c=config(type),s=el(c.select),box=el(c.opts);if(!s||!box)return;
+  var query=norm(el(c.search)?el(c.search).value:'');
+  var arr=Array.from(s.options||[]).filter(function(x){return !query||norm(x.textContent).indexOf(query)>=0;});
+  box.innerHTML=arr.length?arr.map(function(x){return '<label class="cq-rep-option"><input type="checkbox" data-cq-global-type="'+type+'" data-cq-global-value="'+html(x.value)+'"'+(x.selected?' checked':'')+' onchange="cqGlobalRepSelectValue(this,event)"><span>'+html(x.textContent)+'</span></label>';}).join(''):'<div class="cq-rep-empty">Sin coincidencias</div>';
+}
+window.cqGlobalRepOptions=renderOptions;
+window.cqGlobalRepSelectValue=function(chk,event){
+  if(event)event.stopPropagation();
+  var type=chk.getAttribute('data-cq-global-type'),v=chk.getAttribute('data-cq-global-value'),s=el(config(type).select);
+  if(s)Array.from(s.options).forEach(function(o){if(o.value===v)o.selected=!!chk.checked;});
+  updateLabel(type);
+};
+window.cqGlobalRepToggleMulti=function(type,event){
+  if(event)event.stopPropagation();
+  TYPES.forEach(function(t){if(t!==type)el(config(t).wrap).classList.remove('open');});
+  var w=el(config(type).wrap);w.classList.toggle('open');if(w.classList.contains('open'))renderOptions(type);
+};
+window.cqGlobalRepToggleAll=function(type,event){
+  if(event)event.stopPropagation();
+  var s=el(config(type).select);if(!s)return;
+  var opts=Array.from(s.options),all=opts.length>0&&opts.every(function(x){return x.selected;});
+  opts.forEach(function(x){x.selected=!all;});
+  updateLabel(type);renderOptions(type);
+  el(config(type).wrap).classList.add('open');
+};
+window.cqGlobalRepConfirm=function(type,event){
+  if(event)event.stopPropagation();
+  el(config(type).wrap).classList.remove('open');
+  render();
+};
+window.cqGlobalRepToggleFilters=function(force){
+  var p=el('cq-global-filtros-panel'),b=el('cq-global-filtros-toggle');
+  var open=typeof force==='boolean'?force:!p.classList.contains('open');
+  p.classList.toggle('open',open);b.classList.toggle('open',open);
+};
+window.cqGlobalRepClear=function(){
+  TYPES.forEach(function(t){
+    var s=el(config(t).select);if(s)Array.from(s.options).forEach(function(o){o.selected=false;});
+    if(el(config(t).search))el(config(t).search).value='';
+    updateLabel(t);renderOptions(t);
+  });
+  el('cq-global-desde').value='';el('cq-global-hasta').value='';render();
+};
+function summaryText(){
+  var p=[];
+  [['obra','obra'],['subrubro','subrubro'],['producto','producto']].forEach(function(x){var n=selected(x[0]).length;if(n)p.push(n+' '+x[1]+(n===1?'':'s'));});
+  var d=el('cq-global-desde').value,h=el('cq-global-hasta').value;
+  if(d)p.push('desde '+d.split('-').reverse().join('/'));
+  if(h)p.push('hasta '+h.split('-').reverse().join('/'));
+  el('cq-global-filtros-resumen').textContent=p.join(' · ')||'Todos los retiros';
+}
+function result(){
+  var obras=selected('obra'),subs=selected('subrubro'),mats=selected('producto');
+  var desde=el('cq-global-desde').value,hasta=el('cq-global-hasta').value;
+  var filtered=globalRowsCache.filter(function(x){
+    return (!obras.length||obras.indexOf(x.obraKey)>=0) && (!subs.length||subs.indexOf(x.subKey)>=0) && (!mats.length||mats.indexOf(x.productKey)>=0) && dateInRange(x.r.fecha,desde,hasta);
+  });
+  var categories=new Map(),totalPesos=0,totalUSD=0,totalQty=0,acopios=new Set();
+  filtered.forEach(function(x){
+    totalPesos+=x.importe;totalUSD+=x.dolares;totalQty+=x.cantidad;acopios.add(String(x.a.id));
+    var catId=x.catKey;
+    if(!categories.has(catId))categories.set(catId,{name:x.cat,items:new Map(),pesos:0,dolares:0,qty:0});
+    var cat=categories.get(catId);
+    cat.pesos+=x.importe;cat.dolares+=x.dolares;cat.qty+=x.cantidad;
+    // Una fila por acopio/material/obra: evita mezclar precios diferentes.
+    var key=String(x.a.id)+'::'+String(x.m.id)+'::'+x.obraKey;
+    if(!cat.items.has(key))cat.items.set(key,{obra:x.obra,acopio:x.acopioNombre,archived:!!x.a.archived,
+      cod:String(x.m.cod||''),nom:String(x.m.nom||''),unidad:String(x.m.unidad||''),qty:0,pesos:0,dolares:0,precio:Number(x.m.precioAcord)||0});
+    var it=cat.items.get(key);it.qty+=x.cantidad;it.pesos+=x.importe;it.dolares+=x.dolares;
+  });
+  return {rows:filtered,categories:Array.from(categories.values()).map(function(x){return {name:x.name,items:Array.from(x.items.values()),pesos:x.pesos,dolares:x.dolares,qty:x.qty};}),
+    totalPesos:totalPesos,totalUSD:totalUSD,totalQty:totalQty,acopiosCount:acopios.size,
+    obraText:obras.length===1?(el(config('obra').select).selectedOptions[0]||{}).textContent||'Obra':obras.length>1?obras.length+' obras':'Todas las obras',
+    mostrarObra:obras.length!==1,unidad:mats.length===1?(filtered[0]&&filtered[0].m.unidad||''):'',desde:desde,hasta:hasta};
+}
+function render(){
+  if(!el('cq-global-reporte-content')||el('view-reporte-global').style.display==='none')return;
+  if(!filtrosConstruidos)rebuildFilters();
+  currentResult=result();
+  var d=currentResult,root=el('cq-global-reporte-content');
+  var out='<div class="kpi-row cq-rep-kpis" style="grid-template-columns:1fr 1fr 1fr">'
+    +kpi('Obra',html(d.obraText),d.categories.length+' rubros')
+    +kpi('Cantidad retirada','<span class="qty-strong">'+fmtN(d.totalQty,2)+'</span>',html(d.unidad||'total filtrado'))
+    +kpi('Total $',fmtP(d.totalPesos),'≈ '+fmtU(d.totalUSD))+'</div>';
+  if(!d.categories.length){out+='<div class="card"><div class="empty">Sin retiros registrados para el filtro seleccionado</div></div>';}
+  d.categories.forEach(function(cat){
+    var col=(typeof getCatColor==='function')?getCatColor(cat.name):'#2E7D5E';
+    if(!/^#[0-9A-Fa-f]{3,8}$/.test(col))col='#2E7D5E';
+    out+='<div class="card cq-rep-card" style="border-top:3px solid '+col+'">';
+    out+='<div class="card-hd"><span class="card-ttl" style="color:'+col+'">'+html(cat.name)+'</span>'
+      +'<span class="card-sub"><strong>'+fmtN(cat.qty,2)+'</strong> un. · '+fmtP(cat.pesos)+'</span></div>';
+    out+='<div class="tbl-wrap"><table class="cq-rep-table"><thead><tr>'+(d.mostrarObra?'<th>Obra</th>':'')+'<th>Código</th><th>Material</th><th class="r">Cantidad</th><th class="r">Total $</th></tr></thead><tbody>';
+    cat.items.forEach(function(it){
+      out+='<tr>'+(d.mostrarObra?'<td><span class="badge cq-rep-obra-badge">'+html(it.obra)+'</span></td>':'')
+        +'<td class="mono">'+html(it.cod||'—')+'</td>'
+        +'<td class="cq-rep-mat">'+html(it.nom)+'<small class="cq-global-origen">Acopio: '+html(it.acopio)+(it.archived?' · Archivado':'')+'</small></td>'
+        +'<td class="r"><span class="qty-strong">'+fmtN(it.qty,2)+'</span><span class="qty-unit">'+html(it.unidad)+'</span></td>'
+        +'<td class="mono r">'+fmtP(it.pesos)+'</td></tr>';
+    });
+    out+='<tr class="subtotal"><td colspan="'+(d.mostrarObra?4:3)+'">Subtotal '+html(cat.name)+'</td><td class="mono r">'+fmtP(cat.pesos)+'</td></tr></tbody></table></div></div>';
+  });
+  if(d.categories.length){out+='<div class="cq-global-foot-total"><strong>TOTAL GENERAL</strong><span>'+fmtP(d.totalPesos)+'<small>≈ '+fmtU(d.totalUSD)+' · '+d.acopiosCount+' acopios</small></span></div>';}
+  root.innerHTML=out;
+  summaryText();
+}
+window.cqGlobalRepRender=render;
+window.abrirResumenGeneralAcopios=function(){
+  curAcopioId=null;
+  cqSeccionAcopio='resumen-general';
+  cqOcultarVistasRaiz();
+  el('view-reporte-global').style.display='block';
+  cqResetHeaderRaiz();
+  el('hdr-back').style.display='inline';
+  rebuildFilters();render();
+  cqGlobalRepToggleFilters(false);
+  window.scrollTo({top:0,left:0,behavior:'auto'});
+};
+function pdf(){
+  if(!window.jspdf||!window.jspdf.jsPDF)return null;
+  var d=currentResult||result();
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+  var left=12,usable=186,y=14,page=1;
+  function newPage(){doc.addPage();page++;y=14;}
+  function fit(h){if(y+h>282)newPage();}
+  function text(s,x,size,bold,color){doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor.apply(doc,color||[28,43,34]);doc.text(String(s),x,y);}
+  function money(v){return '$'+Math.round(v||0).toLocaleString('es-AR');}
+  function header(){
+    doc.setFillColor(28,61,53);doc.rect(left,y-6,usable,13,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(13);
+    doc.text('CQ  |  Resumen general de acopios',left+4,y+2);
+    y+=15;
+    doc.setTextColor(44,70,57);doc.setFontSize(9);
+    doc.text('Obra: '+d.obraText,left,y);y+=6;
+    var desde=d.desde?fmtFecha(d.desde):'inicio',hasta=d.hasta?fmtFecha(d.hasta):'hoy';
+    doc.text('Periodo: '+(d.desde||d.hasta?desde+' a '+hasta:'Todos los retiros'),left,y);y+=6;
+    doc.text('Acopios incluidos: '+d.acopiosCount+' (activos y archivados)  |  Movimientos: '+d.rows.length,left,y);y+=7;
+    doc.setFont('helvetica','bold');doc.setFontSize(10);
+    doc.text('Total: '+money(d.totalPesos)+'    |    Equivalente: '+fmtU(d.totalUSD),left,y);y+=9;
+  }
+  header();
+  d.categories.forEach(function(cat){
+    fit(22);
+    doc.setFillColor(239,246,240);doc.rect(left,y-4,usable,9,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(28,61,53);
+    var sub=doc.splitTextToSize(cat.name,98)[0]||'';
+    doc.text(sub,left+2,y+2);
+    doc.text(fmtN(cat.qty,2)+' un.  ·  '+money(cat.pesos),left+usable-2,y+2,{align:'right'});
+    y+=12;
+    cat.items.forEach(function(it){
+      var mat=doc.splitTextToSize(it.nom,69);
+      var origin=doc.splitTextToSize('Acopio: '+it.acopio+(it.archived?' (archivado)':''),69);
+      var obra=doc.splitTextToSize(it.obra,30);
+      var lineCount=Math.max(mat.length+origin.length,obra.length,2);
+      var h=Math.max(12,3.55*lineCount+3);
+      fit(h+2);
+      doc.setFont('helvetica','normal');doc.setTextColor(28,43,34);doc.setFontSize(7.6);
+      doc.text(obra,left+1,y);doc.text(doc.splitTextToSize(it.cod||'—',27).slice(0,2),left+31,y);
+      doc.setFont('helvetica','bold');doc.text(mat,left+61,y);
+      doc.setFont('helvetica','normal');doc.setTextColor(108,129,112);
+      doc.text(origin,left+61,y+mat.length*3.55);
+      doc.setTextColor(28,43,34);doc.setFont('helvetica','bold');doc.setFontSize(8);
+      doc.text(fmtN(it.qty,2)+' '+it.unidad,left+155,y,{align:'right',maxWidth:25});
+      doc.text(money(it.pesos),left+usable-1,y,{align:'right',maxWidth:28});
+      y+=h;doc.setDrawColor(230,234,226);doc.line(left,y-2,left+usable,y-2);
+    });
+    fit(9);doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(28,61,53);
+    doc.text('Subtotal '+cat.name.slice(0,45),left+2,y);
+    doc.text(money(cat.pesos),left+usable-1,y,{align:'right'});y+=12;
+  });
+  if(!d.categories.length){fit(13);doc.setFontSize(10);doc.text('Sin retiros para los filtros seleccionados.',left,y);}
+  var pages=doc.getNumberOfPages();
+  for(var p=1;p<=pages;p++){
+    doc.setPage(p);doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(120,139,127);
+    doc.text('CQ Desarrollos · Valores en pesos; USD según TC de cada acopio · '+new Date().toLocaleDateString('es-AR'),left,291);
+    doc.text(p+' / '+pages,198,291,{align:'right'});
+  }
+  return doc.output('blob');
+}
+window.cqGlobalRepPDFWhatsApp=async function(){
+  render();
+  var blob;
+  try{blob=pdf();}catch(e){console.error('PDF resumen general',e);alert('No se pudo generar el PDF del resumen.');return;}
+  if(!blob){alert('No se pudo generar el PDF porque todavía no cargó la biblioteca PDF.');return;}
+  var filename='resumen_general_acopios_'+todayISO()+'.pdf';
+  var file=new File([blob],filename,{type:'application/pdf'});
+  if(navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],title:'Resumen general de acopios',text:'Retiros de todos los acopios, con los filtros aplicados'});return;}
+    catch(e){if(e&&e.name==='AbortError')return;console.warn('Compartir PDF',e);}
+  }
+  var url=URL.createObjectURL(blob),anchor=document.createElement('a');
+  anchor.href=url;anchor.download=filename;document.body.appendChild(anchor);anchor.click();anchor.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},1500);
+  alert('El navegador no permite adjuntar el PDF directamente. Se descargó para que puedas enviarlo por WhatsApp.');
+};
+document.addEventListener('click',function(e){TYPES.forEach(function(t){var wrap=el(config(t).wrap);if(wrap&&!wrap.contains(e.target))wrap.classList.remove('open');});});
+// Actualizar solamente cuando realmente cambia Firebase, sin consultas extra.
+document.addEventListener('cq-acopio-datos-confirmados',function(){
+  if(el('view-reporte-global')&&el('view-reporte-global').style.display==='block'){
+    rebuildFilters();render();
+  }
+});
+})();
+</script>
 </body>
 </html>
 
