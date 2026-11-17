@@ -2143,6 +2143,39 @@ function categoriasPermitidasObra(id=curObra){
   return Object.keys(CAT_LABELS).filter(c=>c!=='ofi');
 }
 const DEFAULT_SUBRUBROS={lote:['Lote','Comisión','Escribanía','Sellado','Expensas','Boleto','Aguas','Gas','EPEC','Mov. suelo','Servicios pagados venta'],arq:['Colegio','Caja','Municipalidad'],mat:['Palmar','Bovedillas','Ladrillos','Tejuelas','Aberturas','Cerrajería y picaportes','Agua+Tanque+Flexibles','Cloacas+Cámara','Pozo','Gas+Aprobación','Muebles','Vanitorys','Espejo+Mampara','Cemento','Hercal','Electricidad','Pérgola materiales','Pérgola mano de obra','Hierros y mallas','Pinturas','Pinturas asfálticas+aislantes','Bachas+Sanitarios+Griferías','Áridos','Horno+Anafe+Campana','Caldera','Bombas','Radiadores','Hormigón','Mesadas','Cerramiento+Maderas','Baño+obrador','Limpieza','Contenedor','Varios','Ferretería','Agasajos','Trabajos extra','Viguetas','Pisos y revest.','Pegamento+pastina','Revoque','Yeso','Telgopor','Clavos+Alambre+Agrotileno','Decoración','Zinguería','Atrim','Flete'],mo:['Mano de obra semanal'],ext:['Plomería','Electricidad','Yeso','Pintura'],ofi:['Administrativa','Honorarios Arquitecta','Honorarios Contadora','MKT Digital','Limpieza','Almuerzo y Café','Gastos varios','Alquiler + Expensas','Impuestos Banco','Seguros','Epec','Ecogas','Internet y cable','Expensas']};
+// Semáforo global inicial basado en ROE Y TIR mejorado (8).xlsx.
+// Se carga una sola vez; después se puede editar desde ⚙ Reglas.
+const CQ_REGLAS_GLOBALES_VERSION='cq-finrules-excel-2026-11-17-v1';
+const CQ_REGLAS_GLOBALES_PRESET={
+  capitalMax:{dir:'low',green:80000,yellow:120000},
+  roe:{dir:'high',green:0.70,yellow:0.40},
+  tirMensual:{dir:'high',green:0.06,yellow:0.04},
+  tirAnual:{dir:'high',green:1.00,yellow:0.60},
+  payback:{dir:'low',green:8,yellow:10},
+  capitalCosto:{dir:'low',green:0.50,yellow:0.70}
+};
+function cqCopiaReglasGlobales(){return JSON.parse(JSON.stringify(CQ_REGLAS_GLOBALES_PRESET))}
+function cqAplicarReglasGlobalesIniciales(c){
+  if(c.finRulesPresetVersion!==CQ_REGLAS_GLOBALES_VERSION){
+    c.finRules=cqCopiaReglasGlobales();
+    c.finRulesPresetVersion=CQ_REGLAS_GLOBALES_VERSION;
+  }
+  return c;
+}
+let cqGuardandoReglasGlobales=false;
+async function cqGuardarReglasGlobalesEnFirebase(data){
+  if(!data||data.finRulesPresetVersion===CQ_REGLAS_GLOBALES_VERSION||cqGuardandoReglasGlobales||!(window._dbReady&&modoFirebase))return;
+  cqGuardandoReglasGlobales=true;
+  try{
+    // Merge: no reescribir obras, gastos, subrubros u otras configuraciones remotas.
+    suppressRemoteUntil=Date.now()+1800;
+    await window._setDoc(window._doc(window._db,'config','app'),{
+      finRules:cqCopiaReglasGlobales(),
+      finRulesPresetVersion:CQ_REGLAS_GLOBALES_VERSION
+    },{merge:true});
+  }catch(e){console.warn('No se pudieron sincronizar las reglas financieras',e)}
+  finally{cqGuardandoReglasGlobales=false}
+}
 let config=loadConfig();let state={};let curObra=localStorage.getItem('gastos_cur_obra')||config.obras[0]?.id||'obra_1';if(!config.obras.find(o=>o.id===curObra))curObra=config.obras[0]?.id||'obra_1';let unsubConfig=null;let unsubObra=null;let applyingRemote=false;let suppressRemoteUntil=0;let modoFirebase=true;
 function updateModoFirebaseBtn(){const b=document.getElementById('btn-modo-firebase');if(b)b.textContent=modoFirebase?'🟢 Firebase ON':'🟠 Modo prueba';}
 function toggleModoFirebase(){modoFirebase=!modoFirebase;updateModoFirebaseBtn();if(!modoFirebase){if(unsubConfig){unsubConfig();unsubConfig=null;}if(unsubObra){unsubObra();unsubObra=null;}setSyncStatus('Modo prueba');}else{setSyncStatus('Firebase: conectando...');startFirebaseSync();}}
@@ -2154,7 +2187,7 @@ Object.keys(DEFAULT_SUBRUBROS).forEach(cat=>{
   // así un subrubro eliminado en Config NO vuelve a aparecer al sincronizar.
   if(!Array.isArray(c.subrubros[cat]))c.subrubros[cat]=[...DEFAULT_SUBRUBROS[cat]];
 });
-Object.keys(c.subrubros).forEach(cat=>{if(Array.isArray(c.subrubros[cat]))c.subrubros[cat].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'}));});if(!c.obras.some(o=>o.id==='oficina'))c.obras.unshift({id:'oficina',label:'Oficina',short:'Oficina'});return c}
+Object.keys(c.subrubros).forEach(cat=>{if(Array.isArray(c.subrubros[cat]))c.subrubros[cat].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'}));});if(!c.obras.some(o=>o.id==='oficina'))c.obras.unshift({id:'oficina',label:'Oficina',short:'Oficina'});return cqAplicarReglasGlobalesIniciales(c)}
 function loadConfig(){try{return normalizeConfig(JSON.parse(localStorage.getItem('gastos_config')||'null')||{obras:DEFAULT_OBRAS,subrubros:DEFAULT_SUBRUBROS})}catch(e){return normalizeConfig({obras:DEFAULT_OBRAS,subrubros:DEFAULT_SUBRUBROS})}}
 function getDefaultTC(){return parseFloat(config.defaultTC)||1400}
 function setDefaultTC(tc){tc=parseFloat(tc);if(!isNaN(tc)&&tc>0){config.defaultTC=tc;localStorage.setItem('gastos_config',JSON.stringify(config));if(window._dbReady)persistConfig();}}
@@ -2281,7 +2314,7 @@ async function loadFromFirebase(){
     const conf=await window._getDoc(window._doc(window._db,'config','app'));
     if(conf.exists()){
       const data=conf.data();
-      if(data.obras&&data.subrubros){config=normalizeConfig({...config,...data,obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC,finRules:(data.finRules&&typeof data.finRules==='object')?data.finRules:(config.finRules||{})});localStorage.setItem('gastos_config',JSON.stringify(config));}
+      if(data.obras&&data.subrubros){config=normalizeConfig({...config,...data,obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC,finRules:(data.finRules&&typeof data.finRules==='object')?data.finRules:(config.finRules||{}),finRulesPresetVersion:data.finRulesPresetVersion||''});localStorage.setItem('gastos_config',JSON.stringify(config));await cqGuardarReglasGlobalesEnFirebase(data);}
     }
     // CQ 23/08/2026 — ahorro de lecturas: al iniciar sólo leer la obra activa.
     // Las demás conservan su cache local y se actualizan al seleccionarlas mediante subscribeObra().
@@ -2308,8 +2341,9 @@ function subscribeConfig(){
     if(!snap.exists())return;
     const data=snap.data();
     if(!(data.obras&&data.subrubros))return;
-    config=normalizeConfig({...config,...data,obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC,finRules:(data.finRules&&typeof data.finRules==='object')?data.finRules:(config.finRules||{})});
+    config=normalizeConfig({...config,...data,obras:data.obras,subrubros:data.subrubros,categoryLabels:data.categoryLabels,defaultTC:data.defaultTC,finRules:(data.finRules&&typeof data.finRules==='object')?data.finRules:(config.finRules||{}),finRulesPresetVersion:data.finRulesPresetVersion||''});
     localStorage.setItem('gastos_config',JSON.stringify(config));
+    if(data.finRulesPresetVersion!==CQ_REGLAS_GLOBALES_VERSION)void cqGuardarReglasGlobalesEnFirebase(data);
     if(!config.obras.find(o=>o.id===curObra))curObra=config.obras[0]?.id;
     config.obras.forEach(o=>{if(!state[o.id])state[o.id]=emptyState()});
     renderAll();
