@@ -3761,11 +3761,21 @@ body.cq-acopio-cargando{overflow:hidden!important}
     <p>Elegí un acopio para gestionar o creá uno nuevo</p>
   </div>
   <div id="home-activos-panel">
-    <div class="home-top-actions">
-      <button class="btn btn-p" onclick="openNuevoAcopio()">+ Nuevo acopio</button>
-      <button class="btn archivo-btn" onclick="showArchivados()">📦 Archivados <span class="archivo-count" id="archivo-count">0</span></button>
+    <div class="home-top-actions cq-home-actions-three" aria-label="Acciones de acopios">
+      <button type="button" id="cq-action-new" class="btn btn-p cq-home-action" onclick="openNuevoAcopio()" title="Crear un nuevo acopio">
+        <span class="cq-home-action-icon" aria-hidden="true">＋</span>
+        <span class="cq-home-action-copy">Nuevo <strong>acopio</strong></span>
+      </button>
+      <button type="button" id="cq-global-summary-btn" class="btn cq-home-action cq-summary-action" onclick="abrirResumenGeneralAcopios()" title="Resumen general de todos los retiros de todos los acopios" aria-label="Resumen general de acopios: todos los retiros">
+        <span class="cq-home-action-icon" aria-hidden="true">▦</span>
+        <span class="cq-home-action-copy">Resumen <strong>general</strong></span>
+      </button>
+      <button type="button" id="cq-action-archived" class="btn archivo-btn cq-home-action" onclick="showArchivados()" title="Ver acopios archivados">
+        <span class="cq-home-action-icon" aria-hidden="true">📁</span>
+        <span class="cq-home-action-copy">Archivados</span>
+        <span class="archivo-count" id="archivo-count">0</span>
+      </button>
     </div>
-    <button type="button" id="cq-global-summary-btn" class="btn btn-s" onclick="abrirResumenGeneralAcopios()"><span class="cq-global-summary-ico">▦</span> Resumen general de acopios · Todos los retiros</button>
     <div id="acopios-list"></div>
   </div>
   <div id="home-archivados-panel" class="archivo-panel">
@@ -16307,8 +16317,91 @@ document.addEventListener('click',function(e){
 
 <style id="cq-global-summary-style">
 /* CQ: resumen general -- mismo lenguaje gráfico que Reporte por obra. */
-#cq-global-summary-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:0 0 15px;padding:13px!important;min-height:45px!important;font-size:12px!important;border-radius:12px!important;white-space:normal}
-#cq-global-summary-btn .cq-global-summary-ico{font-size:17px;line-height:1}
+/* Tres accesos en una sola fila, también en celulares verticales. */
+#view-home #home-activos-panel .home-top-actions.cq-home-actions-three{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:8px!important;
+  align-items:stretch!important;
+  margin:11px 0 17px!important;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  flex:none!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:51px!important;
+  padding:8px 8px!important;
+  margin:0!important;
+  border-radius:13px!important;
+  font-size:11px!important;
+  font-weight:850!important;
+  line-height:1.17!important;
+  letter-spacing:0!important;
+  white-space:normal!important;
+  text-align:left!important;
+  box-shadow:0 5px 13px rgba(28,61,53,.12),inset 0 1px 0 rgba(255,255,255,.25)!important;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action::before{
+  content:none!important;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action .cq-home-action-icon{
+  display:grid;place-items:center;flex:0 0 27px;
+  width:27px;height:29px;
+  font-size:17px;line-height:1;
+  border-radius:8px;
+  background:rgba(255,255,255,.18);
+  color:inherit;
+  text-shadow:none;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action-copy{
+  min-width:0;display:block;line-height:1.18;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action-copy strong{
+  display:block;font-weight:900;
+}
+/* Azul petróleo para identificar claramente la nueva vista consolidada. */
+#view-home #home-activos-panel #cq-global-summary-btn{
+  background:linear-gradient(140deg,#195D82 0%,#2889BE 100%)!important;
+  border:1px solid #3A93C0!important;
+  color:#fff!important;
+  box-shadow:0 6px 15px rgba(26,105,153,.22),inset 0 1px 0 rgba(255,255,255,.28)!important;
+}
+#view-home #home-activos-panel #cq-global-summary-btn:hover{
+  background:linear-gradient(140deg,#164E70,#247CAC)!important;
+  box-shadow:0 9px 19px rgba(26,105,153,.25)!important;
+}
+#view-home #home-activos-panel #cq-action-archived{
+  border:1px solid rgba(200,136,42,.33)!important;
+  background:linear-gradient(145deg,#fffdf9,#FFF4E5)!important;
+  color:#895E21!important;
+  box-shadow:0 5px 13px rgba(139,99,35,.11)!important;
+}
+#view-home #home-activos-panel #cq-action-archived .cq-home-action-icon{
+  background:#FFF0D7;color:#9D6717;
+}
+#view-home #home-activos-panel #cq-action-archived .archivo-count{
+  flex:0 0 auto;
+  min-width:18px!important;
+  height:18px!important;
+  padding:0 4px!important;
+  margin-left:0!important;
+  font-size:9px!important;
+}
+@media(max-width:560px){
+  #view-home #home-activos-panel .home-top-actions.cq-home-actions-three{gap:6px!important;margin:9px 0 15px!important}
+  #view-home #home-activos-panel .cq-home-actions-three .cq-home-action{gap:5px!important;padding:7px 6px!important;font-size:10px!important;min-height:50px!important}
+  #view-home #home-activos-panel .cq-home-actions-three .cq-home-action .cq-home-action-icon{flex-basis:23px;width:23px;height:26px;font-size:15px}
+}
+@media(max-width:370px){
+  #view-home #home-activos-panel .home-top-actions.cq-home-actions-three{gap:4px!important}
+  #view-home #home-activos-panel .cq-home-actions-three .cq-home-action{gap:3px!important;padding:6px 4px!important;font-size:9px!important}
+  #view-home #home-activos-panel .cq-home-actions-three .cq-home-action .cq-home-action-icon{flex-basis:19px;width:19px;height:23px;font-size:13px}
+  #view-home #home-activos-panel #cq-action-archived .archivo-count{min-width:15px!important;height:15px!important;font-size:8px!important;padding:0 2px!important}
+}
 #view-reporte-global{padding-top:6px!important}
 #view-reporte-global .cq-global-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 11px}
 #view-reporte-global .cq-global-title{font-weight:900;font-size:17px;color:var(--green);line-height:1.12}
@@ -16328,7 +16421,6 @@ document.addEventListener('click',function(e){
  #view-reporte-global .cq-global-title{font-size:15px}
  #view-reporte-global .cq-global-back{padding:6px 8px!important;font-size:9px!important}
  #view-reporte-global .cq-global-foot-total>span{font-size:13px}
- #cq-global-summary-btn{font-size:11px!important}
 }
 </style>
 <script id="cq-global-summary-script">
