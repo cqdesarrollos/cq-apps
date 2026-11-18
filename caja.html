@@ -125,7 +125,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
   margin:0 4px;vertical-align:middle;flex:0 0 6px
 }
 .gastos-sync-dot.ok{background:#24a866;box-shadow:0 0 0 2px rgba(36,168,102,.10)}
-.gastos-sync-dot.wait{background:#d6453d;animation:cqCcPulse 1.05s ease-in-out infinite}
+.gastos-sync-dot.wait{background:#d9a52e;box-shadow:0 0 0 2px rgba(217,165,46,.12);animation:cqCcPulse 1.05s ease-in-out infinite}
 @keyframes cqCcPulse{0%,100%{opacity:.45}50%{opacity:1}}
 .sync-note{font-size:9px;color:var(--muted);margin-top:3px;font-weight:700}
 </style>
@@ -1807,6 +1807,8 @@ async function syncMovementCC(m,oldM=null){
 let cqCcGastosRepairTimer=null;
 let cqCcGastosAutoRetryCount=0;
 let cqCcManualRepairRunning=false;
+// No perder un reintento si llega mientras ya se está verificando otra carga.
+let cqCcGastosRepairAfterVerify=false;
 const CQ_CC_GASTOS_MAX_AUTO_RETRIES=3;
 
 function cqCcScheduleGastosRepair(delay=2200,resetBudget=false){
@@ -1970,7 +1972,12 @@ async function verifyGastosCC(options={}){
   if(cqCcManualRepairRunning)return false;
   const repair=options.repair!==false;
   const auto=options.auto===true;
-  if(verifyingCC)return false;
+  if(verifyingCC){
+    // Antes se descartaba esta petición. Si entraba una salida mientras se
+    // comprobaban muchos gastos históricos, el punto podía quedarse rojo.
+    if(auto)cqCcGastosRepairAfterVerify=true;
+    return false;
+  }
   if(!window._cqGastosBridge||window.__cqFirebaseServerReadyCC!==true){
     // No intentar escrituras mientras Firebase no confirmó servidor + sesión.
     return false;
@@ -1988,7 +1995,20 @@ async function verifyGastosCC(options={}){
     const historicosActualizados=cqCcBackfillGastosObraIdHistoricos();
     if(historicosActualizados)save();
 
-    const gastos=db.movements.filter(m=>m.type==='gasto'&&m.gastosObraId);
+    // Una autorreparación comprueba sólo los puntos pendientes/rojos. Antes
+    // leía secuencialmente TODAS las obras de los cientos de movimientos,
+    // demorando la confirmación de una salida nueva durante mucho tiempo.
+    // Priorizar los movimientos recientes y dejar el resto para otras pasadas.
+    const gastos=db.movements.filter(m=>m&&m.type==='gasto'&&m.gastosObraId&&
+      (!auto||m.gastosSyncEstado!=='ok'));
+    if(auto){
+      gastos.sort((a,b)=>movementTimeCC(b)-movementTimeCC(a));
+      gastos.splice(18);
+    }
+    if(!gastos.length){
+      cqCcGastosAutoRetryCount=0;
+      return true;
+    }
     const obraIds=[...new Set(gastos.map(m=>m.gastosObraId))];
     const docs={};
     const f=window._cqGastosBridge;
@@ -2004,7 +2024,12 @@ async function verifyGastosCC(options={}){
     }
 
     let changed=false;
-    for(const m of gastos){
+    for(const candidato of gastos){
+      // Una escritura de Caja puede reemplazar db con un objeto fusionado
+      // mientras esperamos las lecturas: trabajar siempre sobre el registro vivo.
+      const m=db.movements.find(x=>String(x.id||'')===String(candidato.id||''));
+      if(!m||m.type!=='gasto')continue;
+      if(auto&&m.gastosSyncEstado==='ok')continue;
       const arr=docs[m.gastosObraId];
       let next='error',err='';
 
@@ -2056,7 +2081,7 @@ async function verifyGastosCC(options={}){
 
     if(changed){save();render();}
 
-    const quedanMal=gastos.some(m=>m.gastosSyncEstado!=='ok');
+    const quedanMal=(db.movements||[]).some(m=>m&&m.type==='gasto'&&m.gastosObraId&&m.gastosSyncEstado!=='ok');
     if(!quedanMal){
       cqCcGastosAutoRetryCount=0;
     }else if((needsAnotherRetry||auto) && cqCcGastosAutoRetryCount<CQ_CC_GASTOS_MAX_AUTO_RETRIES){
@@ -2064,8 +2089,19 @@ async function verifyGastosCC(options={}){
       cqCcScheduleGastosRepair(2200*cqCcGastosAutoRetryCount,false);
     }
     return !quedanMal;
+  }catch(e){
+    if(auto&&cqCcGastosAutoRetryCount<CQ_CC_GASTOS_MAX_AUTO_RETRIES){
+      cqCcGastosAutoRetryCount++;
+      cqCcScheduleGastosRepair(2200*cqCcGastosAutoRetryCount,false);
+    }
+    throw e;
   }finally{
     verifyingCC=false;
+    if(cqCcGastosRepairAfterVerify){
+      cqCcGastosRepairAfterVerify=false;
+      const pendientes=(db.movements||[]).some(m=>m&&m.type==='gasto'&&m.gastosObraId&&m.gastosSyncEstado!=='ok');
+      if(pendientes)cqCcScheduleGastosRepair(250,false);
+    }
   }
 }
 
@@ -2815,7 +2851,7 @@ function cqCajaLiberarSiListaCC(){
 }
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
-window.__cqCajaBuild='2026-11-12-respaldo-local-indexeddb';
+window.__cqCajaBuild='2026-11-18-gastos-reintento-prioritario';
 
 function cqTimeoutCC(promise,ms,label='Firebase'){
   let t;

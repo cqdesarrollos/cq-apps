@@ -2348,6 +2348,36 @@ body{overflow-x:hidden!important;overflow-y:auto!important}
 </style>
 
 
+<style id="cq-diagnostico-acceso-v3">
+/* Acceso nativo y visible, independiente de los módulos Firebase. */
+.cq-header-unificado{position:relative!important;z-index:80!important}
+#cqSystemStrip{cursor:pointer!important}
+#cqDiagOpen{
+  position:absolute!important;z-index:50!important;right:8px!important;top:calc(100% + 5px)!important;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  min-height:24px;padding:5px 9px;border-radius:999px;
+  border:1px solid rgba(80,238,175,.55);background:rgba(7,48,54,.94);
+  color:#bdf8df;font:800 9px/1 Arial,Helvetica,sans-serif;letter-spacing:.01em;
+  box-shadow:0 4px 13px rgba(0,0,0,.20);cursor:pointer;touch-action:manipulation;
+  -webkit-tap-highlight-color:rgba(0,206,124,.25);
+}
+#cqDiagOpen:active{background:#116248;transform:scale(.96)}
+#cqDiagOpen:focus-visible{outline:2px solid #8dffca;outline-offset:2px}
+@media(max-width:350px){#cqDiagOpen{right:5px!important;font-size:8.4px;padding:5px 7px}}
+</style>
+<script id="cq-diagnostico-apertura-nativa-v3">
+/* Funciona sin esperar a Firebase, sin escribir datos y sin depender del estado de la barra. */
+window.cqOpenFirebaseDiagnostic=function(){
+  var panel=document.getElementById('cqFirebaseModal');
+  if(!panel){window.alert('El panel de diagnóstico no está disponible en esta versión.');return false;}
+  panel.classList.add('open');
+  panel.setAttribute('aria-hidden','false');
+  document.documentElement.style.overflow='hidden';
+  var close=document.getElementById('cqFbClose');
+  if(close)close.focus();
+  return false;
+};
+</script>
 <style id="cq-diagnostico-reparacion-20261118">
 /* Barra interactiva incluso cuando el SDK Firebase tarda en iniciar. */
 #cqSystemStrip{position:relative!important;z-index:6!important;pointer-events:auto!important;touch-action:manipulation!important;-webkit-tap-highlight-color:rgba(49,212,133,.23)!important}
@@ -2374,7 +2404,7 @@ body{overflow-x:hidden!important;overflow-y:auto!important}
   <header class="header cq-header-unificado">
     <div class="header-left cq-header-health">
       <a class="cq-actividad-mini" href="actividad.html" data-cq-gerencia-only="1" aria-label="Abrir actividad" title="Actividad"></a>
-      <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="cqFirebaseModal" title="Tocar para abrir diagnóstico general de Firebase y memoria">
+      <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="cqFirebaseModal" title="Tocar para abrir diagnóstico general de Firebase y memoria" onclick="return window.cqOpenFirebaseDiagnostic()">
         <span class="cq-sys-overall"><span class="cq-sys-dot"></span><span id="cqSysOverall">Sistemas OK</span></span>
         <span class="cq-sys-sep"></span>
         <span class="cq-sys-item">🔥 <b>Firebase</b> <span class="cq-sys-state" id="cqSysFirebase">OK</span></span>
@@ -2383,6 +2413,7 @@ body{overflow-x:hidden!important;overflow-y:auto!important}
         <span class="cq-sys-sep"></span>
         <span class="cq-sys-item">🧠 <b>IA</b> <span class="cq-sys-state" id="cqSysIA">OK</span></span>
       </div>
+      <button type="button" id="cqDiagOpen" data-cq-gerencia-only="1" aria-controls="cqFirebaseModal" aria-haspopup="dialog" onclick="return window.cqOpenFirebaseDiagnostic()" title="Abrir diagnóstico Firebase">Diagnóstico ↗</button>
     </div>
     <div class="cq-header-session">
       <div id="cq-gerencia-user-wrap">
@@ -7527,7 +7558,7 @@ body{overflow-x:hidden!important;background:#061f49!important}
       <div>
         <div class="cq-fb-kicker">CQ DESARROLLOS · SISTEMAS</div>
         <div class="cq-fb-title" id="cqFbTitle">Diagnóstico Firebase</div>
-        <div class="cq-fb-subtitle">Estado de las fuentes de datos y del dispositivo · Solo lectura</div>
+        <div class="cq-fb-subtitle">Estado de las fuentes de datos y del dispositivo · Acceso v3 · Solo lectura</div>
       </div>
       <button id="cqFbClose" class="cq-fb-close" type="button" aria-label="Cerrar diagnóstico">×</button>
     </div>
@@ -7575,16 +7606,15 @@ body{overflow-x:hidden!important;background:#061f49!important}
   'use strict';
   const strip=document.getElementById('cqSystemStrip');
   const panel=document.getElementById('cqFirebaseModal');
+  // El HTML anterior lo anidaba dentro del modal de IA (oculto); extraerlo al body.
+  if(panel && panel.parentElement!==document.body)document.body.appendChild(panel);
   const close=document.getElementById('cqFbClose');
   const run=document.getElementById('cqFbRun');
   if(!strip||!panel)return;
   const el=id=>document.getElementById(id);
   function openPanel(){
     if(getComputedStyle(strip).display==='none')return;
-    panel.classList.add('open');
-    panel.setAttribute('aria-hidden','false');
-    document.documentElement.style.overflow='hidden';
-    close?.focus();
+    window.cqOpenFirebaseDiagnostic();
   }
   function closePanel(){
     panel.classList.remove('open');
