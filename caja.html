@@ -530,7 +530,7 @@ body.cq-caja-cargando > .wrap{visibility:hidden!important}
 </div>
 </section>
 </main>
-<div class="modal-bg" id="movementModal"><div class="modal"><div class="modal-hd"><h3 id="movementTitle">Agregar gasto</h3><button class="close" onclick="closeModal('movementModal')">×</button></div><div class="modal-body"><form class="grid" id="movementForm" onsubmit="saveMovement(event)"><input id="movementId" type="hidden"/><input id="movementType" type="hidden"/><div class="field"><label>Fecha</label><input id="mDate" required="" type="date"/></div><div class="field"><label>Importe</label><input id="mAmount" min="0.01" placeholder="0,00" required="" step="0.01" type="number"/></div><div class="field"><label>Moneda</label><select id="mCurrency"><option value="ars">Pesos (ARS)</option><option value="usd">Dólares (USD)</option></select></div><div class="field" id="mTcField"><label>Tipo de cambio</label><div class="cq-mtc-wrap"><span>$</span><input id="mTc" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="TC Gerencia"/></div><small class="cq-mtc-help" id="mTcHelp">Caja Gerencia · editable para este movimiento</small></div><div class="field full" id="destinationField"><label>Destino del gasto</label><div class="destination"><div class="dest-option office" id="destOffice" onclick="selectDestination('oficina')">🏢 Oficina</div><div class="dest-option work" id="destWork" onclick="selectDestination('obra')">🏗 Obra</div></div><input id="mDestType" type="hidden"/><select class="hide" id="mWork" style="margin-top:9px" onchange="fillCategories();updateMaterialesButtonCC()"><option value="">Seleccionar obra</option></select></div><input id="mConcept" type="hidden"/>
+<div class="modal-bg" id="movementModal"><div class="modal"><div class="modal-hd"><h3 id="movementTitle">Agregar gasto</h3><button class="close" onclick="closeModal('movementModal')">×</button></div><div class="modal-body"><form class="grid" id="movementForm" onsubmit="saveMovement(event)"><div id="cq-caja-config-msg" class="field full" role="status" aria-live="polite" hidden></div><input id="movementId" type="hidden"/><input id="movementType" type="hidden"/><div class="field"><label>Fecha</label><input id="mDate" required="" type="date"/></div><div class="field"><label>Importe</label><input id="mAmount" min="0.01" placeholder="0,00" required="" step="0.01" type="number"/></div><div class="field"><label>Moneda</label><select id="mCurrency"><option value="ars">Pesos (ARS)</option><option value="usd">Dólares (USD)</option></select></div><div class="field" id="mTcField"><label>Tipo de cambio</label><div class="cq-mtc-wrap"><span>$</span><input id="mTc" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="TC Gerencia"/></div><small class="cq-mtc-help" id="mTcHelp">Caja Gerencia · editable para este movimiento</small></div><div class="field full" id="destinationField"><label>Destino del gasto</label><div class="destination"><div class="dest-option office" id="destOffice" onclick="selectDestination('oficina')">🏢 Oficina</div><div class="dest-option work" id="destWork" onclick="selectDestination('obra')">🏗 Obra</div></div><input id="mDestType" type="hidden"/><select class="hide" id="mWork" style="margin-top:9px" onchange="fillCategories();updateMaterialesButtonCC()"><option value="">Seleccionar obra</option></select></div><input id="mConcept" type="hidden"/>
 <div class="field full" id="categoryField"><label>Categoría</label><select id="mCategory" onchange="fillSubrubros();updateMaterialesButtonCC()"><option value="">Seleccionar categoría</option></select></div>
 <div class="field full" id="subrubroField"><label>Subrubro</label>
 <div class="cq-search-combo">
@@ -575,6 +575,11 @@ body.cq-caja-cargando > .wrap{visibility:hidden!important}
 #cq-caja-save-feedback.ok{background:#116a46}
 #cq-caja-save-hint{font:700 11px/1.4 system-ui,sans-serif;color:#a83227;padding:0 18px 7px;display:none}
 #movementSaveBtn:disabled{opacity:.65;cursor:wait}
+#cq-caja-config-msg{grid-column:1/-1!important;order:-1;padding:8px 11px;
+ border:1px solid #d9e8dc;background:#f3f8f5;color:#315a49;
+ border-radius:9px;font:700 11px/1.4 system-ui,sans-serif}
+#cq-caja-config-msg[hidden]{display:none!important}
+#cq-caja-config-msg.error{border-color:#f0c8c1;background:#fff5f3;color:#9d3229}
 </style>
 <div id="cq-caja-save-feedback" role="status" aria-live="polite"></div>
 <script id="cq-guardar-movimientos-feedback">
@@ -584,9 +589,15 @@ body.cq-caja-cargando > .wrap{visibility:hidden!important}
     const el=document.getElementById('cq-caja-save-feedback');
     if(!el)return;
     clearTimeout(hideTimer);
-    el.className='show '+(kind||'wait');
+    // La confirmación normal ya se ve en el historial y en el estado ON/OFF.
+    // No mostrar cartel al pie por "Guardando" ni "Guardado"; mantener errores reales.
+    if(kind!=='err'){
+      el.className='';
+      el.textContent='';
+      return;
+    }
+    el.className='show err';
     el.textContent=String(message||'');
-    if(kind==='ok')hideTimer=setTimeout(()=>{el.classList.remove('show');},3500);
   };
   const form=document.getElementById('movementForm');
   if(form)form.addEventListener('invalid',function(ev){
@@ -1033,7 +1044,17 @@ const CAT_LABELS_CC={
   ext:'Mano de obra extras',
   ofi:'Oficina / gastos generales'
 };
+// Caché de interfaz por sesión: no ocupa el localStorage que guarda movimientos.
+// La copia canónica de obras y subrubros sigue siendo la de Gastos en Firebase.
+const CQ_GASTOS_CONFIG_SESSION_CC='cq_caja_gastos_config_ui_v2';
 let gastosConfigCC=null;
+let gastosConfigEnCursoCC=null;
+try{
+  const anterior=JSON.parse(sessionStorage.getItem(CQ_GASTOS_CONFIG_SESSION_CC)||'null');
+  if(anterior&&Array.isArray(anterior.obras)&&anterior.subrubros&&typeof anterior.subrubros==='object'){
+    gastosConfigCC=anterior;
+  }
+}catch(e){}
 
 function obraTextCC(o){return String([o?.id,o?.label,o?.short].filter(Boolean).join(' ')).toLowerCase()}
 function isOficinaCC(id){return id==='oficina'||obraTextCC((gastosConfigCC?.obras||[]).find(o=>o.id===id)).includes('oficina')}
@@ -1043,18 +1064,35 @@ function categoriasPermitidasCC(id){
   if(isAcopioCC(id))return Object.keys(CAT_LABELS_CC).filter(c=>c!=='ofi'&&c!=='mo'&&c!=='ext');
   return Object.keys(CAT_LABELS_CC).filter(c=>c!=='ofi');
 }
-async function loadGastosConfigCC(){
-  if(gastosConfigCC)return gastosConfigCC;
-  if(!window._cqGastosBridge)return null;
-  const f=window._cqGastosBridge;
-  const snap=await f.getDoc(f.doc(f.db,'config','app'));
-  if(!snap.exists())throw new Error('No existe la configuración de Gastos en Firebase.');
-  const d=snap.data()||{};
-  if(!Array.isArray(d.obras)||!d.subrubros)throw new Error('La configuración de Gastos está incompleta.');
-  gastosConfigCC={obras:d.obras,subrubros:d.subrubros,defaultTC:Number(d.defaultTC)||0};
-  // Obras y subrubros siguen viniendo de Gastos.
-  // El TC viene exclusivamente de Caja Gerencia.
-  return gastosConfigCC;
+async function loadGastosConfigCC(forzarActualizacion=false){
+  // Reutilizar configuración cargada y no volver a esperar un GET por cada salida.
+  if(gastosConfigCC&&!forzarActualizacion)return gastosConfigCC;
+  if(gastosConfigEnCursoCC)return gastosConfigEnCursoCC;
+  gastosConfigEnCursoCC=(async()=>{
+    // El módulo de Gastos puede terminar de inicializar después del de Caja.
+    // Esperarlo sólo para los campos del formulario, sin retrasar su apertura.
+    if(!window._cqGastosBridge){
+      await new Promise((resolve,reject)=>{
+        let intervalo=null;
+        const limpiar=()=>{clearInterval(intervalo);clearTimeout(limite);};
+        const limite=setTimeout(()=>{limpiar();reject(new Error('El módulo de Gastos no inició la conexión.'));},12000);
+        intervalo=setInterval(()=>{if(window._cqGastosBridge){limpiar();resolve();}},100);
+      });
+    }
+    const f=window._cqGastosBridge;
+    const snap=await f.getDoc(f.doc(f.db,'config','app'));
+    if(!snap.exists())throw new Error('No existe la configuración de Gastos en Firebase.');
+    const d=snap.data()||{};
+    if(!Array.isArray(d.obras)||!d.subrubros||typeof d.subrubros!=='object')
+      throw new Error('La configuración de Gastos está incompleta.');
+    const actual={obras:d.obras,subrubros:d.subrubros,defaultTC:Number(d.defaultTC)||0};
+    gastosConfigCC=actual;
+    try{sessionStorage.setItem(CQ_GASTOS_CONFIG_SESSION_CC,JSON.stringify(actual));}catch(e){}
+    // El TC continúa tomando exclusivamente Caja Gerencia.
+    return actual;
+  })();
+  try{return await gastosConfigEnCursoCC;}
+  finally{gastosConfigEnCursoCC=null;}
 }
 function selectedObraIdCC(){
   const dest=document.getElementById('mDestType').value;
@@ -2131,7 +2169,40 @@ async function openMovement(type,id=''){
   document.getElementById('subrubroField').classList.toggle('hide',!isGasto);
   document.getElementById('mNotesLabel').textContent=isGasto?'Comentario':'Observaciones';
   document.getElementById('mNotes').placeholder=isGasto?'Comentario opcional':'Detalle opcional';
-  try{if(isGasto)await loadGastosConfigCC()}catch(e){alert('No se pudo cargar la configuración de Gastos desde Firebase.');return}
+
+  // Mostrar el formulario inmediatamente; nunca bloquear el botón de salida
+  // esperando obras o subrubros de una lectura de red.
+  const modal=document.getElementById('movementModal');
+  const apertura=String((Number(modal.dataset.cqApertura)||0)+1);
+  modal.dataset.cqApertura=apertura;
+  modal.classList.add('open');
+  const avisoConfig=document.getElementById('cq-caja-config-msg');
+  const btnGuardar=document.getElementById('movementSaveBtn');
+  const faltaConfig=isGasto&&!gastosConfigCC;
+  if(avisoConfig){
+    avisoConfig.hidden=!faltaConfig;
+    avisoConfig.classList.remove('error');
+    avisoConfig.textContent=faltaConfig?'Preparando obras y subrubros…':'';
+  }
+  if(btnGuardar)btnGuardar.disabled=!!faltaConfig;
+  try{
+    if(isGasto)await loadGastosConfigCC();
+  }catch(e){
+    if(modal.dataset.cqApertura!==apertura||!modal.classList.contains('open'))return;
+    if(!gastosConfigCC){
+      console.warn('Caja Chica · configuración de Gastos',e);
+      if(avisoConfig){
+        avisoConfig.hidden=false;
+        avisoConfig.classList.add('error');
+        avisoConfig.textContent='No se pudieron cargar obras y subrubros. Cerrá el formulario y volvé a abrirlo para reintentar.';
+      }
+      if(btnGuardar)btnGuardar.disabled=true;
+      return;
+    }
+  }
+  // Si se cerró o se abrió otro movimiento mientras llegaba la respuesta,
+  // no sobrescribir la selección del formulario nuevo.
+  if(modal.dataset.cqApertura!==apertura||!modal.classList.contains('open'))return;
   if(isGasto){
     fillWorksFromGastos(m?.gastosObraId&&m.gastosObraId!=='oficina'?m.gastosObraId:'');
     selectDestination(m?.destType||'');
@@ -2142,7 +2213,8 @@ async function openMovement(type,id=''){
   }else{
     document.getElementById('mConcept').value='Ingreso de efectivo';
   }
-  document.getElementById('movementModal').classList.add('open')
+  if(avisoConfig){avisoConfig.hidden=true;avisoConfig.classList.remove('error');}
+  if(btnGuardar)btnGuardar.disabled=false;
 }
 function selectDestination(v){
   currentDestination=v;
@@ -3676,7 +3748,7 @@ async function announce(){
   try{
     await waitReady();
     document.dispatchEvent(new Event("cq-gastos-bridge-ready"));
-    try{await window.loadGastosConfigCC?.();}catch(e){console.warn("Config Gastos Caja Chica",e)}
+    try{await window.loadGastosConfigCC?.(true);}catch(e){console.warn("Config Gastos Caja Chica",e)}
   }catch(e){console.warn('Bridge Gastos esperando Firebase',e);}
 }
 document.addEventListener('cq-firebase-server-ready',announce);
@@ -4601,7 +4673,12 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
   // Al editar, cargar la obra existente y su importe.
   const oldOpenMovement=window.openMovement;
   window.openMovement=async function(type,id=''){
-    await oldOpenMovement(type,id);
+    const pendiente=oldOpenMovement(type,id);
+    const modal=document.getElementById('movementModal');
+    const apertura=modal?.dataset.cqApertura;
+    await pendiente;
+    // Una apertura anterior no puede modificar un formulario posterior.
+    if(!modal?.classList.contains('open')||modal.dataset.cqApertura!==apertura)return;
     ensureUI();
 
     const m=id?db.movements.find(x=>x.id===id):null;
@@ -4743,6 +4820,8 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     }catch(e){
       console.warn('Caja Chica · no se pudo refrescar TC antes del gasto',e);
     }
+    // Si el usuario corrigió el TC mientras respondía Firebase, conservarlo.
+    if(cqTcUsuarioEditando)return;
     const tc=tcGerenciaActual();
     if(tc>0)setTcForm(tc,'gerencia');
   }
@@ -4791,18 +4870,25 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
       });
     }
 
-    const r=await prevOpen(type,id);
+    const pendiente=prevOpen(type,id);
+    const modal=document.getElementById('movementModal');
+    const apertura=modal?.dataset.cqApertura;
+    const r=await pendiente;
+    if(!modal?.classList.contains('open')||modal.dataset.cqApertura!==apertura)return r;
 
     const m=id?db.movements.find(x=>x.id===id):null;
     if(m&&Number(m.tc)>0){
       cqTcUsuarioEditando=true;
       setTcForm(Number(m.tc),'movimiento');
     }else{
-      cqTcUsuarioEditando=false;
-      // El modal ya está abierto: refrescar sin bloquear la interacción.
-      cargarTcGerenciaEnFormulario(true).catch(function(e){
-        console.warn('Caja Chica · actualización TC en segundo plano',e);
-      });
+      // Para un movimiento nuevo, el TC ya se está leyendo desde el primer toque.
+      // No iniciar una segunda lectura remota al abrir el formulario.
+      if(id){
+        cqTcUsuarioEditando=false;
+        cargarTcGerenciaEnFormulario(true).catch(function(e){
+          console.warn('Caja Chica · actualización TC en segundo plano',e);
+        });
+      }
     }
 
     // El TC se puede revisar/modificar tanto en salida como en ingreso.
