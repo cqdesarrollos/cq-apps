@@ -2413,12 +2413,12 @@ window.cqOpenFirebaseDiagnostic=function(){
         <span class="cq-sys-sep"></span>
         <span class="cq-sys-item">🧠 <b>IA</b> <span class="cq-sys-state" id="cqSysIA">OK</span></span>
       </div>
-      <button type="button" id="cqDiagOpen" data-cq-gerencia-only="1" aria-controls="cqFirebaseModal" aria-haspopup="dialog" onclick="return window.cqOpenFirebaseDiagnostic()" title="Abrir diagnóstico Firebase">Diagnóstico ↗</button>
+      <button type="button" id="cqDiagOpen" data-cq-gerencia-only="1" aria-label="Abrir diagnóstico Firebase" aria-controls="cqFirebaseModal" aria-haspopup="dialog" onclick="return window.cqOpenFirebaseDiagnostic()" title="Diagnóstico de Firebase"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M2 12h4l3-7 5 14 3-7h5"/></svg></button>
     </div>
     <div class="cq-header-session">
       <div id="cq-gerencia-user-wrap">
         <div id="cq-gerencia-user"></div>
-        <button id="cq-gerencia-salir" type="button">Salir</button>
+        <button id="cq-gerencia-salir" type="button" aria-label="Salir / cerrar sesión" title="Cerrar sesión"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5"/><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/></svg></button>
       </div>
       <div class="status"><span class="dot"></span> Online</div>
     </div>
@@ -7780,6 +7780,93 @@ window.cqFirebaseDiagScan=scan;
 getLocal();
 render();
 </script>
+
+
+<style id="cq-header-iconos-juntos-v9">
+/* Barra única aprobada: actividad, estados, diagnóstico, salir. 
+   Mantiene los IDs y eventos originales, cambia únicamente su presentación. */
+.cq-header-unificado{
+  display:flex!important;align-items:center!important;justify-content:space-between!important;
+  flex-wrap:nowrap!important;gap:5px!important;min-width:0!important;width:100%!important;
+  min-height:35px!important;margin-bottom:5px!important;
+}
+.cq-header-unificado .header-left.cq-header-health{
+  display:flex!important;align-items:center!important;flex:1 1 auto!important;
+  min-width:0!important;width:auto!important;max-width:none!important;gap:5px!important;
+}
+.cq-header-unificado .cq-actividad-mini{
+  width:30px!important;height:30px!important;min-width:30px!important;flex:0 0 30px!important;
+}
+.cq-header-unificado #cqSystemStrip{
+  flex:1 1 auto!important;width:auto!important;min-width:0!important;max-width:none!important;
+  height:30px!important;min-height:30px!important;overflow:hidden!important;
+  padding:3px 7px!important;margin:0!important;gap:5px!important;
+  white-space:nowrap!important;justify-content:space-evenly!important;
+  font-size:8px!important;
+}
+.cq-header-unificado #cqSystemStrip .cq-sys-overall{
+  min-width:0!important;flex:0 1 auto!important;white-space:nowrap!important;gap:4px!important;
+}
+.cq-header-unificado #cqSystemStrip .cq-sys-item,
+.cq-header-unificado #cqSystemStrip .cq-sys-state,
+.cq-header-unificado #cqSystemStrip .cq-sys-item b {font-size:inherit!important;white-space:nowrap!important;}
+.cq-header-unificado #cqSystemStrip .cq-sys-sep{height:13px!important;flex:0 0 1px!important}
+.cq-header-unificado .cq-header-session{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  flex:0 0 auto!important;margin:0!important;padding:0!important;gap:0!important;
+}
+.cq-header-unificado #cq-gerencia-user-wrap{display:flex;align-items:center;gap:0!important}
+.cq-header-unificado #cq-gerencia-user-wrap #cq-gerencia-user{display:none!important;width:0!important;min-width:0!important;margin:0!important;padding:0!important;}
+.cq-header-unificado #cqDiagOpen,
+.cq-header-unificado #cq-gerencia-salir{
+  position:static!important;inset:auto!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+  flex:0 0 30px!important;min-width:30px!important;width:30px!important;min-height:30px!important;height:30px!important;
+  margin:0!important;padding:0!important;box-sizing:border-box!important;
+  align-items:center!important;justify-content:center!important;border-radius:50%!important;
+  border:1px solid rgba(87,192,222,.45)!important;
+  background:linear-gradient(145deg,rgba(11,61,81,.76),rgba(7,40,65,.80))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 3px 9px rgba(0,0,0,.13)!important;
+  cursor:pointer!important;touch-action:manipulation!important;font-size:0!important;
+  color:#e2eef4!important;letter-spacing:0!important;
+}
+.cq-header-unificado #cqDiagOpen{color:#45e9a4!important;}
+.cq-header-unificado #cqDiagOpen svg,
+.cq-header-unificado #cq-gerencia-salir svg{
+  display:block;width:19px;height:19px;min-width:19px;min-height:19px;pointer-events:none;
+}
+.cq-header-unificado #cqDiagOpen:active,
+.cq-header-unificado #cq-gerencia-salir:active{
+  transform:scale(.94)!important;background:rgba(20,90,85,.9)!important;
+}
+.cq-header-unificado #cqDiagOpen:focus-visible,
+.cq-header-unificado #cq-gerencia-salir:focus-visible{outline:2px solid #72e9b8!important;outline-offset:2px!important}
+@media(max-width:520px){
+  .cq-header-unificado{gap:4px!important;min-height:28px!important}
+  .cq-header-unificado .header-left.cq-header-health{gap:4px!important}
+  .cq-header-unificado .cq-actividad-mini{width:27px!important;height:27px!important;min-width:27px!important;flex-basis:27px!important}
+  .cq-header-unificado #cqSystemStrip{
+    height:27px!important;min-height:27px!important;font-size:7.1px!important;
+    gap:3px!important;padding:3px 5px!important;
+  }
+  .cq-header-unificado #cqSystemStrip .cq-sys-overall{gap:3px!important}
+  .cq-header-unificado #cqDiagOpen,
+  .cq-header-unificado #cq-gerencia-salir{width:27px!important;min-width:27px!important;height:27px!important;min-height:27px!important;flex-basis:27px!important}
+  .cq-header-unificado #cqDiagOpen svg,.cq-header-unificado #cq-gerencia-salir svg{width:17px;height:17px;min-width:17px;min-height:17px}
+}
+@media(max-width:375px){
+  .cq-header-unificado{gap:3px!important}
+  .cq-header-unificado .header-left.cq-header-health{gap:3px!important}
+  .cq-header-unificado #cqSystemStrip{font-size:6.5px!important;gap:2px!important;padding:2px 4px!important}
+  .cq-header-unificado .cq-actividad-mini{width:25px!important;height:25px!important;min-width:25px!important;flex-basis:25px!important}
+  .cq-header-unificado #cqDiagOpen,.cq-header-unificado #cq-gerencia-salir{width:25px!important;height:25px!important;min-width:25px!important;min-height:25px!important;flex-basis:25px!important}
+}
+@media(orientation:landscape) and (min-width:768px){
+  .cq-header-unificado{gap:7px!important}
+  .cq-header-unificado .header-left.cq-header-health{gap:7px!important;max-width:none!important}
+  .cq-header-unificado #cqSystemStrip{height:34px!important;min-height:34px!important;font-size:8.8px!important;gap:8px!important}
+  .cq-header-unificado #cqDiagOpen,.cq-header-unificado #cq-gerencia-salir{width:32px!important;height:32px!important;min-height:32px!important;min-width:32px!important;flex-basis:32px!important}
+}
+</style>
 
 </body>
 </html>
