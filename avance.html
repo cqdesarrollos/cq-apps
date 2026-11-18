@@ -5464,7 +5464,12 @@ function persistConfig(){
 }
 function currentObra(){ return obrasConfig.find(o=>o.id===curObraId) || obrasConfig[0]; }
 function persist() {
-  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){cqProtectWrite('obra');return;}
+  // true / false en modo local; Promise<boolean> con Firebase.
+  // Quien necesite verificar el guardado (pagos por fuera) puede esperar el resultado.
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){
+    cqProtectWrite('obra');
+    return false;
+  }
   const id=curObraId;
   const meta=obrasConfig.find(o=>o.id===id);
   if(Number(state?.tipoPlantas || meta?.tipoPlantas)===2 &&
@@ -5486,21 +5491,37 @@ function persist() {
   }
   state._cqUpdatedAt=Date.now();
   estadosObras[id] = state;
-  localStorage.setItem('mano_obra_actual', id);
-  localStorage.setItem('mano_obra_'+id, JSON.stringify(state));
-  // Mantiene compatibilidad con tu versión anterior para la primera obra.
-  if(id === obrasConfig[0].id) localStorage.setItem('simon_state', JSON.stringify(state));
+
+  // El caché local no debe impedir guardar en Firebase si el navegador se queda
+  // sin cuota. Antes, un QuotaExceededError detenía el guardado sin aviso.
+  let localOk=true;
+  try{
+    localStorage.setItem('mano_obra_actual', id);
+    const serialized=JSON.stringify(state);
+    localStorage.setItem('mano_obra_'+id, serialized);
+    if(id === obrasConfig[0].id) localStorage.setItem('simon_state', serialized);
+  }catch(e){
+    localOk=false;
+    console.warn('Avances: caché local sin espacio, se intenta guardar en Firebase',e);
+  }
   const token=cqMarkObraDirty(id);
-  recordCurrentObraMutationForHistory();
-  if(isFirebaseEnabled() && window._dbReady) {
+  try{recordCurrentObraMutationForHistory();}
+  catch(e){console.warn('Avances: historial local no disponible',e);}
+
+  if(isFirebaseEnabled() && window._dbReady){
     markSaving();
     const snapshot=JSON.parse(JSON.stringify(state));
-    cqWriteObraRemote(id,snapshot,token)
-      .then(markSaved)
-      .catch(cqSaveFailed);
-  } else {
-    markLocal();
+    return cqWriteObraRemote(id,snapshot,token)
+      .then(()=>{markSaved();return true;})
+      .catch(e=>{cqSaveFailed(e);return false;});
   }
+  if(!localOk){
+    markError();
+    alert('No se pudo guardar: el almacenamiento local está lleno. No se modificaron los datos en Firebase.');
+    return false;
+  }
+  markLocal();
+  return true;
 }
 
 
@@ -6647,29 +6668,65 @@ document.getElementById('modal-fuera').addEventListener('click', e=>{
 });
 
 let pagoFueraEditId = null;
+let pagoFueraSaving = false;
 
-function savePagoFuera(){
+async function savePagoFuera(){
+  if(pagoFueraSaving) return;
   const fecha   = document.getElementById('pf-fecha').value;
   const tipo    = document.getElementById('pf-tipo').value;
-  const monto   = parseFloat(document.getElementById('pf-monto').value);
+  const monto   = Number(document.getElementById('pf-monto').value);
   const concepto= document.getElementById('pf-concepto').value.trim() || (tipo==='favor'?'A favor':'Adelanto');
-  if(!monto || monto<=0){ alert('Ingresá un monto válido.'); return; }
-
-  if(pagoFueraEditId){
-    const idx = state.pagosFuera.findIndex(p => p.id === pagoFueraEditId);
-    if(idx >= 0){
-      state.pagosFuera[idx] = { ...state.pagosFuera[idx], fecha, tipo, monto, concepto, editable:true };
-    }
-    pagoFueraEditId = null;
-  } else {
-    state.pagosFuera.push({ id: Date.now().toString(), fecha, tipo, monto, concepto, editable:true });
+  if(!fecha){alert('Seleccioná la fecha del pago.');return;}
+  if(!Number.isFinite(monto) || monto<=0){alert('Ingresá un monto válido.');return;}
+  if(!['favor','contra'].includes(tipo)){alert('Seleccioná un tipo válido.');return;}
+  if(isFirebaseEnabled() && !cqFirebaseWriteAllowed()){
+    cqProtectWrite('pago fuera de avance');
+    alert('Firebase todavía no está listo para guardar. El pago no se registró; volvé a intentar cuando esté conectado.');
+    return;
   }
 
-  persist();
-  closeModal();
-  renderFinanzas();
-  renderKPIs();
-  refreshConformeTaskUI();
+  const obraAlInicio=curObraId;
+  const pagosAnteriores=deepClone(state.pagosFuera||[]);
+  const editId=pagoFueraEditId;
+  const btn=document.querySelector('#modal-fuera .modal-footer .btn-primary');
+  pagoFueraSaving=true;
+  let confirmado=false;
+  if(btn){btn.disabled=true;btn.textContent='Guardando…';}
+  try{
+    if(editId){
+      const idx=state.pagosFuera.findIndex(p=>String(p.id)===String(editId));
+      if(idx<0) throw new Error('No se encontró el pago a modificar. Recargá la obra.');
+      state.pagosFuera[idx]={...state.pagosFuera[idx],fecha,tipo,monto,concepto,editable:true};
+    }else{
+      const id=Date.now().toString()+'_'+Math.random().toString(36).slice(2,8);
+      state.pagosFuera.push({id,fecha,tipo,monto,concepto,editable:true});
+    }
+
+    // No informar éxito ni cerrar el formulario hasta que Firebase confirme.
+    const ok=await persist();
+    if(ok!==true) throw new Error('El pago no quedó confirmado en Firebase.');
+    confirmado=true;
+    closeModal();
+    try{
+      if(curObraId===obraAlInicio){
+        renderFinanzas();
+        renderKPIs();
+        refreshConformeTaskUI();
+      }
+    }catch(uiError){console.warn('El pago se guardó, pero falló la actualización visual',uiError);}
+  }catch(e){
+    console.error('Avances: error al guardar pago por fuera',e);
+    if(!confirmado && curObraId===obraAlInicio){
+      state.pagosFuera=pagosAnteriores;
+      estadosObras[obraAlInicio]=state;
+      try{localStorage.setItem('mano_obra_'+obraAlInicio,JSON.stringify(state));}catch(_){}
+    }
+    // cqSaveFailed ya muestra el error de Firebase y bloquea nuevas escrituras.
+    if(!cqSyncErrorText) alert('No se pudo guardar el pago. '+String(e?.message||e));
+  }finally{
+    pagoFueraSaving=false;
+    if(btn){btn.disabled=false;btn.textContent=editId?'Guardar cambios':'Guardar';}
+  }
 }
 function editPagoFuera(id){
   const p = state.pagosFuera.find(x => x.id === id);
