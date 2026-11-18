@@ -1570,6 +1570,27 @@ button[onclick*="crearBackupManual"]{
   }
   .bulk-sub-row{grid-template-columns:1fr;gap:6px;padding:9px 10px}
 }
+
+/* Carga masiva: una fila de entrada equivale siempre a un material. */
+#modal-carga-masiva-mat .bulk-mat-col textarea{
+  white-space:pre!important;
+  overflow-wrap:normal!important;
+  overflow-x:auto;
+  tab-size:2;
+}
+#modal-carga-masiva-mat #bulk-mat-precios{background:#F6FBF7}
+#modal-carga-masiva-mat #bulk-mat-cantidades{background:#FFFDF5}
+.cq-bulk-review{margin:12px 0 8px;padding:10px 11px;border:1px solid #D6E8DA;border-radius:12px;background:#F8FCF9}
+.cq-bulk-review-hd{font-size:11px;font-weight:900;color:var(--green);margin-bottom:7px}
+.cq-bulk-review-note{font-size:10px;color:#688474;line-height:1.45}
+.cq-bulk-review-scroll{overflow-x:auto;max-height:245px;overflow-y:auto;border:1px solid #E3EAE3;border-radius:8px;background:#fff}
+.cq-bulk-review table{width:100%;border-collapse:collapse;min-width:510px}
+.cq-bulk-review th,.cq-bulk-review td{padding:6px 7px;border-bottom:1px solid #EDF0EA;text-align:left;font-size:10px;white-space:nowrap}
+.cq-bulk-review th{position:sticky;top:0;background:#EDF6EF!important;color:#4D7963;font-weight:900}
+.cq-bulk-review td.num{text-align:right;font-family:var(--mono);font-size:10px}
+.cq-bulk-review tr.cq-bulk-error td{background:#FFF1EB;color:#A23D29}
+.cq-bulk-review tr.cq-bulk-error td:first-child{font-weight:900}
+.cq-bulk-review-warning{color:#AD3E27;font-weight:800;font-size:10px;margin-top:7px}
 </style>
 
 
@@ -3516,37 +3537,42 @@ body.cq-acopio-cargando{overflow:hidden!important}
     </div>
     <div class="mbody">
       <div style="font-size:11px;color:#7A9E82;line-height:1.45;margin-bottom:12px">
-        Pegá cada dato en su columna y en el mismo orden: línea 1 con línea 1, línea 2 con línea 2, etc.
-        En <b>Cantidad total</b>, dejá la línea vacía si el material es abierto; si cargás una cantidad, ese artículo tendrá stock controlado y las salidas se descontarán de ese total. Elegí una sola regla para calcular el precio acordado.
+        Pegá los <b>códigos</b>, <b>artículos</b>, <b>precios unitarios</b> y <b>cantidades</b> en sus respectivas columnas, siempre una línea por artículo. Cada línea corresponde a la misma fila en las cuatro columnas.
+        En <b>Cantidad total</b>, dejá <b>una línea vacía en esa misma posición</b> si el material es abierto; si cargás una cantidad, ese artículo tendrá stock controlado y las salidas se descontarán de ese total. Elegí una sola regla para calcular el precio acordado.
       </div>
       <div class="cq-bulk-rule-box">
         <label class="cq-bulk-rule"><input type="checkbox" id="bulk-regla-ferro" checked onchange="cqBulkElegirRegla('ferro')"><span><b>Ferroconos</b><small>Precio acordado = precio cargado ÷ 1,21</small></span></label>
         <label class="cq-bulk-rule"><input type="checkbox" id="bulk-regla-deplano" onchange="cqBulkElegirRegla('deplano')"><span><b>Deplano</b><small>Precio acordado = (precio cargado ÷ 1,21) × 1,105</small></span></label>
         <label class="cq-bulk-rule"><input type="checkbox" id="bulk-regla-custom" onchange="cqBulkElegirRegla('custom')"><span><b>Agregar regla</b><small>Definir divisor y multiplicador</small></span></label>
         <div id="bulk-regla-custom-fields" class="cq-bulk-custom-fields" style="display:none">
-          <div class="fld"><label>Dividir por</label><input type="number" id="bulk-regla-dividir" min="0.000001" step="0.001" value="1"></div>
-          <div class="fld"><label>Multiplicar por</label><input type="number" id="bulk-regla-multiplicar" min="0" step="0.001" value="1"></div>
+          <div class="fld"><label>Dividir por</label><input type="number" id="bulk-regla-dividir" oninput="cqBulkActualizarVistaPrevia()" min="0.000001" step="0.001" value="1"></div>
+          <div class="fld"><label>Multiplicar por</label><input type="number" id="bulk-regla-multiplicar" oninput="cqBulkActualizarVistaPrevia()" min="0" step="0.001" value="1"></div>
         </div>
       </div>
 
       <div class="bulk-mat-grid">
         <div class="bulk-mat-col">
           <label>Códigos</label>
-          <textarea id="bulk-mat-codigos" rows="10" placeholder="2303583104&#10;2303583105&#10;2303583106"></textarea>
+          <textarea id="bulk-mat-codigos" wrap="off" oninput="cqBulkActualizarVistaPrevia()" rows="10" placeholder="2303583104&#10;2303583105&#10;2303583106"></textarea>
         </div>
         <div class="bulk-mat-col">
           <label>Artículos</label>
-          <textarea id="bulk-mat-articulos" rows="10" placeholder="Ladrillo cerámico 18&#10;Ladrillo cerámico 12&#10;Cemento"></textarea>
+          <textarea id="bulk-mat-articulos" wrap="off" oninput="cqBulkActualizarVistaPrevia()" rows="10" placeholder="Ladrillo cerámico 18&#10;Ladrillo cerámico 12&#10;Cemento"></textarea>
         </div>
         <div class="bulk-mat-col">
           <label>Precio unitario</label>
-          <textarea id="bulk-mat-precios" rows="10" inputmode="decimal" enterkeyhint="next" placeholder="1250&#10;980&#10;8500"></textarea>
+          <textarea id="bulk-mat-precios" wrap="off" oninput="cqBulkActualizarVistaPrevia()" rows="10" inputmode="decimal" enterkeyhint="next" placeholder="1250&#10;980&#10;8500"></textarea>
           <button type="button" class="bulk-next-price" onclick="bulkSiguientePrecio()">↓ Siguiente renglón</button>
         </div>
         <div class="bulk-mat-col">
           <label>Cantidad total <span style="font-weight:700;color:#A8BFA8">(opcional)</span></label>
-          <textarea id="bulk-mat-cantidades" rows="10" inputmode="decimal" placeholder="120&#10;&#10;50"></textarea>
+          <textarea id="bulk-mat-cantidades" wrap="off" oninput="cqBulkActualizarVistaPrevia()" rows="10" inputmode="decimal" placeholder="120&#10;&#10;50"></textarea>
         </div>
+      </div>
+
+      <div id="cq-bulk-revision" class="cq-bulk-review" aria-live="polite">
+        <div class="cq-bulk-review-hd">Revisión antes de guardar</div>
+        <div id="cq-bulk-revision-contenido" class="cq-bulk-review-note">Pegá los datos y comprobá acá el precio y la cantidad de cada artículo.</div>
       </div>
 
       <div class="bulk-sub-auto-note">
@@ -6244,12 +6270,11 @@ function bulkSiguientePrecio(){
   if(!el)return;
   var start=el.selectionStart==null?el.value.length:el.selectionStart;
   var end=el.selectionEnd==null?start:el.selectionEnd;
-  var before=el.value.slice(0,start),after=el.value.slice(end);
-  if(before && !before.endsWith('\n'))before+='\n';
-  el.value=before+after;
-  var pos=before.length;
+  // Insertar SIEMPRE un renglón, incluso si el anterior ya era vacío.
+  // La versión anterior perdía las líneas vacías y desalineaba precios y cantidades.
+  el.setRangeText('\n',start,end,'end');
+  el.dispatchEvent(new Event('input',{bubbles:true}));
   el.focus();
-  try{el.setSelectionRange(pos,pos);}catch(e){}
 }
 document.addEventListener('cq-acopio-datos-confirmados',function(){
   cargarConfigGastosAcopio().then(function(){
@@ -6775,6 +6800,7 @@ function cqBulkElegirRegla(tipo){
   });
   var fields=document.getElementById('bulk-regla-custom-fields');
   if(fields)fields.style.display=(tipo==='custom')?'grid':'none';
+  cqBulkActualizarVistaPrevia();
 }
 function cqBulkReglaActual(){
   if(document.getElementById('bulk-regla-deplano')&&document.getElementById('bulk-regla-deplano').checked)return 'deplano';
@@ -6808,26 +6834,36 @@ function openCargaMasivaMateriales(){
   cqBulkElegirRegla('ferro');
   var d=document.getElementById('bulk-regla-dividir'),m=document.getElementById('bulk-regla-multiplicar');
   if(d)d.value='1';if(m)m.value='1';
+  cqBulkActualizarVistaPrevia();
   openModal('modal-carga-masiva-mat');
   setTimeout(function(){document.getElementById('bulk-mat-codigos').focus();},100);
 }
 
 function parsePrecioMasivo(value){
-  var s=String(value||'').trim().replace(/\s/g,'');
-  if(!s)return 0;
-  s=s.replace(/\$/g,'');
-  if(s.indexOf(',')>=0 && s.indexOf('.')>=0){
-    if(s.lastIndexOf(',')>s.lastIndexOf('.')){
-      s=s.replace(/\./g,'').replace(',','.');
+  var s=String(value==null?'':value).trim()
+    .replace(/\s|\u00a0/g,'').replace(/\$/g,'').replace(/ARS/gi,'');
+  if(!s||!/^[+]?[0-9][0-9.,]*$/.test(s))return 0;
+  var p=s.lastIndexOf('.'),c=s.lastIndexOf(',');
+  if(p>=0&&c>=0){
+    // 1.234,56 y 1,234.56
+    s=c>p?s.replace(/\./g,'').replace(',','.'):
+      s.replace(/,/g,'');
+  }else if(p>=0||c>=0){
+    var sep=p>=0?'.':',';
+    var partes=s.split(sep);
+    if(partes.length>2){
+      // 1.234.567 o 1,234,567
+      if(!partes.slice(1).every(function(x){return x.length===3;}))return 0;
+      s=partes.join('');
     }else{
-      s=s.replace(/,/g,'');
+      var entero=partes[0],dec=partes[1]||'';
+      if(!dec)return 0;
+      var millares=(dec.length===3&&entero.length<=3&&entero!=='0');
+      s=millares?entero+dec:entero+'.'+dec;
     }
-  }else if(s.indexOf(',')>=0){
-    var parts=s.split(',');
-    if(parts.length===2 && parts[1].length<=2)s=parts[0].replace(/\./g,'')+'.'+parts[1];
-    else s=s.replace(/,/g,'');
   }
-  return parseFloat(s)||0;
+  var n=Number(s);
+  return isFinite(n)&&n>0?n:0;
 }
 
 
@@ -6942,6 +6978,70 @@ function cqOcultarClasificacionBulk(){
   if(btn)btn.textContent='Agregar materiales';
 }
 
+// Cada posición (incluidas las líneas vacías) identifica la misma fila en las 4 columnas.
+function cqBulkLeerFilas(){
+  var ids=['codigos','articulos','precios','cantidades'];
+  var columnas=ids.map(function(id){
+    var el=document.getElementById('bulk-mat-'+id);
+    return (el?el.value:'').replace(/\r\n?/g,'\n').split('\n');
+  });
+  var maxLen=Math.max.apply(null,columnas.map(function(c){return c.length;}));
+  var parsed=[],invalidas=[],filas=[];
+  for(var i=0;i<maxLen;i++){
+    var cod=String(columnas[0][i]||'').trim();
+    var nom=String(columnas[1][i]||'').trim();
+    var precioTxt=String(columnas[2][i]||'').trim();
+    var cantTxt=String(columnas[3][i]||'').trim();
+    if(!cod&&!nom&&!precioTxt&&!cantTxt)continue;
+    var pu=parsePrecioMasivo(precioTxt);
+    var cantidad=cantTxt?parsePrecioMasivo(cantTxt):null;
+    var razon='';
+    if(!nom)razon='Falta artículo';
+    else if(!precioTxt||!(pu>0))razon='Precio inválido o vacío';
+    else if(cantTxt&&!(cantidad>0))razon='Cantidad inválida';
+    var fila={fila:i+1,cod:cod,nom:nom,precioUnit:pu,
+      precioAcord:0,unidad:'c/u',controlStock:cantTxt?'limitado':'abierto',
+      cantidadTotal:cantidad,razon:razon};
+    if(!razon){
+      try{fila.precioAcord=cqBulkPrecioAcordado(pu);}
+      catch(e){fila.razon=e.message||String(e);}
+    }
+    filas.push(fila);
+    if(fila.razon)invalidas.push(i+1);
+    else parsed.push(fila);
+  }
+  return {parsed:parsed,invalidas:invalidas,filas:filas};
+}
+function cqFmtBulkNum(n){
+  return Number(n).toLocaleString('es-AR',{maximumFractionDigits:2});
+}
+function cqBulkActualizarVistaPrevia(){
+  var el=document.getElementById('cq-bulk-revision-contenido');
+  if(!el)return;
+  var datos=cqBulkLeerFilas(),filas=datos.filas;
+  if(!filas.length){
+    el.innerHTML='Pegá los datos y comprobá acá el precio y la cantidad de cada artículo.';
+    return;
+  }
+  var validos=datos.parsed.length;
+  var conCantidad=datos.parsed.filter(function(m){return m.controlStock==='limitado';}).length;
+  var html='<div class="cq-bulk-review-hd">'+validos+' artículo'+(validos===1?'':'s')+' listo'+(validos===1?'':'s')
+    +' · '+conCantidad+' con cantidad específica · '+(validos-conCantidad)+' abiertos</div>';
+  html+='<div class="cq-bulk-review-scroll"><table><thead><tr><th>Fila</th><th>Artículo / código</th><th>Precio unit.</th><th>Precio acord.</th><th>Cantidad total</th></tr></thead><tbody>';
+  filas.slice(0,50).forEach(function(m){
+    html+='<tr'+(m.razon?' class="cq-bulk-error"':'')+'><td>'+m.fila+'</td><td>'
+      +cqEscBulk(m.nom||'—')+(m.cod?'<div style="font-size:9px;color:#7A9E82">'+cqEscBulk(m.cod)+'</div>':'')
+      +'</td><td class="num">'+(m.precioUnit>0?'$ '+cqFmtBulkNum(m.precioUnit):'—')
+      +'</td><td class="num">'+(!m.razon?'$ '+cqFmtBulkNum(m.precioAcord):'—')
+      +'</td><td class="num">'+(m.razon?cqEscBulk(m.razon):m.controlStock==='limitado'?cqFmtBulkNum(m.cantidadTotal):'Abierto')+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  if(filas.length>50)html+='<div class="cq-bulk-review-note">Se muestran 50 de '+filas.length+' filas.</div>';
+  if(datos.invalidas.length)html+='<div class="cq-bulk-review-warning">Corregí las filas '+datos.invalidas.join(', ')+' antes de guardar; no se omitirá ningún artículo por error.</div>';
+  else html+='<div class="cq-bulk-review-note" style="margin-top:7px">Verificá las cantidades y precios. Los datos todavía no están guardados.</div>';
+  el.innerHTML=html;
+}
+
 function guardarCargaMasivaMateriales(){
   var clasWrap=document.getElementById('bulk-sub-clasificar');
   if(clasWrap&&clasWrap.classList.contains('open')){
@@ -6955,40 +7055,14 @@ function guardarCargaMasivaMateriales(){
     }
   }
   try{cqBulkPrecioAcordado(1);}catch(e){alert(e.message||e);return;}
-  var codigos=(document.getElementById('bulk-mat-codigos').value||'').split(/\r?\n/);
-  var articulos=(document.getElementById('bulk-mat-articulos').value||'').split(/\r?\n/);
-  var precios=(document.getElementById('bulk-mat-precios').value||'').split(/\r?\n/);
-  var cantidades=(document.getElementById('bulk-mat-cantidades').value||'').split(/\r?\n/);
-
-  var maxLen=Math.max(codigos.length,articulos.length,precios.length,cantidades.length);
-  var parsed=[];
-  var invalidas=[];
-
-  for(var i=0;i<maxLen;i++){
-    var cod=String(codigos[i]||'').trim();
-    var nom=String(articulos[i]||'').trim();
-    var pu=parsePrecioMasivo(precios[i]||'');
-    var cantRaw=String(cantidades[i]||'').trim();
-    var cant=cantRaw?parsePrecioMasivo(cantRaw):null;
-
-    var emptyRow=!cod && !nom && !String(precios[i]||'').trim() && !cantRaw;
-    if(emptyRow)continue;
-
-    if(!nom || pu<=0 || (cantRaw && cant<=0)){
-      invalidas.push(i+1);
-      continue;
-    }
-
-    parsed.push({
-      fila:i+1,
-      cod:cod,
-      nom:nom,
-      precioUnit:pu,
-      precioAcord:cqBulkPrecioAcordado(pu),
-      unidad:'c/u',
-      controlStock:cantRaw?'limitado':'abierto',
-      cantidadTotal:cantRaw?cant:null
-    });
+  // Usar exactamente las mismas filas, precios y cantidades que muestra la vista previa.
+  var lectura=cqBulkLeerFilas();
+  var parsed=lectura.parsed;
+  var invalidas=lectura.invalidas;
+  if(invalidas.length){
+    cqBulkActualizarVistaPrevia();
+    alert('Hay datos incompletos o inválidos en las filas '+invalidas.join(', ')+'. Corregilos antes de guardar para evitar precios o cantidades mal asignados.');
+    return;
   }
 
   if(!parsed.length){
@@ -7069,6 +7143,7 @@ function guardarCargaMasivaMateriales(){
     m.updatedAt=m.createdAt;
     m.updatedBy=window._cqUsuarioActual||'Acopio';
     delete m.fila;
+    delete m.razon;
     delete m.omitirDuplicado;
     a.mats.push(m);
     cqProtegerAltaMaterial(a.id,m);
