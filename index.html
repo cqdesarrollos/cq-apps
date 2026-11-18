@@ -2347,6 +2347,22 @@ body{overflow-x:hidden!important;overflow-y:auto!important}
 @media(max-width:350px){#cqFirebaseModal .cq-fb-list{grid-template-columns:1fr}}
 </style>
 
+
+<style id="cq-diagnostico-reparacion-20261118">
+/* Barra interactiva incluso cuando el SDK Firebase tarda en iniciar. */
+#cqSystemStrip{position:relative!important;z-index:6!important;pointer-events:auto!important;touch-action:manipulation!important;-webkit-tap-highlight-color:rgba(49,212,133,.23)!important}
+#cqSystemStrip>*{pointer-events:none!important}
+#cqSystemStrip:active{filter:brightness(1.2)}
+#cqFirebaseModal .cq-fb-site-help{border:1px solid #cbded4;border-radius:13px;background:#fff;padding:12px;margin:9px 0 12px;color:#244b3c}
+#cqFirebaseModal .cq-fb-site-help h3{font-size:12px;font-weight:900;margin:0 0 6px}
+#cqFirebaseModal .cq-fb-site-help p{font-size:10px;line-height:1.52;margin:5px 0;color:#516d60}
+#cqFirebaseModal .cq-fb-site-help ol{font-size:10px;line-height:1.65;margin:8px 0;padding-left:18px}
+#cqFirebaseModal .cq-fb-help-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+#cqFirebaseModal .cq-fb-help-btn{appearance:none;cursor:pointer;border:1px solid #a9d5be;border-radius:10px;padding:10px 12px;background:#dcf4e7;color:#115a3d;font-weight:900;font-size:11px}
+#cqFirebaseModal .cq-fb-help-msg{font-size:10px;color:#497063;line-height:1.35}
+#cqFirebaseModal [hidden]{display:none!important}
+</style>
+
 </head>
 <body>
 <div id="cq-boot-loader" role="status" aria-live="polite">
@@ -2358,7 +2374,7 @@ body{overflow-x:hidden!important;overflow-y:auto!important}
   <header class="header cq-header-unificado">
     <div class="header-left cq-header-health">
       <a class="cq-actividad-mini" href="actividad.html" data-cq-gerencia-only="1" aria-label="Abrir actividad" title="Actividad"></a>
-      <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="cqFirebaseModal" title="Abrir diagnóstico general de Firebase y memoria">
+      <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="cqFirebaseModal" title="Tocar para abrir diagnóstico general de Firebase y memoria">
         <span class="cq-sys-overall"><span class="cq-sys-dot"></span><span id="cqSysOverall">Sistemas OK</span></span>
         <span class="cq-sys-sep"></span>
         <span class="cq-sys-item">🔥 <b>Firebase</b> <span class="cq-sys-state" id="cqSysFirebase">OK</span></span>
@@ -7531,6 +7547,20 @@ body{overflow-x:hidden!important;background:#061f49!important}
       <div class="cq-fb-section-title">Almacenamiento del sitio</div>
       <div class="cq-fb-note" id="cqFbSiteUsage">Se consulta el espacio aproximado de caché e IndexedDB del navegador, cuando está disponible. No representa la cuota de Firestore.</div>
       <div class="cq-fb-keys" id="cqFbBigKeys"></div>
+      <div class="cq-fb-site-help" id="cqFbChromeHelp">
+        <h3>⚙ Datos de sitios y cookies (Chrome)</h3>
+        <p>Para borrar exactamente los <b>datos del sitio</b> que señalaste en tus capturas, hay que usar los controles del navegador. La app instalada no puede abrir ese menú de Chrome por sí sola.</p>
+        <ol>
+          <li>Abrí <b>Chrome</b> (sin desinstalar CQ) y visitá la dirección de CQ.</li>
+          <li>Menú <b>⋮ → Controles de sitios → Datos de sitios y cookies</b>.</li>
+          <li>Desde allí podés borrar los datos de ese sitio. Después volvé a abrir la aplicación instalada.</li>
+        </ol>
+        <div class="cq-fb-help-actions">
+          <button type="button" id="cqFbCopyUrl" class="cq-fb-help-btn">Copiar dirección de CQ</button>
+          <span id="cqFbCopyStatus" class="cq-fb-help-msg" role="status"></span>
+        </div>
+        <p><b>Antes de borrar:</b> verificá que todos los movimientos estén sincronizados con Firebase. Borrar datos del sitio también puede cerrar la sesión y eliminar registros locales pendientes.</p>
+      </div>
       <div class="cq-fb-section-title">Consumo y cuota real de Firebase</div>
       <div class="cq-fb-note">El panel web <b>no puede leer el total de GB, lecturas, escrituras ni la cuota del proyecto</b> sin acceso autorizado a las métricas de Google Cloud. Esos valores se consultan en la consola oficial. La prueba aquí no escribe en Firebase ni borra información.</div>
       <div class="cq-fb-actions">
@@ -7540,6 +7570,58 @@ body{overflow-x:hidden!important;background:#061f49!important}
     </div>
   </div>
 </div>
+<script id="cq-fb-ui-siempre-activa-20261118">
+(function(){
+  'use strict';
+  const strip=document.getElementById('cqSystemStrip');
+  const panel=document.getElementById('cqFirebaseModal');
+  const close=document.getElementById('cqFbClose');
+  const run=document.getElementById('cqFbRun');
+  if(!strip||!panel)return;
+  const el=id=>document.getElementById(id);
+  function openPanel(){
+    if(getComputedStyle(strip).display==='none')return;
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden','false');
+    document.documentElement.style.overflow='hidden';
+    close?.focus();
+  }
+  function closePanel(){
+    panel.classList.remove('open');
+    panel.setAttribute('aria-hidden','true');
+    document.documentElement.style.overflow='';
+    strip.focus();
+  }
+  strip.addEventListener('click',openPanel);
+  strip.addEventListener('keydown',e=>{
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();openPanel()}
+  });
+  close?.addEventListener('click',closePanel);
+  panel.addEventListener('click',e=>{if(e.target===panel)closePanel()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))closePanel()});
+  run?.addEventListener('click',()=>{
+    if(typeof window.cqFirebaseDiagScan==='function'){
+      window.cqFirebaseDiagScan();
+    }else{
+      el('cqFbOverall').textContent='Cargando conexión de Firebase';
+      el('cqFbTime').textContent='El módulo de Firebase aún no terminó de iniciar. Revisá tu conexión y volvé a intentar.';
+    }
+  });
+  const copy=el('cqFbCopyUrl');
+  copy?.addEventListener('click',async()=>{
+    const value=location.origin+location.pathname;
+    const msg=el('cqFbCopyStatus');
+    try{
+      if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
+      else{
+        const tmp=document.createElement('textarea');tmp.value=value;tmp.style.position='fixed';tmp.style.opacity='0';document.body.appendChild(tmp);tmp.select();
+        const ok=document.execCommand('copy');tmp.remove();if(!ok)throw new Error('Sin acceso al portapapeles');
+      }
+      msg.textContent='Dirección copiada. Pegala en Chrome.';
+    }catch(e){msg.textContent='Dirección: '+value;}
+  });
+})();
+</script>
 <script type="module" id="cq-firebase-monitor-js-v1">
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {getAuth} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
@@ -7573,7 +7655,7 @@ const list=document.getElementById('cqFbModules');
 const el=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const formatBytes=b=>!Number.isFinite(b)?'—':b<1024?Math.round(b)+' B':b<1048576?(b/1024).toLocaleString('es-AR',{maximumFractionDigits:1})+' KB':(b/1048576).toLocaleString('es-AR',{maximumFractionDigits:2})+' MB';
-let busy=false,initialized=false,results=SOURCES.map(()=>({state:'idle',label:'Pendiente',detail:''}));
+let busy=false,results=SOURCES.map(()=>({state:'idle',label:'Pendiente',detail:''}));
 const sleepError=ms=>new Promise((_,reject)=>setTimeout(()=>reject(Object.assign(new Error('Demora de respuesta superior a '+Math.round(ms/1000)+' s'),{code:'deadline-exceeded'})),ms));
 function errorState(e){
   const code=String(e?.code||'').toLowerCase();
@@ -7662,18 +7744,10 @@ async function scan(){
   try{await Promise.all([worker(),worker(),worker()])}
   finally{busy=false;run.disabled=false;run.textContent='↻ Volver a verificar';render()}
 }
-function open(){
-  if(window._cqGerenciaProfile?.role!=='gerencia')return;
-  panel.classList.add('open');panel.setAttribute('aria-hidden','false');close.focus();
-  if(!initialized){initialized=true;getLocal();render();scan()}
-}
-function hide(){panel.classList.remove('open');panel.setAttribute('aria-hidden','true');strip?.focus()}
-strip?.addEventListener('click',open);
-strip?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}});
-close?.addEventListener('click',hide);
-run?.addEventListener('click',scan);
-panel.addEventListener('click',e=>{if(e.target===panel)hide()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))hide()});
+// El panel se abre mediante un script clásico, sin depender de descargar Firebase.
+// La consulta al servidor sólo se efectúa cuando Gerencia pulsa «Verificar ahora».
+window.cqFirebaseDiagScan=scan;
+getLocal();
 render();
 </script>
 
