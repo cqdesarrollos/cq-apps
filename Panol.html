@@ -3057,7 +3057,7 @@ async function cargarConfigGastosPanol(){
       if(!snap.exists())throw new Error('No existe config/app de Gastos');
       var d=snap.data()||{};
       if(!Array.isArray(d.obras)||!d.subrubros)throw new Error('Configuración de Gastos incompleta');
-      gastosConfigPanol={obras:d.obras,subrubros:d.subrubros,defaultTC:Number(d.defaultTC)||0};
+      gastosConfigPanol={obras:d.obras,subrubros:d.subrubros,categoryLabels:d.categoryLabels||{},categoriasExtra:Array.isArray(d.categoriasExtra)?d.categoriasExtra:[],defaultTC:Number(d.defaultTC)||0};
       return gastosConfigPanol;
     }finally{gastosConfigLoadingPanol=null;}
   })();
@@ -3132,13 +3132,16 @@ function nombreObraMovPanol(m){
   return m&&m.obra?m.obra:'';
 }
 function categoriasGastosPanol(){
-  return [
+  const names=gastosConfigPanol?.categoryLabels||{};
+  const base=[
     {id:'lote',label:'Lote + Servicios + Impuestos'},
     {id:'arq',label:'Arquitectura'},
     {id:'mat',label:'Materiales'},
     {id:'mo',label:'Mano de obra'},
     {id:'ext',label:'Mano de obra extras'}
-  ];
+  ].map(x=>({...x,label:names[x.id]||x.label}));
+  const extras=(gastosConfigPanol?.categoriasExtra||[]).filter(x=>x&&x.id&&x.activa!==false).map(x=>({id:x.id,label:names[x.id]||x.label||x.id}));
+  return [...base,...extras];
 }
 function subrubrosGastosPanol(cat){
   return gastosConfigPanol&&gastosConfigPanol.subrubros&&Array.isArray(gastosConfigPanol.subrubros[cat])
@@ -3261,8 +3264,10 @@ document.addEventListener('keydown',function(e){
 function llenarCategoriasConsumoPanol(selected){
   var el=document.getElementById('consumo-categoria');
   if(!el)return;
-  el.innerHTML=categoriasGastosPanol().map(function(c){
-    return '<option value="'+c.id+'"'+(c.id===selected?' selected':'')+'>'+c.label+'</option>';
+  var categorias=categoriasGastosPanol();
+  if(selected&&!categorias.some(function(c){return c.id===selected;}))categorias.push({id:selected,label:String(gastosConfigPanol?.categoryLabels?.[selected]||selected)+' (histórica)'});
+  el.innerHTML=categorias.map(function(c){
+    return '<option value="'+escHTML(c.id)+'"'+(c.id===selected?' selected':'')+'>'+escHTML(c.label)+'</option>';
   }).join('');
   el.value=selected||'mat';
   renderSubrubrosPanol('');

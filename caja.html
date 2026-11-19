@@ -1053,16 +1053,20 @@ try{
   const anterior=JSON.parse(sessionStorage.getItem(CQ_GASTOS_CONFIG_SESSION_CC)||'null');
   if(anterior&&Array.isArray(anterior.obras)&&anterior.subrubros&&typeof anterior.subrubros==='object'){
     gastosConfigCC=anterior;
+    (anterior.categoriasExtra||[]).forEach(x=>{if(x?.id)CAT_LABELS_CC[x.id]=String(anterior.categoryLabels?.[x.id]||x.label||x.id);});
   }
 }catch(e){}
 
 function obraTextCC(o){return String([o?.id,o?.label,o?.short].filter(Boolean).join(' ')).toLowerCase()}
 function isOficinaCC(id){return id==='oficina'||obraTextCC((gastosConfigCC?.obras||[]).find(o=>o.id===id)).includes('oficina')}
 function isAcopioCC(id){return obraTextCC((gastosConfigCC?.obras||[]).find(o=>o.id===id)).includes('acopio')}
+function cqCategoriasExtraActivasCC(){
+  return (gastosConfigCC?.categoriasExtra||[]).filter(x=>x&&x.activa!==false).map(x=>x.id);
+}
 function categoriasPermitidasCC(id){
   if(isOficinaCC(id))return ['ofi'];
-  if(isAcopioCC(id))return Object.keys(CAT_LABELS_CC).filter(c=>c!=='ofi'&&c!=='mo'&&c!=='ext');
-  return Object.keys(CAT_LABELS_CC).filter(c=>c!=='ofi');
+  const base=['lote','arq','mat','mo','ext'].filter(c=>!isAcopioCC(id)||(c!=='mo'&&c!=='ext'));
+  return [...base,...cqCategoriasExtraActivasCC()];
 }
 async function loadGastosConfigCC(forzarActualizacion=false){
   // Reutilizar configuración cargada y no volver a esperar un GET por cada salida.
@@ -1085,7 +1089,9 @@ async function loadGastosConfigCC(forzarActualizacion=false){
     const d=snap.data()||{};
     if(!Array.isArray(d.obras)||!d.subrubros||typeof d.subrubros!=='object')
       throw new Error('La configuración de Gastos está incompleta.');
-    const actual={obras:d.obras,subrubros:d.subrubros,defaultTC:Number(d.defaultTC)||0};
+    const actual={obras:d.obras,subrubros:d.subrubros,categoryLabels:d.categoryLabels||{},categoriasExtra:Array.isArray(d.categoriasExtra)?d.categoriasExtra:[],defaultTC:Number(d.defaultTC)||0};
+    actual.categoriasExtra.forEach(x=>{if(x?.id)CAT_LABELS_CC[x.id]=String(actual.categoryLabels[x.id]||x.label||x.id);});
+    Object.keys(actual.categoryLabels).forEach(id=>{if(CAT_LABELS_CC[id])CAT_LABELS_CC[id]=actual.categoryLabels[id];});
     gastosConfigCC=actual;
     try{sessionStorage.setItem(CQ_GASTOS_CONFIG_SESSION_CC,JSON.stringify(actual));}catch(e){}
     // El TC continúa tomando exclusivamente Caja Gerencia.
@@ -1134,7 +1140,9 @@ function fillCategories(selected=''){
   const el=document.getElementById('mCategory');
   const obraId=selectedObraIdCC();
   const cats=categoriasPermitidasCC(obraId);
-  el.innerHTML='<option value="">Seleccionar categoría</option>'+cats.map(k=>`<option value="${k}">${esc(CAT_LABELS_CC[k]||k)}</option>`).join('');
+  // En edición, conservar el rubro original aunque ya esté desactivado en Config.
+  if(selected&&!cats.includes(selected))cats.push(selected);
+  el.innerHTML='<option value="">Seleccionar categoría</option>'+cats.map(k=>`<option value="${k}">${esc(CAT_LABELS_CC[k]||k)}${selected===k&&!categoriasPermitidasCC(obraId).includes(k)?' (histórica)':''}</option>`).join('');
   if(selected&&cats.includes(selected))el.value=selected;
   else if(cats.length===1)el.value=cats[0];
   fillSubrubros();
@@ -2222,7 +2230,7 @@ async function openMovement(type,id=''){
   }
   if(btnGuardar)btnGuardar.disabled=!!faltaConfig;
   try{
-    if(isGasto)await loadGastosConfigCC();
+    if(isGasto)await loadGastosConfigCC(true);
   }catch(e){
     if(modal.dataset.cqApertura!==apertura||!modal.classList.contains('open'))return;
     if(!gastosConfigCC){
@@ -4717,11 +4725,12 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     if(dest==='oficina'){
       cats=categoriasPermitidasCC('oficina');
     }else if(dest==='obra'){
-      cats=Object.keys(CAT_LABELS_CC).filter(c=>c!=='ofi');
+      cats=[...categoriasPermitidasCC('obra')];
     }else{
       cats=[];
     }
 
+    if(selected&&!cats.includes(selected))cats.push(selected);
     el.innerHTML='<option value="">Seleccionar categoría</option>'+
       cats.map(k=>'<option value="'+k+'">'+esc(CAT_LABELS_CC[k]||k)+'</option>').join('');
 

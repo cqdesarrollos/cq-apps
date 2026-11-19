@@ -2137,10 +2137,16 @@ function isOficinaObra(id=curObra){return id==='oficina'||obraText(obraById(id))
 function isAcopioObra(id=curObra){return obraText(obraById(id)).includes('acopio')}
 function isObraSimple(id=curObra){return isOficinaObra(id)||isAcopioObra(id)}
 function obraChipClass(o){return isOficinaObra(o.id)?'obra-oficina':(isAcopioObra(o.id)?'obra-acopio':'')}
-function categoriasPermitidasObra(id=curObra){
+function categoriasCargaObra(id=curObra){
   if(isOficinaObra(id))return ['ofi'];
-  if(isAcopioObra(id))return Object.keys(CAT_LABELS).filter(c=>c!=='ofi'&&c!=='mo'&&c!=='ext');
-  return Object.keys(CAT_LABELS).filter(c=>c!=='ofi');
+  const base=Object.keys(DEFAULT_CAT_LABELS).filter(c=>c!=='ofi'&&(!isAcopioObra(id)||(c!=='mo'&&c!=='ext')));
+  const extra=(config.categoriasExtra||[]).filter(c=>c&&c.activa!==false).map(c=>String(c.id));
+  return [...base,...extra];
+}
+function categoriasPermitidasObra(id=curObra){
+  // Las categorías desactivadas siguen en los filtros si tienen movimientos históricos.
+  const usadas=(state?.[id]?.gastos||[]).map(g=>String(g.cat||'')).filter(Boolean);
+  return [...new Set([...categoriasCargaObra(id),...usadas])];
 }
 const DEFAULT_SUBRUBROS={lote:['Lote','Comisión','Escribanía','Sellado','Expensas','Boleto','Aguas','Gas','EPEC','Mov. suelo','Servicios pagados venta'],arq:['Colegio','Caja','Municipalidad'],mat:['Palmar','Bovedillas','Ladrillos','Tejuelas','Aberturas','Cerrajería y picaportes','Agua+Tanque+Flexibles','Cloacas+Cámara','Pozo','Gas+Aprobación','Muebles','Vanitorys','Espejo+Mampara','Cemento','Hercal','Electricidad','Pérgola materiales','Pérgola mano de obra','Hierros y mallas','Pinturas','Pinturas asfálticas+aislantes','Bachas+Sanitarios+Griferías','Áridos','Horno+Anafe+Campana','Caldera','Bombas','Radiadores','Hormigón','Mesadas','Cerramiento+Maderas','Baño+obrador','Limpieza','Contenedor','Varios','Ferretería','Agasajos','Trabajos extra','Viguetas','Pisos y revest.','Pegamento+pastina','Revoque','Yeso','Telgopor','Clavos+Alambre+Agrotileno','Decoración','Zinguería','Atrim','Flete'],mo:['Mano de obra semanal'],ext:['Plomería','Electricidad','Yeso','Pintura'],ofi:['Administrativa','Honorarios Arquitecta','Honorarios Contadora','MKT Digital','Limpieza','Almuerzo y Café','Gastos varios','Alquiler + Expensas','Impuestos Banco','Seguros','Epec','Ecogas','Internet y cable','Expensas']};
 // Semáforo global inicial basado en ROE Y TIR mejorado (8).xlsx.
@@ -2180,7 +2186,11 @@ let config=loadConfig();let state={};let curObra=localStorage.getItem('gastos_cu
 function updateModoFirebaseBtn(){const b=document.getElementById('btn-modo-firebase');if(b)b.textContent=modoFirebase?'🟢 Firebase ON':'🟠 Modo prueba';}
 function toggleModoFirebase(){modoFirebase=!modoFirebase;updateModoFirebaseBtn();if(!modoFirebase){if(unsubConfig){unsubConfig();unsubConfig=null;}if(unsubObra){unsubObra();unsubObra=null;}setSyncStatus('Modo prueba');}else{setSyncStatus('Firebase: conectando...');startFirebaseSync();}}
 
-function normalizeConfig(c){c=c||{};c.obras=Array.isArray(c.obras)?c.obras:DEFAULT_OBRAS.map(o=>({...o}));c.subrubros=c.subrubros||{};c.categoryLabels=(c.categoryLabels&&typeof c.categoryLabels==='object')?c.categoryLabels:{};Object.keys(DEFAULT_CAT_LABELS).forEach(cat=>{const v=String(c.categoryLabels[cat]||'').trim();c.categoryLabels[cat]=v||DEFAULT_CAT_LABELS[cat];});Object.assign(CAT_LABELS,DEFAULT_CAT_LABELS,c.categoryLabels);c.defaultTC=parseFloat(c.defaultTC)||1400;
+function normalizeConfig(c){c=c||{};c.obras=Array.isArray(c.obras)?c.obras:DEFAULT_OBRAS.map(o=>({...o}));c.subrubros=c.subrubros||{};c.categoryLabels=(c.categoryLabels&&typeof c.categoryLabels==='object')?c.categoryLabels:{};Object.keys(DEFAULT_CAT_LABELS).forEach(cat=>{const v=String(c.categoryLabels[cat]||'').trim();c.categoryLabels[cat]=v||DEFAULT_CAT_LABELS[cat];});c.categoriasExtra=Array.isArray(c.categoriasExtra)?c.categoriasExtra.filter(x=>x&&typeof x.id==='string'&&/^cqcat_[a-z0-9_]+$/.test(x.id)).map(x=>({id:x.id,label:String(c.categoryLabels[x.id]||x.label||x.id).trim().slice(0,100),activa:x.activa!==false})):[];
+for(const x of c.categoriasExtra){c.categoryLabels[x.id]=x.label;if(!Array.isArray(c.subrubros[x.id]))c.subrubros[x.id]=[];}
+Object.assign(CAT_LABELS,DEFAULT_CAT_LABELS,c.categoryLabels);
+for(const x of c.categoriasExtra){CAT_SHORT[x.id]=x.label;CAT_COLORS[x.id]='cat-mat';TAG_COLORS[x.id]='tag-mat';}
+c.defaultTC=parseFloat(c.defaultTC)||1400;
 Object.keys(DEFAULT_SUBRUBROS).forEach(cat=>{
   // Los defaults se usan sólo si la categoría nunca tuvo configuración.
   // Si ya existe un array (aunque falte un subrubro), se respeta exactamente:
@@ -2196,7 +2206,7 @@ function dbKey(id){return'gastos_'+id}function getS(){if(!state[curObra])state[c
 function initLocal(){config.obras.forEach(o=>{try{const loaded=JSON.parse(localStorage.getItem(dbKey(o.id))||'null');state[o.id]=migrateState(loaded||emptyState())}catch(e){state[o.id]=emptyState()}})}
 function inferCatBySubrubro(subrubro,currentCat){
   const sub=String(subrubro||'').trim();
-  if(!sub||currentCat==='ofi')return currentCat;
+  if(!sub||currentCat==='ofi'||String(currentCat||'').startsWith('cqcat_'))return currentCat;
   const cats=['lote','arq','mat','mo','ext'];
   const matches=cats.filter(cat=>(DEFAULT_SUBRUBROS[cat]||[]).some(x=>String(x).trim().toLowerCase()===sub.toLowerCase()));
   if(matches.length===1 && matches[0]!==currentCat)return matches[0];
@@ -2715,7 +2725,8 @@ function calcTotales(gastos=null){gastos=gastos||filteredGastos(false);let totUS
 function renderObraBar(){const bar=document.getElementById('obra-bar');bar.innerHTML=config.obras.map(o=>`<button class="obra-chip ${o.id===curObra?'active':''} ${obraChipClass(o)}" onclick="switchObra('${o.id}')" title="${o.label}">${o.short}</button>`).join('')+`<button class="obra-chip obra-add" onclick="openObraModal()">＋ Obra</button>`; if(window.ajustarObrasFijas) setTimeout(window.ajustarObrasFijas,0);}
 function switchObra(id){curObra=id;localStorage.setItem('gastos_cur_obra',curObra);renderAll();subscribeObra()}
 function renderFilters(){
-  const cats=Object.fromEntries(categoriasPermitidasObra(curObra).map(k=>[k,CAT_LABELS[k]]));
+  const cats=Object.fromEntries(categoriasPermitidasObra(curObra).map(k=>[k,CAT_LABELS[k]||k]));
+  const catsCarga=Object.fromEntries(categoriasCargaObra(curObra).map(k=>[k,CAT_LABELS[k]||k]));
   const isOficina=isOficinaObra(curObra);
   const isAcopio=isAcopioObra(curObra);
   const catEl=document.getElementById('filtro-cat');
@@ -2730,10 +2741,12 @@ function renderFilters(){
   const curGastoCat=gCat?.value||'';
 
   if(gCat){
-    gCat.innerHTML=Object.entries(cats).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
-    const categoriaDeseada=(gastoModalAbierto && cats[curGastoCat])
+    const opciones={...catsCarga};
+    if(gastoModalAbierto && document.getElementById('gasto-edit-id')?.value && curGastoCat && cats[curGastoCat] && !opciones[curGastoCat])opciones[curGastoCat]=cats[curGastoCat]+' (histórica)';
+    gCat.innerHTML=Object.entries(opciones).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+    const categoriaDeseada=(gastoModalAbierto && opciones[curGastoCat])
       ? curGastoCat
-      : (cats.mat?'mat':(cats.ofi?'ofi':Object.keys(cats)[0]||''));
+      : (opciones.mat?'mat':(opciones.ofi?'ofi':Object.keys(opciones)[0]||''));
     gCat.value=categoriaDeseada;
   }
   if(catEl){
@@ -3204,7 +3217,7 @@ function ensureAcuerdosMO(){const fin=getS().financiero;if(!fin.acuerdosMO)fin.a
 function updatePagoSaldoInfo(){const box=document.getElementById('mo-saldo-info');if(!box)return;if(document.getElementById('gasto-tipo')?.value==='ingreso'){box.style.display='none';return;}const cat=document.getElementById('g-cat')?.value||'';const sub=(document.getElementById('g-subrubro-sel')?.value||'');if(cat!=='mo'&&cat!=='ext'){box.style.display='none';return;}const acuerdos=ensureAcuerdosMO();const gastoActualUSD=(document.getElementById('g-moneda')?.value==='usd'?((parseFloat(document.getElementById('g-monto')?.value)||0)*(parseFloat(document.getElementById('g-tc')?.value)||getDefaultTC())):(parseFloat(document.getElementById('g-monto')?.value)||0));let acuerdo={monto:0,moneda:'usd',tc:1400},gastadoUSD=0,titulo='';if(cat==='mo'){acuerdo=acuerdos.mo;gastadoUSD=sumGastosByARS('mo','',getS().gastos);titulo='Mano de obra general';}else{titulo=sub||'Extra sin seleccionar';acuerdo=sub?normalizeAcuerdo(acuerdos.ext[sub]):{monto:0,moneda:'usd',tc:1400};gastadoUSD=sub?sumGastosByARS('ext',sub,getS().gastos):0;}const gastado=usdToAcuerdoMoneda(gastadoUSD,acuerdo);const gastoActual=usdToAcuerdoMoneda(gastoActualUSD,acuerdo);const saldo=acuerdo.monto-gastado;const saldoPost=saldo-gastoActual;const cls=saldoPost>=0?'ok':'bad';const aviso=!acuerdo.monto?'<br><span class="warn">No hay presupuesto acordado cargado para este rubro.</span>':'';box.innerHTML=`<strong>${titulo}</strong> <span class="currency-pill">${acuerdo.moneda==='usd'?'U$S':'ARS'}</span><br>Presupuesto: ${fmtAcuerdoValue(acuerdo.monto,acuerdo)} · Pagado: ${fmtAcuerdoValue(gastado,acuerdo)} · Saldo actual: ${fmtAcuerdoValue(saldo,acuerdo)}<br>Después de este pago: <span class="${cls}">${fmtAcuerdoValue(saldoPost,acuerdo)}</span>${aviso}`;box.style.display='block';}
 function renderAcuerdosMOHTML(gastos){const acuerdos=ensureAcuerdosMO();function row(nombre,acuerdo,gastadoUSD){acuerdo=normalizeAcuerdo(acuerdo);const gastado=usdToAcuerdoMoneda(gastadoUSD,acuerdo);const saldo=acuerdo.monto-gastado;const pct=acuerdo.monto?Math.min(100,Math.max(0,(gastado/acuerdo.monto)*100)):0;const comentario=acuerdo.comentario?`<div style="grid-column:1/-1;padding:7px 10px 9px;background:#F8FBF8;border-top:1px dashed #DDE8DE;font-size:12px;color:#58705D"><strong>Comentario:</strong> ${escComentario(acuerdo.comentario)}</div>`:'';return`<div class="mo-budget-cell"><div class="mo-budget-name">${nombre}</div><div class="mo-budget-sub"><span class="currency-pill">${acuerdo.moneda==='usd'?'U$S':'ARS'}</span></div></div><div class="mo-budget-cell r">${fmtAcuerdoValue(acuerdo.monto,acuerdo)}</div><div class="mo-budget-cell r">${fmtAcuerdoValue(gastado,acuerdo)}<div style="height:4px;background:#EEF4EE;border-radius:2px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct.toFixed(0)}%;background:#2E7D5E"></div></div></div><div class="mo-budget-cell r ${saldo>=0?'good':'bad'}">${fmtAcuerdoValue(saldo,acuerdo)}</div>${comentario}`}const moGastado=sumGastosByARS('mo','',gastos);const extras=Object.entries(acuerdos.ext);const extrasHTML=extras.length?extras.map(([nombre,acuerdo])=>row(nombre,acuerdo,sumGastosByARS('ext',nombre,gastos))).join(''):`<div class="mo-budget-cell" style="grid-column:1/-1;color:#A8BFA8;text-align:center">Sin extras acordados cargados.</div>`;return`<div class="fin-card mo-budget-wrap"><div class="mo-budget-head"><div class="kpi-lbl" style="margin:0">Presupuestos MO</div><button class="btn-sm" onclick="openModalAcuerdos()">✏ Editar presupuestos</button></div><div class="mo-budget-grid"><div class="mo-budget-cell h">Rubro</div><div class="mo-budget-cell h r">Acordado</div><div class="mo-budget-cell h r">Pagado</div><div class="mo-budget-cell h r">Saldo</div>${row('Mano de obra general',acuerdos.mo,moGastado)}${extrasHTML}</div></div>`}
 function setGastoModalTipo(tipo='gasto'){const ingreso=tipo==='ingreso';const tipoEl=document.getElementById('gasto-tipo');if(tipoEl)tipoEl.value=ingreso?'ingreso':'gasto';const modal=document.getElementById('modal-gasto');if(modal)modal.dataset.movimiento=ingreso?'ingreso':'gasto';const mt=document.getElementById('gasto-modal-title');if(mt)mt.textContent=(document.getElementById('gasto-edit-id')?.value?'Modificar ':'Registrar ')+(ingreso?'ingreso':'gasto');const lbl=document.getElementById('g-monto-label');if(lbl)lbl.textContent=ingreso?'Monto del ingreso':'Monto';const note=document.getElementById('g-ingreso-note');if(note)note.style.display=ingreso?'block':'none';const saveBtn=document.getElementById('gasto-save-btn');if(saveBtn)saveBtn.textContent=ingreso?'💾 Guardar ingreso':'💾 Guardar gasto';updateMontoRules();updatePagoSaldoInfo();cqFinGastoUI()}
-function openModal(id){if(id==='modal-gasto'){document.getElementById('g-fin-tipo').value='';document.getElementById('g-fin-unidad').value='';document.getElementById('gasto-edit-id').value='';document.getElementById('gasto-tipo').value='gasto';document.getElementById('g-fecha').value=today();document.getElementById('g-monto').value='';document.getElementById('g-nota').value='';{const gCat=document.getElementById('g-cat');const permitidas=categoriasPermitidasObra(curObra);gCat.value=permitidas.includes('mat')?'mat':(permitidas.includes('ofi')?'ofi':(permitidas[0]||''));}document.getElementById('g-moneda').value='ars';document.getElementById('g-tc').value=getDefaultTC();updateSubrubroOptions();setGastoModalTipo('gasto')}document.getElementById(id).classList.add('open')}
+function openModal(id){if(id==='modal-gasto'){document.getElementById('g-fin-tipo').value='';document.getElementById('g-fin-unidad').value='';document.getElementById('gasto-edit-id').value='';document.getElementById('gasto-tipo').value='gasto';document.getElementById('g-fecha').value=today();document.getElementById('g-monto').value='';document.getElementById('g-nota').value='';{const gCat=document.getElementById('g-cat');const permitidas=categoriasCargaObra(curObra);gCat.value=permitidas.includes('mat')?'mat':(permitidas.includes('ofi')?'ofi':(permitidas[0]||''));}document.getElementById('g-moneda').value='ars';document.getElementById('g-tc').value=getDefaultTC();updateSubrubroOptions();setGastoModalTipo('gasto')}document.getElementById(id).classList.add('open')}
 function openIngreso(){openModal('modal-gasto');setGastoModalTipo('ingreso')}
 function closeModal(id){document.getElementById(id).classList.remove('open');if(!document.querySelector('.modal-bg.open'))document.body.classList.remove('modal-open')}document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
 function isServiciosPagadosVenta(cat,subrubro){return cat==='lote'&&(subrubro||'').trim().toLowerCase()==='servicios pagados venta'} function permiteMontoNegativo(cat,subrubro){return cat==='mat'||isServiciosPagadosVenta(cat,subrubro)}
@@ -3216,7 +3229,7 @@ document.addEventListener('click',function(e){const inp=document.getElementById(
 
 function openGastoMasivo(){
   const catSel=document.getElementById('gm-cat');
-  catSel.innerHTML=['lote','arq','mat','mo','ext'].map(c=>`<option value="${c}">${CAT_LABELS[c]||c}</option>`).join('');
+  catSel.innerHTML=categoriasCargaObra(curObra).filter(c=>c!=='ofi').map(c=>`<option value="${c}">${CAT_LABELS[c]||c}</option>`).join('');
   catSel.value=[...catSel.options].some(o=>o.value==='mat')?'mat':(catSel.options[0]?.value||'');
   document.getElementById('gm-fecha').value=today();
   document.getElementById('gm-nota').value='';
@@ -3315,7 +3328,7 @@ if(finTipo&&!finUnidad){alert('Seleccioná la Unidad A o B correspondiente al co
 if(finTipo==='comision'&&esIngreso){alert('La comisión debe cargarse como gasto (salida), no como ingreso.');return;}
 if((finTipo==='precio'||finTipo==='cuota')&&!esIngreso){alert('El anticipo o cuota debe cargarse como ingreso.');return;}
 const gastoData={fecha,cat,subrubro,moneda,monto,tc,nota,finTipo,finUnidad,tipoMovimiento:esIngreso?'ingreso':'gasto',updatedAt:nowISO,updatedBy:usuarioActual};let guardado=null;if(editId){const arr=getS().gastos;const idx=arr.findIndex(g=>g.id===editId);if(idx>=0){arr[idx]={...arr[idx],...gastoData};guardado=arr[idx];}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};arr.push(guardado);}}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};getS().gastos.push(guardado);}document.getElementById('gasto-edit-id').value='';localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));closeModal('modal-gasto');renderAll();try{await cqPersistGastoUpsert(curObra,guardado);}catch(e){console.warn('Guardar gasto por ID',e);setSyncStatus('Firebase: error','err');}}
-function editGasto(id){const g=getS().gastos.find(x=>x.id===id);if(!g)return;const esIngreso=g.tipoMovimiento==='ingreso';document.getElementById('gasto-edit-id').value=g.id;document.getElementById('gasto-tipo').value=esIngreso?'ingreso':'gasto';document.getElementById('g-fecha').value=g.fecha||today();document.getElementById('g-cat').value=g.cat||(curObra==='oficina'?'ofi':'mat');updateSubrubroOptions();const sub=g.subrubro||g.concepto||'';const sel=document.getElementById('g-subrubro-sel');const opts=[...sel.options].map(o=>o.value);if(sub&&!opts.includes(sub)){const opt=document.createElement('option');opt.value=sub;opt.textContent=sub+' (actual)';sel.appendChild(opt);}sel.value=sub;const ss=document.getElementById('g-subrubro-search');if(ss)ss.value=sub||'';document.getElementById('g-moneda').value=g.moneda||'ars';document.getElementById('g-monto').value=esIngreso?Math.abs(parseFloat(g.monto)||0):(g.monto||'');document.getElementById('g-tc').value=g.tc||getDefaultTC();document.getElementById('g-nota').value=g.nota||'';setGastoModalTipo(esIngreso?'ingreso':'gasto');document.getElementById('g-fin-tipo').value=g.finTipo||'';document.getElementById('g-fin-unidad').value=g.finUnidad||'';cqFinGastoUI();document.getElementById('modal-gasto').classList.add('open');}
+function editGasto(id){const g=getS().gastos.find(x=>x.id===id);if(!g)return;const esIngreso=g.tipoMovimiento==='ingreso';document.getElementById('gasto-edit-id').value=g.id;document.getElementById('gasto-tipo').value=esIngreso?'ingreso':'gasto';document.getElementById('g-fecha').value=g.fecha||today();{const e=document.getElementById('g-cat');if(g.cat&&![...e.options].some(o=>o.value===g.cat)){const opt=document.createElement('option');opt.value=g.cat;opt.textContent=(CAT_LABELS[g.cat]||g.cat)+' (histórica)';e.appendChild(opt);}e.value=g.cat||(curObra==='oficina'?'ofi':'mat');}updateSubrubroOptions();const sub=g.subrubro||g.concepto||'';const sel=document.getElementById('g-subrubro-sel');const opts=[...sel.options].map(o=>o.value);if(sub&&!opts.includes(sub)){const opt=document.createElement('option');opt.value=sub;opt.textContent=sub+' (actual)';sel.appendChild(opt);}sel.value=sub;const ss=document.getElementById('g-subrubro-search');if(ss)ss.value=sub||'';document.getElementById('g-moneda').value=g.moneda||'ars';document.getElementById('g-monto').value=esIngreso?Math.abs(parseFloat(g.monto)||0):(g.monto||'');document.getElementById('g-tc').value=g.tc||getDefaultTC();document.getElementById('g-nota').value=g.nota||'';setGastoModalTipo(esIngreso?'ingreso':'gasto');document.getElementById('g-fin-tipo').value=g.finTipo||'';document.getElementById('g-fin-unidad').value=g.finUnidad||'';cqFinGastoUI();document.getElementById('modal-gasto').classList.add('open');}
 async function deleteGasto(id){const g=getS().gastos.find(x=>x.id===id);const nombre=g?.tipoMovimiento==='ingreso'?'ingreso':'gasto';if(!confirm('¿Eliminar este '+nombre+'?'))return;getS().gastos=getS().gastos.filter(g=>g.id!==id);localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));renderAll();try{await cqPersistGastoDelete(curObra,id);}catch(e){console.warn('Eliminar gasto por ID',e);setSyncStatus('Firebase: error','err');}}
 function toggleAmoTc(kind){return;}
 function openModalAcuerdos(){const acuerdos=ensureAcuerdosMO();const mo=normalizeAcuerdo(acuerdos.mo);document.getElementById('amo-general').value=mo.monto||'';document.getElementById('amo-general-comentario').value=mo.comentario||'';document.getElementById('amo-general-moneda').value='ars';document.getElementById('amo-general-tc').value='';toggleAmoTc('general');const extras=Object.entries(acuerdos.ext);document.getElementById('amo-extras').innerHTML=extras.map(([nombre,acuerdo])=>acuerdoExtraRowHTML(nombre,acuerdo)).join('')||'<div class="muted" id="amo-empty">Sin extras cargados. Usá “Agregar extra”.</div>';openModal('modal-acuerdos')}
@@ -3343,9 +3356,18 @@ function slug(value){
 
 function saveObra(){const id=document.getElementById('obra-id-edit').value,label=document.getElementById('obra-label').value.trim(),short=document.getElementById('obra-short').value.trim(),integrarEl=document.getElementById('obra-integrar-modulos'),integrarModulos=integrarEl?integrarEl.checked:true;if(!label||!short){alert('Completá nombre y nombre corto');return}if(id){const o=config.obras.find(x=>x.id===id);o.label=label;o.short=short;o.integrarModulos=(String(o.id)==='oficina'?true:integrarModulos)}else{const newId=slug(label);config.obras.push({id:newId,label,short,integrarModulos});state[newId]=emptyState();curObra=newId;localStorage.setItem('gastos_cur_obra',curObra);persist()}persistConfig();closeModal('modal-obra');renderAll();subscribeObra()}
 function deleteObra(id){if(id==='oficina'){alert('La oficina queda fija para gastos generales.');return}if(config.obras.length===1){alert('Tiene que quedar al menos una obra');return}if(!confirm('¿Eliminar la obra del listado? No borra los datos de Firebase, pero deja de mostrarse.'))return;config.obras=config.obras.filter(o=>o.id!==id);if(curObra===id){curObra=config.obras[0].id;localStorage.setItem('gastos_cur_obra',curObra);subscribeObra()}persistConfig();renderAll()}
-function editCategory(cat){const actual=CAT_LABELS[cat]||cat;const nuevoRaw=prompt('Modificar nombre de categoría. Los gastos ya cargados conservarán su categoría y solo cambiará el nombre visible.',actual);if(nuevoRaw===null)return;const nuevo=nuevoRaw.trim();if(!nuevo){alert('El nombre de la categoría no puede quedar vacío.');return}if(nuevo===actual)return;if(!config.categoryLabels)config.categoryLabels={};config.categoryLabels[cat]=nuevo;CAT_LABELS[cat]=nuevo;persistConfig();renderAll();}
+function editCategory(cat){const actual=CAT_LABELS[cat]||cat;const nuevoRaw=prompt('Modificar nombre de categoría. Los gastos ya cargados conservarán su categoría y solo cambiará el nombre visible.',actual);if(nuevoRaw===null)return;const nuevo=nuevoRaw.trim();if(!nuevo){alert('El nombre de la categoría no puede quedar vacío.');return}if(nuevo===actual)return;if(!config.categoryLabels)config.categoryLabels={};config.categoryLabels[cat]=nuevo;CAT_LABELS[cat]=nuevo;if(cat.startsWith('cqcat_')){const extra=(config.categoriasExtra||[]).find(c=>c.id===cat);if(extra)extra.label=nuevo;CAT_SHORT[cat]=nuevo;}persistConfig();renderAll();}
 function addSubrubro(cat){const v=prompt('Nuevo subrubro para '+CAT_LABELS[cat]);if(!v)return;const val=v.trim();if(!val)return;const existe=(config.subrubros[cat]||[]).some(x=>String(x).trim().toLocaleLowerCase('es')===val.toLocaleLowerCase('es'));if(!existe){config.subrubros[cat].push(val);config.subrubros[cat].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'}));}persistConfig();renderConfig();updateSubrubroOptions()}
 async function editSubrubro(cat,name){
+  if(String(cat).startsWith('cqcat_')){
+    const actual=String(name||''),v=prompt('Nuevo nombre para cargas futuras (los gastos históricos no cambian):',actual);
+    if(v===null)return;
+    const nuevo=v.trim();if(!nuevo||nuevo===actual)return;
+    const arr=config.subrubros[cat]||[];
+    if(arr.some(x=>String(x).toLowerCase()===nuevo.toLowerCase())){alert('Ese subrubro ya existe.');return;}
+    config.subrubros[cat]=arr.map(x=>x===actual?nuevo:x);
+    persistConfig();renderConfig();updateSubrubroOptions();return;
+  }
   const nuevoRaw=prompt('Modificar subrubro. El cambio se aplicará también a todos los gastos ya cargados.',name);
   if(nuevoRaw===null)return;
   const nuevo=nuevoRaw.trim();
@@ -3755,7 +3777,7 @@ function renderReporteCategorias(byCat,totalUSD){
   const entries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
   if(!entries.length){el.innerHTML='<div class="rep-empty">Sin datos para este filtro.</div>';return}
   const max=entries[0][1]||1;
-  el.innerHTML=entries.map(([cat,val],i)=>`<div class="rep-bar-row"><div class="rep-bar-lbl">${CAT_SHORT[cat]||cat}</div><div class="rep-bar-track"><div class="rep-bar-fill" style="width:${Math.max(2,val/max*100)}%;background:${repColor(cat,i)}"></div></div><div class="rep-bar-val">${fmt(val,'usd')}</div></div>`).join('');
+  el.innerHTML=entries.map(([cat,val],i)=>`<div class="rep-bar-row"><div class="rep-bar-lbl">${CAT_SHORT[cat]||CAT_LABELS[cat]||cat}</div><div class="rep-bar-track"><div class="rep-bar-fill" style="width:${Math.max(2,val/max*100)}%;background:${repColor(cat,i)}"></div></div><div class="rep-bar-val">${fmt(val,'usd')}</div></div>`).join('');
 }
 function renderReporteDonut(byCat,totalUSD){
   const el=document.getElementById('reporte-donut');if(!el)return;
@@ -11454,6 +11476,69 @@ function cqFinGastoUI(){
     :'El anticipo o cuota se toma a su fecha real. Si ya estaba previsto en la venta pactada, reemplaza ese cobro en vez de duplicarlo.';
 }
 </script>
+
+<style id="cq-categorias-generales-estilo">
+#cq-nuevas-categorias{margin-bottom:13px;padding:12px 13px;background:#F0F9F5;border:1px solid #CDE4D8;border-radius:12px}
+#cq-nuevas-categorias .cq-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+#cq-nuevas-categorias strong{color:#0B274B;font-size:12px}
+#cq-nuevas-categorias small{display:block;margin-top:4px;color:#607E71;line-height:1.45;font-size:10px}
+#cq-nuevas-categorias button{background:#00CE7C;color:#071E42;border:0;border-radius:9px;padding:8px 12px;font-weight:900;cursor:pointer;font-family:inherit}
+.cq-extra-off{opacity:.64}.cq-extra-tag{margin-left:6px;padding:2px 6px;border-radius:5px;background:#D9EDE4;color:#34604C;font-size:9px;font-weight:800}
+.cq-extra-btn{border:1px solid #CDDAD1;background:#fff;border-radius:7px;padding:5px 8px;font-size:10px;font-weight:850;color:#314F42;cursor:pointer}
+</style>
+<script id="cq-categorias-generales-v1">
+(function(){
+  // Extensiones de configuración únicamente. No guarda ni modifica movimientos.
+  function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  window.cqCrearCategoriaGeneral=function(){
+    const raw=prompt('Nombre de la nueva categoría principal (visible en todas las obras):');
+    if(raw===null)return;
+    const nombre=String(raw).trim().slice(0,100);
+    if(!nombre){alert('Ingresá un nombre.');return;}
+    const nombres=Object.values(CAT_LABELS).map(x=>String(x).toLocaleLowerCase('es'));
+    if(nombres.includes(nombre.toLocaleLowerCase('es'))){alert('Ya existe una categoría con ese nombre.');return;}
+    const base=nombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,35)||'nueva';
+    const id='cqcat_'+base+'_'+Date.now().toString(36);
+    config.categoriasExtra=Array.isArray(config.categoriasExtra)?config.categoriasExtra:[];
+    config.categoriasExtra.push({id,label:nombre,activa:true});
+    if(!config.categoryLabels)config.categoryLabels={};config.categoryLabels[id]=nombre;
+    config.subrubros[id]=[];CAT_LABELS[id]=nombre;CAT_SHORT[id]=nombre;CAT_COLORS[id]='cat-mat';TAG_COLORS[id]='tag-mat';
+    persistConfig();renderAll();renderConfig();
+    alert('Categoría creada. Ahora agregá sus subrubros desde Config.');
+  };
+  window.cqActivarCategoriaGeneral=function(id){
+    const cat=(config.categoriasExtra||[]).find(x=>x.id===id);if(!cat)return;
+    const estado=cat.activa!==false;
+    if(estado&&!confirm('¿Desactivar esta categoría para nuevas cargas?\nLos gastos existentes no se borran ni reclasifican.'))return;
+    cat.activa=!estado;
+    persistConfig();renderAll();renderConfig();
+  };
+  const old=window.renderConfig;
+  if(typeof old!=='function')return;
+  window.renderConfig=function(){
+    const result=old.apply(this,arguments);
+    const list=document.getElementById('subrubros-config');if(!list)return result;
+    let intro=document.getElementById('cq-nuevas-categorias');
+    if(!intro){intro=document.createElement('section');intro.id='cq-nuevas-categorias';list.parentElement.insertBefore(intro,list);}
+    intro.innerHTML='<div class="cq-head"><div><strong>Categorías principales compartidas</strong><small>Creá categorías generales con subrubros. Se sincronizan con Caja Gerencia, Caja Chica y Pañol mediante Firebase. Los gastos ya registrados no cambian.</small></div><button type="button" onclick="cqCrearCategoriaGeneral()">＋ Nueva categoría</button></div>';
+    const cards=list.querySelectorAll(':scope > .card');
+    // Mantener el orden original del renderizador de categorías (no se reordena).
+    Object.keys(CAT_LABELS).forEach((id,i)=>{
+      const cat=(config.categoriasExtra||[]).find(x=>x.id===id),card=cards[i];
+      if(!cat||!card)return;
+      const hd=card.querySelector('.card-hd');if(!hd)return;
+      const actions=hd.querySelector('span:last-child');if(!actions)return;
+      card.classList.toggle('cq-extra-off',cat.activa===false);
+      const note=document.createElement('span');note.className='cq-extra-tag';note.textContent=cat.activa===false?'Desactivada':'Compartida';
+      hd.querySelector('span')?.appendChild(note);
+      const btn=document.createElement('button');btn.type='button';btn.className='cq-extra-btn';btn.textContent=cat.activa===false?'Activar':'Desactivar';btn.onclick=()=>window.cqActivarCategoriaGeneral(id);
+      actions.appendChild(btn);
+    });
+    return result;
+  };
+})();
+</script>
+
 </body>
 </html>
 
