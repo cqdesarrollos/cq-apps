@@ -2137,17 +2137,10 @@ function isOficinaObra(id=curObra){return id==='oficina'||obraText(obraById(id))
 function isAcopioObra(id=curObra){return obraText(obraById(id)).includes('acopio')}
 function isObraSimple(id=curObra){return isOficinaObra(id)||isAcopioObra(id)}
 function obraChipClass(o){return isOficinaObra(o.id)?'obra-oficina':(isAcopioObra(o.id)?'obra-acopio':'')}
-function categoriasCargaObra(id=curObra){
-  if(isOficinaObra(id))return ['ofi'];
-  const propia=config?.catalogosPorObra?.[id];
-  if(propia?.activo && Array.isArray(propia.categorias))return [...new Set(propia.categorias.map(String))];
-  if(isAcopioObra(id))return Object.keys(DEFAULT_CAT_LABELS).filter(c=>c!=='ofi'&&c!=='mo'&&c!=='ext');
-  return Object.keys(DEFAULT_CAT_LABELS).filter(c=>c!=='ofi');
-}
 function categoriasPermitidasObra(id=curObra){
-  // Los movimientos históricos siguen visibles aunque su categoría ya no se use para nuevas cargas.
-  const presentes=(state?.[id]?.gastos||[]).map(g=>String(g?.cat||'')).filter(Boolean);
-  return [...new Set([...categoriasCargaObra(id),...presentes])];
+  if(isOficinaObra(id))return ['ofi'];
+  if(isAcopioObra(id))return Object.keys(CAT_LABELS).filter(c=>c!=='ofi'&&c!=='mo'&&c!=='ext');
+  return Object.keys(CAT_LABELS).filter(c=>c!=='ofi');
 }
 const DEFAULT_SUBRUBROS={lote:['Lote','Comisión','Escribanía','Sellado','Expensas','Boleto','Aguas','Gas','EPEC','Mov. suelo','Servicios pagados venta'],arq:['Colegio','Caja','Municipalidad'],mat:['Palmar','Bovedillas','Ladrillos','Tejuelas','Aberturas','Cerrajería y picaportes','Agua+Tanque+Flexibles','Cloacas+Cámara','Pozo','Gas+Aprobación','Muebles','Vanitorys','Espejo+Mampara','Cemento','Hercal','Electricidad','Pérgola materiales','Pérgola mano de obra','Hierros y mallas','Pinturas','Pinturas asfálticas+aislantes','Bachas+Sanitarios+Griferías','Áridos','Horno+Anafe+Campana','Caldera','Bombas','Radiadores','Hormigón','Mesadas','Cerramiento+Maderas','Baño+obrador','Limpieza','Contenedor','Varios','Ferretería','Agasajos','Trabajos extra','Viguetas','Pisos y revest.','Pegamento+pastina','Revoque','Yeso','Telgopor','Clavos+Alambre+Agrotileno','Decoración','Zinguería','Atrim','Flete'],mo:['Mano de obra semanal'],ext:['Plomería','Electricidad','Yeso','Pintura'],ofi:['Administrativa','Honorarios Arquitecta','Honorarios Contadora','MKT Digital','Limpieza','Almuerzo y Café','Gastos varios','Alquiler + Expensas','Impuestos Banco','Seguros','Epec','Ecogas','Internet y cable','Expensas']};
 // Semáforo global inicial basado en ROE Y TIR mejorado (8).xlsx.
@@ -2203,7 +2196,7 @@ function dbKey(id){return'gastos_'+id}function getS(){if(!state[curObra])state[c
 function initLocal(){config.obras.forEach(o=>{try{const loaded=JSON.parse(localStorage.getItem(dbKey(o.id))||'null');state[o.id]=migrateState(loaded||emptyState())}catch(e){state[o.id]=emptyState()}})}
 function inferCatBySubrubro(subrubro,currentCat){
   const sub=String(subrubro||'').trim();
-  if(!sub||currentCat==='ofi'||String(currentCat||'').startsWith('cqpriv_'))return currentCat;
+  if(!sub||currentCat==='ofi')return currentCat;
   const cats=['lote','arq','mat','mo','ext'];
   const matches=cats.filter(cat=>(DEFAULT_SUBRUBROS[cat]||[]).some(x=>String(x).trim().toLowerCase()===sub.toLowerCase()));
   if(matches.length===1 && matches[0]!==currentCat)return matches[0];
@@ -2722,8 +2715,7 @@ function calcTotales(gastos=null){gastos=gastos||filteredGastos(false);let totUS
 function renderObraBar(){const bar=document.getElementById('obra-bar');bar.innerHTML=config.obras.map(o=>`<button class="obra-chip ${o.id===curObra?'active':''} ${obraChipClass(o)}" onclick="switchObra('${o.id}')" title="${o.label}">${o.short}</button>`).join('')+`<button class="obra-chip obra-add" onclick="openObraModal()">＋ Obra</button>`; if(window.ajustarObrasFijas) setTimeout(window.ajustarObrasFijas,0);}
 function switchObra(id){curObra=id;localStorage.setItem('gastos_cur_obra',curObra);renderAll();subscribeObra()}
 function renderFilters(){
-  const cats=Object.fromEntries(categoriasPermitidasObra(curObra).map(k=>[k,CAT_LABELS[k]||k]));
-  const catsCarga=Object.fromEntries(categoriasCargaObra(curObra).map(k=>[k,CAT_LABELS[k]||k]));
+  const cats=Object.fromEntries(categoriasPermitidasObra(curObra).map(k=>[k,CAT_LABELS[k]]));
   const isOficina=isOficinaObra(curObra);
   const isAcopio=isAcopioObra(curObra);
   const catEl=document.getElementById('filtro-cat');
@@ -2738,13 +2730,10 @@ function renderFilters(){
   const curGastoCat=gCat?.value||'';
 
   if(gCat){
-    const opcionesCarga={...catsCarga};
-    // Editando un gasto viejo se debe poder conservar su categoría aunque haya sido retirada.
-    if(gastoModalAbierto && document.getElementById('gasto-edit-id')?.value && curGastoCat && cats[curGastoCat])opcionesCarga[curGastoCat]=cats[curGastoCat]+' (histórica)';
-    gCat.innerHTML=Object.entries(opcionesCarga).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
-    const categoriaDeseada=(gastoModalAbierto && opcionesCarga[curGastoCat])
+    gCat.innerHTML=Object.entries(cats).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+    const categoriaDeseada=(gastoModalAbierto && cats[curGastoCat])
       ? curGastoCat
-      : (opcionesCarga.mat?'mat':(opcionesCarga.ofi?'ofi':Object.keys(opcionesCarga)[0]||''));
+      : (cats.mat?'mat':(cats.ofi?'ofi':Object.keys(cats)[0]||''));
     gCat.value=categoriaDeseada;
   }
   if(catEl){
@@ -3215,12 +3204,12 @@ function ensureAcuerdosMO(){const fin=getS().financiero;if(!fin.acuerdosMO)fin.a
 function updatePagoSaldoInfo(){const box=document.getElementById('mo-saldo-info');if(!box)return;if(document.getElementById('gasto-tipo')?.value==='ingreso'){box.style.display='none';return;}const cat=document.getElementById('g-cat')?.value||'';const sub=(document.getElementById('g-subrubro-sel')?.value||'');if(cat!=='mo'&&cat!=='ext'){box.style.display='none';return;}const acuerdos=ensureAcuerdosMO();const gastoActualUSD=(document.getElementById('g-moneda')?.value==='usd'?((parseFloat(document.getElementById('g-monto')?.value)||0)*(parseFloat(document.getElementById('g-tc')?.value)||getDefaultTC())):(parseFloat(document.getElementById('g-monto')?.value)||0));let acuerdo={monto:0,moneda:'usd',tc:1400},gastadoUSD=0,titulo='';if(cat==='mo'){acuerdo=acuerdos.mo;gastadoUSD=sumGastosByARS('mo','',getS().gastos);titulo='Mano de obra general';}else{titulo=sub||'Extra sin seleccionar';acuerdo=sub?normalizeAcuerdo(acuerdos.ext[sub]):{monto:0,moneda:'usd',tc:1400};gastadoUSD=sub?sumGastosByARS('ext',sub,getS().gastos):0;}const gastado=usdToAcuerdoMoneda(gastadoUSD,acuerdo);const gastoActual=usdToAcuerdoMoneda(gastoActualUSD,acuerdo);const saldo=acuerdo.monto-gastado;const saldoPost=saldo-gastoActual;const cls=saldoPost>=0?'ok':'bad';const aviso=!acuerdo.monto?'<br><span class="warn">No hay presupuesto acordado cargado para este rubro.</span>':'';box.innerHTML=`<strong>${titulo}</strong> <span class="currency-pill">${acuerdo.moneda==='usd'?'U$S':'ARS'}</span><br>Presupuesto: ${fmtAcuerdoValue(acuerdo.monto,acuerdo)} · Pagado: ${fmtAcuerdoValue(gastado,acuerdo)} · Saldo actual: ${fmtAcuerdoValue(saldo,acuerdo)}<br>Después de este pago: <span class="${cls}">${fmtAcuerdoValue(saldoPost,acuerdo)}</span>${aviso}`;box.style.display='block';}
 function renderAcuerdosMOHTML(gastos){const acuerdos=ensureAcuerdosMO();function row(nombre,acuerdo,gastadoUSD){acuerdo=normalizeAcuerdo(acuerdo);const gastado=usdToAcuerdoMoneda(gastadoUSD,acuerdo);const saldo=acuerdo.monto-gastado;const pct=acuerdo.monto?Math.min(100,Math.max(0,(gastado/acuerdo.monto)*100)):0;const comentario=acuerdo.comentario?`<div style="grid-column:1/-1;padding:7px 10px 9px;background:#F8FBF8;border-top:1px dashed #DDE8DE;font-size:12px;color:#58705D"><strong>Comentario:</strong> ${escComentario(acuerdo.comentario)}</div>`:'';return`<div class="mo-budget-cell"><div class="mo-budget-name">${nombre}</div><div class="mo-budget-sub"><span class="currency-pill">${acuerdo.moneda==='usd'?'U$S':'ARS'}</span></div></div><div class="mo-budget-cell r">${fmtAcuerdoValue(acuerdo.monto,acuerdo)}</div><div class="mo-budget-cell r">${fmtAcuerdoValue(gastado,acuerdo)}<div style="height:4px;background:#EEF4EE;border-radius:2px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pct.toFixed(0)}%;background:#2E7D5E"></div></div></div><div class="mo-budget-cell r ${saldo>=0?'good':'bad'}">${fmtAcuerdoValue(saldo,acuerdo)}</div>${comentario}`}const moGastado=sumGastosByARS('mo','',gastos);const extras=Object.entries(acuerdos.ext);const extrasHTML=extras.length?extras.map(([nombre,acuerdo])=>row(nombre,acuerdo,sumGastosByARS('ext',nombre,gastos))).join(''):`<div class="mo-budget-cell" style="grid-column:1/-1;color:#A8BFA8;text-align:center">Sin extras acordados cargados.</div>`;return`<div class="fin-card mo-budget-wrap"><div class="mo-budget-head"><div class="kpi-lbl" style="margin:0">Presupuestos MO</div><button class="btn-sm" onclick="openModalAcuerdos()">✏ Editar presupuestos</button></div><div class="mo-budget-grid"><div class="mo-budget-cell h">Rubro</div><div class="mo-budget-cell h r">Acordado</div><div class="mo-budget-cell h r">Pagado</div><div class="mo-budget-cell h r">Saldo</div>${row('Mano de obra general',acuerdos.mo,moGastado)}${extrasHTML}</div></div>`}
 function setGastoModalTipo(tipo='gasto'){const ingreso=tipo==='ingreso';const tipoEl=document.getElementById('gasto-tipo');if(tipoEl)tipoEl.value=ingreso?'ingreso':'gasto';const modal=document.getElementById('modal-gasto');if(modal)modal.dataset.movimiento=ingreso?'ingreso':'gasto';const mt=document.getElementById('gasto-modal-title');if(mt)mt.textContent=(document.getElementById('gasto-edit-id')?.value?'Modificar ':'Registrar ')+(ingreso?'ingreso':'gasto');const lbl=document.getElementById('g-monto-label');if(lbl)lbl.textContent=ingreso?'Monto del ingreso':'Monto';const note=document.getElementById('g-ingreso-note');if(note)note.style.display=ingreso?'block':'none';const saveBtn=document.getElementById('gasto-save-btn');if(saveBtn)saveBtn.textContent=ingreso?'💾 Guardar ingreso':'💾 Guardar gasto';updateMontoRules();updatePagoSaldoInfo();cqFinGastoUI()}
-function openModal(id){if(id==='modal-gasto'){document.getElementById('g-fin-tipo').value='';document.getElementById('g-fin-unidad').value='';document.getElementById('gasto-edit-id').value='';document.getElementById('gasto-tipo').value='gasto';document.getElementById('g-fecha').value=today();document.getElementById('g-monto').value='';document.getElementById('g-nota').value='';{const gCat=document.getElementById('g-cat');const permitidas=categoriasCargaObra(curObra);gCat.value=permitidas.includes('mat')?'mat':(permitidas.includes('ofi')?'ofi':(permitidas[0]||''));}document.getElementById('g-moneda').value='ars';document.getElementById('g-tc').value=getDefaultTC();updateSubrubroOptions();setGastoModalTipo('gasto')}document.getElementById(id).classList.add('open')}
+function openModal(id){if(id==='modal-gasto'){document.getElementById('g-fin-tipo').value='';document.getElementById('g-fin-unidad').value='';document.getElementById('gasto-edit-id').value='';document.getElementById('gasto-tipo').value='gasto';document.getElementById('g-fecha').value=today();document.getElementById('g-monto').value='';document.getElementById('g-nota').value='';{const gCat=document.getElementById('g-cat');const permitidas=categoriasPermitidasObra(curObra);gCat.value=permitidas.includes('mat')?'mat':(permitidas.includes('ofi')?'ofi':(permitidas[0]||''));}document.getElementById('g-moneda').value='ars';document.getElementById('g-tc').value=getDefaultTC();updateSubrubroOptions();setGastoModalTipo('gasto')}document.getElementById(id).classList.add('open')}
 function openIngreso(){openModal('modal-gasto');setGastoModalTipo('ingreso')}
 function closeModal(id){document.getElementById(id).classList.remove('open');if(!document.querySelector('.modal-bg.open'))document.body.classList.remove('modal-open')}document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
 function isServiciosPagadosVenta(cat,subrubro){return cat==='lote'&&(subrubro||'').trim().toLowerCase()==='servicios pagados venta'} function permiteMontoNegativo(cat,subrubro){return cat==='mat'||isServiciosPagadosVenta(cat,subrubro)}
 function updateMontoRules(){const cat=document.getElementById('g-cat').value;const sub=document.getElementById('g-subrubro-sel').value;const inp=document.getElementById('g-monto');const note=document.getElementById('g-monto-neg-note');const ingreso=document.getElementById('gasto-tipo')?.value==='ingreso';if(ingreso){inp.min='0';inp.placeholder='Ej: 500000';if(note)note.style.display='none'}else if(permiteMontoNegativo(cat,sub)){inp.min='';inp.placeholder=cat==='mat'?'Ej: -500000 (crédito/devolución)':'Ej: -500000';if(note)note.style.display=cat==='mat'?'block':'none'}else{inp.min='0';inp.placeholder='0';if(note)note.style.display='none'}updatePagoSaldoInfo()}
-function updateSubrubroOptions(){const cat=document.getElementById('g-cat').value;const list=[...cqSubrubrosCargaObra(curObra,cat)].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'}));document.getElementById('g-subrubro-sel').innerHTML='<option value="">-- Seleccionar --</option>'+list.map(c=>`<option value="${c}">${c}</option>`).join('');const ss=document.getElementById('g-subrubro-search');if(ss)ss.value='';const fld=document.getElementById('g-subrubro-fld');if(list.length===1){document.getElementById('g-subrubro-sel').value=list[0];if(ss)ss.value=list[0];if(fld)fld.style.display='none';}else if(fld){fld.style.display='';}updateMontoRules()}function onSubrubroSel(){updateMontoRules()}document.getElementById('g-cat').addEventListener('change',updateSubrubroOptions);['g-monto','g-moneda','g-tc','g-subrubro-sel'].forEach(id=>document.getElementById(id)?.addEventListener('input',updatePagoSaldoInfo));['g-moneda','g-subrubro-sel'].forEach(id=>document.getElementById(id)?.addEventListener('change',updatePagoSaldoInfo));document.getElementById('g-tc')?.addEventListener('change',e=>setDefaultTC(e.target.value));
+function updateSubrubroOptions(){const cat=document.getElementById('g-cat').value;const list=[...(config.subrubros[cat]||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'}));document.getElementById('g-subrubro-sel').innerHTML='<option value="">-- Seleccionar --</option>'+list.map(c=>`<option value="${c}">${c}</option>`).join('');const ss=document.getElementById('g-subrubro-search');if(ss)ss.value='';const fld=document.getElementById('g-subrubro-fld');if(list.length===1){document.getElementById('g-subrubro-sel').value=list[0];if(ss)ss.value=list[0];if(fld)fld.style.display='none';}else if(fld){fld.style.display='';}updateMontoRules()}function onSubrubroSel(){updateMontoRules()}document.getElementById('g-cat').addEventListener('change',updateSubrubroOptions);['g-monto','g-moneda','g-tc','g-subrubro-sel'].forEach(id=>document.getElementById(id)?.addEventListener('input',updatePagoSaldoInfo));['g-moneda','g-subrubro-sel'].forEach(id=>document.getElementById(id)?.addEventListener('change',updatePagoSaldoInfo));document.getElementById('g-tc')?.addEventListener('change',e=>setDefaultTC(e.target.value));
 function filterSubrubroCombo(){const q=(document.getElementById('g-subrubro-search').value||'').trim().toLowerCase();const sel=document.getElementById('g-subrubro-sel');const dd=document.getElementById('g-subrubro-dropdown');const opts=[...sel.options].filter(o=>o.value);const matches=q?opts.filter(o=>o.textContent.toLowerCase().includes(q)):opts;if(!matches.length){dd.innerHTML='<div class="combo-empty">Sin resultados'+(q?' para "'+q.replace(/</g,'&lt;')+'"':'')+'.</div>';}else{dd.innerHTML=matches.map(o=>`<div class="combo-item" onmousedown="event.preventDefault();selectSubrubroCombo('${String(o.value).replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">${o.textContent}</div>`).join('');}dd.style.display='block';}
 function selectSubrubroCombo(val){const sel=document.getElementById('g-subrubro-sel');sel.value=val;document.getElementById('g-subrubro-search').value=val;document.getElementById('g-subrubro-dropdown').style.display='none';sel.dispatchEvent(new Event('change'));}
 document.addEventListener('click',function(e){const inp=document.getElementById('g-subrubro-search');const dd=document.getElementById('g-subrubro-dropdown');if(!inp||!dd)return;if(e.target!==inp&&!dd.contains(e.target))dd.style.display='none';});
@@ -3326,7 +3315,7 @@ if(finTipo&&!finUnidad){alert('Seleccioná la Unidad A o B correspondiente al co
 if(finTipo==='comision'&&esIngreso){alert('La comisión debe cargarse como gasto (salida), no como ingreso.');return;}
 if((finTipo==='precio'||finTipo==='cuota')&&!esIngreso){alert('El anticipo o cuota debe cargarse como ingreso.');return;}
 const gastoData={fecha,cat,subrubro,moneda,monto,tc,nota,finTipo,finUnidad,tipoMovimiento:esIngreso?'ingreso':'gasto',updatedAt:nowISO,updatedBy:usuarioActual};let guardado=null;if(editId){const arr=getS().gastos;const idx=arr.findIndex(g=>g.id===editId);if(idx>=0){arr[idx]={...arr[idx],...gastoData};guardado=arr[idx];}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};arr.push(guardado);}}else{guardado={id:Date.now().toString(),createdAt:nowISO,createdBy:usuarioActual,...gastoData};getS().gastos.push(guardado);}document.getElementById('gasto-edit-id').value='';localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));closeModal('modal-gasto');renderAll();try{await cqPersistGastoUpsert(curObra,guardado);}catch(e){console.warn('Guardar gasto por ID',e);setSyncStatus('Firebase: error','err');}}
-function editGasto(id){const g=getS().gastos.find(x=>x.id===id);if(!g)return;const gCatEl=document.getElementById('g-cat');if(g.cat&&gCatEl&&![...gCatEl.options].some(o=>o.value===g.cat)){const o=document.createElement('option');o.value=g.cat;o.textContent=(CAT_LABELS[g.cat]||g.cat)+' (histórica)';gCatEl.appendChild(o);}const esIngreso=g.tipoMovimiento==='ingreso';document.getElementById('gasto-edit-id').value=g.id;document.getElementById('gasto-tipo').value=esIngreso?'ingreso':'gasto';document.getElementById('g-fecha').value=g.fecha||today();document.getElementById('g-cat').value=g.cat||(curObra==='oficina'?'ofi':'mat');updateSubrubroOptions();const sub=g.subrubro||g.concepto||'';const sel=document.getElementById('g-subrubro-sel');const opts=[...sel.options].map(o=>o.value);if(sub&&!opts.includes(sub)){const opt=document.createElement('option');opt.value=sub;opt.textContent=sub+' (actual)';sel.appendChild(opt);}sel.value=sub;const ss=document.getElementById('g-subrubro-search');if(ss)ss.value=sub||'';document.getElementById('g-moneda').value=g.moneda||'ars';document.getElementById('g-monto').value=esIngreso?Math.abs(parseFloat(g.monto)||0):(g.monto||'');document.getElementById('g-tc').value=g.tc||getDefaultTC();document.getElementById('g-nota').value=g.nota||'';setGastoModalTipo(esIngreso?'ingreso':'gasto');document.getElementById('g-fin-tipo').value=g.finTipo||'';document.getElementById('g-fin-unidad').value=g.finUnidad||'';cqFinGastoUI();document.getElementById('modal-gasto').classList.add('open');}
+function editGasto(id){const g=getS().gastos.find(x=>x.id===id);if(!g)return;const esIngreso=g.tipoMovimiento==='ingreso';document.getElementById('gasto-edit-id').value=g.id;document.getElementById('gasto-tipo').value=esIngreso?'ingreso':'gasto';document.getElementById('g-fecha').value=g.fecha||today();document.getElementById('g-cat').value=g.cat||(curObra==='oficina'?'ofi':'mat');updateSubrubroOptions();const sub=g.subrubro||g.concepto||'';const sel=document.getElementById('g-subrubro-sel');const opts=[...sel.options].map(o=>o.value);if(sub&&!opts.includes(sub)){const opt=document.createElement('option');opt.value=sub;opt.textContent=sub+' (actual)';sel.appendChild(opt);}sel.value=sub;const ss=document.getElementById('g-subrubro-search');if(ss)ss.value=sub||'';document.getElementById('g-moneda').value=g.moneda||'ars';document.getElementById('g-monto').value=esIngreso?Math.abs(parseFloat(g.monto)||0):(g.monto||'');document.getElementById('g-tc').value=g.tc||getDefaultTC();document.getElementById('g-nota').value=g.nota||'';setGastoModalTipo(esIngreso?'ingreso':'gasto');document.getElementById('g-fin-tipo').value=g.finTipo||'';document.getElementById('g-fin-unidad').value=g.finUnidad||'';cqFinGastoUI();document.getElementById('modal-gasto').classList.add('open');}
 async function deleteGasto(id){const g=getS().gastos.find(x=>x.id===id);const nombre=g?.tipoMovimiento==='ingreso'?'ingreso':'gasto';if(!confirm('¿Eliminar este '+nombre+'?'))return;getS().gastos=getS().gastos.filter(g=>g.id!==id);localStorage.setItem(dbKey(curObra),JSON.stringify(getS()));renderAll();try{await cqPersistGastoDelete(curObra,id);}catch(e){console.warn('Eliminar gasto por ID',e);setSyncStatus('Firebase: error','err');}}
 function toggleAmoTc(kind){return;}
 function openModalAcuerdos(){const acuerdos=ensureAcuerdosMO();const mo=normalizeAcuerdo(acuerdos.mo);document.getElementById('amo-general').value=mo.monto||'';document.getElementById('amo-general-comentario').value=mo.comentario||'';document.getElementById('amo-general-moneda').value='ars';document.getElementById('amo-general-tc').value='';toggleAmoTc('general');const extras=Object.entries(acuerdos.ext);document.getElementById('amo-extras').innerHTML=extras.map(([nombre,acuerdo])=>acuerdoExtraRowHTML(nombre,acuerdo)).join('')||'<div class="muted" id="amo-empty">Sin extras cargados. Usá “Agregar extra”.</div>';openModal('modal-acuerdos')}
@@ -3376,7 +3365,6 @@ async function editSubrubro(cat,name){
   const tareas=[];
   for(const obra of config.obras){
     const obraId=obra.id;
-    if(config.catalogosPorObra?.[obraId])continue; // nunca modificar históricos de obras que usaron catálogo propio
     const st=state[obraId]||emptyState();
     let cambio=false;
     (st.gastos||[]).forEach(g=>{
@@ -3414,7 +3402,7 @@ async function editSubrubro(cat,name){
 function delSubrubro(cat,name){if(!confirm('¿Eliminar subrubro? Los gastos ya cargados no se modifican.'))return;config.subrubros[cat]=config.subrubros[cat].filter(x=>x!==name);persistConfig();renderConfig();updateSubrubroOptions()}
 
 function moveObra(id,dir){const i=config.obras.findIndex(o=>o.id===id);const j=i+dir;if(i<0||j<0||j>=config.obras.length)return;const tmp=config.obras[i];config.obras[i]=config.obras[j];config.obras[j]=tmp;persistConfig();renderAll()}
-function renderConfig(){document.getElementById('obras-config').innerHTML=`<table class="tbl"><thead><tr><th>Orden</th><th>Obra</th><th>Corto</th><th></th></tr></thead><tbody>${config.obras.map((o,i)=>`<tr><td class="mono"><button class="btn-sm" onclick="moveObra('${o.id}',-1)" ${i===0?'disabled':''}>↑</button> <button class="btn-sm" onclick="moveObra('${o.id}',1)" ${i===config.obras.length-1?'disabled':''}>↓</button></td><td>${o.label}</td><td class="mono">${o.short}</td><td class="r"><button class="btn-sm" onclick="openObraModal('${o.id}')">Editar</button> ${o.id==='oficina'?'':`<button class="btn-del" onclick="deleteObra('${o.id}')">Eliminar</button>`}</td></tr>`).join('')}</tbody></table>`;document.getElementById('subrubros-config').innerHTML=Object.keys(DEFAULT_CAT_LABELS).map(cat=>[cat,CAT_LABELS[cat]]).map(([cat,label])=>`<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${label}</span></span><span style="display:flex;gap:6px;align-items:center"><button class="btn-sm" title="Modificar nombre de categoría" onclick="editCategory('${cat}')">✏️ Categoría</button><button class="btn-sm" onclick="addSubrubro('${cat}')">＋ Agregar</button></span></div><div class="pillbox">${[...(config.subrubros[cat]||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<span class="pill">${s}<button title="Modificar" onclick="editSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">✏️</button><button title="Eliminar" onclick="delSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">×</button></span>`).join('')}</div></div>`).join('')}
+function renderConfig(){document.getElementById('obras-config').innerHTML=`<table class="tbl"><thead><tr><th>Orden</th><th>Obra</th><th>Corto</th><th></th></tr></thead><tbody>${config.obras.map((o,i)=>`<tr><td class="mono"><button class="btn-sm" onclick="moveObra('${o.id}',-1)" ${i===0?'disabled':''}>↑</button> <button class="btn-sm" onclick="moveObra('${o.id}',1)" ${i===config.obras.length-1?'disabled':''}>↓</button></td><td>${o.label}</td><td class="mono">${o.short}</td><td class="r"><button class="btn-sm" onclick="openObraModal('${o.id}')">Editar</button> ${o.id==='oficina'?'':`<button class="btn-del" onclick="deleteObra('${o.id}')">Eliminar</button>`}</td></tr>`).join('')}</tbody></table>`;document.getElementById('subrubros-config').innerHTML=Object.entries(CAT_LABELS).map(([cat,label])=>`<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${label}</span></span><span style="display:flex;gap:6px;align-items:center"><button class="btn-sm" title="Modificar nombre de categoría" onclick="editCategory('${cat}')">✏️ Categoría</button><button class="btn-sm" onclick="addSubrubro('${cat}')">＋ Agregar</button></span></div><div class="pillbox">${[...(config.subrubros[cat]||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<span class="pill">${s}<button title="Modificar" onclick="editSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">✏️</button><button title="Eliminar" onclick="delSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">×</button></span>`).join('')}</div></div>`).join('')}
 
 function toARS(monto,moneda,tc){return moneda==='usd'?monto*(tc||1400):monto}
 function getCatConsolidado(g){return g.cat==='ofi'?'ofi':g.cat}
@@ -10435,7 +10423,7 @@ initReporteFinPeriodo=function(){const sel=document.getElementById('reporte-fin-
       obrasEl.innerHTML=`<table class="tbl"><thead><tr><th>Orden</th><th>Obra</th><th>Corto</th><th>Estado</th><th>Vínculo</th><th></th></tr></thead><tbody>${(config.obras||[]).map((o,i)=>`<tr class="${o.archived?'obra-archived-row':''}"><td class="mono"><button class="btn-sm" onclick="moveObra('${o.id}',-1)" ${i===0?'disabled':''}>↑</button> <button class="btn-sm" onclick="moveObra('${o.id}',1)" ${i===config.obras.length-1?'disabled':''}>↓</button></td><td>${o.label}</td><td class="mono">${o.short}</td><td>${o.archived?'<span class="obra-archived-tag">Archivada</span>':'<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Activa</span>'}</td><td>${o.id==='oficina'?'<span class="obra-archived-tag" style="background:#EEF9F2;color:#177452">Sistema</span>':(o.integrarModulos===false?'<span class="obra-archived-tag" style="background:#FFF3D9;color:#94600B">Solo Gastos</span>':'<span class="obra-archived-tag" style="background:#EAF4FF;color:#28659A">Vinculada</span>')}</td><td class="r"><button class="btn-sm" onclick="openObraModal('${o.id}')">Editar</button> ${o.id==='oficina'?'':(o.archived?`<button class="archive-btn restore" onclick="cqRestoreObra('${o.id}')">Restaurar</button>`:`<button class="archive-btn" onclick="cqArchiveObra('${o.id}')">📦 Archivar</button> <button class="btn-del" onclick="deleteObra('${o.id}')">Eliminar</button>`)}</td></tr>`).join('')}</tbody></table>`;
     }
     const sub=document.getElementById('subrubros-config');
-    if(sub){sub.innerHTML=Object.keys(DEFAULT_CAT_LABELS).map(cat=>[cat,CAT_LABELS[cat]]).map(([cat,label])=>`<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${label}</span></span><span style="display:flex;gap:6px;align-items:center"><button class="btn-sm" title="Modificar nombre de categoría" onclick="editCategory('${cat}')">✏️ Categoría</button><button class="btn-sm" onclick="addSubrubro('${cat}')">＋ Agregar</button></span></div><div class="pillbox">${[...(config.subrubros[cat]||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<span class="pill">${s}<button title="Modificar" onclick="editSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">✏️</button><button title="Eliminar" onclick="delSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">×</button></span>`).join('')}</div></div>`).join('')}
+    if(sub){sub.innerHTML=Object.entries(CAT_LABELS).map(([cat,label])=>`<div class="card"><div class="card-hd ${CAT_COLORS[cat]}"><span><span class="tag ${TAG_COLORS[cat]}">${label}</span></span><span style="display:flex;gap:6px;align-items:center"><button class="btn-sm" title="Modificar nombre de categoría" onclick="editCategory('${cat}')">✏️ Categoría</button><button class="btn-sm" onclick="addSubrubro('${cat}')">＋ Agregar</button></span></div><div class="pillbox">${[...(config.subrubros[cat]||[])].sort((a,b)=>String(a).localeCompare(String(b),'es',{sensitivity:'base'})).map(s=>`<span class="pill">${s}<button title="Modificar" onclick="editSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">✏️</button><button title="Eliminar" onclick="delSubrubro('${cat}',decodeURIComponent('${encodeURIComponent(String(s))}'))">×</button></span>`).join('')}</div></div>`).join('')}
   };
 
   /* Reportes: activas por defecto; las archivadas se pueden mostrar si hacen falta para histórico */
@@ -15186,192 +15174,5 @@ try{setReporteMesActual=window.setReporteMesActual;}catch(e){}
     };
     try { renderReporteFinancieroComparativo = window.renderReporteFinancieroComparativo; } catch(e) {}
   }
-})();
-</script>
-
-<!-- CQ: Catálogos particulares por obra, independiente de movimientos históricos -->
-<style id="cq-catalogos-obra-estilos">
-#cq-cat-obra-panel{margin:0 0 16px;background:#fff;border:1px solid #D6E4E0;border-radius:14px;box-shadow:0 3px 14px rgba(6,30,85,.06);overflow:hidden}
-#cq-cat-obra-panel .cq-co-head{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;background:linear-gradient(90deg,#E9F9F1,#F5F9FD);border-bottom:1px solid #DCE8E3;gap:8px}
-#cq-cat-obra-panel .cq-co-title{font-size:13px;font-weight:900;color:#061E55}
-#cq-cat-obra-panel .cq-co-sub{font-size:10.5px;color:#637F72;line-height:1.45;margin-top:3px}
-#cq-cat-obra-panel .cq-co-body{padding:13px 16px}
-#cq-cat-obra-panel .cq-co-top{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
-#cq-cat-obra-panel .cq-co-field{flex:1 1 230px;min-width:180px}
-#cq-cat-obra-panel .cq-co-field label{display:block;font-size:10px;font-weight:850;color:#6E8F7E;margin-bottom:5px}
-#cq-cat-obra-panel select{width:100%;padding:8px 10px;background:#fff;border:1px solid #C9D9D0;border-radius:9px;font:700 12px 'Space Grotesk',sans-serif;color:#173D31}
-#cq-cat-obra-panel .cq-co-toggle{display:flex;align-items:center;gap:8px;padding:9px 11px;background:#F3F8F5;border:1px solid #D6E8DC;border-radius:9px;font-size:11px;font-weight:850;color:#224B37;cursor:pointer}
-#cq-cat-obra-panel .cq-co-toggle input{width:17px;height:17px;accent-color:#00A96B}
-#cq-cat-obra-panel .cq-co-note{font-size:11px;color:#5E766C;line-height:1.55;padding:11px 12px;border-radius:9px;background:#F7FAF8;border:1px solid #E1EAE5}
-#cq-cat-obra-panel .cq-co-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:10px}
-#cq-cat-obra-panel .cq-co-card{background:#FAFCFB;border:1px solid #D9E5DF;border-radius:10px;overflow:hidden}
-#cq-cat-obra-panel .cq-co-card-h{display:flex;justify-content:space-between;align-items:center;gap:5px;padding:10px 11px;background:#F0F6F3;border-bottom:1px solid #E1EAE5}
-#cq-cat-obra-panel .cq-co-cat-name{font-size:11px;font-weight:900;color:#1D4B37;min-width:0;overflow-wrap:anywhere}
-#cq-cat-obra-panel .cq-co-actions{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-#cq-cat-obra-panel .cq-co-btn{border:1px solid #C7DACE;background:#fff;border-radius:7px;padding:5px 8px;font:800 10px 'Space Grotesk',sans-serif;color:#2A6651;cursor:pointer}
-#cq-cat-obra-panel .cq-co-btn:hover{background:#E7F8EE}
-#cq-cat-obra-panel .cq-co-btn.warn{color:#AF5A48;border-color:#E9CBC3}
-#cq-cat-obra-panel .cq-co-pills{display:flex;flex-wrap:wrap;gap:6px;padding:10px}
-#cq-cat-obra-panel .cq-co-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid #E0E9E4;background:#fff;padding:5px 7px;border-radius:100px;font-size:10.5px;color:#395D4D}
-#cq-cat-obra-panel .cq-co-pill button{border:0;background:transparent;cursor:pointer;padding:0 1px;color:#926E56;font-size:12px}
-#cq-cat-obra-panel .cq-co-footer{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-#cq-cat-obra-panel .cq-co-footer .cq-co-btn{font-size:11px;padding:8px 11px}
-#cq-cat-obra-panel .cq-co-hint{font-size:10px;color:#738A7C;margin-top:10px;line-height:1.4}
-@media(max-width:650px){#cq-cat-obra-panel .cq-co-head,#cq-cat-obra-panel .cq-co-body{padding:11px}#cq-cat-obra-panel .cq-co-top{gap:8px}}
-</style>
-<script id="cq-catalogos-individuales-por-obra-v1">
-(function(){
-  // Configuración individual. Ningún método de esta sección altera gastosItems, gastos,
-  // financiero ni documentos de otros módulos. Sólo guarda catálogo en config/app.
-  let selected='';
-  const baseRenderConfig=window.renderConfig;
-  const baseRenderAll=window.renderAll;
-  const baseSaveMass=window.saveGastoMasivo;
-  const clean=s=>String(s==null?'':s).trim().replace(/[<>"'&]/g,'').slice(0,105);
-  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  const allGlobal=id=>isOficinaObra(id)?['ofi']:isAcopioObra(id)?['lote','arq','mat']:['lote','arq','mat','mo','ext'];
-  const catalogo=id=>config.catalogosPorObra?.[id];
-  function ensure(){if(!config.catalogosPorObra||typeof config.catalogosPorObra!=='object')config.catalogosPorObra={};}
-  function registry(){
-    Object.values(config.catalogosPorObra||{}).forEach(entry=>{
-      if(!entry||!entry.customLabels)return;
-      Object.entries(entry.customLabels).forEach(([key,label])=>{
-        if(!/^cqpriv_[a-z0-9_]+$/.test(key))return;
-        CAT_LABELS[key]=clean(label)||'Categoría personalizada';
-        CAT_SHORT[key]=CAT_LABELS[key];
-        CAT_COLORS[key]='cat-mat';TAG_COLORS[key]='tag-mat';
-      });
-    });
-  }
-  function ensureEntry(id){
-    ensure();
-    if(!config.catalogosPorObra[id]){
-      const cats=allGlobal(id);
-      const subs={};cats.forEach(cat=>{subs[cat]=[...(config.subrubros?.[cat]||[])]});
-      config.catalogosPorObra[id]={activo:false,categorias:cats,subrubros:subs,customLabels:{}};
-    }
-    return config.catalogosPorObra[id];
-  }
-  function save(){registry();persistConfig();renderAll();}
-  function chosen(){if(selected && config.obras.some(o=>o.id===selected))return selected;return curObra&&config.obras.some(o=>o.id===curObra)?curObra:config.obras[0]?.id||'oficina'}
-  window.cqSubrubrosCargaObra=function(id,cat){
-    const c=catalogo(id);
-    if(c?.activo){
-      if(!c.categorias?.includes(cat))return [];
-      return Array.isArray(c.subrubros?.[cat])?c.subrubros[cat]:[];
-    }
-    return config.subrubros?.[cat]||[];
-  };
-  window.cqCatSelect=function(id){selected=id;draw()};
-  window.cqCatToggle=function(checked){
-    const id=chosen();if(isOficinaObra(id))return;
-    const c=ensureEntry(id);c.activo=!!checked;
-    save();
-  };
-  window.cqCatAddCategory=function(){
-    const id=chosen();const c=ensureEntry(id);
-    const disponibles=Object.keys(DEFAULT_CAT_LABELS).filter(cat=>cat!=='ofi'&&!c.categorias.includes(cat));
-    const opciones=disponibles.map((cat,i)=>`${i+1}. ${CAT_LABELS[cat]}`).join('\n');
-    const msg='Agregar categoría a '+(obraById(id).label||id)+'\n\n'+(opciones||'No hay más categorías generales disponibles.')+'\n\nEscribí el número de una categoría general, o el NOMBRE de una categoría nueva:';
-    const input=prompt(msg);if(input===null)return;
-    const raw=input.trim();if(!raw)return;
-    const index=/^\d+$/.test(raw)?Number(raw)-1:-1;
-    if(index>=0 && index<disponibles.length){
-      const cat=disponibles[index];c.categorias.push(cat);
-      if(!Array.isArray(c.subrubros[cat]))c.subrubros[cat]=[...(config.subrubros?.[cat]||[])];
-    }else{
-      if(/^\d+$/.test(raw)){alert('Número de categoría inválido.');return;}
-      const name=clean(raw);if(!name){alert('Nombre inválido.');return;}
-      if(c.categorias.some(k=>(c.customLabels?.[k]||CAT_LABELS[k]||'').toLowerCase()===name.toLowerCase())){alert('Ya existe esa categoría en esta obra.');return;}
-      let key='cqpriv_'+id.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
-      key=key.replace(/_+/g,'_');
-      c.categorias.push(key);c.subrubros[key]=[];c.customLabels[key]=name;
-    }
-    save();
-  };
-  window.cqCatRemoveCategory=function(cat){
-    const id=chosen(),c=catalogo(id);if(!c?.activo)return;
-    const label=CAT_LABELS[cat]||cat;
-    if(!confirm('¿Ocultar la categoría "'+label+'" sólo en '+(obraById(id).label||id)+'?\n\nTodos los gastos ya cargados mantendrán su clasificación y seguirán en los reportes.'))return;
-    c.categorias=c.categorias.filter(v=>v!==cat);
-    save();
-  };
-  window.cqCatRenameCategory=function(cat){
-    const c=catalogo(chosen());if(!c?.activo||!cat.startsWith('cqpriv_'))return;
-    const raw=prompt('Nombre visible de la categoría (los gastos no cambian):',c.customLabels?.[cat]||CAT_LABELS[cat]||cat);
-    if(raw===null)return;const v=clean(raw);if(!v)return;
-    c.customLabels[cat]=v;save();
-  };
-  window.cqCatAddSub=function(cat){
-    const c=catalogo(chosen());if(!c?.activo||!c.categorias.includes(cat))return;
-    const raw=prompt('Nuevo subrubro para '+(CAT_LABELS[cat]||cat)+':');if(raw===null)return;
-    const val=clean(raw);if(!val)return;
-    if(!Array.isArray(c.subrubros[cat]))c.subrubros[cat]=[];
-    if(c.subrubros[cat].some(s=>String(s).toLocaleLowerCase('es')===val.toLocaleLowerCase('es'))){alert('Ese subrubro ya existe en esta obra.');return;}
-    c.subrubros[cat].push(val);c.subrubros[cat].sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));save();
-  };
-  window.cqCatEditSub=function(cat,encoded){
-    const old=decodeURIComponent(encoded),c=catalogo(chosen());if(!c?.activo||!c.categorias.includes(cat))return;
-    const raw=prompt('Cambiar nombre del subrubro para nuevas cargas.\nLos gastos anteriores NO se reclasificarán:',old);
-    if(raw===null)return;const val=clean(raw);if(!val||val===old)return;
-    if((c.subrubros[cat]||[]).some(s=>String(s).toLocaleLowerCase('es')===val.toLocaleLowerCase('es'))){alert('Ya existe ese subrubro.');return;}
-    c.subrubros[cat]=(c.subrubros[cat]||[]).map(s=>s===old?val:s);save();
-  };
-  window.cqCatRemoveSub=function(cat,encoded){
-    const old=decodeURIComponent(encoded),c=catalogo(chosen());if(!c?.activo)return;
-    if(!confirm('¿Quitar "'+old+'" del catálogo de esta obra?\n\nLos gastos históricos quedarán intactos.'))return;
-    c.subrubros[cat]=(c.subrubros[cat]||[]).filter(v=>v!==old);save();
-  };
-  window.cqCatGoGastos=function(){
-    const id=chosen();if(curObra!==id)switchObra(id);
-    showTab('gastos');
-  };
-  function draw(){
-    const panel=document.getElementById('cq-cat-obra-panel');if(!panel)return;
-    const id=chosen();selected=id;
-    const office=isOficinaObra(id),c=catalogo(id),active=!!c?.activo;
-    const select=document.getElementById('cq-cat-obra-select');
-    select.innerHTML=(config.obras||[]).map(o=>`<option value="${esc(o.id)}">${esc(o.label||o.short||o.id)}${o.archived?' (archivada)':''}</option>`).join('');
-    select.value=id;
-    const toggle=document.getElementById('cq-cat-obra-toggle');toggle.checked=active;toggle.disabled=office;
-    const box=document.getElementById('cq-cat-obra-contenido');
-    if(office){box.innerHTML='<div class="cq-co-note">Oficina conserva su catálogo especial actual, administrado en las categorías generales de abajo. No se modifica su funcionamiento.</div>';return;}
-    if(!active){box.innerHTML='<div class="cq-co-note">Esta obra sigue utilizando las categorías y subrubros generales. Activá la configuración particular para copiar su catálogo actual y después modificarlo sin afectar a las otras obras.</div>';return;}
-    const cats=(c.categorias||[]);
-    const content=cats.map(cat=>{
-      const title=CAT_LABELS[cat]||c.customLabels?.[cat]||cat;
-      const subs=Array.isArray(c.subrubros?.[cat])?c.subrubros[cat]:[];
-      return `<div class="cq-co-card"><div class="cq-co-card-h"><span class="cq-co-cat-name">${esc(title)}</span><span class="cq-co-actions">${cat.startsWith('cqpriv_')?`<button type="button" class="cq-co-btn" onclick="cqCatRenameCategory('${cat}')">✎ Nombre</button>`:''}<button type="button" class="cq-co-btn warn" onclick="cqCatRemoveCategory('${cat}')">Ocultar</button></span></div><div class="cq-co-pills">${subs.map(s=>`<span class="cq-co-pill">${esc(s)} <button type="button" title="Renombrar sólo en esta configuración" onclick="cqCatEditSub('${cat}','${encodeURIComponent(s).replace(/'/g,'%27')}')">✎</button><button type="button" title="Quitar del catálogo" onclick="cqCatRemoveSub('${cat}','${encodeURIComponent(s).replace(/'/g,'%27')}')">×</button></span>`).join('')||'<span class="cq-co-note">Sin subrubros definidos</span>'}</div><div style="padding:0 10px 10px"><button type="button" class="cq-co-btn" onclick="cqCatAddSub('${cat}')">＋ Agregar subrubro</button></div></div>`;
-    }).join('');
-    box.innerHTML=`<div class="cq-co-footer"><button type="button" class="cq-co-btn" onclick="cqCatAddCategory()">＋ Agregar categoría</button><button type="button" class="cq-co-btn" onclick="cqCatGoGastos()">Ver y reclasificar gastos</button></div><div class="cq-co-cols">${content||'<div class="cq-co-note">Todavía no hay categorías. Agregá una para poder registrar nuevos gastos.</div>'}</div><div class="cq-co-hint">Ocultar, quitar o renombrar modifica únicamente las opciones para cargas futuras en esta obra. Los gastos previos siguen en los reportes y pueden reclasificarse editándolos individualmente. No se cambia ningún dato del resto de los módulos.</div>`;
-  }
-  window.renderConfig=function(){
-    registry();if(typeof baseRenderConfig==='function')baseRenderConfig.apply(this,arguments);
-    const view=document.getElementById('view-config');if(!view)return;
-    let panel=document.getElementById('cq-cat-obra-panel');
-    if(!panel){
-      panel=document.createElement('section');panel.id='cq-cat-obra-panel';
-      panel.innerHTML=`<div class="cq-co-head"><div><div class="cq-co-title">Configuración personalizada por obra</div><div class="cq-co-sub">Cada obra puede tener sus propias categorías y subrubros, sin modificar el catálogo general ni los gastos existentes.</div></div></div><div class="cq-co-body"><div class="cq-co-top"><div class="cq-co-field"><label for="cq-cat-obra-select">Seleccioná una obra</label><select id="cq-cat-obra-select" onchange="cqCatSelect(this.value)"></select></div><label class="cq-co-toggle"><input type="checkbox" id="cq-cat-obra-toggle" onchange="cqCatToggle(this.checked)"><span>Catálogo propio</span></label></div><div id="cq-cat-obra-contenido"></div></div>`;
-      view.insertBefore(panel,view.firstChild);
-    }
-    draw();
-  };
-  window.renderAll=function(){registry();return typeof baseRenderAll==='function'?baseRenderAll.apply(this,arguments):undefined;};
-  // Carga masiva histórica: puede seguir usándose para las obras estándar.
-  // Nunca permite introducir por error una categoría/subrubro ocultos en un catálogo privado.
-  window.saveGastoMasivo=async function(){
-    const chosenObras=[...document.querySelectorAll('#gm-obras input[type="checkbox"]:checked')].map(x=>x.value);
-    const cat=document.getElementById('gm-cat')?.value||'';
-    const sub=(document.getElementById('gm-subrubro-search')?.value||'').trim()||document.getElementById('gm-subrubro')?.value||'';
-    const blocked=chosenObras.filter(id=>{
-      const c=catalogo(id);return c?.activo && (!c.categorias?.includes(cat)||!(c.subrubros?.[cat]||[]).some(s=>s.toLowerCase()===sub.toLowerCase()));
-    });
-    if(blocked.length){alert('La categoría o el subrubro no están habilitados en estas obras con catálogo propio:\n'+blocked.map(id=>obraById(id).label||id).join('\n')+'\n\nNo se realizó ninguna carga. Ajustá la selección o configurá el catálogo de esa obra.');return;}
-    return typeof baseSaveMass==='function'?baseSaveMass.apply(this,arguments):undefined;
-  };
-  registry();
-  // El catálogo ya llega en config/app y se replica en tiempo real con la sincronización existente.
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{try{renderAll()}catch(e){console.warn(e)}});
-  else try{renderAll()}catch(e){console.warn(e)};
 })();
 </script>
