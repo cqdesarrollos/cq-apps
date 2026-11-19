@@ -2303,6 +2303,96 @@ body{overflow-x:hidden!important;overflow-y:auto!important}
 @media (max-width:520px){.app>.footer{margin-top:auto!important}}
 </style>
 
+
+<style id="cq-firebase-monitor-css-v1">
+/* Diagnóstico CQ: todas las lecturas de Firestore son manuales y de solo lectura. */
+#cqSystemStrip{cursor:pointer!important;transition:box-shadow .16s ease!important}
+#cqSystemStrip:hover,#cqSystemStrip:focus-visible{outline:2px solid rgba(96,231,172,.75)!important;outline-offset:2px!important}
+#cqFirebaseModal{display:none;position:fixed;inset:0;z-index:45000;padding:13px;background:rgba(3,14,30,.83);backdrop-filter:blur(8px);align-items:center;justify-content:center;color:#16362e;font-family:Arial,Helvetica,sans-serif}
+#cqFirebaseModal.open{display:flex!important}
+#cqFirebaseModal *{box-sizing:border-box}
+#cqFirebaseModal .cq-fb-dialog{width:min(690px,100%);max-height:min(94dvh,980px);display:flex;flex-direction:column;border-radius:22px;overflow:hidden;background:#f5f8f7;border:1px solid #b6cec2;box-shadow:0 24px 80px rgba(0,0,0,.42)}
+#cqFirebaseModal .cq-fb-header{flex:0 0 auto;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:linear-gradient(125deg,#08294b,#105748);color:white;padding:18px 19px 15px}
+#cqFirebaseModal .cq-fb-kicker{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#7ee8b7;font-weight:900}
+#cqFirebaseModal .cq-fb-title{font-size:22px;letter-spacing:-.025em;font-weight:900;margin:5px 0 3px}
+#cqFirebaseModal .cq-fb-subtitle{font-size:11px;color:#c9dfd7;line-height:1.35}
+#cqFirebaseModal .cq-fb-close{width:35px;height:35px;border:1px solid rgba(255,255,255,.22);color:#effff7;border-radius:10px;background:rgba(255,255,255,.09);font-size:25px;cursor:pointer;flex:0 0 auto}
+#cqFirebaseModal .cq-fb-scroll{padding:15px 17px 17px;overflow-y:auto;overscroll-behavior:contain;min-height:0}
+#cqFirebaseModal .cq-fb-statusbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+#cqFirebaseModal .cq-fb-overall{font-size:12px;font-weight:900;color:#234c40}
+#cqFirebaseModal .cq-fb-date{display:block;font-size:10px;font-weight:600;color:#748a81;margin-top:3px}
+#cqFirebaseModal .cq-fb-run{min-height:38px;border:0;border-radius:10px;padding:8px 13px;background:#00c97b;color:#073529;font-size:11px;font-weight:900;cursor:pointer}
+#cqFirebaseModal .cq-fb-run:disabled{opacity:.6;cursor:wait}
+#cqFirebaseModal .cq-fb-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:13px}
+#cqFirebaseModal .cq-fb-stat{border:1px solid #dce9e2;border-radius:13px;padding:12px 10px;background:#fff;min-width:0}
+#cqFirebaseModal .cq-fb-stat-name{display:block;font-size:9px;color:#70897d;font-weight:800;line-height:1.2;margin-bottom:8px}
+#cqFirebaseModal .cq-fb-stat-value{display:block;font-size:19px;font-weight:900;color:#183e32;letter-spacing:-.03em;overflow-wrap:anywhere}
+#cqFirebaseModal .cq-fb-stat-info{display:block;font-size:9px;color:#70897d;margin-top:5px;line-height:1.4}
+#cqFirebaseModal .cq-fb-section-title{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:900;color:#163d30;margin:16px 0 9px}
+#cqFirebaseModal .cq-fb-note{border:1px solid #d7e9df;background:#edf6f0;color:#446357;border-radius:11px;padding:9px 11px;font-size:10px;line-height:1.52;margin:8px 0 11px}
+#cqFirebaseModal .cq-fb-list{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+#cqFirebaseModal .cq-fb-item{background:#fff;border:1px solid #deebe4;border-radius:11px;padding:10px 11px;min-width:0}
+#cqFirebaseModal .cq-fb-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#cqFirebaseModal .cq-fb-item-name{font-size:11px;font-weight:900;color:#1b3e32}
+#cqFirebaseModal .cq-fb-item-sub{font-size:9px;color:#789082;line-height:1.3;margin-top:3px;overflow-wrap:anywhere}
+#cqFirebaseModal .cq-fb-chip{border-radius:7px;padding:4px 6px;font-weight:900;white-space:nowrap;font-size:9px;color:#687b72;background:#edf2ef}
+#cqFirebaseModal .cq-fb-chip.ok{color:#147c52;background:#e0f5e9}
+#cqFirebaseModal .cq-fb-chip.warn{color:#8b5a1e;background:#fff0d7}
+#cqFirebaseModal .cq-fb-chip.error{color:#af3535;background:#ffe5e5}
+#cqFirebaseModal .cq-fb-chip.checking{color:#3369a0;background:#e7f1fa}
+#cqFirebaseModal .cq-fb-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#cqFirebaseModal .cq-fb-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:#e7f1eb;border:1px solid #b9d7c6;border-radius:10px;color:#155841;padding:9px 12px;font-size:10px;font-weight:900}
+#cqFirebaseModal .cq-fb-keys{font-size:9px;color:#5b7065;line-height:1.6;overflow-wrap:anywhere;padding:7px 0}
+@media(max-width:520px){#cqFirebaseModal{padding:0}#cqFirebaseModal .cq-fb-dialog{width:100vw;max-height:100dvh;height:100dvh;border-radius:0}#cqFirebaseModal .cq-fb-header{padding:15px 14px 12px}#cqFirebaseModal .cq-fb-scroll{padding:12px 12px 18px}#cqFirebaseModal .cq-fb-title{font-size:20px}#cqFirebaseModal .cq-fb-stats{gap:6px}#cqFirebaseModal .cq-fb-stat{padding:10px 7px}#cqFirebaseModal .cq-fb-stat-value{font-size:15px}#cqFirebaseModal .cq-fb-stat-name{font-size:8.2px}#cqFirebaseModal .cq-fb-list{grid-template-columns:1fr 1fr;gap:6px}#cqFirebaseModal .cq-fb-item{padding:9px 8px}#cqFirebaseModal .cq-fb-item-name{font-size:10px}#cqFirebaseModal .cq-fb-chip{font-size:8px;padding:3px 5px}}
+@media(max-width:350px){#cqFirebaseModal .cq-fb-list{grid-template-columns:1fr}}
+</style>
+
+
+<style id="cq-diagnostico-acceso-v3">
+/* Acceso nativo y visible, independiente de los módulos Firebase. */
+.cq-header-unificado{position:relative!important;z-index:80!important}
+#cqSystemStrip{cursor:pointer!important}
+#cqDiagOpen{
+  position:absolute!important;z-index:50!important;right:8px!important;top:calc(100% + 5px)!important;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  min-height:24px;padding:5px 9px;border-radius:999px;
+  border:1px solid rgba(80,238,175,.55);background:rgba(7,48,54,.94);
+  color:#bdf8df;font:800 9px/1 Arial,Helvetica,sans-serif;letter-spacing:.01em;
+  box-shadow:0 4px 13px rgba(0,0,0,.20);cursor:pointer;touch-action:manipulation;
+  -webkit-tap-highlight-color:rgba(0,206,124,.25);
+}
+#cqDiagOpen:active{background:#116248;transform:scale(.96)}
+#cqDiagOpen:focus-visible{outline:2px solid #8dffca;outline-offset:2px}
+@media(max-width:350px){#cqDiagOpen{right:5px!important;font-size:8.4px;padding:5px 7px}}
+</style>
+<script id="cq-diagnostico-apertura-nativa-v3">
+/* Funciona sin esperar a Firebase, sin escribir datos y sin depender del estado de la barra. */
+window.cqOpenFirebaseDiagnostic=function(){
+  var panel=document.getElementById('cqFirebaseModal');
+  if(!panel){window.alert('El panel de diagnóstico no está disponible en esta versión.');return false;}
+  panel.classList.add('open');
+  panel.setAttribute('aria-hidden','false');
+  document.documentElement.style.overflow='hidden';
+  var close=document.getElementById('cqFbClose');
+  if(close)close.focus();
+  return false;
+};
+</script>
+<style id="cq-diagnostico-reparacion-20261118">
+/* Barra interactiva incluso cuando el SDK Firebase tarda en iniciar. */
+#cqSystemStrip{position:relative!important;z-index:6!important;pointer-events:auto!important;touch-action:manipulation!important;-webkit-tap-highlight-color:rgba(49,212,133,.23)!important}
+#cqSystemStrip>*{pointer-events:none!important}
+#cqSystemStrip:active{filter:brightness(1.2)}
+#cqFirebaseModal .cq-fb-site-help{border:1px solid #cbded4;border-radius:13px;background:#fff;padding:12px;margin:9px 0 12px;color:#244b3c}
+#cqFirebaseModal .cq-fb-site-help h3{font-size:12px;font-weight:900;margin:0 0 6px}
+#cqFirebaseModal .cq-fb-site-help p{font-size:10px;line-height:1.52;margin:5px 0;color:#516d60}
+#cqFirebaseModal .cq-fb-site-help ol{font-size:10px;line-height:1.65;margin:8px 0;padding-left:18px}
+#cqFirebaseModal .cq-fb-help-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+#cqFirebaseModal .cq-fb-help-btn{appearance:none;cursor:pointer;border:1px solid #a9d5be;border-radius:10px;padding:10px 12px;background:#dcf4e7;color:#115a3d;font-weight:900;font-size:11px}
+#cqFirebaseModal .cq-fb-help-msg{font-size:10px;color:#497063;line-height:1.35}
+#cqFirebaseModal [hidden]{display:none!important}
+</style>
+
 </head>
 <body>
 <div id="cq-boot-loader" role="status" aria-live="polite">
@@ -2314,7 +2404,7 @@ body{overflow-x:hidden!important;overflow-y:auto!important}
   <header class="header cq-header-unificado">
     <div class="header-left cq-header-health">
       <a class="cq-actividad-mini" href="actividad.html" data-cq-gerencia-only="1" aria-label="Abrir actividad" title="Actividad"></a>
-      <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="status" aria-live="polite" title="Estado de servicios CQ">
+      <div class="cq-system-strip" id="cqSystemStrip" data-cq-gerencia-only="1" data-level="ok" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="cqFirebaseModal" title="Tocar para abrir diagnóstico general de Firebase y memoria" onclick="return window.cqOpenFirebaseDiagnostic()">
         <span class="cq-sys-overall"><span class="cq-sys-dot"></span><span id="cqSysOverall">Sistemas OK</span></span>
         <span class="cq-sys-sep"></span>
         <span class="cq-sys-item">🔥 <b>Firebase</b> <span class="cq-sys-state" id="cqSysFirebase">OK</span></span>
@@ -2323,11 +2413,12 @@ body{overflow-x:hidden!important;overflow-y:auto!important}
         <span class="cq-sys-sep"></span>
         <span class="cq-sys-item">🧠 <b>IA</b> <span class="cq-sys-state" id="cqSysIA">OK</span></span>
       </div>
+      <button type="button" id="cqDiagOpen" data-cq-gerencia-only="1" aria-label="Abrir diagnóstico Firebase" aria-controls="cqFirebaseModal" aria-haspopup="dialog" onclick="return window.cqOpenFirebaseDiagnostic()" title="Diagnóstico de Firebase"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M2 12h4l3-7 5 14 3-7h5"/></svg></button>
     </div>
     <div class="cq-header-session">
       <div id="cq-gerencia-user-wrap">
         <div id="cq-gerencia-user"></div>
-        <button id="cq-gerencia-salir" type="button">Salir</button>
+        <button id="cq-gerencia-salir" type="button" aria-label="Salir / cerrar sesión" title="Cerrar sesión"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9"><path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5"/><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/></svg></button>
       </div>
       <div class="status"><span class="dot"></span> Online</div>
     </div>
@@ -5686,8 +5777,8 @@ document.querySelectorAll('.cq-ia-quick button[data-q]').forEach(b=>b.addEventLi
     netlify:document.getElementById('cqSysNetlify'),
     ia:document.getElementById('cqSysIA')
   };
-  const state={firebase:'ok',netlify:(navigator.onLine?'ok':'error'),ia:'ok'};
-  const label={firebase:'OK',netlify:(navigator.onLine?'OK':'Sin red'),ia:'OK'};
+  const state={firebase:'checking',netlify:(navigator.onLine?'ok':'error'),ia:'ok'};
+  const label={firebase:'Verificando',netlify:(navigator.onLine?'OK':'Sin red'),ia:'OK'};
 
   function render(){
     const values=Object.values(state);
@@ -5720,7 +5811,7 @@ document.querySelectorAll('.cq-ia-quick button[data-q]').forEach(b=>b.addEventLi
 <script type="module" id="cq-system-firebase-check-v1">
 import { getApps, getApp, initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDocFromServer } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const firebaseConfig={
   apiKey:"AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8",
   authDomain:"cq-mano-de-obra.firebaseapp.com",
@@ -5743,7 +5834,7 @@ async function checkFirebase(){
   if(checking||!auth.currentUser)return;
   checking=true;
   try{
-    await getDoc(doc(db,'config','app'));
+    await getDocFromServer(doc(db,'config','app'));
     window.cqSystemSet&&window.cqSystemSet('firebase','ok','OK');
   }catch(e){
     const [st,tx]=statusFromError(e);
@@ -6522,24 +6613,6 @@ body{overflow-x:hidden!important;background:#061f49!important}
   .footer{width:min(860px,100%)!important;margin:8px auto 0!important;padding:4px 2px 0!important;font-size:8px!important}
 }
 </style>
-<script id="cq-final-fix-runtime-v4">
-(function(){
-  function forceOk(){
-    try{
-      const strip=document.getElementById('cqSystemStrip');
-      if(strip) strip.dataset.level='ok';
-      const fb=document.getElementById('cqSysFirebase'); if(fb) fb.textContent='OK';
-      const nl=document.getElementById('cqSysNetlify'); if(nl && !/Sin red/i.test(nl.textContent||'')) nl.textContent='OK';
-      const ia=document.getElementById('cqSysIA'); if(ia) ia.textContent='OK';
-    }catch(e){}
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', forceOk, {once:true});
-  else forceOk();
-  setTimeout(forceOk, 1000);
-})();
-</script>
-
-
 <style id="cq-menu-details-v5">
 /* Restaurar Salir en cabecera */
 .cq-header-unificado{position:relative!important}
@@ -7475,6 +7548,377 @@ body{overflow-x:hidden!important;background:#061f49!important}
     height:3px!important;
   }
   .cq-secundarios .btn.btn-agenda{background-position:right 7px bottom 14px,center,center!important;}
+}
+</style>
+
+
+<div id="cqFirebaseModal" aria-hidden="true">
+  <div class="cq-fb-dialog" role="dialog" aria-modal="true" aria-labelledby="cqFbTitle">
+    <div class="cq-fb-header">
+      <div>
+        <div class="cq-fb-kicker">CQ DESARROLLOS · SISTEMAS</div>
+        <div class="cq-fb-title" id="cqFbTitle">Diagnóstico Firebase</div>
+        <div class="cq-fb-subtitle">Estado de las fuentes de datos y del dispositivo · Acceso v3 · Solo lectura</div>
+      </div>
+      <button id="cqFbClose" class="cq-fb-close" type="button" aria-label="Cerrar diagnóstico">×</button>
+    </div>
+    <div class="cq-fb-scroll">
+      <div class="cq-fb-statusbar">
+        <div><div class="cq-fb-overall" id="cqFbOverall">Sin verificar</div><span class="cq-fb-date" id="cqFbTime">Tocá «Verificar ahora» para consultar Firebase.</span></div>
+        <button class="cq-fb-run" id="cqFbRun" type="button">↻ Verificar ahora</button>
+      </div>
+      <div class="cq-fb-stats">
+        <div class="cq-fb-stat"><span class="cq-fb-stat-name">Fuentes conectadas</span><span class="cq-fb-stat-value" id="cqFbConnected">— / 15</span><span class="cq-fb-stat-info" id="cqFbConnectedNote">Lectura en servidor</span></div>
+        <div class="cq-fb-stat"><span class="cq-fb-stat-name">Memoria local CQ</span><span class="cq-fb-stat-value" id="cqFbLocalSize">—</span><span class="cq-fb-stat-info" id="cqFbLocalNote">Este navegador</span></div>
+        <div class="cq-fb-stat"><span class="cq-fb-stat-name">Prueba de escritura local</span><span class="cq-fb-stat-value" id="cqFbWrite">—</span><span class="cq-fb-stat-info" id="cqFbWriteNote">No altera datos</span></div>
+      </div>
+      <div class="cq-fb-note" id="cqFbBrowserNote">La memoria local es la de este dispositivo y navegador; <b>no es la capacidad usada en Firebase</b>. Los indicadores de módulos comprueban lectura de documentos representativos, no garantizan que cada guardado funcione.</div>
+      <div class="cq-fb-note" id="cqFbLocalAlert" role="status" hidden></div>
+      <div class="cq-fb-section-title"><span>Aplicaciones y datos Firebase</span><span id="cqFbProgress" style="font-size:10px;color:#718980;font-weight:700">15 fuentes</span></div>
+      <div class="cq-fb-list" id="cqFbModules" aria-live="polite"></div>
+      <div class="cq-fb-section-title">Almacenamiento del sitio</div>
+      <div class="cq-fb-note" id="cqFbSiteUsage">Se consulta el espacio aproximado de caché e IndexedDB del navegador, cuando está disponible. No representa la cuota de Firestore.</div>
+      <div class="cq-fb-keys" id="cqFbBigKeys"></div>
+      <div class="cq-fb-help-actions"><button type="button" id="cqFbCopyLocalKeys" class="cq-fb-help-btn">Copiar detalle de memoria</button><span id="cqFbCopyLocalStatus" class="cq-fb-help-msg" role="status"></span></div>
+      <div class="cq-fb-site-help" id="cqFbChromeHelp">
+        <h3>⚙ Datos de sitios y cookies (Chrome)</h3>
+        <p>Para borrar exactamente los <b>datos del sitio</b> que señalaste en tus capturas, hay que usar los controles del navegador. La app instalada no puede abrir ese menú de Chrome por sí sola.</p>
+        <ol>
+          <li>Abrí <b>Chrome</b> (sin desinstalar CQ) y visitá la dirección de CQ.</li>
+          <li>Menú <b>⋮ → Controles de sitios → Datos de sitios y cookies</b>.</li>
+          <li>Desde allí podés borrar los datos de ese sitio. Después volvé a abrir la aplicación instalada.</li>
+        </ol>
+        <div class="cq-fb-help-actions">
+          <button type="button" id="cqFbCopyUrl" class="cq-fb-help-btn">Copiar dirección de CQ</button>
+          <span id="cqFbCopyStatus" class="cq-fb-help-msg" role="status"></span>
+        </div>
+        <p><b>Antes de borrar:</b> verificá que todos los movimientos estén sincronizados con Firebase. Borrar datos del sitio también puede cerrar la sesión y eliminar registros locales pendientes.</p>
+      </div>
+      <div class="cq-fb-section-title">Consumo y cuota real de Firebase</div>
+      <div class="cq-fb-note">El panel web <b>no puede leer el total de GB, lecturas, escrituras ni la cuota del proyecto</b> sin acceso autorizado a las métricas de Google Cloud. Esos valores se consultan en la consola oficial. La prueba aquí no escribe en Firebase ni borra información.</div>
+      <div class="cq-fb-actions">
+        <a class="cq-fb-link" href="https://console.firebase.google.com/project/cq-mano-de-obra/overview" target="_blank" rel="noopener noreferrer">Abrir consola Firebase ↗</a>
+        <a class="cq-fb-link" href="https://console.cloud.google.com/monitoring?project=cq-mano-de-obra" target="_blank" rel="noopener noreferrer">Métricas Google Cloud ↗</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script id="cq-fb-ui-siempre-activa-20261118">
+(function(){
+  'use strict';
+  const strip=document.getElementById('cqSystemStrip');
+  const panel=document.getElementById('cqFirebaseModal');
+  // El HTML anterior lo anidaba dentro del modal de IA (oculto); extraerlo al body.
+  if(panel && panel.parentElement!==document.body)document.body.appendChild(panel);
+  const close=document.getElementById('cqFbClose');
+  const run=document.getElementById('cqFbRun');
+  if(!strip||!panel)return;
+  const el=id=>document.getElementById(id);
+  function openPanel(){
+    if(getComputedStyle(strip).display==='none')return;
+    window.cqOpenFirebaseDiagnostic();
+  }
+  function closePanel(){
+    panel.classList.remove('open');
+    panel.setAttribute('aria-hidden','true');
+    document.documentElement.style.overflow='';
+    strip.focus();
+  }
+  strip.addEventListener('click',openPanel);
+  strip.addEventListener('keydown',e=>{
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();openPanel()}
+  });
+  close?.addEventListener('click',closePanel);
+  panel.addEventListener('click',e=>{if(e.target===panel)closePanel()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))closePanel()});
+  run?.addEventListener('click',()=>{
+    if(typeof window.cqFirebaseDiagScan==='function'){
+      window.cqFirebaseDiagScan();
+    }else{
+      el('cqFbOverall').textContent='Cargando conexión de Firebase';
+      el('cqFbTime').textContent='El módulo de Firebase aún no terminó de iniciar. Revisá tu conexión y volvé a intentar.';
+    }
+  });
+  const copy=el('cqFbCopyUrl');
+  copy?.addEventListener('click',async()=>{
+    const value=location.origin+location.pathname;
+    const msg=el('cqFbCopyStatus');
+    try{
+      if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
+      else{
+        const tmp=document.createElement('textarea');tmp.value=value;tmp.style.position='fixed';tmp.style.opacity='0';document.body.appendChild(tmp);tmp.select();
+        const ok=document.execCommand('copy');tmp.remove();if(!ok)throw new Error('Sin acceso al portapapeles');
+      }
+      msg.textContent='Dirección copiada. Pegala en Chrome.';
+    }catch(e){msg.textContent='Dirección: '+value;}
+  });
+})();
+</script>
+<script type="module" id="cq-firebase-monitor-js-v1">
+import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {getAuth} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import {getFirestore,doc,getDocFromServer} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+const cfg={apiKey:'AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8',authDomain:'cq-mano-de-obra.firebaseapp.com',projectId:'cq-mano-de-obra',storageBucket:'cq-mano-de-obra.firebasestorage.app',messagingSenderId:'502127540211',appId:'1:502127540211:web:8daefc75bdaafad412c486'};
+const app=getApps().length?getApp():initializeApp(cfg);
+const auth=getAuth(app),db=getFirestore(app);
+// Cada módulo tiene una fuente representativa que se conoce por el propio index CQ.
+// El listado no presupone que se haya validado la totalidad de sus documentos.
+const SOURCES=[
+  {name:'Gastos',path:'config/app',group:'Finanzas',detail:'Configuración de obras'},
+  {name:'Caja Gerencia',path:'cq_caja/gastos_compartidos_v1',group:'Finanzas'},
+  {name:'Caja Chica',path:'caja_chica_app/main',group:'Finanzas'},
+  {name:'Flujo de fondos',path:'cq_gerencia_datos/flujo_fondos',group:'Finanzas'},
+  {name:'Financieros',path:'cq_gerencia_datos/financieros',group:'Indicadores'},
+  {name:'ROE / TIR',path:'cq_gerencia_datos/roe_tir',group:'Indicadores'},
+  {name:'Avances',path:'config/mano_obra_multiobra',group:'Obras',detail:'Configuración de obras'},
+  {name:'Control de Obras',path:'control_obras_app/main',group:'Obras'},
+  {name:'Post Obra',path:'post_obra/estado_v1',group:'Obras'},
+  {name:'Arquitectura',path:'config/arquitectura',group:'Obras'},
+  {name:'Materiales',path:'materiales/data_planilla_exacta_v4',group:'Materiales'},
+  {name:'Acopio',path:'acopio_cq/acopio_cq_compartido_v3',group:'Materiales'},
+  {name:'Pañol',path:'panol/stock_v1',group:'Materiales'},
+  {name:'Solicitud de Pedidos',path:'solicitud_pedidos/data',group:'Materiales'},
+  {name:'Agenda',path:'agenda_socios/shared_v1',group:'Gestión'}
+];
+const panel=document.getElementById('cqFirebaseModal');
+const strip=document.getElementById('cqSystemStrip');
+const run=document.getElementById('cqFbRun'),close=document.getElementById('cqFbClose');
+const list=document.getElementById('cqFbModules');
+const el=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const formatBytes=b=>!Number.isFinite(b)?'—':b<1024?Math.round(b)+' B':b<1048576?(b/1024).toLocaleString('es-AR',{maximumFractionDigits:1})+' KB':(b/1048576).toLocaleString('es-AR',{maximumFractionDigits:2})+' MB';
+let busy=false,results=SOURCES.map(()=>({state:'idle',label:'Pendiente',detail:''}));
+let localWriteState='unknown'; // Independiente de la conectividad Firebase.
+const sleepError=ms=>new Promise((_,reject)=>setTimeout(()=>reject(Object.assign(new Error('Demora de respuesta superior a '+Math.round(ms/1000)+' s'),{code:'deadline-exceeded'})),ms));
+function errorState(e){
+  const code=String(e?.code||'').toLowerCase();
+  if(code.includes('permission-denied')||code.includes('unauthenticated'))return {state:'warn',label:'Sin permiso',detail:'Firebase rechazó la lectura. Revisá permisos o sesión.'};
+  if(code.includes('resource-exhausted'))return {state:'error',label:'Sin cuota',detail:'Firebase informó límite o cuota agotada.'};
+  if(code.includes('unavailable')||code.includes('deadline')||code.includes('network')||code.includes('offline'))return {state:'error',label:'Sin conexión',detail:'No se pudo leer el servidor. Revisá red o disponibilidad.'};
+  return {state:'error',label:'Error',detail:String(e?.code||e?.message||'No se pudo leer').slice(0,125)};
+}
+function render(){
+  list.innerHTML=SOURCES.map((x,i)=>{
+    const y=results[i],desc=y.detail||x.detail||x.path;
+    return '<div class="cq-fb-item"><div class="cq-fb-item-top"><span class="cq-fb-item-name">'+esc(x.name)+'</span><span class="cq-fb-chip '+esc(y.state)+'">'+esc(y.label)+'</span></div><div class="cq-fb-item-sub">'+esc(x.group)+' · '+esc(desc)+'</div></div>';
+  }).join('');
+  const n=results.filter(x=>x.state==='ok').length;
+  const done=results.filter(x=>!['idle','checking'].includes(x.state)).length;
+  const fails=results.filter(x=>x.state==='error'||x.state==='warn').length;
+  el('cqFbConnected').textContent=done?n+' / '+SOURCES.length:'— / '+SOURCES.length;
+  el('cqFbConnectedNote').textContent=done?fails?fails+' con inconvenientes':(SOURCES.length-n)+' restantes / sin datos':'Lecturas del servidor';
+  el('cqFbProgress').textContent=done+' de '+SOURCES.length+' verificados';
+  if(done===SOURCES.length){
+    el('cqFbOverall').textContent=fails?('Atención: '+fails+' fuente'+(fails===1?'':'s')+' con problemas'):(localWriteState==='limited'?'Firebase OK · revisar memoria local':'Verificación completa');
+    el('cqFbTime').textContent='Última comprobación: '+new Date().toLocaleString('es-AR');
+  }
+}
+// Solo observa nombres y tamaños de claves locales. No inspecciona ni borra datos CQ.
+function localKeySummary(){
+  const keys=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k===null)continue;
+    const v=localStorage.getItem(k)||'';
+    keys.push({k,size:(k.length+v.length)*2}); // Aproximación UTF-16; no es cuota oficial.
+  }
+  keys.sort((a,b)=>b.size-a.size);
+  return keys;
+}
+// Cada prueba borra únicamente su propia clave temporal, incluso si falla.
+function testLocalWrite(characters){
+  const key='cq_diag_temporal_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+  try{
+    localStorage.setItem(key,'x'.repeat(characters));
+    return {ok:localStorage.getItem(key)==='x'.repeat(characters),reason:''};
+  }catch(e){
+    return {ok:false,reason:String(e?.name||e?.message||'El navegador rechazó la escritura')};
+  }finally{
+    try{localStorage.removeItem(key)}catch(e){}
+  }
+}
+function getLocal(){
+  const alert=el('cqFbLocalAlert');
+  let keys=[];
+  try{
+    keys=localKeySummary();
+    const bytes=keys.reduce((total,x)=>total+x.size,0);
+    el('cqFbLocalSize').textContent=formatBytes(bytes);
+    el('cqFbLocalNote').textContent=keys.length+' claves · cálculo aproximado';
+    el('cqFbBigKeys').textContent=keys.length
+      ? 'Claves locales más pesadas (nombre y tamaño; sin mostrar contenido): '+keys.slice(0,15).map((x,i)=>(i+1)+'. '+x.k+' ('+formatBytes(x.size)+')').join(' · ')+(keys.length>15?' · y '+(keys.length-15)+' más. Usá «Copiar detalle de memoria» para ver el listado completo.':'')
+      : 'No hay datos guardados en localStorage.';
+  }catch(e){
+    el('cqFbLocalSize').textContent='Sin acceso';
+    el('cqFbLocalNote').textContent='El navegador bloquea la lectura';
+    el('cqFbBigKeys').textContent='No se pudo leer localStorage: '+String(e?.name||e?.message||e);
+  }
+  const tiny=testLocalWrite(1);
+  const normal=tiny.ok?testLocalWrite(8192):{ok:false,reason:tiny.reason};
+  let status,description;
+  if(!tiny.ok){
+    status='Sin espacio';
+    description='No pudo guardar ni 1 carácter · '+(tiny.reason||'Error de escritura');
+  }else if(!normal.ok){
+    status='Espacio limitado';
+    description='1 carácter OK; prueba de 8 KB rechazada · '+(normal.reason||'Error de escritura');
+  }else{
+    status='Disponible';
+    description='Pruebas temporales de 1 carácter y 8 KB OK';
+  }
+  localWriteState=normal.ok?'ok':'limited';
+  el('cqFbWrite').textContent=status;
+  el('cqFbWrite').style.color=normal.ok?'#19865e':'#bd3939';
+  el('cqFbWriteNote').textContent=description;
+  alert.hidden=normal.ok;
+  if(!normal.ok){
+    alert.textContent='Atención: el almacenamiento local de este navegador no admite la prueba de escritura. Esto NO indica una falla de Firebase. No borres datos del sitio ni claves CQ hasta confirmar que no haya operaciones pendientes de sincronizar. Revisá abajo qué claves ocupan más espacio y copiá el detalle para identificar el módulo responsable.';
+    alert.style.background='#fff5e8';
+    alert.style.borderColor='#ead6aa';
+    alert.style.color='#825b20';
+  }
+  if(navigator.storage?.estimate){
+    navigator.storage.estimate().then(r=>{
+      const used=Number.isFinite(r.usage)?formatBytes(r.usage):'No disponible';
+      const quota=Number.isFinite(r.quota)?formatBytes(r.quota):'No disponible';
+      el('cqFbSiteUsage').textContent='Datos del sitio en este navegador (caché, IndexedDB y otros): '+used+' utilizados · cuota global estimada: '+quota+'. La cuota global NO es el límite específico de localStorage ni indica el consumo de Firebase.';
+    }).catch(()=>{el('cqFbSiteUsage').textContent='El navegador no permite consultar su cuota de almacenamiento.'});
+  }
+}
+el('cqFbCopyLocalKeys')?.addEventListener('click',async()=>{
+  const status=el('cqFbCopyLocalStatus');
+  try{
+    const keys=localKeySummary();
+    const total=keys.reduce((sum,x)=>sum+x.size,0);
+    const detail='Diagnóstico local CQ ('+new Date().toLocaleString('es-AR')+')\n'
+      +'Total aproximado: '+formatBytes(total)+' · '+keys.length+' claves\n'
+      +'Solo nombres y tamaños; no incluye valores ni datos guardados.\n'
+      +keys.map((x,i)=>(i+1)+'. '+x.k+' — '+formatBytes(x.size)).join('\n');
+    await navigator.clipboard.writeText(detail);
+    status.textContent='Detalle copiado. Podés pegarlo en el chat.';
+  }catch(e){
+    status.textContent='No se pudo copiar. Podés ver las claves principales arriba.';
+  }
+});
+async function checkOne(i){
+  const x=SOURCES[i];results[i]={state:'checking',label:'Leyendo…',detail:x.detail||x.path};render();
+  try{
+    const snap=await Promise.race([getDocFromServer(doc(db,x.path)),sleepError(16000)]);
+    if(!snap.exists())results[i]={state:'warn',label:'Sin datos',detail:'Documento no encontrado (lectura del servidor OK)'};
+    else {
+      let size='';
+      try{size=' · JSON aprox. '+formatBytes(new Blob([JSON.stringify(snap.data()||{})]).size)}catch(e){}
+      results[i]={state:'ok',label:'Lectura OK',detail:(x.detail?x.detail+' · ':'')+'Servidor respondió'+size};
+    }
+  }catch(e){results[i]=errorState(e)}
+  render();
+}
+async function scan(){
+  if(busy)return;
+  if(window._cqGerenciaProfile?.role!=='gerencia'){
+    el('cqFbOverall').textContent='Solo disponible para Gerencia';return;
+  }
+  if(!auth.currentUser){el('cqFbOverall').textContent='Sin sesión: ingresá a Gerencia';return}
+  busy=true;run.disabled=true;run.textContent='Verificando…';
+  results=SOURCES.map(()=>({state:'idle',label:'Pendiente',detail:''}));
+  el('cqFbOverall').textContent='Consultando Firestore…';render();getLocal();
+  // 3 lecturas en paralelo como máximo para evitar consultas pesadas.
+  let cursor=0;
+  async function worker(){while(cursor<SOURCES.length){const i=cursor++;await checkOne(i)}}
+  try{await Promise.all([worker(),worker(),worker()])}
+  finally{busy=false;run.disabled=false;run.textContent='↻ Volver a verificar';render()}
+}
+// El panel se abre mediante un script clásico, sin depender de descargar Firebase.
+// La consulta al servidor sólo se efectúa cuando Gerencia pulsa «Verificar ahora».
+window.cqFirebaseDiagScan=scan;
+getLocal();
+render();
+</script>
+
+
+<style id="cq-header-iconos-juntos-v9">
+/* Barra única aprobada: actividad, estados, diagnóstico, salir. 
+   Mantiene los IDs y eventos originales, cambia únicamente su presentación. */
+.cq-header-unificado{
+  display:flex!important;align-items:center!important;justify-content:space-between!important;
+  flex-wrap:nowrap!important;gap:5px!important;min-width:0!important;width:100%!important;
+  min-height:35px!important;margin-bottom:5px!important;
+}
+.cq-header-unificado .header-left.cq-header-health{
+  display:flex!important;align-items:center!important;flex:1 1 auto!important;
+  min-width:0!important;width:auto!important;max-width:none!important;gap:5px!important;
+}
+.cq-header-unificado .cq-actividad-mini{
+  width:30px!important;height:30px!important;min-width:30px!important;flex:0 0 30px!important;
+}
+.cq-header-unificado #cqSystemStrip{
+  flex:1 1 auto!important;width:auto!important;min-width:0!important;max-width:none!important;
+  height:30px!important;min-height:30px!important;overflow:hidden!important;
+  padding:3px 7px!important;margin:0!important;gap:5px!important;
+  white-space:nowrap!important;justify-content:space-evenly!important;
+  font-size:8px!important;
+}
+.cq-header-unificado #cqSystemStrip .cq-sys-overall{
+  min-width:0!important;flex:0 1 auto!important;white-space:nowrap!important;gap:4px!important;
+}
+.cq-header-unificado #cqSystemStrip .cq-sys-item,
+.cq-header-unificado #cqSystemStrip .cq-sys-state,
+.cq-header-unificado #cqSystemStrip .cq-sys-item b {font-size:inherit!important;white-space:nowrap!important;}
+.cq-header-unificado #cqSystemStrip .cq-sys-sep{height:13px!important;flex:0 0 1px!important}
+.cq-header-unificado .cq-header-session{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  flex:0 0 auto!important;margin:0!important;padding:0!important;gap:0!important;
+}
+.cq-header-unificado #cq-gerencia-user-wrap{display:flex;align-items:center;gap:0!important}
+.cq-header-unificado #cq-gerencia-user-wrap #cq-gerencia-user{display:none!important;width:0!important;min-width:0!important;margin:0!important;padding:0!important;}
+.cq-header-unificado #cqDiagOpen,
+.cq-header-unificado #cq-gerencia-salir{
+  position:static!important;inset:auto!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+  flex:0 0 30px!important;min-width:30px!important;width:30px!important;min-height:30px!important;height:30px!important;
+  margin:0!important;padding:0!important;box-sizing:border-box!important;
+  align-items:center!important;justify-content:center!important;border-radius:50%!important;
+  border:1px solid rgba(87,192,222,.45)!important;
+  background:linear-gradient(145deg,rgba(11,61,81,.76),rgba(7,40,65,.80))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 3px 9px rgba(0,0,0,.13)!important;
+  cursor:pointer!important;touch-action:manipulation!important;font-size:0!important;
+  color:#e2eef4!important;letter-spacing:0!important;
+}
+.cq-header-unificado #cqDiagOpen{color:#45e9a4!important;}
+.cq-header-unificado #cqDiagOpen svg,
+.cq-header-unificado #cq-gerencia-salir svg{
+  display:block;width:19px;height:19px;min-width:19px;min-height:19px;pointer-events:none;
+}
+.cq-header-unificado #cqDiagOpen:active,
+.cq-header-unificado #cq-gerencia-salir:active{
+  transform:scale(.94)!important;background:rgba(20,90,85,.9)!important;
+}
+.cq-header-unificado #cqDiagOpen:focus-visible,
+.cq-header-unificado #cq-gerencia-salir:focus-visible{outline:2px solid #72e9b8!important;outline-offset:2px!important}
+@media(max-width:520px){
+  .cq-header-unificado{gap:4px!important;min-height:28px!important}
+  .cq-header-unificado .header-left.cq-header-health{gap:4px!important}
+  .cq-header-unificado .cq-actividad-mini{width:27px!important;height:27px!important;min-width:27px!important;flex-basis:27px!important}
+  .cq-header-unificado #cqSystemStrip{
+    height:27px!important;min-height:27px!important;font-size:7.1px!important;
+    gap:3px!important;padding:3px 5px!important;
+  }
+  .cq-header-unificado #cqSystemStrip .cq-sys-overall{gap:3px!important}
+  .cq-header-unificado #cqDiagOpen,
+  .cq-header-unificado #cq-gerencia-salir{width:27px!important;min-width:27px!important;height:27px!important;min-height:27px!important;flex-basis:27px!important}
+  .cq-header-unificado #cqDiagOpen svg,.cq-header-unificado #cq-gerencia-salir svg{width:17px;height:17px;min-width:17px;min-height:17px}
+}
+@media(max-width:375px){
+  .cq-header-unificado{gap:3px!important}
+  .cq-header-unificado .header-left.cq-header-health{gap:3px!important}
+  .cq-header-unificado #cqSystemStrip{font-size:6.5px!important;gap:2px!important;padding:2px 4px!important}
+  .cq-header-unificado .cq-actividad-mini{width:25px!important;height:25px!important;min-width:25px!important;flex-basis:25px!important}
+  .cq-header-unificado #cqDiagOpen,.cq-header-unificado #cq-gerencia-salir{width:25px!important;height:25px!important;min-width:25px!important;min-height:25px!important;flex-basis:25px!important}
+}
+@media(orientation:landscape) and (min-width:768px){
+  .cq-header-unificado{gap:7px!important}
+  .cq-header-unificado .header-left.cq-header-health{gap:7px!important;max-width:none!important}
+  .cq-header-unificado #cqSystemStrip{height:34px!important;min-height:34px!important;font-size:8.8px!important;gap:8px!important}
+  .cq-header-unificado #cqDiagOpen,.cq-header-unificado #cq-gerencia-salir{width:32px!important;height:32px!important;min-height:32px!important;min-width:32px!important;flex-basis:32px!important}
 }
 </style>
 

@@ -1570,6 +1570,27 @@ button[onclick*="crearBackupManual"]{
   }
   .bulk-sub-row{grid-template-columns:1fr;gap:6px;padding:9px 10px}
 }
+
+/* Carga masiva: una fila de entrada equivale siempre a un material. */
+#modal-carga-masiva-mat .bulk-mat-col textarea{
+  white-space:pre!important;
+  overflow-wrap:normal!important;
+  overflow-x:auto;
+  tab-size:2;
+}
+#modal-carga-masiva-mat #bulk-mat-precios{background:#F6FBF7}
+#modal-carga-masiva-mat #bulk-mat-cantidades{background:#FFFDF5}
+.cq-bulk-review{margin:12px 0 8px;padding:10px 11px;border:1px solid #D6E8DA;border-radius:12px;background:#F8FCF9}
+.cq-bulk-review-hd{font-size:11px;font-weight:900;color:var(--green);margin-bottom:7px}
+.cq-bulk-review-note{font-size:10px;color:#688474;line-height:1.45}
+.cq-bulk-review-scroll{overflow-x:auto;max-height:245px;overflow-y:auto;border:1px solid #E3EAE3;border-radius:8px;background:#fff}
+.cq-bulk-review table{width:100%;border-collapse:collapse;min-width:510px}
+.cq-bulk-review th,.cq-bulk-review td{padding:6px 7px;border-bottom:1px solid #EDF0EA;text-align:left;font-size:10px;white-space:nowrap}
+.cq-bulk-review th{position:sticky;top:0;background:#EDF6EF!important;color:#4D7963;font-weight:900}
+.cq-bulk-review td.num{text-align:right;font-family:var(--mono);font-size:10px}
+.cq-bulk-review tr.cq-bulk-error td{background:#FFF1EB;color:#A23D29}
+.cq-bulk-review tr.cq-bulk-error td:first-child{font-weight:900}
+.cq-bulk-review-warning{color:#AD3E27;font-weight:800;font-size:10px;margin-top:7px}
 </style>
 
 
@@ -3516,37 +3537,42 @@ body.cq-acopio-cargando{overflow:hidden!important}
     </div>
     <div class="mbody">
       <div style="font-size:11px;color:#7A9E82;line-height:1.45;margin-bottom:12px">
-        Pegá cada dato en su columna y en el mismo orden: línea 1 con línea 1, línea 2 con línea 2, etc.
-        En <b>Cantidad total</b>, dejá la línea vacía si el material es abierto; si cargás una cantidad, ese artículo tendrá stock controlado y las salidas se descontarán de ese total. Elegí una sola regla para calcular el precio acordado.
+        Pegá los <b>códigos</b>, <b>artículos</b>, <b>precios unitarios</b> y <b>cantidades</b> en sus respectivas columnas, siempre una línea por artículo. Cada línea corresponde a la misma fila en las cuatro columnas.
+        En <b>Cantidad total</b>, dejá <b>una línea vacía en esa misma posición</b> si el material es abierto; si cargás una cantidad, ese artículo tendrá stock controlado y las salidas se descontarán de ese total. Elegí una sola regla para calcular el precio acordado.
       </div>
       <div class="cq-bulk-rule-box">
         <label class="cq-bulk-rule"><input type="checkbox" id="bulk-regla-ferro" checked onchange="cqBulkElegirRegla('ferro')"><span><b>Ferroconos</b><small>Precio acordado = precio cargado ÷ 1,21</small></span></label>
         <label class="cq-bulk-rule"><input type="checkbox" id="bulk-regla-deplano" onchange="cqBulkElegirRegla('deplano')"><span><b>Deplano</b><small>Precio acordado = (precio cargado ÷ 1,21) × 1,105</small></span></label>
         <label class="cq-bulk-rule"><input type="checkbox" id="bulk-regla-custom" onchange="cqBulkElegirRegla('custom')"><span><b>Agregar regla</b><small>Definir divisor y multiplicador</small></span></label>
         <div id="bulk-regla-custom-fields" class="cq-bulk-custom-fields" style="display:none">
-          <div class="fld"><label>Dividir por</label><input type="number" id="bulk-regla-dividir" min="0.000001" step="0.001" value="1"></div>
-          <div class="fld"><label>Multiplicar por</label><input type="number" id="bulk-regla-multiplicar" min="0" step="0.001" value="1"></div>
+          <div class="fld"><label>Dividir por</label><input type="number" id="bulk-regla-dividir" oninput="cqBulkActualizarVistaPrevia()" min="0.000001" step="0.001" value="1"></div>
+          <div class="fld"><label>Multiplicar por</label><input type="number" id="bulk-regla-multiplicar" oninput="cqBulkActualizarVistaPrevia()" min="0" step="0.001" value="1"></div>
         </div>
       </div>
 
       <div class="bulk-mat-grid">
         <div class="bulk-mat-col">
           <label>Códigos</label>
-          <textarea id="bulk-mat-codigos" rows="10" placeholder="2303583104&#10;2303583105&#10;2303583106"></textarea>
+          <textarea id="bulk-mat-codigos" wrap="off" oninput="cqBulkActualizarVistaPrevia()" rows="10" placeholder="2303583104&#10;2303583105&#10;2303583106"></textarea>
         </div>
         <div class="bulk-mat-col">
           <label>Artículos</label>
-          <textarea id="bulk-mat-articulos" rows="10" placeholder="Ladrillo cerámico 18&#10;Ladrillo cerámico 12&#10;Cemento"></textarea>
+          <textarea id="bulk-mat-articulos" wrap="off" oninput="cqBulkActualizarVistaPrevia()" rows="10" placeholder="Ladrillo cerámico 18&#10;Ladrillo cerámico 12&#10;Cemento"></textarea>
         </div>
         <div class="bulk-mat-col">
           <label>Precio unitario</label>
-          <textarea id="bulk-mat-precios" rows="10" inputmode="decimal" enterkeyhint="next" placeholder="1250&#10;980&#10;8500"></textarea>
+          <textarea id="bulk-mat-precios" wrap="off" oninput="cqBulkActualizarVistaPrevia()" rows="10" inputmode="decimal" enterkeyhint="next" placeholder="1250&#10;980&#10;8500"></textarea>
           <button type="button" class="bulk-next-price" onclick="bulkSiguientePrecio()">↓ Siguiente renglón</button>
         </div>
         <div class="bulk-mat-col">
           <label>Cantidad total <span style="font-weight:700;color:#A8BFA8">(opcional)</span></label>
-          <textarea id="bulk-mat-cantidades" rows="10" inputmode="decimal" placeholder="120&#10;&#10;50"></textarea>
+          <textarea id="bulk-mat-cantidades" wrap="off" oninput="cqBulkActualizarVistaPrevia()" rows="10" inputmode="decimal" placeholder="120&#10;&#10;50"></textarea>
         </div>
+      </div>
+
+      <div id="cq-bulk-revision" class="cq-bulk-review" aria-live="polite">
+        <div class="cq-bulk-review-hd">Revisión antes de guardar</div>
+        <div id="cq-bulk-revision-contenido" class="cq-bulk-review-note">Pegá los datos y comprobá acá el precio y la cantidad de cada artículo.</div>
       </div>
 
       <div class="bulk-sub-auto-note">
@@ -3692,6 +3718,7 @@ body.cq-acopio-cargando{overflow:hidden!important}
     <div class="mbody">
       <button class="btn btn-p" onclick="crearBackupManual()" style="width:auto;min-width:0;padding:8px 14px;font-size:11px;min-height:36px;display:inline-flex;align-items:center;justify-content:center;margin:0 auto">💾 Crear backup manual</button>
       <div class="sec-ttl" style="margin-top:16px">Elegí un backup para restaurar</div>
+      <button type="button" class="btn btn-s btn-sm" style="margin-bottom:8px" onclick="cqRefrescarHistorialBackups()">Verificar historial completo</button>
       <div id="backups-list"></div>
       <div style="font-size:10px;color:#A8BFA8;margin-top:10px;line-height:1.35">
         Se guardan automáticamente los últimos 20 backups. Al restaurar, se reemplaza el estado completo de la planilla.
@@ -3761,9 +3788,20 @@ body.cq-acopio-cargando{overflow:hidden!important}
     <p>Elegí un acopio para gestionar o creá uno nuevo</p>
   </div>
   <div id="home-activos-panel">
-    <div class="home-top-actions">
-      <button class="btn btn-p" onclick="openNuevoAcopio()">+ Nuevo acopio</button>
-      <button class="btn archivo-btn" onclick="showArchivados()">📦 Archivados <span class="archivo-count" id="archivo-count">0</span></button>
+    <div class="home-top-actions cq-home-actions-three" aria-label="Acciones de acopios">
+      <button type="button" id="cq-action-new" class="btn btn-p cq-home-action" onclick="openNuevoAcopio()" title="Crear un nuevo acopio">
+        <span class="cq-home-action-icon" aria-hidden="true">＋</span>
+        <span class="cq-home-action-copy">Nuevo <strong>acopio</strong></span>
+      </button>
+      <button type="button" id="cq-global-summary-btn" class="btn cq-home-action cq-summary-action" onclick="abrirResumenGeneralAcopios()" title="Resumen general de todos los retiros de todos los acopios" aria-label="Resumen general de acopios: todos los retiros">
+        <span class="cq-home-action-icon" aria-hidden="true">▦</span>
+        <span class="cq-home-action-copy">Resumen <strong>general</strong></span>
+      </button>
+      <button type="button" id="cq-action-archived" class="btn archivo-btn cq-home-action" onclick="showArchivados()" title="Ver acopios archivados">
+        <span class="cq-home-action-icon" aria-hidden="true">📁</span>
+        <span class="cq-home-action-copy">Archivados</span>
+        <span class="archivo-count" id="archivo-count">0</span>
+      </button>
     </div>
     <div id="acopios-list"></div>
   </div>
@@ -3779,6 +3817,62 @@ body.cq-acopio-cargando{overflow:hidden!important}
   </div>
 </div>
 
+
+<!-- VISTA GENERAL: CONSULTA DE TODOS LOS ACOPIOS (incluye archivados) -->
+<div id="view-reporte-global" class="main" style="display:none">
+  <div class="cq-global-header">
+    <div><h2 class="cq-global-title">Resumen general de acopios</h2><div class="cq-global-subtitle">Todos los retiros de todos los acopios, incluidos los archivados</div></div>
+    <button type="button" class="btn btn-s cq-global-back" onclick="abrirMenuAcopios()">← Volver</button>
+  </div>
+  <button type="button" class="btn btn-p btn-full cq-rep-whatsapp" onclick="cqGlobalRepPDFWhatsApp()">📲 Enviar PDF por WhatsApp</button>
+  <button type="button" id="cq-global-filtros-toggle" class="cq-rep-filtros-toggle" onclick="cqGlobalRepToggleFilters()">
+    <span>⚙ Filtros del reporte</span><span id="cq-global-filtros-resumen">Todos los retiros</span><span class="cq-rep-filtros-arrow">⌄</span>
+  </button>
+  <div class="filter-card cq-rep-filtros-panel" id="cq-global-filtros-panel">
+    <div class="cq-rep-filter-grid">
+      <div class="fld cq-rep-filter-fld">
+        <label>Obra</label>
+        <select id="cq-global-obra-filter" multiple aria-hidden="true" tabindex="-1" style="display:none"></select>
+        <div class="cq-rep-multi" id="cq-global-obra-multi">
+          <button type="button" class="cq-rep-multi-btn" onclick="cqGlobalRepToggleMulti('obra',event)"><span id="cq-global-obra-label">Todas las obras</span><span class="cq-rep-multi-arrow">⌄</span></button>
+          <div class="cq-rep-multi-panel">
+            <div class="cq-rep-search"><span>⌕</span><input id="cq-global-obra-search" placeholder="Buscar obra..." oninput="cqGlobalRepOptions('obra')" autocomplete="off"></div>
+            <div class="cq-rep-actions"><button type="button" onclick="cqGlobalRepToggleAll('obra',event)">Todos</button><button type="button" class="cq-rep-ok" onclick="cqGlobalRepConfirm('obra',event)">OK</button></div>
+            <div class="cq-rep-options" id="cq-global-obra-options"></div>
+          </div>
+        </div>
+      </div>
+      <div class="fld cq-rep-filter-fld">
+        <label>Subrubro</label>
+        <select id="cq-global-subrubro-filter" multiple aria-hidden="true" tabindex="-1" style="display:none"></select>
+        <div class="cq-rep-multi" id="cq-global-subrubro-multi">
+          <button type="button" class="cq-rep-multi-btn" onclick="cqGlobalRepToggleMulti('subrubro',event)"><span id="cq-global-subrubro-label">Todos los subrubros</span><span class="cq-rep-multi-arrow">⌄</span></button>
+          <div class="cq-rep-multi-panel">
+            <div class="cq-rep-search"><span>⌕</span><input id="cq-global-subrubro-search" placeholder="Buscar subrubro..." oninput="cqGlobalRepOptions('subrubro')" autocomplete="off"></div>
+            <div class="cq-rep-actions"><button type="button" onclick="cqGlobalRepToggleAll('subrubro',event)">Todos</button><button type="button" class="cq-rep-ok" onclick="cqGlobalRepConfirm('subrubro',event)">OK</button></div>
+            <div class="cq-rep-options" id="cq-global-subrubro-options"></div>
+          </div>
+        </div>
+      </div>
+      <div class="fld cq-rep-filter-fld cq-rep-producto">
+        <label>Producto</label>
+        <select id="cq-global-producto-filter" multiple aria-hidden="true" tabindex="-1" style="display:none"></select>
+        <div class="cq-rep-multi" id="cq-global-producto-multi">
+          <button type="button" class="cq-rep-multi-btn" onclick="cqGlobalRepToggleMulti('producto',event)"><span id="cq-global-producto-label">Todos los productos</span><span class="cq-rep-multi-arrow">⌄</span></button>
+          <div class="cq-rep-multi-panel">
+            <div class="cq-rep-search"><span>⌕</span><input id="cq-global-producto-search" placeholder="Buscar producto..." oninput="cqGlobalRepOptions('producto')" autocomplete="off"></div>
+            <div class="cq-rep-actions"><button type="button" onclick="cqGlobalRepToggleAll('producto',event)">Todos</button><button type="button" class="cq-rep-ok" onclick="cqGlobalRepConfirm('producto',event)">OK</button></div>
+            <div class="cq-rep-options" id="cq-global-producto-options"></div>
+          </div>
+        </div>
+      </div>
+      <div class="fld"><label>Desde</label><input type="date" id="cq-global-desde" onchange="cqGlobalRepRender()"></div>
+      <div class="fld"><label>Hasta</label><input type="date" id="cq-global-hasta" onchange="cqGlobalRepRender()"></div>
+    </div>
+    <button type="button" class="cq-rep-limpiar" onclick="cqGlobalRepClear()">↺ Limpiar todos los filtros</button>
+  </div>
+  <div id="cq-global-reporte-content"></div>
+</div>
 
 <!-- ═══════════════ ENTREGAS PENDIENTES ═══════════════ -->
 <div id="view-entregas-pendientes" class="main" style="display:none">
@@ -3879,6 +3973,9 @@ body.cq-acopio-cargando{overflow:hidden!important}
       🔧 Reparar retiros pendientes en Materiales
     </button>
     <div id="cq-reparar-materiales-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#F7F6F3;font-size:11px;color:#567065;line-height:1.35"></div>
+    <button type="button" id="cq-reparar-bajas-materiales-btn" class="btn btn-s btn-full" onclick="cqRepararBajasAcopioMateriales()" style="margin:0 0 8px">
+      🧹 Reparar bajas antiguas en Materiales
+    </button>
 
     <button type="button" id="cq-reparar-gastos-btn" class="btn btn-s btn-full" onclick="cqRepararGastosPendientes()" style="margin:0 0 8px">
       💰 Reparar retiros pendientes en Gastos
@@ -3889,6 +3986,9 @@ body.cq-acopio-cargando{overflow:hidden!important}
       🧰 Reparar retiros pendientes en Pañol
     </button>
     <div id="cq-reparar-panol-info" style="display:none;margin:-2px 0 9px;padding:9px 11px;border-radius:8px;background:#F7F6F3;font-size:11px;color:#567065;line-height:1.35"></div>
+    <button type="button" id="cq-reparar-bajas-panol-btn" class="btn btn-s btn-full" onclick="cqRepararBajasAntiguasPanol()" style="margin:0 0 8px">
+      🧹 Reparar bajas antiguas en Pañol
+    </button>
     <button type="button" id="cq-ret-filtros-toggle" class="cq-ret-filtros-toggle" onclick="cqToggleHistFiltros()">
       <span>⚙ Filtros</span><span id="cq-ret-filtros-resumen">Todos los retiros</span><span class="cq-ret-filtros-arrow">⌄</span>
     </button>
@@ -4688,6 +4788,79 @@ function maybeAutoBackup(){
   lastAutoBackupAt=now;
 }
 const CQ_ACOPIO_BACKUP_COLLECTION='acopio_backups';
+// CQ 19/11/2026 · Indice liviano (en la MISMA coleccion; no exige reglas nuevas).
+// Nunca contiene el campo db de las copias. Si falla, se usa el historial original.
+const CQ_ACOPIO_BACKUP_INDEX_ID='__indice_liviano_cq_v1';
+var cqAcopioIndiceEnConstruccion=null;
+function cqAcopioBackupIndiceRef(){
+  var f=window._cqFirebase;
+  return f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,CQ_ACOPIO_BACKUP_INDEX_ID);
+}
+function cqAcopioBackupMeta(id,d){
+  return {tipo:String(d.tipo||'auto'),fecha:String(d.fecha||''),createdAt:String(d.createdAt||''),sourceUpdatedAt:String(d.sourceUpdatedAt||'')};
+}
+async function cqLeerIndiceBackups(){
+  var f=window._cqFirebase;
+  var snap=await f.getDoc(cqAcopioBackupIndiceRef());
+  var data=snap.exists()?snap.data():null;
+  return data&&typeof data==='object'?data:null;
+}
+async function cqRegistrarEnIndiceBackups(id,datos){
+  var f=window._cqFirebase;
+  if(!f||!f.runTransaction)return;
+  await f.runTransaction(f.db,async function(tx){
+    var ref=cqAcopioBackupIndiceRef(),snap=await tx.get(ref);
+    var d=snap.exists()?(snap.data()||{}):{};
+    var items=(d.items&&typeof d.items==='object')?Object.assign({},d.items):{};
+    items[id]=cqAcopioBackupMeta(id,datos);
+    tx.set(ref,{ready:d.ready===true,items:items,updatedAt:new Date().toISOString()});
+  });
+}
+async function cqQuitarDelIndiceBackups(ids){
+  if(!ids||!ids.length)return;
+  var f=window._cqFirebase;
+  await f.runTransaction(f.db,async function(tx){
+    var ref=cqAcopioBackupIndiceRef(),snap=await tx.get(ref);
+    if(!snap.exists())return;
+    var d=snap.data()||{},items=Object.assign({},d.items||{});
+    ids.forEach(function(id){delete items[id];});
+    tx.set(ref,{ready:d.ready===true,items:items,updatedAt:new Date().toISOString()});
+  });
+}
+async function cqAsegurarIndiceBackups(forzar){
+  var previo=await cqLeerIndiceBackups();
+  if(!forzar&&previo&&previo.ready===true)return previo;
+  if(cqAcopioIndiceEnConstruccion)return cqAcopioIndiceEnConstruccion;
+  cqAcopioIndiceEnConstruccion=(async function(){
+    var f=window._cqFirebase;
+    // Primera migracion solamente: lectura original completa, sin modificar ningun backup.
+    var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
+    var encontrados={};
+    snaps.forEach(function(x){
+      if(x.id===CQ_ACOPIO_BACKUP_INDEX_ID)return;
+      var d=x.data()||{};
+      if(d.db)encontrados[x.id]=cqAcopioBackupMeta(x.id,d);
+    });
+    await f.runTransaction(f.db,async function(tx){
+      var ref=cqAcopioBackupIndiceRef(),snap=await tx.get(ref);
+      var actual=snap.exists()?(snap.data()||{}):{};
+      // Conservar altas de otro dispositivo durante la migracion.
+      var items=Object.assign({},encontrados,actual.items||{});
+      tx.set(ref,{ready:true,items:items,updatedAt:new Date().toISOString()});
+    });
+    return await cqLeerIndiceBackups();
+  })();
+  try{return await cqAcopioIndiceEnConstruccion;}
+  finally{cqAcopioIndiceEnConstruccion=null;}
+}
+async function cqRefrescarHistorialBackups(){
+  var el=document.getElementById('backups-list');
+  if(el)el.innerHTML='<div class="empty">Verificando historial completo...</div>';
+  try{
+    await cqAsegurarIndiceBackups(true);
+    await renderBackups();
+  }catch(e){console.warn('Acopio: no se pudo actualizar indice',e);await renderBackups();}
+}
 
 function cqBackupDateId(d){
   d=d||new Date();
@@ -4701,36 +4874,61 @@ async function cqCrearBackupFirebase(tipo,dbFuente,idForzado){
   var id=idForzado||((tipo==='auto'?'daily_':'manual_')+cqBackupDateId(ahora)+(tipo==='auto'?'':'_'+ahora.getTime()));
   var data=sanitizeDB(JSON.parse(JSON.stringify(dbFuente||cloneDBSinBackups())));
   data.backups=[];
-  await f.setDoc(f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,id),{
+  var registro={
     tipo:tipo||'manual',
     fecha:cqBackupDateId(ahora),
     createdAt:ahora.toISOString(),
     sourceUpdatedAt:lastSyncedAt||'',
     db:data
-  });
+  };
+  await f.setDoc(f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,id),registro);
+  // Indice auxiliar: su fallo NO invalida un backup completo ya confirmado.
+  try{await cqRegistrarEnIndiceBackups(id,registro);}catch(e){console.warn('Acopio: indice de backup pendiente',e);}
   return id;
 }
 async function cqBackupDiarioDesdeRemoto(dbRemota,sourceUpdatedAt){
   try{
     if(!window._cqFirebaseReady||!window._cqFirebase||!dbRemota)return;
     var f=window._cqFirebase;
-    var id='daily_'+cqBackupDateId(new Date());
+    var ahora=new Date(),id='daily_'+cqBackupDateId(ahora);
+    // Una lectura liviana del indice reemplaza la descarga diaria del backup completo.
+    // Si no figura, verificar el documento real: conserva backups de versiones antiguas.
+    var indice=null;
+    try{indice=await cqLeerIndiceBackups();}catch(e){console.warn('Acopio: indice no disponible; verificando backup real',e);}
+    if(indice&&indice.items&&indice.items[id])return;
     var ref=f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,id);
     var existe=await f.getDoc(ref);
-    if(existe.exists())return;
+    if(existe.exists()){
+      try{await cqRegistrarEnIndiceBackups(id,existe.data()||{});}catch(e){console.warn('Acopio: indice diario pendiente',e);}
+      return;
+    }
     var data=sanitizeDB(JSON.parse(JSON.stringify(dbRemota)));data.backups=[];
-    await f.setDoc(ref,{tipo:'auto',fecha:cqBackupDateId(new Date()),createdAt:new Date().toISOString(),sourceUpdatedAt:sourceUpdatedAt||'',db:data});
+    var registro={tipo:'auto',fecha:cqBackupDateId(ahora),createdAt:ahora.toISOString(),sourceUpdatedAt:sourceUpdatedAt||'',db:data};
+    await f.setDoc(ref,registro);
+    try{await cqRegistrarEnIndiceBackups(id,registro);}catch(e){console.warn('Acopio: indice diario pendiente',e);}
     await cqLimpiarBackupsFirebase();
   }catch(e){console.warn('Acopio: backup diario omitido',e);}
 }
 async function cqLimpiarBackupsFirebase(){
   try{
     var f=window._cqFirebase;if(!f||!f.deleteDoc)return;
-    var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
-    var arr=[];snaps.forEach(function(x){var d=x.data()||{};if(String(x.id).indexOf('pre_restore_')!==0)arr.push({id:x.id,createdAt:d.createdAt||''});});
+    var arr=[],indice=null;
+    try{indice=await cqAsegurarIndiceBackups();}catch(e){console.warn('Acopio: indice no disponible; usando lectura original',e);}
+    if(indice&&indice.ready&&indice.items){
+      Object.keys(indice.items).forEach(function(id){
+        if(id.indexOf('pre_restore_')!==0)arr.push({id:id,createdAt:indice.items[id].createdAt||''});
+      });
+    }else{
+      var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
+      snaps.forEach(function(x){var d=x.data()||{};if(x.id!==CQ_ACOPIO_BACKUP_INDEX_ID&&d.db&&x.id.indexOf('pre_restore_')!==0)arr.push({id:x.id,createdAt:d.createdAt||''});});
+    }
     arr.sort(function(a,b){return String(b.createdAt).localeCompare(String(a.createdAt));});
-    var sobrantes=arr.slice(30);
-    for(var i=0;i<sobrantes.length;i++)await f.deleteDoc(f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,sobrantes[i].id));
+    var sobrantes=arr.slice(30),borrados=[];
+    for(var i=0;i<sobrantes.length;i++){
+      await f.deleteDoc(f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,sobrantes[i].id));
+      borrados.push(sobrantes[i].id);
+    }
+    try{await cqQuitarDelIndiceBackups(borrados);}catch(e){console.warn('Acopio: limpieza de indice pendiente',e);}
   }catch(e){console.warn('Acopio: no se pudieron depurar backups',e);}
 }
 async function crearBackupManual(){
@@ -4751,8 +4949,18 @@ async function renderBackups(){
   el.innerHTML='<div class="empty">Cargando backups de Firebase...</div>';
   try{
     if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
-    var f=window._cqFirebase,snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION)),arr=[];
-    snaps.forEach(function(x){var d=x.data()||{};if(d.db)arr.push({id:x.id,tipo:d.tipo||'auto',createdAt:d.createdAt||'',fecha:d.fecha||'',sourceUpdatedAt:d.sourceUpdatedAt||''});});
+    var f=window._cqFirebase,arr=[],indice=null;
+    try{indice=await cqAsegurarIndiceBackups();}catch(e){console.warn('Acopio: historial completo sin indice',e);}
+    if(indice&&indice.ready&&indice.items){
+      Object.keys(indice.items).forEach(function(id){
+        var d=indice.items[id]||{};
+        arr.push({id:id,tipo:d.tipo||'auto',createdAt:d.createdAt||'',fecha:d.fecha||'',sourceUpdatedAt:d.sourceUpdatedAt||''});
+      });
+    }else{
+      // Compatibilidad: sin indice o sin permisos, mantener el historial original.
+      var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
+      snaps.forEach(function(x){var d=x.data()||{};if(d.db)arr.push({id:x.id,tipo:d.tipo||'auto',createdAt:d.createdAt||'',fecha:d.fecha||'',sourceUpdatedAt:d.sourceUpdatedAt||''});});
+    }
     arr.sort(function(a,b){return String(b.createdAt).localeCompare(String(a.createdAt));});
     if(!arr.length){el.innerHTML='<div class="empty">Todavía no hay backups en Firebase</div>';return;}
     el.innerHTML=arr.slice(0,30).map(function(b){
@@ -6177,12 +6385,11 @@ function bulkSiguientePrecio(){
   if(!el)return;
   var start=el.selectionStart==null?el.value.length:el.selectionStart;
   var end=el.selectionEnd==null?start:el.selectionEnd;
-  var before=el.value.slice(0,start),after=el.value.slice(end);
-  if(before && !before.endsWith('\n'))before+='\n';
-  el.value=before+after;
-  var pos=before.length;
+  // Insertar SIEMPRE un renglón, incluso si el anterior ya era vacío.
+  // La versión anterior perdía las líneas vacías y desalineaba precios y cantidades.
+  el.setRangeText('\n',start,end,'end');
+  el.dispatchEvent(new Event('input',{bubbles:true}));
   el.focus();
-  try{el.setSelectionRange(pos,pos);}catch(e){}
 }
 document.addEventListener('cq-acopio-datos-confirmados',function(){
   cargarConfigGastosAcopio().then(function(){
@@ -6206,7 +6413,7 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 var cqSeccionAcopio='menu';
 
 function cqOcultarVistasRaiz(){
-  var ids=['view-menu-acopio','view-home','view-entregas-pendientes','view-acopio'];
+  var ids=['view-menu-acopio','view-home','view-entregas-pendientes','view-acopio','view-reporte-global'];
   ids.forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
   var tabs=document.getElementById('tabs-acopio');if(tabs)tabs.style.display='none';
 }
@@ -6255,6 +6462,7 @@ function cqVolverAcopio(){
     abrirMenuAcopios();
     return;
   }
+  if(cqSeccionAcopio==='resumen-general'){abrirMenuAcopios();return;}
   if(cqSeccionAcopio==='acopios' || cqSeccionAcopio==='entregas'){
     goHome();
     return;
@@ -6507,6 +6715,12 @@ async function confirmarBorrarAcopio(id){
       ?JSON.parse(JSON.stringify(acEliminar.retiros))
       :[];
 
+    // Sin Firebase el borrado local puede dejar movimientos huérfanos en otros módulos.
+    if(retirosEliminar.length && (!window._cqFirebaseReady||!window._cqFirebase)){
+      toast('Conectá Firebase para borrar el acopio y sus movimientos vinculados','err');
+      return;
+    }
+    var contextoAcopio=acEliminar?JSON.parse(JSON.stringify(acEliminar)):null;
     pushUndo();
     cqDesprotegerAcopioNuevo(id);
     retirosEliminar.forEach(function(r){
@@ -6519,20 +6733,11 @@ async function confirmarBorrarAcopio(id){
 
     if(document.getElementById('home-archivados-panel')&&document.getElementById('home-archivados-panel').classList.contains('open'))renderArchivados();else renderHome();
 
-    // Borrar el acopio completo debe equivaler a borrar uno por uno todos sus retiros.
-    // Así no quedan cargas huérfanas activas en Materiales/Gastos/Pañol.
-    if(retirosEliminar.length && window._cqFirebaseReady&&window._cqFirebase){
-      var fallas=0;
-      for(var i=0;i<retirosEliminar.length;i++){
-        try{
-          var errs=await cqLimpiarDestinosRetiroExacto(id,retirosEliminar[i]);
-          if(errs&&errs.length)fallas+=errs.length;
-        }catch(e){
-          fallas++;
-          console.warn('Limpieza al borrar acopio',id,retirosEliminar[i]&&retirosEliminar[i].id,e);
-        }
-      }
-      toast(fallas?'⚠️ Acopio eliminado · revisar '+fallas+' vínculo(s)':'✓ Acopio eliminado y vínculos limpiados',fallas?'err':undefined);
+    // Borrar el acopio completo equivale a dar de baja cada retiro en todos los destinos.
+    // Se conserva la ficha anterior para identificar cargas históricas sin ID auxiliar.
+    if(retirosEliminar.length){
+      var errores=await cqCompletarBorradoLoteAcopio(id,retirosEliminar,contextoAcopio);
+      toast(errores.length?'⚠️ Acopio eliminado · revisar '+errores.join(', '):'✓ Acopio eliminado y vínculos limpiados',errores.length?'err':undefined);
     }
   } else {
     pendingDeleteAcopioId=id;
@@ -6707,6 +6912,7 @@ function cqBulkElegirRegla(tipo){
   });
   var fields=document.getElementById('bulk-regla-custom-fields');
   if(fields)fields.style.display=(tipo==='custom')?'grid':'none';
+  cqBulkActualizarVistaPrevia();
 }
 function cqBulkReglaActual(){
   if(document.getElementById('bulk-regla-deplano')&&document.getElementById('bulk-regla-deplano').checked)return 'deplano';
@@ -6740,26 +6946,36 @@ function openCargaMasivaMateriales(){
   cqBulkElegirRegla('ferro');
   var d=document.getElementById('bulk-regla-dividir'),m=document.getElementById('bulk-regla-multiplicar');
   if(d)d.value='1';if(m)m.value='1';
+  cqBulkActualizarVistaPrevia();
   openModal('modal-carga-masiva-mat');
   setTimeout(function(){document.getElementById('bulk-mat-codigos').focus();},100);
 }
 
 function parsePrecioMasivo(value){
-  var s=String(value||'').trim().replace(/\s/g,'');
-  if(!s)return 0;
-  s=s.replace(/\$/g,'');
-  if(s.indexOf(',')>=0 && s.indexOf('.')>=0){
-    if(s.lastIndexOf(',')>s.lastIndexOf('.')){
-      s=s.replace(/\./g,'').replace(',','.');
+  var s=String(value==null?'':value).trim()
+    .replace(/\s|\u00a0/g,'').replace(/\$/g,'').replace(/ARS/gi,'');
+  if(!s||!/^[+]?[0-9][0-9.,]*$/.test(s))return 0;
+  var p=s.lastIndexOf('.'),c=s.lastIndexOf(',');
+  if(p>=0&&c>=0){
+    // 1.234,56 y 1,234.56
+    s=c>p?s.replace(/\./g,'').replace(',','.'):
+      s.replace(/,/g,'');
+  }else if(p>=0||c>=0){
+    var sep=p>=0?'.':',';
+    var partes=s.split(sep);
+    if(partes.length>2){
+      // 1.234.567 o 1,234,567
+      if(!partes.slice(1).every(function(x){return x.length===3;}))return 0;
+      s=partes.join('');
     }else{
-      s=s.replace(/,/g,'');
+      var entero=partes[0],dec=partes[1]||'';
+      if(!dec)return 0;
+      var millares=(dec.length===3&&entero.length<=3&&entero!=='0');
+      s=millares?entero+dec:entero+'.'+dec;
     }
-  }else if(s.indexOf(',')>=0){
-    var parts=s.split(',');
-    if(parts.length===2 && parts[1].length<=2)s=parts[0].replace(/\./g,'')+'.'+parts[1];
-    else s=s.replace(/,/g,'');
   }
-  return parseFloat(s)||0;
+  var n=Number(s);
+  return isFinite(n)&&n>0?n:0;
 }
 
 
@@ -6874,6 +7090,70 @@ function cqOcultarClasificacionBulk(){
   if(btn)btn.textContent='Agregar materiales';
 }
 
+// Cada posición (incluidas las líneas vacías) identifica la misma fila en las 4 columnas.
+function cqBulkLeerFilas(){
+  var ids=['codigos','articulos','precios','cantidades'];
+  var columnas=ids.map(function(id){
+    var el=document.getElementById('bulk-mat-'+id);
+    return (el?el.value:'').replace(/\r\n?/g,'\n').split('\n');
+  });
+  var maxLen=Math.max.apply(null,columnas.map(function(c){return c.length;}));
+  var parsed=[],invalidas=[],filas=[];
+  for(var i=0;i<maxLen;i++){
+    var cod=String(columnas[0][i]||'').trim();
+    var nom=String(columnas[1][i]||'').trim();
+    var precioTxt=String(columnas[2][i]||'').trim();
+    var cantTxt=String(columnas[3][i]||'').trim();
+    if(!cod&&!nom&&!precioTxt&&!cantTxt)continue;
+    var pu=parsePrecioMasivo(precioTxt);
+    var cantidad=cantTxt?parsePrecioMasivo(cantTxt):null;
+    var razon='';
+    if(!nom)razon='Falta artículo';
+    else if(!precioTxt||!(pu>0))razon='Precio inválido o vacío';
+    else if(cantTxt&&!(cantidad>0))razon='Cantidad inválida';
+    var fila={fila:i+1,cod:cod,nom:nom,precioUnit:pu,
+      precioAcord:0,unidad:'c/u',controlStock:cantTxt?'limitado':'abierto',
+      cantidadTotal:cantidad,razon:razon};
+    if(!razon){
+      try{fila.precioAcord=cqBulkPrecioAcordado(pu);}
+      catch(e){fila.razon=e.message||String(e);}
+    }
+    filas.push(fila);
+    if(fila.razon)invalidas.push(i+1);
+    else parsed.push(fila);
+  }
+  return {parsed:parsed,invalidas:invalidas,filas:filas};
+}
+function cqFmtBulkNum(n){
+  return Number(n).toLocaleString('es-AR',{maximumFractionDigits:2});
+}
+function cqBulkActualizarVistaPrevia(){
+  var el=document.getElementById('cq-bulk-revision-contenido');
+  if(!el)return;
+  var datos=cqBulkLeerFilas(),filas=datos.filas;
+  if(!filas.length){
+    el.innerHTML='Pegá los datos y comprobá acá el precio y la cantidad de cada artículo.';
+    return;
+  }
+  var validos=datos.parsed.length;
+  var conCantidad=datos.parsed.filter(function(m){return m.controlStock==='limitado';}).length;
+  var html='<div class="cq-bulk-review-hd">'+validos+' artículo'+(validos===1?'':'s')+' listo'+(validos===1?'':'s')
+    +' · '+conCantidad+' con cantidad específica · '+(validos-conCantidad)+' abiertos</div>';
+  html+='<div class="cq-bulk-review-scroll"><table><thead><tr><th>Fila</th><th>Artículo / código</th><th>Precio unit.</th><th>Precio acord.</th><th>Cantidad total</th></tr></thead><tbody>';
+  filas.slice(0,50).forEach(function(m){
+    html+='<tr'+(m.razon?' class="cq-bulk-error"':'')+'><td>'+m.fila+'</td><td>'
+      +cqEscBulk(m.nom||'—')+(m.cod?'<div style="font-size:9px;color:#7A9E82">'+cqEscBulk(m.cod)+'</div>':'')
+      +'</td><td class="num">'+(m.precioUnit>0?'$ '+cqFmtBulkNum(m.precioUnit):'—')
+      +'</td><td class="num">'+(!m.razon?'$ '+cqFmtBulkNum(m.precioAcord):'—')
+      +'</td><td class="num">'+(m.razon?cqEscBulk(m.razon):m.controlStock==='limitado'?cqFmtBulkNum(m.cantidadTotal):'Abierto')+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  if(filas.length>50)html+='<div class="cq-bulk-review-note">Se muestran 50 de '+filas.length+' filas.</div>';
+  if(datos.invalidas.length)html+='<div class="cq-bulk-review-warning">Corregí las filas '+datos.invalidas.join(', ')+' antes de guardar; no se omitirá ningún artículo por error.</div>';
+  else html+='<div class="cq-bulk-review-note" style="margin-top:7px">Verificá las cantidades y precios. Los datos todavía no están guardados.</div>';
+  el.innerHTML=html;
+}
+
 function guardarCargaMasivaMateriales(){
   var clasWrap=document.getElementById('bulk-sub-clasificar');
   if(clasWrap&&clasWrap.classList.contains('open')){
@@ -6887,40 +7167,14 @@ function guardarCargaMasivaMateriales(){
     }
   }
   try{cqBulkPrecioAcordado(1);}catch(e){alert(e.message||e);return;}
-  var codigos=(document.getElementById('bulk-mat-codigos').value||'').split(/\r?\n/);
-  var articulos=(document.getElementById('bulk-mat-articulos').value||'').split(/\r?\n/);
-  var precios=(document.getElementById('bulk-mat-precios').value||'').split(/\r?\n/);
-  var cantidades=(document.getElementById('bulk-mat-cantidades').value||'').split(/\r?\n/);
-
-  var maxLen=Math.max(codigos.length,articulos.length,precios.length,cantidades.length);
-  var parsed=[];
-  var invalidas=[];
-
-  for(var i=0;i<maxLen;i++){
-    var cod=String(codigos[i]||'').trim();
-    var nom=String(articulos[i]||'').trim();
-    var pu=parsePrecioMasivo(precios[i]||'');
-    var cantRaw=String(cantidades[i]||'').trim();
-    var cant=cantRaw?parsePrecioMasivo(cantRaw):null;
-
-    var emptyRow=!cod && !nom && !String(precios[i]||'').trim() && !cantRaw;
-    if(emptyRow)continue;
-
-    if(!nom || pu<=0 || (cantRaw && cant<=0)){
-      invalidas.push(i+1);
-      continue;
-    }
-
-    parsed.push({
-      fila:i+1,
-      cod:cod,
-      nom:nom,
-      precioUnit:pu,
-      precioAcord:cqBulkPrecioAcordado(pu),
-      unidad:'c/u',
-      controlStock:cantRaw?'limitado':'abierto',
-      cantidadTotal:cantRaw?cant:null
-    });
+  // Usar exactamente las mismas filas, precios y cantidades que muestra la vista previa.
+  var lectura=cqBulkLeerFilas();
+  var parsed=lectura.parsed;
+  var invalidas=lectura.invalidas;
+  if(invalidas.length){
+    cqBulkActualizarVistaPrevia();
+    alert('Hay datos incompletos o inválidos en las filas '+invalidas.join(', ')+'. Corregilos antes de guardar para evitar precios o cantidades mal asignados.');
+    return;
   }
 
   if(!parsed.length){
@@ -7001,6 +7255,7 @@ function guardarCargaMasivaMateriales(){
     m.updatedAt=m.createdAt;
     m.updatedBy=window._cqUsuarioActual||'Acopio';
     delete m.fila;
+    delete m.razon;
     delete m.omitirDuplicado;
     a.mats.push(m);
     cqProtegerAltaMaterial(a.id,m);
@@ -7910,8 +8165,10 @@ async function cqAutoRepararMaterialesFaltantesActual(){
 function iniciarVerificacionMaterialesAcopio(){
   if(!window.__cqAcopioInicialConfirmado)return;
   if(!window._cqFirebaseReady||!window._cqFirebase){setTimeout(iniciarVerificacionMaterialesAcopio,700);return;}
+  // La señal de inicio puede llegar varias veces; no desuscribir y volver a leer
+  // el documento grande de Materiales en cada llamada duplicada.
+  if(unsubVerificacionMaterialesAcopio)return;
   var f=window._cqFirebase;
-  try{ if(unsubVerificacionMaterialesAcopio) unsubVerificacionMaterialesAcopio(); }catch(_e){}
   unsubVerificacionMaterialesAcopio=f.onSnapshot(f.doc(f.db,'materiales','data_planilla_exacta_v4'),function(snap){
     // No reparar retiros usando un catálogo local antiguo.
     if(snap.metadata && snap.metadata.fromCache)return;
@@ -10613,6 +10870,93 @@ async function openEditRetiro(id){
 // CQ 17/09/2026 — reparación segura de retiros que deberían existir en Materiales.
 // NO crea ni modifica retiros de Acopio. NO toca Gastos ni Pañol.
 // Verifica primero el documento real de Materiales y sólo reintenta los faltantes.
+// CQ 19/11/2026 — reparación voluntaria de bajas anteriores que sólo borraron Acopio.
+// Las coincidencias son por integrationId exacto, NUNCA por nombre/cantidad del producto.
+async function cqRepararBajasAcopioMateriales(){
+  var btn=document.getElementById('cq-reparar-bajas-materiales-btn');
+  if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no disponible','err');return;}
+  var f=window._cqFirebase;
+  var aRef=f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID);
+  var mRef=f.doc(f.db,'materiales','data_planilla_exacta_v4');
+  if(btn){btn.disabled=true;btn.textContent='Buscando bajas pendientes…';}
+  try{
+    var snaps=await Promise.all([f.getDoc(aRef),f.getDoc(mRef)]);
+    if(!snaps[0].exists()||!(snaps[0].data()||{}).db)throw new Error('No se pudo verificar el estado actual de Acopio');
+    if(!snaps[1].exists())throw new Error('No se pudo leer Materiales');
+    function vivosEn(db){
+      var s=new Set();
+      (db&&Array.isArray(db.acopios)?db.acopios:[]).forEach(function(a){
+        (Array.isArray(a&&a.retiros)?a.retiros:[]).forEach(function(r){s.add(integracionRetiroId(a.id,r.id));});
+      });
+      return s;
+    }
+    var activos=vivosEn((snaps[0].data()||{}).db);
+    var cargas=(snaps[1].data()||{}).cargas||[];
+    var candidatos=cargas.filter(function(c){
+      var id=String(c&&c.integracionId||'');
+      return /^acopio_[0-9]+_[0-9]+$/.test(id) && !activos.has(id);
+    });
+    if(!candidatos.length){toast('✓ No hay cargas borradas pendientes en Materiales');return;}
+    var ids=new Set(candidatos.map(function(c){return String(c.integracionId);}));
+    var muestra=candidatos.slice(0,8).map(function(c){return '• '+String(c.matName||c.materialNameOrigen||'Material')+' · '+String(c.qty||0);}).join('\n');
+    if(!confirm('Se encontraron '+candidatos.length+' cargas automáticas de Acopio que ya no tienen un retiro vigente.\n\n'+muestra+'\n\nSe eliminarán ÚNICAMENTE esas cargas de Materiales (por ID exacto). No se tocarán cargas manuales ni retiros vigentes. ¿Continuar?'))return;
+
+    var eliminados=[];
+    await f.runTransaction(f.db,async function(tx){
+      var actualA=await tx.get(aRef);
+      var actualM=await tx.get(mRef);
+      if(!actualA.exists()||!actualA.data().db||!actualM.exists())throw new Error('Datos remotos incompletos');
+      var vivos=vivosEn(actualA.data().db);
+      var data=actualM.data()||{};
+      var original=Array.isArray(data.cargas)?data.cargas:[];
+      var quitar=original.filter(function(c){
+        var iid=String(c&&c.integracionId||'');
+        return ids.has(iid)&&!vivos.has(iid)&&/^acopio_[0-9]+_[0-9]+$/.test(iid);
+      });
+      if(!quitar.length)return;
+      var eliminadosIds=new Set(quitar.map(function(c){return String(c.integracionId);}));
+      data.cargas=original.filter(function(c){return !eliminadosIds.has(String(c&&c.integracionId||''));});
+      // Mantener sólo fichas automáticas que todavía tengan movimientos.
+      var mats=new Set(quitar.map(function(c){return String(c.matId);}));
+      if(!Array.isArray(data.extraMats))data.extraMats=[];
+      mats.forEach(function(mid){
+        if((data.cargas||[]).some(function(c){return String(c&&c.matId)===mid;}))return;
+        var extra=data.extraMats.find(function(x){return x&&String(x.id)===mid;});
+        var auto=extra&&(extra.autoCreated===true||String(extra.source||'').toLowerCase()==='acopio'||String(extra.comentarios||'').indexOf('Creado automáticamente desde Acopio')===0);
+        if(!auto)return;
+        data.extraMats=data.extraMats.filter(function(x){return String(x&&x.id)!==mid;});
+        if(data.matCodigos)delete data.matCodigos[mid];
+        if(data.matCategorias)delete data.matCategorias[mid];
+        if(data.matNombres)delete data.matNombres[mid];
+      });
+      data.updatedAt=new Date().toISOString();
+      data.updatedByIntegration='cq_reparacion_bajas_acopio';
+      tx.set(mRef,data);
+      eliminados=quitar.map(function(c){return String(c.integracionId);});
+    });
+    // Auditoría secundaria: la fuente de verdad ya quedó corregida en Materiales.
+    var fallas=0;
+    for(var i=0;i<eliminados.length;i++){
+      try{
+        await f.setDoc(f.doc(f.db,'materiales_integraciones',eliminados[i]),{
+          active:false,deletedAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+        },{merge:true});
+      }catch(e){fallas++;console.warn('Auditoría baja Acopio',e);}
+    }
+    // Verificar el documento real después de la transacción.
+    var check=await f.getDoc(mRef);
+    var faltan=(check.exists()&&Array.isArray((check.data()||{}).cargas)?check.data().cargas:[]).filter(function(c){return eliminados.indexOf(String(c&&c.integracionId||''))>=0;});
+    if(faltan.length)throw new Error('La verificación detectó cargas aún presentes');
+    toast('✓ '+eliminados.length+' carga(s) huérfana(s) retiradas de Materiales'+(fallas?' · auditoría pendiente':''));
+  }catch(e){
+    console.warn('Reparar bajas Acopio → Materiales',e);
+    toast('No se pudo completar la reparación: '+String(e&&e.message||e),'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🧹 Reparar bajas antiguas en Materiales';}
+  }
+}
+window.cqRepararBajasAcopioMateriales=cqRepararBajasAcopioMateriales;
+
 async function cqRepararMaterialesPendientes(){
   var btn=document.getElementById('cq-reparar-materiales-btn');
   var info=document.getElementById('cq-reparar-materiales-info');
@@ -10877,6 +11221,77 @@ async function cqRepararPanolPendientes(){
   }
 }
 window.cqRepararPanolPendientes=cqRepararPanolPendientes;
+
+// CQ 19/11/2026 — borrar SOLAMENTE entradas originadas en Acopio cuyos
+// identificadores ya no existen en la fuente. Nunca borrar por nombre/cantidad.
+// No es reparación de altas: no crea ningún ingreso en Pañol.
+async function cqRepararBajasAntiguasPanol(){
+  var btn=document.getElementById('cq-reparar-bajas-panol-btn');
+  if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no disponible','err');return;}
+  var f=window._cqFirebase;
+  if(btn){btn.disabled=true;btn.textContent='Buscando bajas antiguas…';}
+  try{
+    var origenRef=f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID);
+    var panolRef=f.doc(f.db,'panol','stock_v1');
+    var snapshots=await Promise.all([
+      f.getDocFromServer?f.getDocFromServer(origenRef):f.getDoc(origenRef),
+      f.getDocFromServer?f.getDocFromServer(panolRef):f.getDoc(panolRef)
+    ]);
+    if(!snapshots[0].exists()||!(snapshots[0].data()||{}).db)throw new Error('No se pudo validar Acopio en Firebase');
+    if(!snapshots[1].exists()){toast('Pañol no contiene datos para reparar');return;}
+    var vivos=new Set();
+    ((snapshots[0].data().db.acopios)||[]).forEach(function(a){
+      (a&&a.retiros||[]).forEach(function(r){vivos.add(cqPanolEntradaId(a.id,r.id));});
+    });
+    var datos=snapshots[1].data()||{};
+    var candidatos=new Map();
+    function sumar(acopioId,retiroId,entradaId){
+      var id=cqPanolEntradaId(acopioId,retiroId);
+      if(id!==entradaId || vivos.has(id))return;
+      if(!candidatos.has(id))candidatos.set(id,{id:retiroId,acopioId:acopioId,entradaId:id});
+    }
+    function obtenerIds(obj,tipo){
+      if(!obj)return;
+      var origen=String(obj.origen||'');
+      var vinculo=String(obj.acopioEntradaId||'');
+      var id=String(obj.id||'');
+      if(tipo==='lote' && !vinculo && /_lote$/.test(id))vinculo=id.slice(0,-5);
+      if(tipo==='mov' && !vinculo && /_mov$/.test(id))vinculo=id.slice(0,-4);
+      var match=/^acopio_(\d+)_(\d+)$/.exec(vinculo);
+      var acopioId=String(obj.acopioId||match&&match[1]||'');
+      var retiroId=String(obj.acopioRetiroId||match&&match[2]||'');
+      if(!/^\d+$/.test(acopioId)||!/^\d+$/.test(retiroId))return;
+      if(!(origen==='cq_acopio'||obj.acopioEntradaId||obj.acopioRetiroId))return;
+      sumar(acopioId,retiroId,cqPanolEntradaId(acopioId,retiroId));
+    }
+    (datos.movimientos||[]).forEach(function(m){if(m&&m.tipo==='entrada')obtenerIds(m,'mov');});
+    (datos.lotes||[]).forEach(function(l){obtenerIds(l,'lote');});
+    var lista=Array.from(candidatos.values());
+    if(!lista.length){toast('✓ No hay entradas borradas pendientes en Pañol');return;}
+    var resumen=lista.slice(0,8).map(function(x){return '• Acopio '+x.acopioId+' · retiro '+x.id;}).join('\n');
+    if(!confirm('Encontré '+lista.length+' entrada(s)/lote(s) de origen Acopio sin retiro vigente.\n\n'+resumen+'\n\nSe eliminarán SOLO esos vínculos exactos de Pañol, y sus salidas dependientes si existieran. No se tocará el stock manual ni las entradas vigentes. ¿Continuar?'))return;
+    var hechos=0,errores=[];
+    for(var i=0;i<lista.length;i++){
+      var r=lista[i];
+      if(btn)btn.textContent='Limpiando '+(i+1)+'/'+lista.length+'…';
+      try{
+        await cqEliminarPanolRetiroExacto(r.acopioId,{id:r.id},true);
+        hechos++;
+      }catch(e){errores.push(r.entradaId+': '+String(e&&e.message||e));console.warn('Reparación baja Pañol',r,e);}
+    }
+    if(errores.length){
+      toast('⚠️ Pañol: '+hechos+' reparadas, '+errores.length+' pendientes','err');
+      alert('Reparación parcial de Pañol:\n\n'+errores.slice(0,6).join('\n'));
+    }else toast('✓ '+hechos+' baja(s) antiguas reparadas en Pañol');
+  }catch(e){
+    console.warn('Reparación de bajas antiguas Pañol',e);
+    toast('Error al reparar Pañol: '+String(e&&e.message||e),'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🧹 Reparar bajas antiguas en Pañol';}
+  }
+}
+window.cqRepararBajasAntiguasPanol=cqRepararBajasAntiguasPanol;
+
 
 
 async function guardarEditRetiro(){
@@ -11173,7 +11588,7 @@ async function eliminarGastoRetiroAcopioSeguro(retiro){
 }
 
 
-async function cqEliminarMaterialesRetiroExacto(acopioId,retiro){
+async function cqEliminarMaterialesRetiroExacto(acopioId,retiro,acopioReferencia){
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
   var f=window._cqFirebase;
   var iid=integracionRetiroId(acopioId,retiro.id);
@@ -11184,7 +11599,7 @@ async function cqEliminarMaterialesRetiroExacto(acopioId,retiro){
     if(!snap.exists())return;
     var data=snap.data()||{};
     var cargas=Array.isArray(data.cargas)?data.cargas.slice():[];
-    var acopioActual=(DB.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);})||null;
+    var acopioActual=acopioReferencia||(DB.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);})||null;
     function coincide(c){
       var porIid=String(c&&c.integracionId||'')===String(iid);
       var porMov=String(c&&c.sourceMovementId||'')===String(retiro.id)
@@ -11198,7 +11613,12 @@ async function cqEliminarMaterialesRetiroExacto(acopioId,retiro){
       // Respaldo para versiones de Materiales que al re-guardar pierden
       // integrationId/sourceMovementId pero conservan material, obra, cantidad y fecha.
       if(acopioActual && typeof cqCargaMaterialesCoincideRetiro==='function'){
-        try{return cqCargaMaterialesCoincideRetiro(c,retiro,acopioActual);}catch(_e){}
+        var acopioOrigen=String(c&&c.origen||'').toLowerCase()==='acopio'
+          || /^acopio[_-]/i.test(String(c&&c.integracionId||''))
+          || (c&&c.automatico===true&&String(c&&c.nota||'').toLowerCase().indexOf('acopio')>=0);
+        if(acopioOrigen){
+          try{return cqCargaMaterialesCoincideRetiro(c,retiro,acopioActual);}catch(_e){}
+        }
       }
       return false;
     }
@@ -11275,12 +11695,17 @@ async function cqEliminarMaterialesRetiroExacto(acopioId,retiro){
     var snapCheck=await f.getDoc(ref);
     var dataCheck=snapCheck.exists()?(snapCheck.data()||{}):{};
     var arrCheck=Array.isArray(dataCheck.cargas)?dataCheck.cargas:[];
-    var aCheck=(DB.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);})||null;
+    var aCheck=acopioReferencia||(DB.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);})||null;
     var sigue=arrCheck.some(function(c){
       if(String(c&&c.integracionId||'')===String(iid))return true;
       if(String(c&&c.sourceMovementId||'')===String(retiro.id))return true;
       if(aCheck && typeof cqCargaMaterialesCoincideRetiro==='function'){
-        try{return cqCargaMaterialesCoincideRetiro(c,retiro,aCheck);}catch(_e){}
+        var acopioOrigen=String(c&&c.origen||'').toLowerCase()==='acopio'
+          || /^acopio[_-]/i.test(String(c&&c.integracionId||''))
+          || (c&&c.automatico===true&&String(c&&c.nota||'').toLowerCase().indexOf('acopio')>=0);
+        if(acopioOrigen){
+          try{return cqCargaMaterialesCoincideRetiro(c,retiro,aCheck);}catch(_e){}
+        }
       }
       return false;
     });
@@ -11289,13 +11714,18 @@ async function cqEliminarMaterialesRetiroExacto(acopioId,retiro){
         var snap2=await tx.get(ref);
         if(!snap2.exists())return;
         var d2=snap2.data()||{};
-        var a2=(DB.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);})||null;
+        var a2=acopioReferencia||(DB.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);})||null;
         var arr2=Array.isArray(d2.cargas)?d2.cargas.slice():[];
         arr2=arr2.filter(function(c){
           if(String(c&&c.integracionId||'')===String(iid))return false;
           if(String(c&&c.sourceMovementId||'')===String(retiro.id))return false;
           if(a2 && typeof cqCargaMaterialesCoincideRetiro==='function'){
-            try{if(cqCargaMaterialesCoincideRetiro(c,retiro,a2))return false;}catch(_e){}
+            var acopioOrigen=String(c&&c.origen||'').toLowerCase()==='acopio'
+              || /^acopio[_-]/i.test(String(c&&c.integracionId||''))
+              || (c&&c.automatico===true&&String(c&&c.nota||'').toLowerCase().indexOf('acopio')>=0);
+            if(acopioOrigen){
+              try{if(cqCargaMaterialesCoincideRetiro(c,retiro,a2))return false;}catch(_e){}
+            }
           }
           return true;
         });
@@ -11391,11 +11821,37 @@ async function cqEliminarGastoRetiroExacto(acopioId,retiro){
   return true;
 }
 
-async function cqEliminarPanolRetiroExacto(acopioId,retiro){
+// CQ 19/11/2026 — identificar vínculos exactos de Pañol aun en registros
+// históricos que conservaron el ID determinístico pero perdieron metadatos.
+// Nunca buscar por nombre o cantidad: podría borrar stock independiente.
+function cqPanolIngresoCoincide(x,entradaId,acopioId,retiroId){
+  if(!x || x.tipo!=='entrada')return false;
+  return String(x.acopioEntradaId||'')===entradaId
+    || (String(x.acopioId||'')===String(acopioId)&&String(x.acopioRetiroId||'')===String(retiroId))
+    || (String(x.id||'')===entradaId+'_mov'
+        && (x.origen==='cq_acopio'||String(x.acopioEntradaId||'')===entradaId));
+}
+function cqPanolLoteCoincide(l,entradaId,acopioId,retiroId){
+  if(!l)return false;
+  return (String(l.acopioId||'')===String(acopioId)&&String(l.acopioRetiroId||'')===String(retiroId))
+    || (String(l.id||'')===entradaId+'_lote' && l.origen==='cq_acopio');
+}
+async function cqEliminarPanolRetiroExacto(acopioId,retiro,verificarFuente){
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
   var f=window._cqFirebase;
   var ref=f.doc(f.db,'panol','stock_v1');
   var entradaId=cqPanolEntradaId(acopioId,retiro.id);
+  if(verificarFuente===true){
+    // Proteger efectos de salidas: validar ANTES de tocar Materiales o Gastos.
+    var fuenteRef=f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID);
+    var fuenteSnap=await (f.getDocFromServer?f.getDocFromServer(fuenteRef):f.getDoc(fuenteRef));
+    if(!fuenteSnap.exists()||!(fuenteSnap.data()||{}).db)throw new Error('Acopio no disponible: no se pueden reparar bajas');
+    var fuente=(fuenteSnap.data()||{}).db;
+    var vivo=(fuente.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);});
+    if(vivo&&(vivo.retiros||[]).some(function(r){return String(r&&r.id)===String(retiro.id);})){ 
+      throw new Error('El retiro sigue vigente en Acopio');
+    }
+  }
 
   // Leer primero para localizar lotes/salidas dependientes.
   var snap0=await f.getDoc(ref);
@@ -11405,13 +11861,7 @@ async function cqEliminarPanolRetiroExacto(acopioId,retiro){
   var lotes0=Array.isArray(d0.lotes)?d0.lotes:[];
 
   var entradas=mov0.filter(function(x){
-    return x&&x.tipo==='entrada'&&(
-      String(x.acopioEntradaId||'')===String(entradaId)
-      || (
-        String(x.acopioId||'')===String(acopioId)
-        && String(x.acopioRetiroId||'')===String(retiro.id)
-      )
-    );
+    return cqPanolIngresoCoincide(x,entradaId,acopioId,retiro.id);
   });
 
   var loteIds=[];
@@ -11421,9 +11871,7 @@ async function cqEliminarPanolRetiroExacto(acopioId,retiro){
     });
   });
   lotes0.forEach(function(l){
-    if(l
-      && String(l.acopioId||'')===String(acopioId)
-      && String(l.acopioRetiroId||'')===String(retiro.id)
+    if(cqPanolLoteCoincide(l,entradaId,acopioId,retiro.id)
       && loteIds.indexOf(String(l.id))<0){
       loteIds.push(String(l.id));
     }
@@ -11443,6 +11891,16 @@ async function cqEliminarPanolRetiroExacto(acopioId,retiro){
   }
 
   await f.runTransaction(f.db,async function(tx){
+    if(verificarFuente===true){
+      var fuenteRef=f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID);
+      var fuenteSnap=await tx.get(fuenteRef);
+      if(!fuenteSnap.exists()||!(fuenteSnap.data()||{}).db)throw new Error('Acopio no disponible: no se puede validar una baja antigua');
+      var fuente=(fuenteSnap.data()||{}).db;
+      var acopioVivo=(fuente.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);});
+      if(acopioVivo&&(acopioVivo.retiros||[]).some(function(r){return String(r&&r.id)===String(retiro.id);})){ 
+        throw new Error('Retiro vigente: se protege su entrada de Pañol');
+      }
+    }
     var snap=await tx.get(ref);
     if(!snap.exists())return;
     var data=snap.data()||{};
@@ -11451,13 +11909,7 @@ async function cqEliminarPanolRetiroExacto(acopioId,retiro){
     var movimientos=Array.isArray(data.movimientos)?data.movimientos.slice():[];
 
     var entradasTx=movimientos.filter(function(x){
-      return x&&x.tipo==='entrada'&&(
-        String(x.acopioEntradaId||'')===String(entradaId)
-        || (
-          String(x.acopioId||'')===String(acopioId)
-          && String(x.acopioRetiroId||'')===String(retiro.id)
-        )
-      );
+      return cqPanolIngresoCoincide(x,entradaId,acopioId,retiro.id);
     });
 
     var ids=[];
@@ -11467,9 +11919,7 @@ async function cqEliminarPanolRetiroExacto(acopioId,retiro){
       });
     });
     lotes.forEach(function(l){
-      if(l
-        && String(l.acopioId||'')===String(acopioId)
-        && String(l.acopioRetiroId||'')===String(retiro.id)
+      if(cqPanolLoteCoincide(l,entradaId,acopioId,retiro.id)
         && ids.indexOf(String(l.id))<0){
         ids.push(String(l.id));
       }
@@ -11489,13 +11939,7 @@ async function cqEliminarPanolRetiroExacto(acopioId,retiro){
 
     movimientos=movimientos.filter(function(x){
       if(!x)return false;
-      var esEntrada=x.tipo==='entrada'&&(
-        String(x.acopioEntradaId||'')===String(entradaId)
-        || (
-          String(x.acopioId||'')===String(acopioId)
-          && String(x.acopioRetiroId||'')===String(retiro.id)
-        )
-      );
+      var esEntrada=cqPanolIngresoCoincide(x,entradaId,acopioId,retiro.id);
       var esSalida=x.tipo==='salida'&&salidasIds.indexOf(String(x.id))>=0;
       return !(esEntrada||esSalida);
     });
@@ -11519,12 +11963,65 @@ async function cqEliminarPanolRetiroExacto(acopioId,retiro){
     tx.set(ref,data);
   });
 
+  // No informar una baja exitosa sin comprobar que desaparecieron los vínculos.
+  // La lectura del servidor evita dar por borrado un registro que sigue en Firebase.
+  var comprobado=await (f.getDocFromServer?f.getDocFromServer(ref):f.getDoc(ref));
+  if(comprobado.exists()){
+    var cd=comprobado.data()||{};
+    var pendienteMov=(cd.movimientos||[]).some(function(x){return cqPanolIngresoCoincide(x,entradaId,acopioId,retiro.id);});
+    var pendienteLote=(cd.lotes||[]).some(function(l){return cqPanolLoteCoincide(l,entradaId,acopioId,retiro.id);});
+    if(pendienteMov||pendienteLote){
+      throw new Error('Pañol sigue teniendo la entrada o el lote de Acopio tras el borrado');
+    }
+  }
   return true;
 }
 
-async function cqLimpiarDestinosRetiroExacto(acopioId,retiro){
+// CQ 19/11/2026 — completar bajas desde Reporte, borrar obra y borrar acopio.
+// La eliminación ya se registró localmente con tombstones. No crea cargas nuevas.
+async function cqCompletarBorradoLoteAcopio(acopioId,retiros,acopioReferencia){
+  if(!retiros||!retiros.length)return [];
+  if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible para completar el borrado');
+  var errores=[];
+  // Si algún alta estaba en vuelo, esperar que termine ANTES de limpiar destinos.
+  for(var i=0;i<retiros.length;i++){
+    var key=String(acopioId)+'::'+String(retiros[i].id);
+    var anterior=cqIntegracionesRetiroPromesas.get(key);
+    if(anterior){try{await anterior;}catch(_e){}}
+  }
+  try{
+    await cqConfirmarFuenteConSyncOriginal(acopioId,retiros[0],false);
+    // Una sola comprobación remota también cubre bajas masivas.
+    var f=window._cqFirebase;
+    var snap=await f.getDoc(f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID));
+    var actual=snap.exists()?snap.data()||{}:{};
+    var origen=(actual.db&&actual.db.acopios||[]).find(function(a){return String(a&&a.id)===String(acopioId);});
+    var sigue=new Set((origen&&origen.retiros||[]).map(function(r){return String(r&&r.id);}));
+    if(retiros.some(function(r){return sigue.has(String(r.id));}))throw new Error('Quedaron retiros en Firebase de Acopio');
+  }catch(e){
+    errores.push('Acopio Firebase');
+    console.warn('No se pudo confirmar borrado de fuente',e);
+    // No continuar: las integraciones no deben borrarse si la fuente todavía puede reemitirlas.
+    return errores;
+  }
+  for(var j=0;j<retiros.length;j++){
+    var r=retiros[j];
+    try{
+      var resultado=await cqLimpiarDestinosRetiroExacto(acopioId,r,acopioReferencia);
+      resultado.forEach(function(n){if(errores.indexOf(n)<0)errores.push(n);});
+    }catch(e){
+      console.warn('Error limpiando retiro',r&&r.id,e);
+      if(errores.indexOf('Materiales/Gastos/Pañol')<0)errores.push('Materiales/Gastos/Pañol');
+    }finally{
+      cqIntegracionesRetiroPromesas.delete(String(acopioId)+'::'+String(r.id));
+    }
+  }
+  return errores;
+}
+
+async function cqLimpiarDestinosRetiroExacto(acopioId,retiro,acopioReferencia){
   var resultados=await Promise.allSettled([
-    cqEliminarMaterialesRetiroExacto(acopioId,retiro),
+    cqEliminarMaterialesRetiroExacto(acopioId,retiro,acopioReferencia),
     cqEliminarGastoRetiroExacto(acopioId,retiro),
     cqEliminarPanolRetiroExacto(acopioId,retiro)
   ]);
@@ -11674,7 +12171,7 @@ function guardarObra(){
 }
 var pendingDeleteObraIdx=null;
 function confirmarBorrarObraDesdeReporte(){curRetirarObra=curReporteObra;confirmarBorrarObra();}
-function confirmarBorrarObra(){
+async function confirmarBorrarObra(){
   var a=getAcopio();
   var obras=getObras();
   if(!obras.length) return;
@@ -11685,19 +12182,37 @@ function confirmarBorrarObra(){
     if(tieneRetiros && !confirm('La obra "'+nom+'" tiene retiros registrados. Si la eliminás, esos retiros se pierden también. ¿Continuar?')){
       pendingDeleteObraIdx=null;return;
     }
-    // Eliminar retiros de esa obra y reindexar los de obras posteriores
+    // Guardar los retiros antiguos para eliminar también sus cargos en los módulos conectados.
+    var retirosBorrados=JSON.parse(JSON.stringify((a.retiros||[]).filter(function(r){return r.obraIdx===idx;})));
+    if(retirosBorrados.length && (!window._cqFirebaseReady||!window._cqFirebase)){
+      toast('Conectá Firebase para borrar obra y movimientos asociados','err');
+      pendingDeleteObraIdx=null;return;
+    }
+    var referencia=JSON.parse(JSON.stringify(a));
+    var acopioId=String(a.id);
     pushUndo();
+    retirosBorrados.forEach(function(r){
+      cqAgregarTombstoneRetiro(acopioId,r.id);
+      cqDesprotegerRetiroNuevo(acopioId,r.id);
+      cqIntegracionesRetiroCanceladas.add(acopioId+'::'+String(r.id));
+    });
     a.retiros=(a.retiros||[]).filter(function(r){return r.obraIdx!==idx;}).map(function(r){
       return r.obraIdx>idx?Object.assign({},r,{obraIdx:r.obraIdx-1}):r;
     });
     a.obras.splice(idx,1);
     persist();
     pendingDeleteObraIdx=null;
-    toast('Obra "'+nom+'" eliminada');
+    toast('Obra "'+nom+'" eliminada'+(retirosBorrados.length?' · limpiando vínculos':''));
     curRetirarObra=Math.max(0,idx-1);
     curReporteObra=curRetirarObra;
     var activeTab=(document.querySelector('.tab.active')&&document.querySelector('.tab.active').id.replace('tab-',''))||'retirar';
     showTab(activeTab);
+    if(retirosBorrados.length){
+      try{
+        var errs=await cqCompletarBorradoLoteAcopio(acopioId,retirosBorrados,referencia);
+        toast(errs.length?'⚠️ Obra eliminada · revisar '+errs.join(', '):'✓ Obra y movimientos vinculados eliminados',errs.length?'err':undefined);
+      }catch(e){console.warn('Borrado de obra vinculado',e);toast('⚠️ Revisar vínculos de la obra eliminada','err');}
+    }
   } else {
     pendingDeleteObraIdx=idx;
     toast('Tocá de nuevo "Eliminar obra" para confirmar');
@@ -12257,22 +12772,40 @@ function editarRetiroDesdeReporte(matId,obraIdx){
   if(typeof obraIdx==='number'&&obraIdx>=0)curRetirarObra=obraIdx;
   showTab('retirar');
 }
-function eliminarRetirosDesdeReporte(matId,obraIdx){
-  pushUndo();
+async function eliminarRetirosDesdeReporte(matId,obraIdx){
   var arr=getRetirosReporteMaterial(matId,obraIdx);
   if(!arr.length){alert('No hay retiros para eliminar');return;}
-  var m=getMat(matId);
-  var qty=arr.reduce(function(s,r){return s+r.qty;},0);
+  var m=getMat(matId),a=getAcopio();
+  if(!a)return;
+  var qty=arr.reduce(function(s,r){return s+Number(r.qty||0);},0);
   var msg=arr.length===1
     ?'¿Eliminar el retiro de '+fmtN(qty,2)+' '+(m?m.unidad:'')+' de '+(m?m.nom:'material')+'?'
     :'Hay '+arr.length+' retiros de '+(m?m.nom:'este material')+', total '+fmtN(qty,2)+' '+(m?m.unidad:'')+'. ¿Eliminar TODOS esos retiros del filtro?';
   if(!confirm(msg))return;
-  var ids=arr.map(function(r){return r.id;});
-  var a=getAcopio();
-  a.retiros=(a.retiros||[]).filter(function(r){return ids.indexOf(r.id)===-1;});
+  if(!window._cqFirebaseReady||!window._cqFirebase){toast('Firebase no disponible. No se borró el retiro.','err');return;}
+  var originales=JSON.parse(JSON.stringify(arr));
+  var referencia=JSON.parse(JSON.stringify(a));
+  var ids=new Set(originales.map(function(r){return String(r.id);}));
+  var acopioId=String(a.id);
+  pushUndo();
+  originales.forEach(function(r){
+    var key=acopioId+'::'+String(r.id);
+    cqAgregarTombstoneRetiro(acopioId,r.id);
+    cqDesprotegerRetiroNuevo(acopioId,r.id);
+    cqIntegracionesRetiroCanceladas.add(key);
+  });
+  a.retiros=(a.retiros||[]).filter(function(r){return !ids.has(String(r.id));});
   persist();
-  toast('✓ Retiro eliminado');
   renderReporte();
+  toast('Eliminando de Acopio y módulos vinculados…');
+  try{
+    var errores=await cqCompletarBorradoLoteAcopio(acopioId,originales,referencia);
+    if(errores.length)toast('⚠️ Eliminado de Acopio · revisar '+errores.join(', '),'err');
+    else toast('✓ Retiro(s) eliminados de Acopio, Materiales, Gastos y Pañol');
+  }catch(e){
+    console.warn('Error en baja desde Reporte',e);
+    toast('⚠️ Verificar sincronización de los retiros eliminados','err');
+  }
 }
 
 
@@ -16247,6 +16780,401 @@ document.addEventListener('click',function(e){
 })();
 </script>
 
+<style id="cq-global-summary-style">
+/* CQ: resumen general -- mismo lenguaje gráfico que Reporte por obra. */
+/* Tres accesos en una sola fila, también en celulares verticales. */
+#view-home #home-activos-panel .home-top-actions.cq-home-actions-three{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:8px!important;
+  align-items:stretch!important;
+  margin:11px 0 17px!important;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  flex:none!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:51px!important;
+  padding:8px 8px!important;
+  margin:0!important;
+  border-radius:13px!important;
+  font-size:11px!important;
+  font-weight:850!important;
+  line-height:1.17!important;
+  letter-spacing:0!important;
+  white-space:normal!important;
+  text-align:left!important;
+  box-shadow:0 5px 13px rgba(28,61,53,.12),inset 0 1px 0 rgba(255,255,255,.25)!important;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action::before{
+  content:none!important;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action .cq-home-action-icon{
+  display:grid;place-items:center;flex:0 0 27px;
+  width:27px;height:29px;
+  font-size:17px;line-height:1;
+  border-radius:8px;
+  background:rgba(255,255,255,.18);
+  color:inherit;
+  text-shadow:none;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action-copy{
+  min-width:0;display:block;line-height:1.18;
+}
+#view-home #home-activos-panel .cq-home-actions-three .cq-home-action-copy strong{
+  display:block;font-weight:900;
+}
+/* Azul petróleo para identificar claramente la nueva vista consolidada. */
+#view-home #home-activos-panel #cq-global-summary-btn{
+  background:linear-gradient(140deg,#195D82 0%,#2889BE 100%)!important;
+  border:1px solid #3A93C0!important;
+  color:#fff!important;
+  box-shadow:0 6px 15px rgba(26,105,153,.22),inset 0 1px 0 rgba(255,255,255,.28)!important;
+}
+#view-home #home-activos-panel #cq-global-summary-btn:hover{
+  background:linear-gradient(140deg,#164E70,#247CAC)!important;
+  box-shadow:0 9px 19px rgba(26,105,153,.25)!important;
+}
+#view-home #home-activos-panel #cq-action-archived{
+  border:1px solid rgba(200,136,42,.33)!important;
+  background:linear-gradient(145deg,#fffdf9,#FFF4E5)!important;
+  color:#895E21!important;
+  box-shadow:0 5px 13px rgba(139,99,35,.11)!important;
+}
+#view-home #home-activos-panel #cq-action-archived .cq-home-action-icon{
+  background:#FFF0D7;color:#9D6717;
+}
+#view-home #home-activos-panel #cq-action-archived .archivo-count{
+  flex:0 0 auto;
+  min-width:18px!important;
+  height:18px!important;
+  padding:0 4px!important;
+  margin-left:0!important;
+  font-size:9px!important;
+}
+@media(max-width:560px){
+  #view-home #home-activos-panel .home-top-actions.cq-home-actions-three{gap:6px!important;margin:9px 0 15px!important}
+  #view-home #home-activos-panel .cq-home-actions-three .cq-home-action{gap:5px!important;padding:7px 6px!important;font-size:10px!important;min-height:50px!important}
+  #view-home #home-activos-panel .cq-home-actions-three .cq-home-action .cq-home-action-icon{flex-basis:23px;width:23px;height:26px;font-size:15px}
+}
+@media(max-width:370px){
+  #view-home #home-activos-panel .home-top-actions.cq-home-actions-three{gap:4px!important}
+  #view-home #home-activos-panel .cq-home-actions-three .cq-home-action{gap:3px!important;padding:6px 4px!important;font-size:9px!important}
+  #view-home #home-activos-panel .cq-home-actions-three .cq-home-action .cq-home-action-icon{flex-basis:19px;width:19px;height:23px;font-size:13px}
+  #view-home #home-activos-panel #cq-action-archived .archivo-count{min-width:15px!important;height:15px!important;font-size:8px!important;padding:0 2px!important}
+}
+#view-reporte-global{padding-top:6px!important}
+#view-reporte-global .cq-global-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 11px}
+#view-reporte-global .cq-global-title{font-weight:900;font-size:17px;color:var(--green);line-height:1.12}
+#view-reporte-global .cq-global-subtitle{font-size:10px;font-weight:700;color:#7A9E82;margin-top:4px;line-height:1.4}
+#view-reporte-global .cq-global-back{font-size:10px!important;padding:7px 9px!important;min-height:31px!important;flex:0 0 auto}
+#view-reporte-global .cq-rep-whatsapp{width:auto!important;min-width:0!important;max-width:210px!important;min-height:29px!important;height:29px!important;padding:4px 10px!important;margin:4px 0 7px auto!important;display:block!important;border-radius:8px!important;font-size:8.5px!important;letter-spacing:0!important}
+#view-reporte-global .cq-rep-mat{font-weight:900!important;color:#173F32!important}
+#view-reporte-global .cq-rep-kpis .kpi-sub{font-weight:900!important;color:#315F4C!important}
+#view-reporte-global .cq-rep-kpis .kpi-val{overflow-wrap:anywhere}
+#view-reporte-global .cq-global-origen{display:block;margin-top:3px;color:#718A7A;font-size:8px;line-height:1.25;font-weight:700}
+#view-reporte-global .cq-global-foot-total{background:linear-gradient(90deg,#DCECDF,#EAF5EE);border:1px solid #CCDCCE;border-radius:11px;display:flex;align-items:center;justify-content:space-between;padding:12px 13px;gap:9px;color:#174638;margin:13px 0 17px}
+#view-reporte-global .cq-global-foot-total>strong{font-weight:900;font-size:12px}
+#view-reporte-global .cq-global-foot-total>span{font-weight:900;font:900 16px var(--mono);text-align:right}
+#view-reporte-global .cq-global-foot-total small{display:block;font-size:9px;font-weight:700;margin-top:3px;color:#4C7860}
+#view-reporte-global .cq-rep-filtros-toggle #cq-global-filtros-resumen{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#7A5B8F;font-size:9px;font-weight:800}
+@media(max-width:560px){
+ #view-reporte-global .cq-global-title{font-size:15px}
+ #view-reporte-global .cq-global-back{padding:6px 8px!important;font-size:9px!important}
+ #view-reporte-global .cq-global-foot-total>span{font-size:13px}
+}
+</style>
+<script id="cq-global-summary-script">
+/* CQ — Resumen consolidado de retiros de todos los acopios, sin alterar la lógica de cada acopio. */
+(function(){
+'use strict';
+var TYPES=['obra','subrubro','producto'];
+var globalRowsCache=[];
+var currentResult=null;
+var filtrosConstruidos=false;
+
+function el(id){return document.getElementById(id);}
+function norm(v){return String(v==null?'':v).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');}
+function html(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function gid(type,suffix){return 'cq-global-'+type+(suffix?'-'+suffix:'');}
+function config(type){return {select:gid(type,'filter'),wrap:gid(type,'multi'),label:gid(type,'label'),search:gid(type,'search'),opts:gid(type,'options'),any:({'obra':'Todas las obras','subrubro':'Todos los subrubros','producto':'Todos los productos'})[type]};}
+function acopioObraLabel(r,a,lookup){
+  if(r.obraHistorica)return String(r.obraHistorica).trim();
+  if(r.gastosObraId){
+    var ob=lookup[String(r.gastosObraId)];
+    if(ob)return String(ob.label||ob.short||ob.id).trim();
+  }
+  var obras=Array.isArray(a.obras)?a.obras:[];
+  var i=Number(r.obraIdx);
+  return String((Number.isInteger(i)&&i>=0?obras[i]:'')||'Obra').trim();
+}
+function productKey(m){
+  var code=norm(m.cod||'');
+  var label=norm(m.nom||'');
+  var unit=norm(m.unidad||'');
+  // Identifica el mismo producto entre distintos acopios aunque los matId sean distintos.
+  return (code?'codigo:'+code+'|':'')+'material:'+label+'|unidad:'+unit;
+}
+function sourceRows(){
+  var lookup={};
+  try{getObrasGastosAllObjects().forEach(function(x){lookup[String(x.id)]=x;});}catch(_e){}
+  var all=[];
+  (DB.acopios||[]).forEach(function(a){
+    var mats={};
+    (a.mats||[]).forEach(function(m){if(m&&m.id!=null)mats[String(m.id)]=m;});
+    (a.retiros||[]).forEach(function(r){
+      var m=mats[String(r.matId)];
+      if(!m)return; // Coincide con el criterio del reporte individual.
+      var obra=acopioObraLabel(r,a,lookup);
+      var cantidad=Number(r.qty)||0;
+      var importe=cantidad*(Number(m.precioAcord)||0);
+      var tc=Number(a.tc)||TC_DEFAULT;
+      var cat=String(m.cat||'Sin subrubro').trim()||'Sin subrubro';
+      all.push({a:a,r:r,m:m,obra:obra,obraKey:norm(obra),sub:String(r.subrubro||'').trim(),subKey:norm(r.subrubro||''),productKey:productKey(m),
+        cat:cat,catKey:norm(cat),cantidad:cantidad,importe:importe,dolares:importe/tc,acopioNombre:String(a.nombre||'Acopio')});
+    });
+  });
+  return all;
+}
+function selected(type){
+  var s=el(config(type).select);
+  return s?Array.from(s.selectedOptions||[]).map(function(x){return String(x.value);}):[];
+}
+function buildOptions(type,prev){
+  var c=config(type),s=el(c.select);if(!s)return;
+  var map=new Map();
+  globalRowsCache.forEach(function(x){
+    var key,label;
+    if(type==='obra'){key=x.obraKey;label=x.obra;}
+    else if(type==='subrubro'){key=x.subKey;label=x.sub;}
+    else{key=x.productKey;label=x.m.nom+(x.m.cod?' · '+x.m.cod:'');}
+    if(key&&!map.has(key))map.set(key,label);
+  });
+  var opts=Array.from(map,function(pair){return {key:pair[0],label:pair[1]};});
+  opts.sort(function(a,b){return a.label.localeCompare(b.label,'es',{numeric:true,sensitivity:'base'});});
+  s.innerHTML=opts.map(function(x){return '<option value="'+html(x.key)+'"'+(prev.indexOf(x.key)>=0?' selected':'')+'>'+html(x.label)+'</option>';}).join('');
+  updateLabel(type);renderOptions(type);
+}
+function rebuildFilters(){
+  var prev={};TYPES.forEach(function(t){prev[t]=selected(t);});
+  globalRowsCache=sourceRows();
+  TYPES.forEach(function(t){buildOptions(t,prev[t]);});
+  filtrosConstruidos=true;
+}
+function updateLabel(type){
+  var c=config(type),s=el(c.select),l=el(c.label);if(!s||!l)return;
+  var arr=Array.from(s.selectedOptions||[]);
+  l.textContent=!arr.length?c.any:arr.length===1?arr[0].textContent:arr.slice(0,2).map(function(x){return x.textContent;}).join(' · ')+(arr.length>2?' · +'+(arr.length-2):'');
+}
+function renderOptions(type){
+  var c=config(type),s=el(c.select),box=el(c.opts);if(!s||!box)return;
+  var query=norm(el(c.search)?el(c.search).value:'');
+  var arr=Array.from(s.options||[]).filter(function(x){return !query||norm(x.textContent).indexOf(query)>=0;});
+  box.innerHTML=arr.length?arr.map(function(x){return '<label class="cq-rep-option"><input type="checkbox" data-cq-global-type="'+type+'" data-cq-global-value="'+html(x.value)+'"'+(x.selected?' checked':'')+' onchange="cqGlobalRepSelectValue(this,event)"><span>'+html(x.textContent)+'</span></label>';}).join(''):'<div class="cq-rep-empty">Sin coincidencias</div>';
+}
+window.cqGlobalRepOptions=renderOptions;
+window.cqGlobalRepSelectValue=function(chk,event){
+  if(event)event.stopPropagation();
+  var type=chk.getAttribute('data-cq-global-type'),v=chk.getAttribute('data-cq-global-value'),s=el(config(type).select);
+  if(s)Array.from(s.options).forEach(function(o){if(o.value===v)o.selected=!!chk.checked;});
+  updateLabel(type);
+};
+window.cqGlobalRepToggleMulti=function(type,event){
+  if(event)event.stopPropagation();
+  TYPES.forEach(function(t){if(t!==type)el(config(t).wrap).classList.remove('open');});
+  var w=el(config(type).wrap);w.classList.toggle('open');if(w.classList.contains('open'))renderOptions(type);
+};
+window.cqGlobalRepToggleAll=function(type,event){
+  if(event)event.stopPropagation();
+  var s=el(config(type).select);if(!s)return;
+  var opts=Array.from(s.options),all=opts.length>0&&opts.every(function(x){return x.selected;});
+  opts.forEach(function(x){x.selected=!all;});
+  updateLabel(type);renderOptions(type);
+  el(config(type).wrap).classList.add('open');
+};
+window.cqGlobalRepConfirm=function(type,event){
+  if(event)event.stopPropagation();
+  el(config(type).wrap).classList.remove('open');
+  render();
+};
+window.cqGlobalRepToggleFilters=function(force){
+  var p=el('cq-global-filtros-panel'),b=el('cq-global-filtros-toggle');
+  var open=typeof force==='boolean'?force:!p.classList.contains('open');
+  p.classList.toggle('open',open);b.classList.toggle('open',open);
+};
+window.cqGlobalRepClear=function(){
+  TYPES.forEach(function(t){
+    var s=el(config(t).select);if(s)Array.from(s.options).forEach(function(o){o.selected=false;});
+    if(el(config(t).search))el(config(t).search).value='';
+    updateLabel(t);renderOptions(t);
+  });
+  el('cq-global-desde').value='';el('cq-global-hasta').value='';render();
+};
+function summaryText(){
+  var p=[];
+  [['obra','obra'],['subrubro','subrubro'],['producto','producto']].forEach(function(x){var n=selected(x[0]).length;if(n)p.push(n+' '+x[1]+(n===1?'':'s'));});
+  var d=el('cq-global-desde').value,h=el('cq-global-hasta').value;
+  if(d)p.push('desde '+d.split('-').reverse().join('/'));
+  if(h)p.push('hasta '+h.split('-').reverse().join('/'));
+  el('cq-global-filtros-resumen').textContent=p.join(' · ')||'Todos los retiros';
+}
+function result(){
+  var obras=selected('obra'),subs=selected('subrubro'),mats=selected('producto');
+  var desde=el('cq-global-desde').value,hasta=el('cq-global-hasta').value;
+  var filtered=globalRowsCache.filter(function(x){
+    return (!obras.length||obras.indexOf(x.obraKey)>=0) && (!subs.length||subs.indexOf(x.subKey)>=0) && (!mats.length||mats.indexOf(x.productKey)>=0) && dateInRange(x.r.fecha,desde,hasta);
+  });
+  var categories=new Map(),totalPesos=0,totalUSD=0,totalQty=0,acopios=new Set();
+  filtered.forEach(function(x){
+    totalPesos+=x.importe;totalUSD+=x.dolares;totalQty+=x.cantidad;acopios.add(String(x.a.id));
+    var catId=x.catKey;
+    if(!categories.has(catId))categories.set(catId,{name:x.cat,items:new Map(),pesos:0,dolares:0,qty:0});
+    var cat=categories.get(catId);
+    cat.pesos+=x.importe;cat.dolares+=x.dolares;cat.qty+=x.cantidad;
+    // Una fila por acopio/material/obra: evita mezclar precios diferentes.
+    var key=String(x.a.id)+'::'+String(x.m.id)+'::'+x.obraKey;
+    if(!cat.items.has(key))cat.items.set(key,{obra:x.obra,acopio:x.acopioNombre,archived:!!x.a.archived,
+      cod:String(x.m.cod||''),nom:String(x.m.nom||''),unidad:String(x.m.unidad||''),qty:0,pesos:0,dolares:0,precio:Number(x.m.precioAcord)||0});
+    var it=cat.items.get(key);it.qty+=x.cantidad;it.pesos+=x.importe;it.dolares+=x.dolares;
+  });
+  return {rows:filtered,categories:Array.from(categories.values()).map(function(x){return {name:x.name,items:Array.from(x.items.values()),pesos:x.pesos,dolares:x.dolares,qty:x.qty};}),
+    totalPesos:totalPesos,totalUSD:totalUSD,totalQty:totalQty,acopiosCount:acopios.size,
+    obraText:obras.length===1?(el(config('obra').select).selectedOptions[0]||{}).textContent||'Obra':obras.length>1?obras.length+' obras':'Todas las obras',
+    mostrarObra:obras.length!==1,unidad:mats.length===1?(filtered[0]&&filtered[0].m.unidad||''):'',desde:desde,hasta:hasta};
+}
+function render(){
+  if(!el('cq-global-reporte-content')||el('view-reporte-global').style.display==='none')return;
+  if(!filtrosConstruidos)rebuildFilters();
+  currentResult=result();
+  var d=currentResult,root=el('cq-global-reporte-content');
+  var out='<div class="kpi-row cq-rep-kpis" style="grid-template-columns:1fr 1fr 1fr">'
+    +kpi('Obra',html(d.obraText),d.categories.length+' rubros')
+    +kpi('Cantidad retirada','<span class="qty-strong">'+fmtN(d.totalQty,2)+'</span>',html(d.unidad||'total filtrado'))
+    +kpi('Total $',fmtP(d.totalPesos),'≈ '+fmtU(d.totalUSD))+'</div>';
+  if(!d.categories.length){out+='<div class="card"><div class="empty">Sin retiros registrados para el filtro seleccionado</div></div>';}
+  d.categories.forEach(function(cat){
+    var col=(typeof getCatColor==='function')?getCatColor(cat.name):'#2E7D5E';
+    if(!/^#[0-9A-Fa-f]{3,8}$/.test(col))col='#2E7D5E';
+    out+='<div class="card cq-rep-card" style="border-top:3px solid '+col+'">';
+    out+='<div class="card-hd"><span class="card-ttl" style="color:'+col+'">'+html(cat.name)+'</span>'
+      +'<span class="card-sub"><strong>'+fmtN(cat.qty,2)+'</strong> un. · '+fmtP(cat.pesos)+'</span></div>';
+    out+='<div class="tbl-wrap"><table class="cq-rep-table"><thead><tr>'+(d.mostrarObra?'<th>Obra</th>':'')+'<th>Código</th><th>Material</th><th class="r">Cantidad</th><th class="r">Total $</th></tr></thead><tbody>';
+    cat.items.forEach(function(it){
+      out+='<tr>'+(d.mostrarObra?'<td><span class="badge cq-rep-obra-badge">'+html(it.obra)+'</span></td>':'')
+        +'<td class="mono">'+html(it.cod||'—')+'</td>'
+        +'<td class="cq-rep-mat">'+html(it.nom)+'<small class="cq-global-origen">Acopio: '+html(it.acopio)+(it.archived?' · Archivado':'')+'</small></td>'
+        +'<td class="r"><span class="qty-strong">'+fmtN(it.qty,2)+'</span><span class="qty-unit">'+html(it.unidad)+'</span></td>'
+        +'<td class="mono r">'+fmtP(it.pesos)+'</td></tr>';
+    });
+    out+='<tr class="subtotal"><td colspan="'+(d.mostrarObra?4:3)+'">Subtotal '+html(cat.name)+'</td><td class="mono r">'+fmtP(cat.pesos)+'</td></tr></tbody></table></div></div>';
+  });
+  if(d.categories.length){out+='<div class="cq-global-foot-total"><strong>TOTAL GENERAL</strong><span>'+fmtP(d.totalPesos)+'<small>≈ '+fmtU(d.totalUSD)+' · '+d.acopiosCount+' acopios</small></span></div>';}
+  root.innerHTML=out;
+  summaryText();
+}
+window.cqGlobalRepRender=render;
+window.abrirResumenGeneralAcopios=function(){
+  curAcopioId=null;
+  cqSeccionAcopio='resumen-general';
+  cqOcultarVistasRaiz();
+  el('view-reporte-global').style.display='block';
+  cqResetHeaderRaiz();
+  el('hdr-back').style.display='inline';
+  rebuildFilters();render();
+  cqGlobalRepToggleFilters(false);
+  window.scrollTo({top:0,left:0,behavior:'auto'});
+};
+function pdf(){
+  if(!window.jspdf||!window.jspdf.jsPDF)return null;
+  var d=currentResult||result();
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+  var left=12,usable=186,y=14,page=1;
+  function newPage(){doc.addPage();page++;y=14;}
+  function fit(h){if(y+h>282)newPage();}
+  function text(s,x,size,bold,color){doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor.apply(doc,color||[28,43,34]);doc.text(String(s),x,y);}
+  function money(v){return '$'+Math.round(v||0).toLocaleString('es-AR');}
+  function header(){
+    doc.setFillColor(28,61,53);doc.rect(left,y-6,usable,13,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(13);
+    doc.text('CQ  |  Resumen general de acopios',left+4,y+2);
+    y+=15;
+    doc.setTextColor(44,70,57);doc.setFontSize(9);
+    doc.text('Obra: '+d.obraText,left,y);y+=6;
+    var desde=d.desde?fmtFecha(d.desde):'inicio',hasta=d.hasta?fmtFecha(d.hasta):'hoy';
+    doc.text('Periodo: '+(d.desde||d.hasta?desde+' a '+hasta:'Todos los retiros'),left,y);y+=6;
+    doc.text('Acopios incluidos: '+d.acopiosCount+' (activos y archivados)  |  Movimientos: '+d.rows.length,left,y);y+=7;
+    doc.setFont('helvetica','bold');doc.setFontSize(10);
+    doc.text('Total: '+money(d.totalPesos)+'    |    Equivalente: '+fmtU(d.totalUSD),left,y);y+=9;
+  }
+  header();
+  d.categories.forEach(function(cat){
+    fit(22);
+    doc.setFillColor(239,246,240);doc.rect(left,y-4,usable,9,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(28,61,53);
+    var sub=doc.splitTextToSize(cat.name,98)[0]||'';
+    doc.text(sub,left+2,y+2);
+    doc.text(fmtN(cat.qty,2)+' un.  ·  '+money(cat.pesos),left+usable-2,y+2,{align:'right'});
+    y+=12;
+    cat.items.forEach(function(it){
+      var mat=doc.splitTextToSize(it.nom,69);
+      var origin=doc.splitTextToSize('Acopio: '+it.acopio+(it.archived?' (archivado)':''),69);
+      var obra=doc.splitTextToSize(it.obra,30);
+      var lineCount=Math.max(mat.length+origin.length,obra.length,2);
+      var h=Math.max(12,3.55*lineCount+3);
+      fit(h+2);
+      doc.setFont('helvetica','normal');doc.setTextColor(28,43,34);doc.setFontSize(7.6);
+      doc.text(obra,left+1,y);doc.text(doc.splitTextToSize(it.cod||'—',27).slice(0,2),left+31,y);
+      doc.setFont('helvetica','bold');doc.text(mat,left+61,y);
+      doc.setFont('helvetica','normal');doc.setTextColor(108,129,112);
+      doc.text(origin,left+61,y+mat.length*3.55);
+      doc.setTextColor(28,43,34);doc.setFont('helvetica','bold');doc.setFontSize(8);
+      doc.text(fmtN(it.qty,2)+' '+it.unidad,left+155,y,{align:'right',maxWidth:25});
+      doc.text(money(it.pesos),left+usable-1,y,{align:'right',maxWidth:28});
+      y+=h;doc.setDrawColor(230,234,226);doc.line(left,y-2,left+usable,y-2);
+    });
+    fit(9);doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(28,61,53);
+    doc.text('Subtotal '+cat.name.slice(0,45),left+2,y);
+    doc.text(money(cat.pesos),left+usable-1,y,{align:'right'});y+=12;
+  });
+  if(!d.categories.length){fit(13);doc.setFontSize(10);doc.text('Sin retiros para los filtros seleccionados.',left,y);}
+  var pages=doc.getNumberOfPages();
+  for(var p=1;p<=pages;p++){
+    doc.setPage(p);doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(120,139,127);
+    doc.text('CQ Desarrollos · Valores en pesos; USD según TC de cada acopio · '+new Date().toLocaleDateString('es-AR'),left,291);
+    doc.text(p+' / '+pages,198,291,{align:'right'});
+  }
+  return doc.output('blob');
+}
+window.cqGlobalRepPDFWhatsApp=async function(){
+  render();
+  var blob;
+  try{blob=pdf();}catch(e){console.error('PDF resumen general',e);alert('No se pudo generar el PDF del resumen.');return;}
+  if(!blob){alert('No se pudo generar el PDF porque todavía no cargó la biblioteca PDF.');return;}
+  var filename='resumen_general_acopios_'+todayISO()+'.pdf';
+  var file=new File([blob],filename,{type:'application/pdf'});
+  if(navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],title:'Resumen general de acopios',text:'Retiros de todos los acopios, con los filtros aplicados'});return;}
+    catch(e){if(e&&e.name==='AbortError')return;console.warn('Compartir PDF',e);}
+  }
+  var url=URL.createObjectURL(blob),anchor=document.createElement('a');
+  anchor.href=url;anchor.download=filename;document.body.appendChild(anchor);anchor.click();anchor.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},1500);
+  alert('El navegador no permite adjuntar el PDF directamente. Se descargó para que puedas enviarlo por WhatsApp.');
+};
+document.addEventListener('click',function(e){TYPES.forEach(function(t){var wrap=el(config(t).wrap);if(wrap&&!wrap.contains(e.target))wrap.classList.remove('open');});});
+// Actualizar solamente cuando realmente cambia Firebase, sin consultas extra.
+document.addEventListener('cq-acopio-datos-confirmados',function(){
+  if(el('view-reporte-global')&&el('view-reporte-global').style.display==='block'){
+    rebuildFilters();render();
+  }
+});
+})();
+</script>
 </body>
 </html>
 

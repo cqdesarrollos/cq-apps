@@ -1,7 +1,8 @@
-<!-- CQ 04/11/2026 · SOLO MATERIALES v5 · catálogo autoritativo con recuperación de altas explícitas y validación estricta de identidad -->
+<!-- CQ 13/11/2026 · SOLO MATERIALES v5.1 · ID nuevo reservado en todas las fuentes sin perder protección de identidad -->
 <!DOCTYPE html>
 <!-- CQ 13/10/2026 · permisos individuales de obra: Materiales -->
 <!-- V10: inicio paralelo y protección cargada sin transacciones redundantes; no cambia las escrituras de catálogo -->
+<!-- CQ 19/11/2026: optimización conservadora de lecturas; respaldo íntegro; índice ligero de backups -->
 
 <html lang="es">
 <head>
@@ -4686,7 +4687,7 @@ html.cq-v9-catalogo-listo #cq-v9-catalogo-inicio {display:none!important;}
 
 <script id="cq-backup-materiales-script">
 (function(){
- var C='materiales_backups', MC='materiales', MD='data_planilla_exacta_v4', busy=false;
+ var C='materiales_backups', I='__indice_liviano_v1', MC='materiales', MD='data_planilla_exacta_v4', busy=false;
 
  function fAR(){
   try{
@@ -4708,24 +4709,56 @@ html.cq-v9-catalogo-listo #cq-v9-catalogo-inicio {display:none!important;}
    }else id=(kind==='pre_restore'?'pre_restore_':'manual_')+now.toISOString().replace(/[-:.TZ]/g,'').slice(0,14);
    var main=await window._getDoc(window._doc(window._db,MC,MD));
    if(!main.exists())throw Error('No existe Materiales remoto');
-   await window._setDoc(window._doc(window._db,C,id),{
-    kind:kind,fecha:day,createdAt:now.toISOString(),source:'firebase_confirmado',
-    db:JSON.parse(JSON.stringify(main.data()||{}))
-   });
-   return true;
+    await window._setDoc(window._doc(window._db,C,id),{
+     kind:kind,fecha:day,createdAt:now.toISOString(),source:'firebase_confirmado',
+     db:JSON.parse(JSON.stringify(main.data()||{}))
+    });
+    // Guardar un índice sin el campo db; si falla, el backup íntegro permanece.
+    try{
+      // El índice vive en la MISMA colección ya autorizada para backups.
+      // merge:true agrega esta clave sin borrar referencias anteriores.
+      var item={};item[id]={kind:kind,fecha:day,createdAt:now.toISOString(),source:'firebase_confirmado'};
+      await window._setDoc(window._doc(window._db,C,I),{backups:item},{merge:true});
+    }catch(errorIndice){console.warn('Índice de backup pendiente, copia intacta',errorIndice);}
+    return true;
   }catch(e){console.warn('Backup Materiales',e);return false}
   finally{busy=false}
  }
- async function render(){
-  var box=document.getElementById('cqBkListaMateriales');
-  if(!ready()){box.innerHTML='<div class="empty">Firebase todavía no está listo.</div>';return}
-  try{
-   var snap=await window._getDocs(window._collection(window._db,C)),arr=[];
-   snap.forEach(function(x){var d=x.data()||{};d.id=x.id;arr.push(d)});
-   arr.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''))});
-   if(!arr.length){box.innerHTML='<div class="empty">Todavía no hay backups.</div>';return}
-   box.innerHTML='';
-   arr.slice(0,30).forEach(function(b){
+ async function render(incluirHistoricos){
+   var box=document.getElementById('cqBkListaMateriales');
+   if(!ready()){box.innerHTML='<div class="empty">Firebase todavía no está listo.</div>';return}
+   try{
+    // Por defecto sólo descargar metadatos; los backups anteriores a esta
+    // actualización siguen disponibles mediante "Mostrar historial completo".
+    var arr=[];
+    if(incluirHistoricos){
+      var snap=await window._getDocs(window._collection(window._db,C));
+      snap.forEach(function(x){
+        if(x.id===I)return; // El índice no es una copia restaurable.
+        var d=x.data()||{};d.id=x.id;arr.push(d);
+      });
+    }else{
+      // Si las reglas antiguas no permiten leer el índice, volver al listado
+      // original para no perder acceso a las copias en otro dispositivo.
+      var indice;
+      try{indice=await window._getDoc(window._doc(window._db,C,I));}
+      catch(errIndice){
+        console.warn('Índice liviano no disponible: consultando historial original',errIndice);
+        return render(true);
+      }
+      var entradas=indice.exists()?((indice.data()||{}).backups||{}):{};
+      Object.keys(entradas).forEach(function(id){
+        var d=entradas[id]||{};arr.push(Object.assign({},d,{id:id}));
+      });
+    }
+    arr.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''))});
+    box.innerHTML='';
+    if(!arr.length){
+      var vacio=document.createElement('div');vacio.className='empty';
+      vacio.textContent=incluirHistoricos?'Todavía no hay backups.':'No hay backups nuevos indexados; los anteriores siguen disponibles.';
+      box.appendChild(vacio);
+    }
+    arr.slice(0,30).forEach(function(b){
     var row=document.createElement('div');row.className='cq-bk-row';
     var info=document.createElement('div');
     var rawFecha=String(b.fecha||'');
@@ -4746,11 +4779,22 @@ html.cq-v9-catalogo-listo #cq-v9-catalogo-inicio {display:none!important;}
      alert('Backup restaurado. Se creó pre_restore.');
      location.reload();
     };
-    row.appendChild(info);row.appendChild(bt);box.appendChild(row);
-   });
-  }catch(e){console.warn(e);box.innerHTML='<div class="empty">No se pudieron leer los backups.</div>'}
- }
- async function openWork(){await save('auto');await render()}
+     row.appendChild(info);row.appendChild(bt);box.appendChild(row);
+    });
+    if(!incluirHistoricos){
+      var btHist=document.createElement('button');
+      btHist.type='button';btHist.className='btn btn-s';
+      btHist.style.cssText='margin-top:9px;padding:8px 12px;font-size:10px;width:100%';
+      btHist.textContent='Mostrar historial completo (incluye backups anteriores)';
+      btHist.onclick=function(){
+        btHist.disabled=true;btHist.textContent='Leyendo historial completo...';
+        render(true);
+      };
+      box.appendChild(btHist);
+    }
+   }catch(e){console.warn(e);box.innerHTML='<div class="empty">No se pudieron leer los backups.</div>'}
+  }
+  async function openWork(){await save('auto');await render()}
  document.getElementById('cqBackupVisible').addEventListener('click',function(){setTimeout(openWork,0)});
  document.getElementById('cqBkManualMateriales').addEventListener('click',async function(){var x=await save('manual');alert(x?'Backup manual guardado.':'No se pudo guardar.');if(x)render()});
  document.addEventListener('firebase-ready',function(){setTimeout(function(){save('auto')},1200)});
@@ -5422,19 +5466,26 @@ function nombreObraUnificadoMateriales(baseName,idx){
   if(g)return g.label||g.short||g.id;
   return (state.obraNombres&&state.obraNombres[idx])?state.obraNombres[idx]:baseName;
 }
+// CQ 19/11/2026: una sola consulta de config/app para inicios concurrentes.
+// No se reemplaza el listener en tiempo real ni el contenido remoto.
+var cqObrasGastosLecturaEnCurso=null;
 async function cargarObrasGastosMateriales(force){
   if(obrasGastosMateriales&&!force)return obrasGastosMateriales;
   if(!window._dbReady||!window._getDoc)return null;
-  try{
-    var snap=await window._getDoc(window._doc(window._db,'config','app'));
-    if(!snap.exists())return null;
-    var d=snap.data()||{};
-    obrasGastosMateriales=Array.isArray(d.obras)?d.obras:[];
-    return obrasGastosMateriales;
-  }catch(e){
-    console.warn('No se pudieron cargar las obras de Gastos en Materiales',e);
-    return null;
-  }
+  if(cqObrasGastosLecturaEnCurso)return cqObrasGastosLecturaEnCurso;
+  cqObrasGastosLecturaEnCurso=(async function(){
+    try{
+      var snap=await window._getDoc(window._doc(window._db,'config','app'));
+      if(!snap.exists())return null;
+      var d=snap.data()||{};
+      obrasGastosMateriales=Array.isArray(d.obras)?d.obras:[];
+      return obrasGastosMateriales;
+    }catch(e){
+      console.warn('No se pudieron cargar las obras de Gastos en Materiales',e);
+      return null;
+    }finally{ cqObrasGastosLecturaEnCurso=null; }
+  })();
+  return cqObrasGastosLecturaEnCurso;
 }
 function indiceBasePorClaveGastos(clave){
   if(!clave)return -1;
@@ -8614,30 +8665,43 @@ function updateModoUI(){
   setSyncStatus(modoFirebase?'Firebase ON':'Modo prueba',modoFirebase?'ok':'');
   
 }
+// CQ 19/11/2026: el estado visual de sincronización no necesita una lectura
+// remota completa por cada snapshot del documento de Materiales.
+var cqUltimaLecturaMetaSync=0, cqLecturaMetaSyncPendiente=null;
 async function updateLastSync(action){
   if(!window._dbReady||!modoFirebase)return;
+  var at=new Date().toISOString(), user=getUserName();
   await window._setDoc(window._doc(window._db,'materiales_meta','last_sync'),{
-    user:getUserName(),
+    user:user,
     clientId:CLIENT_ID,
     action:action,
-    at:new Date().toISOString()
+    at:at
   });
-  readLastSync();
+  cqUltimaLecturaMetaSync=Date.now();
+  setSyncMeta('Última sync: '+new Date(at).toLocaleString('es-AR')+' · '+(user||'Usuario'));
 }
-async function readLastSync(){
+async function readLastSync(force){
   if(!window._dbReady||!modoFirebase){setSyncMeta('Modo prueba',true);return;}
-  try{
-    var snap=await window._getDoc(window._doc(window._db,'materiales_meta','last_sync'));
-    if(snap.exists()){
-      var d=snap.data();
-      setSyncMeta('Última sync: '+new Date(d.at).toLocaleString('es-AR')+' · '+(d.user||'Usuario'));
-    }else{
-      setSyncMeta('Sin sync previa',true);
-    }
-  }catch(e){
-    console.warn(e);
-    setSyncMeta('Sync sin leer',true);
-  }
+  if(cqLecturaMetaSyncPendiente)return cqLecturaMetaSyncPendiente;
+  if(!force&&cqUltimaLecturaMetaSync&&Date.now()-cqUltimaLecturaMetaSync<60000)return;
+  cqUltimaLecturaMetaSync=Date.now();
+  cqLecturaMetaSyncPendiente=(async function(){
+    try{
+      var snap=await window._getDoc(window._doc(window._db,'materiales_meta','last_sync'));
+      if(snap.exists()){
+        var d=snap.data();
+        setSyncMeta('Última sync: '+new Date(d.at).toLocaleString('es-AR')+' · '+(d.user||'Usuario'));
+      }else{
+        setSyncMeta('Sin sync previa',true);
+      }
+    }catch(e){
+      console.warn(e);
+      // Ante error, permitir reintentar sin esperar un minuto.
+      cqUltimaLecturaMetaSync=0;
+      setSyncMeta('Sync sin leer',true);
+    }finally{cqLecturaMetaSyncPendiente=null;}
+  })();
+  return cqLecturaMetaSyncPendiente;
 }
 
 function cqNombreExactoCodigo(v){
@@ -8664,13 +8728,18 @@ function cqAgregarCodigoFuente(map,nombre,codigo,fuente){
   }
 }
 
-async function cqCodigosPorNombreDesdeFuentes(){
+// CQ 19/11/2026: reutilizar sólo para completar códigos la lectura reciente
+// de Acopio obtenida en la reconciliación inicial. La reconciliación de borrados
+// SIEMPRE conserva su lectura fresca para no eliminar información vigente.
+var cqAcopioUltimaReconciliacionSnap=null, cqAcopioUltimaReconciliacionAt=0;
+async function cqCodigosPorNombreDesdeFuentes(forzar){
   var map={};
 
   try{
-    var snapA=await window._getDoc(
-      window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3')
-    );
+    var snapA=(!forzar&&cqAcopioUltimaReconciliacionSnap&&
+      Date.now()-cqAcopioUltimaReconciliacionAt<10000)
+      ?cqAcopioUltimaReconciliacionSnap
+      :await window._getDoc(window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3'));
     if(snapA.exists()){
       var rawA=snapA.data()||{};
       var dbA=(rawA.db&&typeof rawA.db==='object')?rawA.db:rawA;
@@ -8706,12 +8775,17 @@ var cqUltimaConsultaCodigosFuentes=0;
 var CQ_CODIGOS_FUENTES_COOLDOWN=5*60*1000;
 async function completarCodigosDesdeAcopioYPanol(forzar){
   if(!window._dbReady||!modoFirebase||cqCompletandoCodigosFuentes)return {actualizados:0,conflictos:0};
+  // Si todos los materiales poseen código, no descargar Acopio y Pañol.
+  // Las consultas forzadas (diagnóstico/comparación) siguen funcionando igual.
+  if(!forzar&&!getAllMats().some(function(m){
+    return m&&!isMatDeleted(m.id)&&!String(getMatCodigo(m)||'').trim();
+  }))return {actualizados:0,conflictos:0,sinFaltantes:true};
   if(!forzar && Date.now()-cqUltimaConsultaCodigosFuentes<CQ_CODIGOS_FUENTES_COOLDOWN)return {actualizados:0,conflictos:0,cache:true};
   cqUltimaConsultaCodigosFuentes=Date.now();
   cqCompletandoCodigosFuentes=true;
 
   try{
-    var codigosPorNombre=await cqCodigosPorNombreDesdeFuentes();
+    var codigosPorNombre=await cqCodigosPorNombreDesdeFuentes(!!forzar);
     if(!state.matCodigos)state.matCodigos={};
 
     var actualizados=0, conflictos=0;
@@ -9046,6 +9120,10 @@ async function cqReconciliarMaterialesConAcopioActual(){
   var cambio=false;
   try{
     var snapA=await window._getDoc(window._doc(window._db,'acopio_cq','acopio_cq_compartido_v3'));
+    // Reusar este snapshot en el enriquecimiento inmediato de códigos,
+    // sin evitar lecturas frescas en futuras reconciliaciones.
+    cqAcopioUltimaReconciliacionSnap=snapA;
+    cqAcopioUltimaReconciliacionAt=Date.now();
     if(!snapA.exists())return false;
     var raw=snapA.data()||{};
     var dbA=(raw.db&&typeof raw.db==='object')?raw.db:raw;
@@ -10013,29 +10091,31 @@ setTimeout(function(){
   if(!firebaseStarted)startFirebase();
 },350);
 
+// CQ 19/11/2026: focus y visibilitychange suelen dispararse juntos en móvil.
+// Mantener una revalidación fresca tras regresar, sin generar 2 descargas iguales.
+var cqUltimoRefrescoObrasAlVolver=0, cqRefrescoObrasAlVolverPendiente=null;
+function cqRefrescarObrasAlVolver(){
+  if(!window._dbReady||!modoFirebase)return;
+  if(cqRefrescoObrasAlVolverPendiente)return;
+  if(cqUltimoRefrescoObrasAlVolver&&Date.now()-cqUltimoRefrescoObrasAlVolver<60000)return;
+  cqUltimoRefrescoObrasAlVolver=Date.now();
+  cqRefrescoObrasAlVolverPendiente=cargarObrasGastosMateriales(true).then(function(){
+    var migro=estabilizarObrasGastosMateriales();
+    if(migro)localStorage.setItem(DB_KEY,JSON.stringify(state));
+    renderActive();
+  }).catch(function(e){
+    cqUltimoRefrescoObrasAlVolver=0;
+    console.warn('Actualización permisos Materiales al volver',e);
+  }).finally(function(){cqRefrescoObrasAlVolverPendiente=null;});
+}
 window.addEventListener('focus',function(){
   if(modoFirebase&&!firebaseStarted)startFirebase();
-  // Al volver a Materiales, renovar permisos de obras desde Gastos sin tocar históricos.
-  if(window._dbReady){
-    cargarObrasGastosMateriales(true).then(function(){
-      var migro=estabilizarObrasGastosMateriales();
-      if(migro)localStorage.setItem(DB_KEY,JSON.stringify(state));
-      renderActive();
-    }).catch(function(e){console.warn('Actualización permisos Materiales desde Gastos',e);});
-  }
+  cqRefrescarObrasAlVolver();
 });
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState!=='visible')return;
   if(modoFirebase&&!firebaseStarted)startFirebase();
-  /* Respaldo móvil: aunque el listener haya quedado suspendido en segundo plano,
-     al volver se fuerza una lectura fresca de los permisos de obra. */
-  if(window._dbReady){
-    cargarObrasGastosMateriales(true).then(function(){
-      var migro=estabilizarObrasGastosMateriales();
-      if(migro)localStorage.setItem(DB_KEY,JSON.stringify(state));
-      renderActive();
-    }).catch(function(e){console.warn('Actualización permisos Materiales al volver visible',e);});
-  }
+  cqRefrescarObrasAlVolver();
 });
 
 function getObras(){
@@ -19997,13 +20077,29 @@ function guardarNuevaEntrada(entries,main,d,accion){
     id=Number(enNombre.id);
     if(window.__cqMaterialesEmployeeRO)throw new Error('El material ya existe. En modo solo lectura no se puede modificar.');
   }else{
+    // Un ID nuevo debe quedar libre en TODO el catálogo visible y remoto.
+    // Las integraciones pueden crear IDs >= 10000 sin registrarlos aún en
+    // extraMats: la numeración anterior omitía esos IDs y chocaba al guardar.
     var max=9999;
-    existentes.forEach(function(m){var n=Number(m&&m.id);if(Number.isFinite(n)&&n>max)max=n;});
-    // Los IDs de materiales borrados y cargas históricas tampoco pueden reciclarse.
-    (main.deletedMatIds||[]).forEach(function(k){var n=Number(k);if(Number.isFinite(n)&&n>max)max=n;});
-    (main.cargas||[]).forEach(function(c){var n=Number(c&&c.matId);if(Number.isFinite(n)&&n>max)max=n;});
-    Object.keys(entries).forEach(function(k){var n=Number(k);if(Number.isFinite(n)&&n>max)max=n;});
+    function reservarId(valor){
+      var n=Number(valor);
+      if(Number.isSafeInteger(n)&&n>=10000&&n>max)max=n;
+    }
+    existentes.forEach(function(m){if(m)reservarId(m.id);});
+    // Incluir materiales dinámicos visibles, pero sin reutilizar ni confiar
+    // en su identidad: son sólo IDs reservados para el alta nueva.
+    activos().forEach(function(m){if(m)reservarId(m.id);});
+    (main.deletedMatIds||[]).forEach(reservarId);
+    (main.cargas||[]).forEach(function(c){if(c)reservarId(c.matId);});
+    Object.keys(entries).forEach(reservarId);
+    // Hay IDs creados por otras apps que persisten sólo en mapas de Firebase,
+    // incluso después de que cambie el array de materiales.
+    ['matNombres','matCategorias','matCodigos','matComentarios',
+      'catalogoManual','categoriaManual','categoriaManualIdentidad','categoriaMemoria'].forEach(function(campo){
+      Object.keys(main[campo]||{}).forEach(reservarId);
+    });
     id=max+1;
+    if(!Number.isSafeInteger(id))throw new Error('No hay un ID seguro disponible para el nuevo material.');
   }
   var extraActual=extras.find(function(m){return String(m.id)===String(id);});
   var yaCreado=!!(extraActual||entries[String(id)]&&entries[String(id)].manualCreated);
@@ -20073,8 +20169,13 @@ async function transaccionCatalogo(datos,accion){
       var soloEditados={};
       result.forEach(function(g){soloEditados[String(g.id)]=entries[String(g.id)];});
       var revision=prepararCambios(main,soloEditados,renombresAutorizados);
-      if(revision.collisions.some(function(c){return result.some(function(r){return String(r.id)===String(c.id);});}))
-        throw new Error('ID en conflicto: no se aplicó la edición al material equivocado');
+      var choque=revision.collisions.find(function(c){
+        return result.some(function(r){return String(r.id)===String(c.id);});
+      });
+      if(choque)
+        throw new Error('ID en conflicto (#'+choque.id+'). Material solicitado: '+
+          String(choque.protegido||'sin nombre')+'. Ocupante detectado: '+
+          String(choque.remoto||'sin identificar')+'. No se modificó ningún material.');
       var patch=revision.patch;
       // La transacción lee el último estado de Firebase: no pisa cargas nuevas.
       if(main.cargas)patch.cargas=main.cargas;
