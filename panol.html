@@ -2226,6 +2226,50 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
   @media(prefers-reduced-motion:reduce){#cq-panol-cargando .cq-carga-rueda{animation-duration:2s}}
 </style>
 
+
+<style id="cq-panol-tablet-iconos-stock-sin-superposicion">
+/* Solo tablet tactil: reservar el ancho real para los cuatro iconos
+   de cada producto, sin modificar telefono ni escritorio. */
+@media (min-width:700px) and (max-width:1600px) and (any-pointer:coarse) {
+  #view-stock #stock-list .prod-top{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 170px!important;
+    gap:10px!important;
+    align-items:center!important;
+  }
+  #view-stock #stock-list .prod-right{
+    width:170px!important;
+    min-width:170px!important;
+    max-width:170px!important;
+    justify-self:end!important;
+    overflow:visible!important;
+  }
+  #view-stock #stock-list .prod-icons{
+    box-sizing:border-box!important;
+    width:170px!important;
+    min-width:170px!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,36px)!important;
+    justify-content:end!important;
+    gap:6px!important;
+    margin-top:7px!important;
+  }
+  #view-stock #stock-list .prod-icons .icon-mini{
+    box-sizing:border-box!important;
+    display:inline-flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    width:36px!important;
+    min-width:36px!important;
+    height:36px!important;
+    flex:0 0 36px!important;
+    font-size:17px!important;
+    line-height:1!important;
+    padding:0!important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -4111,8 +4155,25 @@ function startFirebase(){
     if(unsub)unsub();
     // Suscripción instalada DESPUÉS de la carga inicial: no duplicar lecturas
     // y copias en paralelo con la consulta que permite habilitar la pantalla.
-    unsub=window._onSnapshot(window._doc(window._db,DOC_COL,DOC_ID),async function(snap){
-      if(Date.now()<suppressRemoteUntil)return;
+    // CQ: si un cambio de Acopio llega durante la breve ventana de guardado
+    // local, diferirlo. Descartarlo hacía que el movimiento siguiera visible
+    // hasta la siguiente modificación de Firebase.
+    var cqPanolCambioDiferido=null;
+    var cqPanolTimerDiferido=null;
+    async function cqPanolProcesarSnapshot(snap){
+      if(Date.now()<suppressRemoteUntil){
+        // Sólo eventos confirmados del servidor; no reinyectar cache ni pendientes.
+        if(snap.metadata&&(snap.metadata.fromCache||snap.metadata.hasPendingWrites))return;
+        cqPanolCambioDiferido=snap;
+        if(cqPanolTimerDiferido)clearTimeout(cqPanolTimerDiferido);
+        cqPanolTimerDiferido=setTimeout(function(){
+          cqPanolTimerDiferido=null;
+          var ult=cqPanolCambioDiferido;
+          cqPanolCambioDiferido=null;
+          if(ult)cqPanolProcesarSnapshot(ult).catch(function(e){console.warn('Snapshot diferido Pañol',e);});
+        },Math.max(50,suppressRemoteUntil-Date.now()+80));
+        return;
+      }
       // Si un guardado no fue confirmado, no reemplazar lo pendiente por un
       // snapshot de otra sesión. La situación requiere diagnóstico antes de operar.
       if(window.__cqPanolUltimoErrorGuardado)return;
@@ -4142,7 +4203,8 @@ function startFirebase(){
         setSyncStatus(cachéActualizado?'Actualizado':'Firebase ON · memoria local llena','ok');
       renderActive();
       panolGuardarBackupFirebase(state,'snapshot válido').catch(function(e){console.warn(e);});
-    },function(e){
+    }
+    unsub=window._onSnapshot(window._doc(window._db,DOC_COL,DOC_ID),cqPanolProcesarSnapshot,function(e){
       console.warn(e);
       setSyncStatus('🟠 Error de sync','err');
     });
