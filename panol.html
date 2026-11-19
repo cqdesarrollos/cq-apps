@@ -6057,9 +6057,15 @@ async function cargarCatalogoMaterialesPanol(){
   var list=CQ_BASE_CATALOGO_MATERIALES_PANOL.map(function(x){return Object.assign({},x);});
   try{
     if(window._dbReady&&window._getDoc){
-      var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
-      if(snap.exists()){
-        var d=snap.data()||{};
+      // Ya hay un listener de Materiales en Pañol: reutilizar su copia reciente.
+      // Sin copia válida, mantener la lectura directa que existía antes.
+      var d=(cqMaterialesDocCachePanol&&Date.now()-cqMaterialesDocCacheAtPanol<120000)
+        ?cqMaterialesDocCachePanol:null;
+      if(!d){
+        var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+        if(snap.exists())d=snap.data()||{};
+      }
+      if(d){
         var ren=d.matNombres||{},cod=d.matCodigos||{},cats=d.matCategorias||{},catRen=d.catRenames||{};
         var deleted=(d.deletedMatIds||[]).map(Number);
 
@@ -6162,6 +6168,8 @@ function renderMaterialSeleccionadoPanol(){
 var materialesIntegradosPanol=null;
 var materialesVerificacionErrorPanol=false;
 var unsubVerificacionMaterialesPanol=null;
+var cqMaterialesDocCachePanol=null;
+var cqMaterialesDocCacheAtPanol=0;
 
 // CQ 14/09/2026 — si una salida que DEBE estar en Materiales desaparece del
 // documento principal, Pañol la vuelve a materializar. El Set evita bucles.
@@ -6254,9 +6262,15 @@ function iniciarVerificacionMaterialesPanol(){
     setTimeout(iniciarVerificacionMaterialesPanol,700);
     return;
   }
-  try{ if(unsubVerificacionMaterialesPanol) unsubVerificacionMaterialesPanol(); }catch(_e){}
+  // Evitar desuscribir y reinstalar el mismo listener al recibir los dos
+  // eventos de inicio (cq-db-ready y el reintento programado).
+  if(unsubVerificacionMaterialesPanol)return;
   unsubVerificacionMaterialesPanol=window._onSnapshot(window._doc(window._db,'materiales','data_planilla_exacta_v4'),function(snap){
     materialesVerificacionErrorPanol=false;
+    if(snap.exists()){
+      cqMaterialesDocCachePanol=snap.data()||{};
+      cqMaterialesDocCacheAtPanol=Date.now();
+    }else{cqMaterialesDocCachePanol=null;cqMaterialesDocCacheAtPanol=0;}
     var ids=new Set();
     if(snap.exists()){
       var d=snap.data()||{};
@@ -10205,6 +10219,11 @@ async function guardar(kind){
     var now=new Date(), day=fechaAR(now), id;
     if(kind==="auto"){
       id="daily_"+day;
+      // Consultar primero el índice pequeño, no el respaldo completo de hoy.
+      var ixAuto=await window._getDoc(window._doc(window._db,COLL,"backup_index_v1"));
+      var entradasAuto=ixAuto.exists()&&Array.isArray((ixAuto.data()||{}).ids)?ixAuto.data().ids:[];
+      if(entradasAuto.some(function(x){return x&&x.id===id;}))return true;
+      // Compatibilidad con respaldos antiguos anteriores al índice.
       var ex=await window._getDoc(window._doc(window._db,COLL,id));
       if(ex.exists())return true;
     }else if(kind==="pre_restore"){
@@ -10228,7 +10247,9 @@ async function guardar(kind){
     // NO se toca last_good_stock_v1 (respaldo nativo de Pañol) ni backup_index_v1.
     var sobrantes=ids.slice(30);
     ids=ids.slice(0,30);
-    await window._setDoc(idxRef,{ids:ids,updatedAt:now.toISOString()});
+    // Conservar la marca de migración del historial anterior.
+    var historicosRevisados=!!(idxSnap.exists()&&(idxSnap.data()||{}).legacyScanned);
+    await window._setDoc(idxRef,{ids:ids,updatedAt:now.toISOString(),legacyScanned:historicosRevisados});
 
     if(window._deleteDoc){
       for(var z=0;z<sobrantes.length;z++){
@@ -10270,40 +10291,70 @@ async function leerBackupId(id,meta){
   }catch(e){return null;}
 }
 async function disponibles(){
-  var arr=[],seen={};
-
-  // 1) Índice de backups nuevos (manuales, pre_restore y diarios).
+  var arr=[],seen={},ixRef=window._doc(window._db,COLL,"backup_index_v1");
+  var idxSnap=null, idx={}, ids=[];
   try{
-    var ix=await window._getDoc(window._doc(window._db,COLL,"backup_index_v1"));
-    var ids=ix.exists()&&Array.isArray(ix.data().ids)?ix.data().ids:[];
-    for(var i=0;i<ids.length;i++){
-      var d=await leerBackupId(ids[i].id,ids[i]);
-      if(d&&d.state&&tieneDatos(d.state)){arr.push(d);seen[d.id]=1;}
-    }
-  }catch(e){}
+    idxSnap=await window._getDoc(ixRef);
+    idx=idxSnap.exists()?(idxSnap.data()||{}):{};
+    ids=Array.isArray(idx.ids)?idx.ids.slice():[];
+  }catch(e){console.warn("No se pudo consultar el índice de Pañol",e);}
 
-  // 2) Diarios de los últimos 30 días, incluso si el índice aún no existía.
-  for(var j=0;j<DAYS;j++){
-    var f=offsetFecha(j),id="daily_"+f;
-    if(seen[id])continue;
-    var d2=await leerBackupId(id,{kind:"auto",fecha:f});
-    if(d2&&d2.state&&tieneDatos(d2.state)){arr.push(d2);seen[id]=1;}
+  // Los registros del índice sólo tienen datos de presentación. Antes se
+  // descargaba cada copia completa para mostrar únicamente la fecha.
+  ids.forEach(function(b){
+    if(!b||!b.id||seen[b.id])return;
+    arr.push({id:b.id,kind:b.kind||"auto",fecha:b.fecha||"",createdAt:b.createdAt||""});
+    seen[b.id]=1;
+  });
+
+  // Migración UNA SOLA VEZ: descubrir los diarios anteriores al índice y
+  // registrar su metadata. No se modifica ni elimina ningún backup antiguo.
+  // Si falla una lectura, NO marcar la migración como terminada.
+  if(idxSnap && !idx.legacyScanned){
+    var completar=true,nuevos=[];
+    for(var j=0;j<DAYS;j++){
+      var f=offsetFecha(j),id="daily_"+f;
+      if(seen[id])continue;
+      try{
+        var s=await window._getDoc(window._doc(window._db,COLL,id));
+        if(!s.exists())continue;
+        var d=s.data()||{};
+        if(!d.state||!tieneDatos(d.state))continue;
+        var meta={id:id,kind:d.kind||"auto",fecha:d.fecha||f,createdAt:d.createdAt||""};
+        arr.push(meta);nuevos.push(meta);seen[id]=1;
+      }catch(e){completar=false;console.warn("No se pudo verificar diario histórico de Pañol",id,e);}
+    }
+    if(completar){
+      try{
+        // Recargar el índice antes de fusionar: puede haber backups hechos
+        // desde otro teléfono durante la exploración del historial.
+        var ultimo=await window._getDoc(ixRef);
+        var actuales=ultimo.exists()&&Array.isArray((ultimo.data()||{}).ids)?ultimo.data().ids:[];
+        var conjunto={},mezcla=[];
+        actuales.concat(ids,nuevos).forEach(function(x){
+          if(x&&x.id&&!conjunto[x.id]){conjunto[x.id]=1;mezcla.push(x);}
+        });
+        await window._setDoc(ixRef,{ids:mezcla,updatedAt:new Date().toISOString(),legacyScanned:true});
+      }catch(e){console.warn("No se pudo registrar índice histórico de Pañol",e);}
+    }
   }
 
-  // 3) Backup de seguridad que Pañol YA TRAÍA en el archivo original.
+  // El backup nativo permanece accesible; su contenido se lee SOLO si se
+  // solicita restaurarlo. No descargarlo para mostrar una fila en el modal.
   if(!seen["last_good_stock_v1"]){
-    var old=await leerBackupId("last_good_stock_v1",{kind:"seguridad"});
-    if(old&&old.state&&tieneDatos(old.state)){
-      old.createdAt=old.createdAt||old.savedAt||"";
-      arr.push(old);seen[old.id]=1;
-    }
+    arr.push({id:"last_good_stock_v1",kind:"seguridad",fecha:"",createdAt:""});
   }
-
   arr.sort(function(a,b){return String(b.createdAt||"").localeCompare(String(a.createdAt||""));});
   return arr;
 }
 async function restaurar(b){
-  if(!b||!b.state||!tieneDatos(b.state)){alert("Backup inválido.");return;}
+  if(!b||!b.id){alert("Backup inválido.");return;}
+  // Descarga a demanda: el listado no necesita el estado completo.
+  if(!b.state){
+    b=await leerBackupId(b.id,b);
+    if(!b){alert("No se pudo abrir este backup. Puede haber sido eliminado.");return;}
+  }
+  if(!b.state||!tieneDatos(b.state)){alert("Backup inválido.");return;}
   if(!confirm("¿Restaurar este backup de Pañol?\\n\\nEsto reemplazará el estado actual."))return;
   if(String(prompt("Escribí RESTAURAR para confirmar:")||"").trim().toUpperCase()!=="RESTAURAR"){
     alert("Restauración cancelada.");return;
