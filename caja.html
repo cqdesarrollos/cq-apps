@@ -2747,8 +2747,11 @@ async function cqFsRequestCC(ref,method="GET",body=null,params=[],timeoutMs=9000
   }catch(e){if(e&&e.name==="AbortError")throw new Error("Firebase HTTPS · tiempo agotado");throw e;}
   finally{clearTimeout(t);}
 }
-async function getDoc(ref){
-  const raw=await cqFsRequestCC(ref,"GET");
+// CQ 19/11/2026 · Lecturas selectivas: los campos no solicitados no viajan
+// desde Firestore. Se mantienen las lecturas completas para guardar/fusionar.
+async function getDoc(ref,fieldMaskPaths=[]){
+  const params=(fieldMaskPaths||[]).map(path=>["mask.fieldPaths",String(path)]);
+  const raw=await cqFsRequestCC(ref,"GET",null,params);
   const data=raw?cqFsFieldsDecodeCC(raw.fields||{}):null;
   return{exists:()=>!!raw,data:()=>data,_updateTime:raw&&raw.updateTime?String(raw.updateTime):""};
 }
@@ -2759,16 +2762,53 @@ async function setDoc(ref,data,options={}){
   if(options&&options.__updateTime)params.push(["currentDocument.updateTime",String(options.__updateTime)]);
   return cqFsRequestCC(ref,"PATCH",{fields:cqFsFieldsEncodeCC(data||{})},params,10000);
 }
-function onSnapshot(ref,next,error){
-  let stopped=false,timer=null,last="";
+// Emulación de onSnapshot por HTTPS (no es un listener en tiempo real).
+// Antes cada consulta de 15 s descargaba el documento completo, aun sin cambios.
+// Ahora se consulta sólo updateTime; los datos se descargan al cambiar la versión.
+// En pestañas ocultas se consulta cada 60 s y al volver se revisa enseguida.
+function onSnapshot(ref,next,error,options={}){
+  let stopped=false,timer=null;
+  let last=typeof options.initialUpdateTime==="string"?options.initialUpdateTime:null;
+  const fields=Array.isArray(options.fieldMaskPaths)?options.fieldMaskPaths:[];
   const tick=async()=>{
     if(stopped)return;
-    try{const snap=await getDoc(ref);const token=String(snap._updateTime||"");if(token!==last){last=token;next(snap);}}
-    catch(e){if(error)error(e);}
-    if(!stopped)timer=setTimeout(tick,15000);
+    timer=null;
+    try{
+      if(last===null){
+        // Primera lectura: se necesita el contenido (o los campos seleccionados).
+        const snap=await getDoc(ref,fields);
+        if(stopped)return;
+        const version=String(snap._updateTime||"");
+        last=version;
+        if(version)next(snap);
+      }else{
+        // La máscara devuelve un documento mínimo con updateTime auténtico.
+        // No se agrega ni modifica ningún campo del documento remoto.
+        const probe=await cqFsRequestCC(ref,"GET",null,[["mask.fieldPaths","_cq_version_probe"]]);
+        if(stopped)return;
+        const version=probe&&probe.updateTime?String(probe.updateTime):"";
+        if(version!==last){
+          const snap=await getDoc(ref,fields);
+          if(stopped)return;
+          last=String(snap._updateTime||"");
+          next(snap);
+        }
+      }
+    }catch(e){if(!stopped&&error)error(e);}
+    if(!stopped)timer=setTimeout(tick,document.visibilityState==="hidden"?60000:15000);
   };
+  const alVolver=()=>{
+    if(stopped||document.visibilityState!=="visible"||!timer)return;
+    clearTimeout(timer);
+    timer=setTimeout(tick,100);
+  };
+  document.addEventListener("visibilitychange",alVolver);
   timer=setTimeout(tick,80);
-  return()=>{stopped=true;if(timer)clearTimeout(timer);};
+  return()=>{
+    stopped=true;
+    if(timer)clearTimeout(timer);
+    document.removeEventListener("visibilitychange",alVolver);
+  };
 }
 async function runTransaction(_db,fn){
   let lastErr=null;
@@ -2790,10 +2830,11 @@ async function runTransaction(_db,fn){
   }
   throw lastErr||new Error("No se pudo completar la operación");
 }
-async function listCollection(collectionPath,pageSize=50,orderBy=''){
+async function listCollection(collectionPath,pageSize=50,orderBy='',fieldMaskPaths=[]){
   const parts=String(collectionPath||'').split('/').filter(Boolean);
   const params=[['pageSize',String(Math.max(1,Math.min(1000,Number(pageSize)||50)))]];
   if(orderBy)params.push(['orderBy',String(orderBy)]);
+  (fieldMaskPaths||[]).forEach(path=>params.push(['mask.fieldPaths',String(path)]));
   const raw=await cqFsRequestCC({parts,path:parts.join('/')},'GET',null,params,10000);
   return ((raw&&raw.documents)||[]).map(d=>{
     const name=String(d.name||'');
@@ -3090,7 +3131,8 @@ async function firebaseCC(){
 
 async function cqProbeServerCC(fdb){
   const ref=doc(fdb,CC_COL,CC_DOC);
-  await cqTimeoutCC(getDocFromServer(ref),8000,'Conexión Firebase');
+  // Verificación de conexión: no descargar todo el libro de movimientos.
+  await cqTimeoutCC(getDoc(ref,['updatedAt']),8000,'Conexión Firebase');
   return true;
 }
 
@@ -3368,6 +3410,9 @@ async function startCC(){
       initializedCC=false;
       clearTimeout(timerCC);
       if(navigator.onLine)timerCC=setTimeout(()=>{timerCC=null;if(!initializedCC)startCC();},5000);
+    },{
+      // Ya se leyó (y quizá se guardó) la versión completa durante startCC.
+      initialUpdateTime:String(cqUltimoSnapshotConfirmadoCC&&cqUltimoSnapshotConfirmadoCC._updateTime||'')
     });
 
     retryFailuresCC=0;
@@ -3858,7 +3903,8 @@ function aplicarTipoCambioGerencia(data,forzar=false){
 }
 
 async function leerTcGerenciaInicial(){
-  const snap=await getDoc(refTCGerencia);
+  // Sólo se necesita el TC de Gerencia, no toda su caja histórica.
+  const snap=await getDoc(refTCGerencia,['db.lastTC']);
   if(!snap.exists())return false;
   return aplicarTipoCambioGerencia(snap.data()||{});
 }
@@ -3894,7 +3940,7 @@ async function iniciarSyncTCGerencia(){
         // Si el usuario no tiene acceso a Caja Gerencia (p.ej. Eugenia),
         // no reintentar en bucle. Caja Chica seguirá usando el TC maestro compartido.
         if(String(e&&e.code||'')!=='permission-denied')programarReintentoTC();
-      });
+      },{fieldMaskPaths:['db.lastTC']});
     }
   }finally{
     tcStarting=false;
@@ -5107,7 +5153,7 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
 import { getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 const aBK=window.__cqRestFirestoreAdapterCC;
 if(!aBK)throw new Error('Adaptador Firebase HTTPS no disponible');
-const {getFirestore,doc,setDoc,deleteDoc,listCollection}=aBK;
+const {getFirestore,doc,getDoc,setDoc,deleteDoc,listCollection}=aBK;
 const BK_COL="backups_caja_chica";
 const KEEP=30;
 const btn=document.getElementById("cqBackupCajaBtn"), modal=document.getElementById("cqBkCajaModal");
@@ -5117,7 +5163,8 @@ async function db(){for(let i=0;i<40&&!getApps().length;i++)await sleep(150);if(
 function state(){if(typeof window.__cqCajaChicaGetState!=="function")throw new Error("Estado de Caja Chica no disponible");return JSON.parse(JSON.stringify(window.__cqCajaChicaGetState()))}
 function idNow(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}_${Date.now()}`}
 function dayKey(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}`}
-async function rows(){return await listCollection(BK_COL,KEEP+20,'createdAtMs desc')}
+// La lista sólo necesita fechas y tipo; los estados completos permanecen en Firestore.
+async function rows(){return await listCollection(BK_COL,KEEP+20,'createdAtMs desc',['createdAtMs','createdAt','kind'])}
 async function prune(){const docs=await rows();for(let i=KEEP;i<docs.length;i++)await deleteDoc(docs[i].ref)}
 async function createBackup(kind="Manual",fixedId=''){
  const fdb=await db(), now=Date.now(), id=fixedId||idNow();
@@ -5143,7 +5190,11 @@ async function loadList(){
    meta.innerHTML=`<b>${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}</b><small>${x.kind||"Backup"}</small>`;
    const r=document.createElement("button");r.type="button";r.className="cq-bk-restore";r.textContent="Restaurar";
    r.onclick=async()=>{if(!confirm("¿Restaurar este backup de Caja Chica?"))return;try{
-      const st=x.state;if(!st)throw new Error("Backup vacío");
+      // Descargar el contenido íntegro ÚNICAMENTE cuando se solicita restaurar.
+      const fdb=await db();
+      const completo=await getDoc(doc(fdb,BK_COL,ds.id));
+      const st=completo.exists()?(completo.data()||{}).state:null;
+      if(!st)throw new Error("Backup vacío o inexistente");
       if(typeof window.__cqCajaChicaApplyState==="function"){window.__cqCajaChicaApplyState(st)}
       else { localStorage.setItem("cq_caja_chica_state_v1",JSON.stringify(st)); location.reload(); return; }
       if(typeof window.__cqCajaChicaMarkDirty==="function")window.__cqCajaChicaMarkDirty();
