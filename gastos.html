@@ -2457,9 +2457,12 @@ async function ensureDailyBackup(){
     if(!snap.exists()){
       const payload=await buildRemoteBackupPayload('auto');
       await window._setDoc(ref,payload);
+      // CQ: limpiar historial sólo después de CREAR un backup nuevo.
+      // Antes se descargaban hasta 40 backups completos en cada entrada
+      // o retorno a la aplicación, aunque el backup de hoy ya existiera.
+      cleanupOldBackups();
     }
     localStorage.setItem('gastos_last_auto_backup',todayKey);
-    cleanupOldBackups();
   }catch(e){console.warn('Daily backup error',e);}
 }
 async function getBackupList(){
@@ -4227,7 +4230,16 @@ refreshReporteFirebase = async function(){
   renderReporte();
 };
 
-initLocal();if(modoFirebase){setSyncStatus('Firebase: conectando...');setSyncMeta('Firebase: conectando...');}renderFilters();updateUserDeviceButton();ensureUserName();renderAll();programarMarcarVisto();captureInitialFallback();startPresence();document.addEventListener('firebase-ready',startFirebaseSync);setTimeout(()=>{if(window._dbReady)startFirebaseSync()},800);window.addEventListener('beforeunload',()=>{if(unsubConfig)unsubConfig();if(unsubObra)unsubObra();});
+initLocal();if(modoFirebase){setSyncStatus('Firebase: conectando...');setSyncMeta('Firebase: conectando...');}renderFilters();updateUserDeviceButton();ensureUserName();renderAll();programarMarcarVisto();captureInitialFallback();startPresence();// CQ: el evento Firebase y el respaldo de 800 ms no deben iniciar dos cargas paralelas.
+// El respaldo se conserva para cuando el evento ya se emitió antes de registrar el listener.
+let cqInicioFirebaseLanzado=false;
+function cqInicioFirebaseSoloUnaVez(){
+  if(cqInicioFirebaseLanzado || !window._dbReady || !modoFirebase)return;
+  cqInicioFirebaseLanzado=true;
+  startFirebaseSync();
+}
+document.addEventListener('firebase-ready',cqInicioFirebaseSoloUnaVez);
+setTimeout(cqInicioFirebaseSoloUnaVez,800);window.addEventListener('beforeunload',()=>{if(unsubConfig)unsubConfig();if(unsubObra)unsubObra();});
 
 setTimeout(function(){
   if(new URLSearchParams(location.search).get('borrarOficina')==='1'){
