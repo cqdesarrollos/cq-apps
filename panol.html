@@ -6543,6 +6543,20 @@ function cqMatResolverMaterialDirecto(data,ev){
     if(mat.codigo)data.matCodigos[mat.id]=mat.codigo;
   }
 
+  // Si Materiales todavía lo clasificaba en "Varios", una salida nueva
+  // con subrubro válido y específico corrige sólo ese dato. No se modifican
+  // otras categorías específicas ni se reescribe el historial de Materiales.
+  if(mat && ev.cqCorregirCategoriaGenerica===true){
+    var actual=String(data.matCategorias[mat.id]||mat.catName||'').trim();
+    var propuesto=String(ev.materialCategory||ev.category||'').trim();
+    var normalizarCat=function(x){return String(x||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');};
+    if((!actual||normalizarCat(actual)==='varios') && propuesto && normalizarCat(propuesto)!=='varios'){
+      data.matCategorias[mat.id]=propuesto;
+      var yaExiste=data.extraCats.some(function(c){return normalizarCat(c&&c.name)===normalizarCat(propuesto);});
+      if(!yaExiste)data.extraCats.push({name:propuesto,color:'#6FA58D',autoCreated:true,source:'panol'});
+    }
+  }
+
   var incomingCode=String(ev.materialCode||'').trim();
   if(incomingCode&&!cqMatCodigoDirecto(data,mat)){
     // Copiar código sólo al mismo producto que ya fue resuelto de forma segura.
@@ -6787,8 +6801,11 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
   // Materiales puede resolver uno existente por código/nombre o crear uno nuevo.
   var materialCode=destino?String(destino.code||''):(prod?String(prod.codigo||''):String(mov.materialCode||''));
   var materialName=destino?String(destino.name||''):(prod?String(prod.nombre||''):String(mov.materialName||''));
-  var materialCategory=destino?String(destino.category||''):'';
-  if(!materialCategory)materialCategory=String(mov.gastosSubrubro||(prod&&prod.rubro)||'VARIOS').trim()||'VARIOS';
+  // No priorizar una vinculación antigua (por ejemplo "Varios") sobre
+  // el subrubro que se confirmó al descontar el producto de la obra.
+  var materialCategory=String(mov.gastosSubrubro||'').trim();
+  if(!materialCategory)materialCategory=destino?String(destino.category||'').trim():'';
+  if(!materialCategory)materialCategory=String((prod&&prod.rubro)||'VARIOS').trim()||'VARIOS';
 
   if(activo!==false && !materialName && !materialCode){
     throw new Error('No se pudo identificar el producto para Materiales');
@@ -6807,6 +6824,7 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
     materialName:materialName,
     category:materialCategory,
     materialCategory:materialCategory,
+    cqCorregirCategoriaGenerica:mov.cqSubrubroConfirmadoSalida===true,
     autoCreateCatalog:true,
     qty:(mov.materialesCantidad!=null?Number(mov.materialesCantidad):Number(mov.cantidad))||0,
     unidad:'u',
@@ -6929,6 +6947,11 @@ async function registrarConsumo(){
     return;
   }
   var prod=getProductoDesdeConsumoInput();
+  // Confirmar la categoría vigente de Materiales antes de registrar la salida.
+  // Sólo actualiza el formulario si el subrubro no fue corregido manualmente.
+  if(prod && typeof window.cqPanolConfirmarSubrubroSalida==='function'){
+    await window.cqPanolConfirmarSubrubroSalida(prod);
+  }
   var prodId=prod?prod.id:'';
   var cantidad=parseFloat(document.getElementById('consumo-cantidad').value);
   var categoria='mat';
@@ -6972,6 +6995,11 @@ async function registrarConsumo(){
     alert('No hay stock suficiente.\n\nDisponible: '+fmtN(disponible)+'\nPedido: '+fmtN(cantidad));
     return;
   }
+
+  // El subrubro validado y visible es el que se guarda en Pañol y viaja a
+  // Gastos/Materiales. Corrige también productos antiguos clasificados "Varios".
+  prod.rubro=subrubro;
+  if(prod.materialesProducto){prod.materialesProducto.category=subrubro;}
 
   var res=consumirStockFIFO(prodId,cantidad);
 
@@ -7027,6 +7055,9 @@ async function registrarConsumo(){
           :'No corresponde enviar este consumo a Materiales.')
     ),
     gastosCategoria:categoria,gastosSubrubro:subrubro,comentario:comentario,
+    // Sólo las nuevas salidas habilitan la corrección de una categoría genérica
+    // en el catálogo de Materiales. Los históricos no se reclasifican.
+    cqSubrubroConfirmadoSalida:subrubro.trim().toLowerCase()!=='varios',
     gastosDebeCargar:gastosDebeCargar,
     gastosSyncEstado:gastosDebeCargar?'pendiente':'no',
     gastosSyncError:gastosDebeCargar?'':'No se envía a Gastos porque el stock consumido fue ingresado sin precio.',
@@ -10499,7 +10530,184 @@ function go(t){var a=items();if(!a.length)return;if(t==="stock"){share(makePdf("
 document.addEventListener("click",function(e){var b=e.target.closest("[data-sharepdf]");if(!b)return;e.preventDefault();e.stopPropagation();go(b.getAttribute("data-sharepdf"))},true);
 function r(){setTimeout(mount,100)}document.addEventListener("change",r);window.addEventListener("load",r);r()
 })();
-</script></body>
+</script>
+
+<!-- CQ 19/11/2026 — Subrubro real de Materiales en salidas de Pañol -->
+<script id="cq-panol-subrubro-salida-real-v1">
+(function(){
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  function generico(v){return !norm(v)||norm(v)==='varios';}
+  function valido(v){
+    try{return validarSubrubroPanol('mat',v);}catch(e){return '';}
+  }
+  function catalogoActual(){
+    var doc=(typeof cqMaterialesDocCachePanol!=='undefined'&&cqMaterialesDocCachePanol)||null;
+    if(!doc){
+      return (typeof cqCatalogoMaterialesPanol!=='undefined'&&cqCatalogoMaterialesPanol.length
+        ? cqCatalogoMaterialesPanol : CQ_BASE_CATALOGO_MATERIALES_PANOL).slice();
+    }
+    var nombres=doc.matNombres||{},codigos=doc.matCodigos||{},cats=doc.matCategorias||{},renombres=doc.catRenames||{};
+    var eliminados=new Set((doc.deletedMatIds||[]).map(String));
+    var base=CQ_BASE_CATALOGO_MATERIALES_PANOL.map(function(x){
+      return {id:x.id,name:x.name,code:x.code||'',category:x.category||''};
+    });
+    (doc.extraMats||[]).forEach(function(x){
+      if(!x)return;
+      base.push({id:x.id,name:x.mat||'',code:x.codigo||'',category:x.catName||''});
+    });
+    var vistos=new Set();
+    return base.filter(function(x){
+      var k=String(x.id);
+      if(eliminados.has(k)||vistos.has(k))return false;
+      vistos.add(k);return true;
+    }).map(function(x){
+      var id=String(x.id);
+      if(nombres[id]!=null)x.name=String(nombres[id]);
+      if(codigos[id]!=null)x.code=String(codigos[id]);
+      if(cats[id]!=null)x.category=String(cats[id]);
+      if(renombres[x.category]!=null)x.category=String(renombres[x.category]);
+      return x;
+    });
+  }
+  function materialDelProducto(prod){
+    if(!prod)return null;
+    var catalogo=catalogoActual();
+    var ligado=prod.materialesProducto||null;
+    var nombre=norm(prod.nombre),nombreLigado=norm(ligado&&ligado.name);
+    var codigo=String(prod.codigo||(ligado&&ligado.code)||'').trim().toLowerCase();
+    var idLigado=ligado&&ligado.id!=null?String(ligado.id):'';
+    // Un ID se usa sólo si coincide con la identidad del producto, no por sí solo.
+    if(idLigado){
+      var porId=catalogo.find(function(x){return String(x.id)===idLigado;});
+      if(porId&&(norm(porId.name)===nombre||norm(porId.name)===nombreLigado))return porId;
+    }
+    if(nombre){
+      var porNombre=catalogo.find(function(x){return norm(x.name)===nombre;});
+      if(porNombre)return porNombre;
+    }
+    if(codigo){
+      var candidatos=catalogo.filter(function(x){return String(x.code||'').trim().toLowerCase()===codigo;});
+      var compatibles=candidatos.filter(function(x){
+        return norm(x.name)===nombre||norm(x.name)===nombreLigado;
+      });
+      if(compatibles.length===1)return compatibles[0];
+    }
+    return null;
+  }
+  function resolver(prod){
+    if(!prod)return {categoria:'',origen:'',material:null};
+    var material=materialDelProducto(prod);
+    var catReal=material?valido(material.category):'';
+    var catLigada=valido(prod.materialesProducto&&prod.materialesProducto.category);
+    var catStock=valido(prod.rubro);
+    // La categoría vigente de Materiales es la autoridad cuando es específica.
+    // Si es "Varios", preferir otra clasificación específica conocida.
+    var opciones=[
+      {categoria:catReal,origen:'Materiales'},
+      {categoria:catLigada,origen:'vínculo Materiales'},
+      {categoria:catStock,origen:'stock Pañol'}
+    ];
+    var especifica=opciones.find(function(x){return x.categoria&&!generico(x.categoria);});
+    var elegida=especifica||opciones.find(function(x){return !!x.categoria;})||{categoria:'',origen:''};
+    return {categoria:elegida.categoria,origen:elegida.origen,material:material};
+  }
+  function aplicar(prod,manual){
+    if(!prod||String(cqConsumoProdIdPanol)!==String(prod.id))return;
+    var input=document.getElementById('consumo-subrubro');
+    if(!input)return;
+    var r=resolver(prod);
+    if(r.material){
+      // Mantener el enlace al material existente: evita crear duplicados.
+      prod.materialesProducto={
+        id:r.material.id,name:r.material.name,code:r.material.code||'',
+        category:r.categoria||r.material.category||''
+      };
+      cqMaterialSeleccionadoPanol=Object.assign({},prod.materialesProducto);
+      var row=document.getElementById('consumo-materiales-check');
+      var chk=document.getElementById('consumo-cargar-materiales');
+      var auto=document.getElementById('consumo-materiales-auto');
+      if(row)row.classList.remove('hidden-manual');
+      if(chk){chk.checked=true;chk.disabled=true;}
+      if(auto){auto.style.display='block';auto.textContent='✓ Materiales automático: '+r.material.name;}
+    }
+    if(!manual && r.categoria){
+      input.value=r.categoria;
+      input.dataset.cqSubOrigen=r.origen;
+      input.dataset.cqUserEdited='0';
+    }
+    var help=document.getElementById('consumo-prod-help');
+    if(help){
+      var cat=input.value.trim();
+      help.textContent='Stock disponible: '+fmtN(stockDeProducto(prod.id))+' u · Subrubro: '+
+        (cat||'sin definir')+
+        (manual?' (seleccionado manualmente)':(!generico(cat)&&r.origen?' · '+r.origen:''))+
+        (generico(cat)?' · Podés corregirlo antes de descontar.':'');
+      help.style.color=generico(cat)?'#9A651B':'var(--verde2)';
+    }
+  }
+  async function confirmar(prod){
+    if(!prod)return;
+    // El listener ya leyó Materiales: no realizar otra consulta ni tocar el flujo.
+    if(!cqMaterialesDocCachePanol&&window._dbReady&&window._getDoc&&window._doc&&window._db){
+      try{
+        var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+        if(snap.exists()){
+          cqMaterialesDocCachePanol=snap.data()||{};
+          cqMaterialesDocCacheAtPanol=Date.now();
+        }
+      }catch(e){console.warn('Pañol: categoría actual de Materiales no disponible',e);}
+    }
+    var input=document.getElementById('consumo-subrubro');
+    aplicar(prod,!!(input&&input.dataset.cqUserEdited==='1'));
+  }
+  window.cqPanolConfirmarSubrubroSalida=confirmar;
+
+  var completarAnterior=window.completarConsumoProducto;
+  if(typeof completarAnterior==='function'){
+    window.completarConsumoProducto=function(prod){
+      // Las versiones previas del selector pueden sobrescribir prod.rubro con
+      // una categoría enlazada vieja. Conservar la clasificación válida previa.
+      var categoriaAntes=resolver(prod);
+      var resultado=completarAnterior.apply(this,arguments);
+      if(prod && categoriaAntes.categoria && !generico(categoriaAntes.categoria) && generico(prod.rubro)){
+        prod.rubro=categoriaAntes.categoria;
+      }
+      var input=document.getElementById('consumo-subrubro');
+      if(input)input.dataset.cqUserEdited='0';
+      aplicar(prod,false);
+      return resultado;
+    };
+    completarConsumoProducto=window.completarConsumoProducto;
+  }
+
+  // Tras elegir un producto se puede corregir su subrubro sin perder la
+  // selección de código/producto. Sin producto seleccionado, se mantienen
+  // los filtros y el comportamiento previo de los desplegables.
+  var entradaAnterior=window.onConsumoSubrubroInput;
+  window.onConsumoSubrubroInput=function(){
+    var input=document.getElementById('consumo-subrubro');
+    if(input)input.dataset.cqUserEdited='1';
+    var prod=getProductoDesdeConsumoInput();
+    if(prod&&cqConsumoProdIdPanol){aplicar(prod,true);return;}
+    if(typeof entradaAnterior==='function')return entradaAnterior.apply(this,arguments);
+  };
+  onConsumoSubrubroInput=window.onConsumoSubrubroInput;
+
+  var seleccionAnterior=window.onConsumoSubrubroSeleccionado;
+  window.onConsumoSubrubroSeleccionado=function(){
+    var input=document.getElementById('consumo-subrubro');
+    if(input)input.dataset.cqUserEdited='1';
+    var prod=getProductoDesdeConsumoInput();
+    if(prod&&cqConsumoProdIdPanol){aplicar(prod,true);return;}
+    if(typeof seleccionAnterior==='function')return seleccionAnterior.apply(this,arguments);
+  };
+  onConsumoSubrubroSeleccionado=window.onConsumoSubrubroSeleccionado;
+})();
+</script>
+</body>
 </html>
 <style id="cq-stock-report-darker-final">
 /* Reporte Stock: un tono más oscuro, sin alterar lógica */
