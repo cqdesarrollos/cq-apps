@@ -3718,6 +3718,7 @@ body.cq-acopio-cargando{overflow:hidden!important}
     <div class="mbody">
       <button class="btn btn-p" onclick="crearBackupManual()" style="width:auto;min-width:0;padding:8px 14px;font-size:11px;min-height:36px;display:inline-flex;align-items:center;justify-content:center;margin:0 auto">💾 Crear backup manual</button>
       <div class="sec-ttl" style="margin-top:16px">Elegí un backup para restaurar</div>
+      <button type="button" class="btn btn-s btn-sm" style="margin-bottom:8px" onclick="cqRefrescarHistorialBackups()">Verificar historial completo</button>
       <div id="backups-list"></div>
       <div style="font-size:10px;color:#A8BFA8;margin-top:10px;line-height:1.35">
         Se guardan automáticamente los últimos 20 backups. Al restaurar, se reemplaza el estado completo de la planilla.
@@ -4781,6 +4782,79 @@ function maybeAutoBackup(){
   lastAutoBackupAt=now;
 }
 const CQ_ACOPIO_BACKUP_COLLECTION='acopio_backups';
+// CQ 19/11/2026 · Indice liviano (en la MISMA coleccion; no exige reglas nuevas).
+// Nunca contiene el campo db de las copias. Si falla, se usa el historial original.
+const CQ_ACOPIO_BACKUP_INDEX_ID='__indice_liviano_cq_v1';
+var cqAcopioIndiceEnConstruccion=null;
+function cqAcopioBackupIndiceRef(){
+  var f=window._cqFirebase;
+  return f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,CQ_ACOPIO_BACKUP_INDEX_ID);
+}
+function cqAcopioBackupMeta(id,d){
+  return {tipo:String(d.tipo||'auto'),fecha:String(d.fecha||''),createdAt:String(d.createdAt||''),sourceUpdatedAt:String(d.sourceUpdatedAt||'')};
+}
+async function cqLeerIndiceBackups(){
+  var f=window._cqFirebase;
+  var snap=await f.getDoc(cqAcopioBackupIndiceRef());
+  var data=snap.exists()?snap.data():null;
+  return data&&typeof data==='object'?data:null;
+}
+async function cqRegistrarEnIndiceBackups(id,datos){
+  var f=window._cqFirebase;
+  if(!f||!f.runTransaction)return;
+  await f.runTransaction(f.db,async function(tx){
+    var ref=cqAcopioBackupIndiceRef(),snap=await tx.get(ref);
+    var d=snap.exists()?(snap.data()||{}):{};
+    var items=(d.items&&typeof d.items==='object')?Object.assign({},d.items):{};
+    items[id]=cqAcopioBackupMeta(id,datos);
+    tx.set(ref,{ready:d.ready===true,items:items,updatedAt:new Date().toISOString()});
+  });
+}
+async function cqQuitarDelIndiceBackups(ids){
+  if(!ids||!ids.length)return;
+  var f=window._cqFirebase;
+  await f.runTransaction(f.db,async function(tx){
+    var ref=cqAcopioBackupIndiceRef(),snap=await tx.get(ref);
+    if(!snap.exists())return;
+    var d=snap.data()||{},items=Object.assign({},d.items||{});
+    ids.forEach(function(id){delete items[id];});
+    tx.set(ref,{ready:d.ready===true,items:items,updatedAt:new Date().toISOString()});
+  });
+}
+async function cqAsegurarIndiceBackups(forzar){
+  var previo=await cqLeerIndiceBackups();
+  if(!forzar&&previo&&previo.ready===true)return previo;
+  if(cqAcopioIndiceEnConstruccion)return cqAcopioIndiceEnConstruccion;
+  cqAcopioIndiceEnConstruccion=(async function(){
+    var f=window._cqFirebase;
+    // Primera migracion solamente: lectura original completa, sin modificar ningun backup.
+    var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
+    var encontrados={};
+    snaps.forEach(function(x){
+      if(x.id===CQ_ACOPIO_BACKUP_INDEX_ID)return;
+      var d=x.data()||{};
+      if(d.db)encontrados[x.id]=cqAcopioBackupMeta(x.id,d);
+    });
+    await f.runTransaction(f.db,async function(tx){
+      var ref=cqAcopioBackupIndiceRef(),snap=await tx.get(ref);
+      var actual=snap.exists()?(snap.data()||{}):{};
+      // Conservar altas de otro dispositivo durante la migracion.
+      var items=Object.assign({},encontrados,actual.items||{});
+      tx.set(ref,{ready:true,items:items,updatedAt:new Date().toISOString()});
+    });
+    return await cqLeerIndiceBackups();
+  })();
+  try{return await cqAcopioIndiceEnConstruccion;}
+  finally{cqAcopioIndiceEnConstruccion=null;}
+}
+async function cqRefrescarHistorialBackups(){
+  var el=document.getElementById('backups-list');
+  if(el)el.innerHTML='<div class="empty">Verificando historial completo...</div>';
+  try{
+    await cqAsegurarIndiceBackups(true);
+    await renderBackups();
+  }catch(e){console.warn('Acopio: no se pudo actualizar indice',e);await renderBackups();}
+}
 
 function cqBackupDateId(d){
   d=d||new Date();
@@ -4794,36 +4868,61 @@ async function cqCrearBackupFirebase(tipo,dbFuente,idForzado){
   var id=idForzado||((tipo==='auto'?'daily_':'manual_')+cqBackupDateId(ahora)+(tipo==='auto'?'':'_'+ahora.getTime()));
   var data=sanitizeDB(JSON.parse(JSON.stringify(dbFuente||cloneDBSinBackups())));
   data.backups=[];
-  await f.setDoc(f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,id),{
+  var registro={
     tipo:tipo||'manual',
     fecha:cqBackupDateId(ahora),
     createdAt:ahora.toISOString(),
     sourceUpdatedAt:lastSyncedAt||'',
     db:data
-  });
+  };
+  await f.setDoc(f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,id),registro);
+  // Indice auxiliar: su fallo NO invalida un backup completo ya confirmado.
+  try{await cqRegistrarEnIndiceBackups(id,registro);}catch(e){console.warn('Acopio: indice de backup pendiente',e);}
   return id;
 }
 async function cqBackupDiarioDesdeRemoto(dbRemota,sourceUpdatedAt){
   try{
     if(!window._cqFirebaseReady||!window._cqFirebase||!dbRemota)return;
     var f=window._cqFirebase;
-    var id='daily_'+cqBackupDateId(new Date());
+    var ahora=new Date(),id='daily_'+cqBackupDateId(ahora);
+    // Una lectura liviana del indice reemplaza la descarga diaria del backup completo.
+    // Si no figura, verificar el documento real: conserva backups de versiones antiguas.
+    var indice=null;
+    try{indice=await cqLeerIndiceBackups();}catch(e){console.warn('Acopio: indice no disponible; verificando backup real',e);}
+    if(indice&&indice.items&&indice.items[id])return;
     var ref=f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,id);
     var existe=await f.getDoc(ref);
-    if(existe.exists())return;
+    if(existe.exists()){
+      try{await cqRegistrarEnIndiceBackups(id,existe.data()||{});}catch(e){console.warn('Acopio: indice diario pendiente',e);}
+      return;
+    }
     var data=sanitizeDB(JSON.parse(JSON.stringify(dbRemota)));data.backups=[];
-    await f.setDoc(ref,{tipo:'auto',fecha:cqBackupDateId(new Date()),createdAt:new Date().toISOString(),sourceUpdatedAt:sourceUpdatedAt||'',db:data});
+    var registro={tipo:'auto',fecha:cqBackupDateId(ahora),createdAt:ahora.toISOString(),sourceUpdatedAt:sourceUpdatedAt||'',db:data};
+    await f.setDoc(ref,registro);
+    try{await cqRegistrarEnIndiceBackups(id,registro);}catch(e){console.warn('Acopio: indice diario pendiente',e);}
     await cqLimpiarBackupsFirebase();
   }catch(e){console.warn('Acopio: backup diario omitido',e);}
 }
 async function cqLimpiarBackupsFirebase(){
   try{
     var f=window._cqFirebase;if(!f||!f.deleteDoc)return;
-    var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
-    var arr=[];snaps.forEach(function(x){var d=x.data()||{};if(String(x.id).indexOf('pre_restore_')!==0)arr.push({id:x.id,createdAt:d.createdAt||''});});
+    var arr=[],indice=null;
+    try{indice=await cqAsegurarIndiceBackups();}catch(e){console.warn('Acopio: indice no disponible; usando lectura original',e);}
+    if(indice&&indice.ready&&indice.items){
+      Object.keys(indice.items).forEach(function(id){
+        if(id.indexOf('pre_restore_')!==0)arr.push({id:id,createdAt:indice.items[id].createdAt||''});
+      });
+    }else{
+      var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
+      snaps.forEach(function(x){var d=x.data()||{};if(x.id!==CQ_ACOPIO_BACKUP_INDEX_ID&&d.db&&x.id.indexOf('pre_restore_')!==0)arr.push({id:x.id,createdAt:d.createdAt||''});});
+    }
     arr.sort(function(a,b){return String(b.createdAt).localeCompare(String(a.createdAt));});
-    var sobrantes=arr.slice(30);
-    for(var i=0;i<sobrantes.length;i++)await f.deleteDoc(f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,sobrantes[i].id));
+    var sobrantes=arr.slice(30),borrados=[];
+    for(var i=0;i<sobrantes.length;i++){
+      await f.deleteDoc(f.doc(f.db,CQ_ACOPIO_BACKUP_COLLECTION,sobrantes[i].id));
+      borrados.push(sobrantes[i].id);
+    }
+    try{await cqQuitarDelIndiceBackups(borrados);}catch(e){console.warn('Acopio: limpieza de indice pendiente',e);}
   }catch(e){console.warn('Acopio: no se pudieron depurar backups',e);}
 }
 async function crearBackupManual(){
@@ -4844,8 +4943,18 @@ async function renderBackups(){
   el.innerHTML='<div class="empty">Cargando backups de Firebase...</div>';
   try{
     if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
-    var f=window._cqFirebase,snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION)),arr=[];
-    snaps.forEach(function(x){var d=x.data()||{};if(d.db)arr.push({id:x.id,tipo:d.tipo||'auto',createdAt:d.createdAt||'',fecha:d.fecha||'',sourceUpdatedAt:d.sourceUpdatedAt||''});});
+    var f=window._cqFirebase,arr=[],indice=null;
+    try{indice=await cqAsegurarIndiceBackups();}catch(e){console.warn('Acopio: historial completo sin indice',e);}
+    if(indice&&indice.ready&&indice.items){
+      Object.keys(indice.items).forEach(function(id){
+        var d=indice.items[id]||{};
+        arr.push({id:id,tipo:d.tipo||'auto',createdAt:d.createdAt||'',fecha:d.fecha||'',sourceUpdatedAt:d.sourceUpdatedAt||''});
+      });
+    }else{
+      // Compatibilidad: sin indice o sin permisos, mantener el historial original.
+      var snaps=await f.getDocs(f.collection(f.db,CQ_ACOPIO_BACKUP_COLLECTION));
+      snaps.forEach(function(x){var d=x.data()||{};if(d.db)arr.push({id:x.id,tipo:d.tipo||'auto',createdAt:d.createdAt||'',fecha:d.fecha||'',sourceUpdatedAt:d.sourceUpdatedAt||''});});
+    }
     arr.sort(function(a,b){return String(b.createdAt).localeCompare(String(a.createdAt));});
     if(!arr.length){el.innerHTML='<div class="empty">Todavía no hay backups en Firebase</div>';return;}
     el.innerHTML=arr.slice(0,30).map(function(b){
@@ -8053,8 +8162,10 @@ async function cqAutoRepararMaterialesFaltantesActual(){
 function iniciarVerificacionMaterialesAcopio(){
   if(!window.__cqAcopioInicialConfirmado)return;
   if(!window._cqFirebaseReady||!window._cqFirebase){setTimeout(iniciarVerificacionMaterialesAcopio,700);return;}
+  // La señal de inicio puede llegar varias veces; no desuscribir y volver a leer
+  // el documento grande de Materiales en cada llamada duplicada.
+  if(unsubVerificacionMaterialesAcopio)return;
   var f=window._cqFirebase;
-  try{ if(unsubVerificacionMaterialesAcopio) unsubVerificacionMaterialesAcopio(); }catch(_e){}
   unsubVerificacionMaterialesAcopio=f.onSnapshot(f.doc(f.db,'materiales','data_planilla_exacta_v4'),function(snap){
     // No reparar retiros usando un catálogo local antiguo.
     if(snap.metadata && snap.metadata.fromCache)return;
