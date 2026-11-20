@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Control de Integraciones · CQ Desarrollos</title>
+<title>Control de Integraciones · CQ Desarrollos · Auditoría completa</title>
 <meta name="theme-color" content="#0b1b51">
 <style>
 :root{--blue:#0b1b51;--green:#00875b;--mint:#00ce7c;--bg:#f4f6f9;--ink:#17243b;--line:#dbe5ec;--muted:#64748b;--error:#b93336;--warn:#a36a12}
@@ -44,6 +44,11 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 .cq-feedback-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:8000;max-width:min(96vw,530px);padding:12px 15px;background:#173a30;color:white;box-shadow:0 8px 28px #142b3140;border-radius:10px;font-size:12px;line-height:1.4;font-weight:750;pointer-events:none;opacity:0;transition:opacity .15s}
 .cq-feedback-toast.visible{opacity:1}.cq-feedback-toast.warning{background:#7b421c}
 .review-button{touch-action:manipulation}
+.wide-scan{display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:11px 0 4px;padding:10px 11px;border:1px solid #dbe5ec;background:#f7fafc;border-radius:10px}
+.wide-scan input{margin-top:3px;width:17px;height:17px;accent-color:#0b1b51;flex:none}
+.wide-scan span{display:flex;flex-direction:column;gap:3px;font-size:12px}
+.wide-scan small{font-size:10px;line-height:1.45;color:#64748b}
+.kpi.orphan strong{color:#9d5a1d}
 .diag-raw{margin-top:9px;font-size:10px;color:#617388}.diag-raw summary{font-weight:700;cursor:pointer}.diag-raw div{white-space:pre-wrap;margin-top:6px;overflow-wrap:anywhere}
 @media(max-width:560px){.diag-values{grid-template-columns:1fr 1fr}.finding .origin{font-size:9px}}
 </style>
@@ -53,17 +58,18 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <main>
 <section class="panel">
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
-<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · los estados antiguos con vínculo localizado se separan de los problemas reales</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
-<div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — auditoría completa</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<label class="wide-scan"><input type="checkbox" id="scan-all-obras"><span><b>Revisar también Gastos de todas las obras</b><small>Opcional: detecta huérfanos en obras cuyo movimiento de origen ya fue eliminado. Agrega lecturas de Firebase según la cantidad de obras.</small></span></label>
+<div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div><div class="kpi orphan"><strong id="metric-orphan">—</strong><span>Posibles huérfanos / borrados incompletos</span></div></div>
 <div class="notice" id="cc-overview" hidden></div>
 <div class="notice" id="info">El control no modifica movimientos. «Está OK · Ocultar» guarda inmediatamente la revisión en este dispositivo; intenta compartirla en Firebase sin bloquear el botón. No corrige el vínculo. Si ese dato cambia, aparecerá una alerta nueva.</div>
 <details id="sources-disclosure" class="details-sources"><summary><span id="source-count">Fuentes consultadas: sin verificar</span></summary><div id="sources" class="sources"></div></details>
 </section>
 <section class="panel"><div class="tools"><b>Detalle de verificaciones</b><span id="count" style="font-size:11px;color:#64748b">Sin ejecutar</span></div>
-<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="info">Indicadores antiguos (informativo)</option><option value="reviewed">Revisados y ocultos</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Buscar fecha, obra, origen o ID" aria-label="Buscar resultado"></div>
+<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="orphan">Huérfanos y borrados</option><option value="info">Indicadores antiguos (informativo)</option><option value="reviewed">Revisados y ocultos</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Buscar fecha, obra, origen o ID" aria-label="Buscar resultado"></div>
 <div id="results" class="empty">Pulsá «Verificar ahora» para consultar el estado real de Firebase.</div><div class="review-feedback" id="review-feedback" role="status" aria-live="polite"></div><div id="cq-feedback-toast" class="cq-feedback-toast" role="status" aria-live="polite"></div>
 </section>
-<p class="hint">Cobertura de esta versión: comparación de la casilla, el documento de integraciones y el ingreso real de Caja Gerencia → Caja Chica; además de vínculos reconocidos de Caja Gerencia, Caja Chica, Acopio y Pañol hacia Gastos, Materiales, Pañol y Caja Chica. No comprueba todos los movimientos huérfanos ni los borrados históricos, ni puede leer pendientes guardados sólo en el dispositivo. Los puntos rojos intencionales «No se agregó» no son fallas de sincronización. Los estados internos antiguos se agrupan como informativos cuando se encuentra el ID vinculado en destino; esto no acredita una auditoría completa de cantidades, precios ni productos. Las marcas «Está OK» no alteran el estado real de Caja, Gastos, Acopio, Pañol ni Materiales; pueden deshacerse en el filtro Revisados. Las fechas indican la fecha registrada del movimiento; no la última sincronización. Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
+<p class="hint">Cobertura de esta versión: comparación del destino efectivo en Caja Gerencia, el documento de integraciones y el ingreso real de Caja Gerencia → Caja Chica; además de vínculos reconocidos de Caja Gerencia, Caja Chica, Acopio y Pañol hacia Gastos, Materiales, Pañol y Caja Chica. La búsqueda inversa de huérfanos revisa Materiales, Pañol y Caja Chica. Para incluir movimientos de Gastos cuya fuente ya desapareció, activá «Revisar también Gastos de todas las obras»: consulta más documentos de Firebase. La ausencia del origen NO prueba por sí sola un borrado; pueden existir históricos migrados o archivados. Cuando Materiales conserva una baja explícita, esa evidencia se distingue de un simple huérfano. No puede leer pendientes guardados sólo en el dispositivo. Los puntos rojos intencionales «No se agregó» no son fallas de sincronización. Los estados internos antiguos se agrupan como informativos cuando se encuentra el ID vinculado en destino; esto no acredita una auditoría completa de cantidades, precios ni productos. Las marcas «Está OK» no alteran el estado real de Caja, Gastos, Acopio, Pañol ni Materiales; pueden deshacerse en el filtro Revisados. Las fechas indican la fecha registrada del movimiento; no la última sincronización. Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
 </main>
 <script type="module">
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -177,7 +183,13 @@ function diagnostic(severity,connection,title,detail,meta={}){
   a.summary=`Se localizó en el destino un movimiento con el ID de integración esperado. El origen conserva el estado «${status}». Este estado por sí solo no demuestra un error en la carga.`;
   a.fields=a.fields.length?a.fields:[{label:'ID de integración',a:'Localizado en destino'},{label:'Estado interno en origen',a:status}];
   a.action=`No hace falta revisar estos estados uno por uno ni volver a enviar el movimiento. Se muestran aparte como información. Si necesitás corregir el color del punto en ${src}, revisá esa aplicación; las diferencias reales de importe, cantidad o registros faltantes se alertan por separado cuando esas comparaciones están implementadas.`;
- }else if(title.includes('No aparece en Gastos')||title.includes('ausente')||title.includes('sin carga')||title.includes('Retiro sin entrada')||title.includes('Ingreso no localizado')){
+ }else if(title==='Borrado incompleto confirmado'){
+    a.summary=meta.summary||'Hay una carga activa en Materiales cuyo identificador figura expresamente entre las cargas eliminadas. Ambos estados se contradicen.';
+    a.action='No elimines nada desde Control. Revisá la carga en Materiales y su registro de bajas; verificá primero qué movimiento corresponde conservar.';
+  }else if(title==='Posible movimiento huérfano'){
+    a.summary=meta.summary||'El destino conserva un movimiento con ID de integración, pero no encontramos el origen asociado entre los registros actuales consultados.';
+    a.action=meta.action||`Comprobá en ${src} si se borró o archivó ese movimiento. Verificá en ${dst} que no sea un registro histórico válido; no borres ni reenvíes automáticamente.`;
+  }else if(title.includes('No aparece en Gastos')||title.includes('ausente')||title.includes('sin carga')||title.includes('Retiro sin entrada')||title.includes('Ingreso no localizado')){
   a.summary=`Se esperaba un movimiento vinculado en ${dst}, pero no apareció con los identificadores comprobados.`;
   a.action=`Revisá la fecha, la obra y el ID en ${src} y ${dst}. No lo reenvíes hasta confirmar que no existe con otro identificador.`;
  }else if(title.includes('duplicad')||title.includes('repetido')){
@@ -202,7 +214,7 @@ function diagnostic(severity,connection,title,detail,meta={}){
  return a;
 }
 function log(severity,connection,title,detail,obra,id,meta={}){
- const f={severity,connection,title,detail:detail||'',obra:obra||'',id:id||'',fechaOrigen:movementDate(meta.source),fechaGastos:movementDate(meta.dest),diag:diagnostic(severity,connection,title,detail,meta)};
+ const f={severity,connection,title,detail:detail||'',obra:obra||'',id:id||'',auditType:meta.auditType||'',fechaOrigen:movementDate(meta.source),fechaGastos:movementDate(meta.dest),diag:diagnostic(severity,connection,title,detail,meta)};
  f.reviewKey=reviewKey(f);findings.push(f);
 }
 function normalizeDoc(data){const d=data?.db&&typeof data.db==='object'?data.db:data;return d&&typeof d==='object'?d:{};}
@@ -212,7 +224,7 @@ function classifyMissing(x){return ageMs(x?.createdAt||x?.creadoAt||x?.fecha||x?
 function prettyError(e){const c=str(e?.code||'');if(c.includes('permission-denied'))return 'Sin permisos Firebase';if(c.includes('unavailable'))return 'Sin conexión con Firebase';return str(e?.message||'Error de lectura').slice(0,150);}
 function summarize(){
  const c={error:0,warning:0,ok:0,info:0};findings.forEach(f=>{if(!isReviewed(f))c[f.severity]++;});
- el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;el('metric-reviewed').textContent=reviewedCount();el('metric-info').textContent=c.info;
+ el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;el('metric-reviewed').textContent=reviewedCount();el('metric-info').textContent=c.info;el('metric-orphan').textContent=findings.filter(f=>f.auditType&&!isReviewed(f)).length;
  const box=el('cc-overview'),issues=findings.filter(f=>f.connection==='Caja Gerencia → Caja Chica'&&['error','warning'].includes(f.severity)&&!isReviewed(f));
  if(!issues.length){box.hidden=true;box.textContent='';return;}
  const counts={};issues.forEach(f=>counts[f.title]=(counts[f.title]||0)+1);
@@ -224,7 +236,7 @@ function render(){
  const kind=el('type').value,mod=el('module').value,search=el('search').value.toLowerCase();
  const filtered=findings.filter(f=>{
    const reviewed=isReviewed(f);
-   const matches=kind==='reviewed'?reviewed:!reviewed&&(kind==='issues'?['error','warning'].includes(f.severity):kind==='all'||f.severity===kind);
+   const matches=kind==='reviewed'?reviewed:!reviewed&&(kind==='issues'?['error','warning'].includes(f.severity):kind==='orphan'?!!f.auditType:kind==='all'||f.severity===kind);
    return matches&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.diag.summary+' '+f.connection+' '+f.obra+' '+f.id+' '+f.fechaOrigen+' '+f.fechaGastos).toLowerCase().includes(search));
  });
  if(kind==='all')filtered.sort((a,b)=>({error:0,warning:1,info:2,ok:3}[a.severity]??4)-({error:0,warning:1,info:2,ok:3}[b.severity]??4));
@@ -235,7 +247,7 @@ function render(){
   if(f.severity!=='ok'){
     const dates=tag('', 'date-line');
     const sourceName=f.connection.split(' → ')[0]||'Origen';
-    dates.append(tag(sourceName+': '+(f.fechaOrigen||'Sin fecha'),'date-chip'+(f.fechaOrigen?'':' missing')));
+    if(f.fechaOrigen||!f.auditType)dates.append(tag(sourceName+': '+(f.fechaOrigen||'Sin fecha'),'date-chip'+(f.fechaOrigen?'':' missing')));
     const destName=f.connection.split(' → ')[1];
     if(f.fechaGastos)dates.append(tag((destName||'Destino')+': '+f.fechaGastos,'date-chip'));
     body.append(dates);
@@ -262,11 +274,20 @@ function render(){
 }
 
 function addModules(){const select=el('module'),chosen=select.value;select.replaceChildren(new Option('Todas las conexiones','all'));[...new Set(findings.map(x=>x.connection))].sort().forEach(x=>select.add(new Option(x,x)));select.value=[...select.options].some(o=>o.value===chosen)?chosen:'all';}
-async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];summarize();renderSources();el('sources-disclosure').open=false;await loadReviews();
+async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('scan-all-obras').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];summarize();renderSources();el('sources-disclosure').open=false;await loadReviews();
 try{
  const names=[['Caja Gerencia','cq_caja','gastos_compartidos_v1'],['Caja Chica','caja_chica_app','main'],['Integraciones Caja Chica','caja_chica_integraciones','main'],['Acopio','acopio_cq','acopio_cq_compartido_v3'],['Pañol','panol','stock_v1'],['Materiales','materiales','data_planilla_exacta_v4']];
  const files={};
  await Promise.all(names.map(async ([name,col,id])=>{try{const data=await read(col,id);if(!data)throw new Error('Documento no encontrado');files[name]=normalizeDoc(data);sources.push({name,ok:true,text:'Lectura confirmada'});}catch(e){files[name]=null;sources.push({name,ok:false,text:prettyError(e)});}}));
+ renderSources();
+ // Consulta lateral: evidencias explícitas de bajas. No se modifica el registro.
+ let bajaMateriales=null,bajasLeidas=false;
+ if(files['Materiales']){
+   try{bajaMateriales=await read('materiales','tombstones_cargas_v2')||{};bajasLeidas=true;
+       sources.push({name:'Bajas de Materiales',ok:true,text:'Registro lateral consultado'});}
+   catch(e){sources.push({name:'Bajas de Materiales',ok:false,text:prettyError(e)});}
+ }
+ const bb=new Set([...arr(bajaMateriales?.ids),...arr(bajaMateriales?.ignoredIntegrationIds),...arr(files['Materiales']?.ignoredIntegrationIds)].map(str).filter(Boolean));
  renderSources();
  const cc=arr(files['Caja Chica']?.state?.movements||files['Caja Chica']?.movements),cg=files['Caja Gerencia']||{},ac=arr(files['Acopio']?.acopios),pn=arr(files['Pañol']?.movimientos),mat=arr(files['Materiales']?.cargas);
  const cgAllPesos=[...arr(cg.deudaPesos),...arr(cg.fondoPesosMovs),...arr(cg.santanderMovs)].filter(m=>m&&m.tipo==='gasto');
@@ -277,6 +298,19 @@ try{
  cc.filter(m=>m?.type==='gasto'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>obraIds.add(str(m.gastosObraId)));
  ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(r?.gastosObraId&&r.cargarGastos!==false)obraIds.add(str(r.gastosObraId))}));
  pn.filter(m=>m?.tipo==='salida'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>obraIds.add(str(m.gastosObraId)));
+ // La búsqueda ampliada requiere leer TODAS las obras para encontrar registros
+ // de Gastos cuyo movimiento original ya desapareció: no inferir cobertura total
+ // solamente de las obras que aparecen en los movimientos de origen.
+ const auditAllObras=el('scan-all-obras').checked;
+ let auditCatalogComplete=false,configuredObras=[];
+ if(auditAllObras){
+   try{const configDoc=await read('config','app');
+       if(!configDoc||!Array.isArray(configDoc.obras))throw new Error('Catálogo de obras no disponible');
+       configuredObras=configDoc.obras.map(o=>str(o?.id)).filter(Boolean);
+       configuredObras.forEach(id=>obraIds.add(id));auditCatalogComplete=true;
+       sources.push({name:'Catálogo de Gastos',ok:true,text:configuredObras.length+' obras para auditoría ampliada'});
+   }catch(e){sources.push({name:'Catálogo de Gastos',ok:false,text:prettyError(e)});}
+ }
  const obras=[...obraIds].filter(Boolean);
  const gastoDocs={},todo=obras.slice();let index=0;
  async function worker(){while(index<todo.length){const id=todo[index++];try{const d=await read('gastos',id);gastoDocs[id]=d?activeGastos(d):[];sources.push({name:'Gastos · '+id,ok:true,text:d?'Leído':'Sin movimientos'});}catch(e){gastoDocs[id]=null;sources.push({name:'Gastos · '+id,ok:false,text:prettyError(e)});}}}
@@ -418,8 +452,15 @@ try{
       const sid=str(m.id),marcado=m.cajaChicaIngreso===true,intRows=intBySource.get(sid)||[],ccRows=ccBySource.get(sid)||[];
       const activeRows=intRows.filter(x=>x.active!==false&&x.deletedFromCajaChica!==true);
       const active=activeRows.length>0,connected=ccRows.length>0;
-      // Evitar registrar cada gasto sin Caja Chica: sólo auditar intentos de vínculo.
-      if(!marcado&&!intRows.length&&!connected)return;
+      // MISMA regla de Caja Gerencia (cqCajaChicaVinculoCorresponde / cqDualSyncHTML):
+      // Fondo común $ sólo se dirige a Caja Chica si el usuario lo tildó Y eligió
+      // "No agregar a Gastos". En datos viejos quedó cajaChicaIngreso=true en
+      // gastos normales que SÍ van a Gastos: esa marca NO es un envío real.
+      const debeIrCajaChica=marcado&&m.imputacionPendienteGastos===false;
+      // No exigir ingresos inexistentes por marcas históricas sin destino real.
+      // Sólo auditar de todos modos cuando quede un vínculo ACTIVO o un ingreso
+      // REAL en Caja Chica, porque podría ser una duplicación indebida.
+      if(!debeIrCajaChica&&!active&&!connected)return;
       const state=active?'Activa':intRows.length?'Inactiva':'Sin integración';
       const fields=[
         {label:'Casilla Caja Chica guardada en Caja Gerencia',a:marcado?'MARCADA (Sí)':'DESMARCADA (No)'},
@@ -433,26 +474,19 @@ try{
       if(!files['Caja Chica']||!ccIntData){
         log('warning',name,'Verificación parcial del vínculo de Caja Chica','Faltó consultar Caja Chica o su documento de integraciones','',sid,{...meta,summary:'No se pudieron consultar las tres fuentes necesarias para confirmar el vínculo.',action:'Repetí la verificación cuando estén disponibles Caja Chica y sus integraciones; no corrijas movimientos por esta alerta.'});return;
       }
-      // La vinculación con Caja Chica NO corresponde cuando el gasto ya se
-      // imputa a Gastos. Una marca vieja por sí sola no es una falla.
-      const aGastos=m.imputacionPendienteGastos===true||arr(m.imputaciones).some(i=>i&&i.obraId);
-      if(aGastos){
+      // Aunque la casilla histórica esté marcada, si el movimiento se envió a
+      // Gastos no debería tener un ingreso en Caja Chica. Señalarlo ÚNICAMENTE
+      // si hallamos evidencia real de que el vínculo continúa activo.
+      if(!debeIrCajaChica){
         if(active||connected){
-          log('warning',name,'Gasto de obra con vínculo residual en Caja Chica',
-            'Este gasto se imputa a Gastos, pero '+(active?'hay una integración activa. ':'')+(connected?'existe un ingreso en Caja Chica.':''),
-            '',sid,{...meta,summary:'El gasto ya se imputa a Gastos; no debería enviar un ingreso a Caja Chica. El control encontró '+(active?'un vínculo activo':'')+(active&&connected?' y ':'')+(connected?'un ingreso registrado':'')+'.',
-              action:'No vuelvas a enviarlo. Revisá si el ingreso en Caja Chica fue creado por error y corregilo desde las aplicaciones correspondientes, sin borrar movimientos desde Control.'});
-        }else if(marcado){
-          log('info',name,'Marca histórica de Caja Chica no aplicable',
-            'El gasto se imputa a Gastos y no existe ingreso ni integración activa en Caja Chica.',
-            '',sid,{...meta,summary:'El campo antiguo de Caja Chica quedó marcado en este gasto, pero no hay vínculo ni ingreso activo y el gasto pertenece a Gastos.',
-              action:'No requiere revisión individual. La vista de Caja Gerencia ya no mostrará el punto de Caja Chica para gastos imputados a Gastos.'});
-        }
-        return;
-      }
-      if(!marcado){
-        if(active||connected){
-          log('warning',name,'Casilla desmarcada, pero queda un vínculo activo','La casilla está apagada en Caja Gerencia; '+(active?'su integración sigue activa. ':'')+(connected?'Todavía existe un ingreso vinculado en Caja Chica.':''),'',sid,{...meta,summary:'Caja Gerencia ya guarda la casilla DESMARCADA, pero '+(active?'la integración sigue ACTIVA':'persiste un ingreso en Caja Chica')+'.',action:'No vuelvas a marcar la casilla. Revisá en Caja Chica si el ingreso debe eliminarse y comprobá que el vínculo se haya desactivado correctamente. No lo borres desde este control.'});
+          const desdeGastos=m.imputacionPendienteGastos!==false;
+          fields.push({label:'Destino esperado según Caja Gerencia',a:desdeGastos?'Gastos (no Caja Chica)':'Sin envío actual a Caja Chica'});
+          log('warning',name,desdeGastos?'Vínculo de Caja Chica activo en gasto de Gastos':'Casilla desmarcada, pero queda un vínculo activo',
+            'Se encontró '+(active?'integración activa':'')+(active&&connected?' e ':'')+(connected?'ingreso en Caja Chica':'')+' sin que corresponda ese destino.',
+            '',sid,{...meta,summary:desdeGastos
+              ?'Este gasto está configurado para Gastos. No corresponde enviar otro ingreso a Caja Chica, pero existe un vínculo activo o un ingreso vinculado.'
+              :'Caja Gerencia tiene desmarcado Caja Chica, pero sigue existiendo un vínculo activo o ingreso asociado.',
+              action:'Verificá el movimiento en Caja Chica antes de borrar o modificar nada. Si existe un ingreso indebido, corregí la vinculación desde la app correspondiente; el Control no cambia datos.'});
         }
         return;
       }
@@ -481,15 +515,146 @@ try{
       reportStale('Caja Gerencia · puntos Caja Chica','',sid,m,'cajaChicaSyncEstado');
     });
   }
+// ---------------------------------------------------------------------
+// Auditoría inversa de registros sobrevivientes (solo lectura).
+// No equiparar automáticamente «origen ausente» con «eliminación»: marcar
+// como POSIBLE huérfano. Tombstones explícitos sí prueban contradicción.
+// ---------------------------------------------------------------------
+const acopioRetiros=new Map(),acopioRetirosPorId=new Map();
+ac.forEach(a=>arr(a?.retiros).forEach(r=>{
+ if(!a||a.id==null||!r||r.id==null)return;
+ const iid='acopio_'+str(a.id)+'_'+str(r.id);
+ acopioRetiros.set(iid,{a,r});
+ const sid=str(r.id);if(!acopioRetirosPorId.has(sid))acopioRetirosPorId.set(sid,[]);
+ acopioRetirosPorId.get(sid).push({a,r});
+}));
+const pnById=new Map(pn.filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
+const cgById=new Map(cgAllPesos.filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
+const ccById=new Map(cc.filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
+const fondoById=new Map(arr(cg.fondoPesosMovs).filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
+const posible=(conn,id,obra,dest,reason,action,fields=[])=>{
+ log('warning',conn,'Posible movimiento huérfano',reason,obra,id,{auditType:'orphan',dest,
+   summary:reason,action:action||'Revisá si el origen fue realmente borrado. Un archivo histórico válido puede explicar la diferencia. No elimines ni reenvíes desde Control.',
+   fields:[{label:'Registro conservado en destino',a:id},...fields]});
+};
+// Movimiento activo en Materiales con baja explícita: contradicción
+// respaldada en el documento lateral de tombstones (no implica borrado de origen).
+if(files['Materiales']){
+ for(const [iid,items] of materialMap){
+   for(const c of items){
+     if(!bajasLeidas||!bb.has(iid))continue;
+     log('error','Bajas de Materiales → Materiales','Borrado incompleto confirmado',
+       'La carga '+iid+' figura en el registro de bajas y sigue activa en Materiales.',
+       str(c.obraNameOrigen||c.obraName||''),iid,{auditType:'deleted',dest:c,
+       summary:'Materiales conserva una carga activa cuya misma identidad figura en el registro explícito de bajas.',
+       fields:[{label:'Integración eliminada',a:iid},{label:'Cantidad conservada',a:num(c.qty)}]});
+   }
+   // Los identificadores explícitos son la única evidencia para cotejar
+   // hacia atrás sin inventar movimientos anteriores que ya no se guardan.
+   if(bb.has(iid))continue; // la anomalía concreta ya se informó arriba
+   const c=items[0],destObra=str(c.obraNameOrigen||c.obraName||'');
+   if(iid.startsWith('acopio_')&&files['Acopio']&&(!c.origen||/acopio/i.test(str(c.origen)))){
+     const r=acopioRetiros.get(iid);
+     if(!r)posible('Acopio → Materiales',iid,destObra,c,
+       'Materiales tiene una carga de Acopio, pero su retiro original no aparece en los acopios actuales.',
+       'Comprobá si el retiro fue borrado en Acopio y si esta carga debe seguir existiendo en Materiales. No dupliques el retiro.');
+     else if(r.r.cargarMateriales===false)posible('Acopio → Materiales',iid,destObra,c,
+       'El retiro sigue en Acopio con envío a Materiales desactivado, pero Materiales conserva la carga.',
+       'Verificá si la carga debe permanecer por una decisión anterior; podría ser un borrado incompleto.');
+   }else if(iid.startsWith('panol_')&&files['Pañol']){
+     const id=iid.slice('panol_'.length),m=pnById.get(id);
+     if(!m)posible('Pañol → Materiales',iid,destObra,c,
+       'Materiales conserva una salida de Pañol cuyo movimiento original no aparece en el Pañol actual.');
+     else if(m.materialesAgregar===false)posible('Pañol → Materiales',iid,destObra,c,
+       'Pañol conserva la salida pero tiene el envío a Materiales desactivado; la carga sigue en Materiales.');
+   }else if(iid.startsWith('caja_chica_')&&files['Caja Chica']){
+     const id=iid.slice('caja_chica_'.length),m=ccById.get(id);
+     if(!m)posible('Caja Chica → Materiales',iid,destObra,c,
+       'Materiales conserva una carga de Caja Chica cuyo gasto de origen no aparece en Caja Chica.');
+     else if(m.materialesAgregar===false)posible('Caja Chica → Materiales',iid,destObra,c,
+       'El gasto existe en Caja Chica, pero ya no tiene habilitado el envío a Materiales.');
+   }else if(iid.startsWith('caja_')&&!iid.startsWith('caja_gerencia_')&&files['Caja Gerencia']){
+     const src=str(c.sourceMovementId),m=src?cgById.get(src):null;
+     if(src&&!m)posible('Caja Gerencia → Materiales',iid,destObra,c,
+       'Materiales conserva una carga enviada desde Caja Gerencia, pero el gasto de origen ya no figura en Caja.');
+     else if(m&&m.materialesAgregar===false)posible('Caja Gerencia → Materiales',iid,destObra,c,
+       'El gasto existe en Caja Gerencia, pero el envío a Materiales está desactivado y la carga continúa registrada.');
+   }
+ }
+}
+// Entradas a Pañol que siguen activas cuando la fuente explícita desaparece.
+if(files['Pañol']&&files['Acopio']){
+ for(const m of pn.filter(x=>x?.tipo==='entrada')){
+   const entradaId=str(m.acopioEntradaId),aid=str(m.acopioId),rid=str(m.acopioRetiroId);
+   if(entradaId.startsWith('acopio_')||aid&&rid){
+     const key=entradaId||('acopio_'+aid+'_'+rid),r=acopioRetiros.get(key);
+     if(!r)posible('Acopio → Pañol',str(m.id||key),str(m.obraName||m.obra||''),m,
+       'Pañol conserva una entrada asociada a Acopio, pero no aparece su retiro original.',
+       'Buscá ese retiro en Acopio (incluidos los archivados) antes de considerar el stock como sobrante.',
+       [{label:'ID del retiro esperado',a:key}]);
+     else if(r.r.cargarPanol===false)posible('Acopio → Pañol',str(m.id||key),'',m,
+       'La entrada existe en Pañol, pero el retiro original ya no tiene habilitado el envío a Pañol.');
+   }
+ }
+}
+if(files['Pañol']&&files['Caja Gerencia']){
+ for(const m of pn.filter(x=>x?.tipo==='entrada')){
+   const key=str(m.cajaGerenciaEntradaId||'');
+   if(!key.startsWith('caja_gerencia_'))continue;
+   const src=key.slice('caja_gerencia_'.length);
+   if(!cgById.has(src))posible('Caja Gerencia → Pañol',str(m.id||key),'',m,
+     'Pañol conserva una entrada identificada como enviada desde Caja Gerencia, pero ya no figura ese gasto en Caja.',
+     'Comprobá el movimiento en Caja Gerencia y el historial del stock antes de eliminar la entrada.',
+     [{label:'ID original de Caja',a:src}]);
+ }
+}
+// Ingresos de Caja Chica con referencia inequívoca a Fondo Común de Caja.
+if(files['Caja Chica']&&files['Caja Gerencia']){
+ for(const m of cc.filter(x=>x?.type==='ingreso')){
+   const id=str(m.integrationId||m.id),sid=str(m.cajaGerenciaOrigenId||m.sourceMovementId||(id.startsWith('caja_gerencia_fondo_')?id.slice(20):''));
+   if(!sid||!(id.startsWith('caja_gerencia_fondo_')||m.origen==='cq_caja_gerencia'||m.cajaGerenciaVinculado===true))continue;
+   if(!fondoById.has(sid))posible('Caja Gerencia → Caja Chica',str(m.id),'',m,
+     'Caja Chica conserva un ingreso vinculado con Fondo común $, pero ya no aparece el movimiento original en Caja Gerencia.',
+     'Revisá si ese ingreso corresponde a un movimiento eliminado o a una migración histórica; no borres el ingreso desde Control.',
+     [{label:'ID de Caja original',a:sid}]);
+ }
+}
+// Revisión inversa de Gastos: en modo normal solo las obras ya consultadas;
+// en modo ampliado, todas las obras del catálogo, incluso si la fuente falta.
+for(const [oid,items] of Object.entries(gastoDocs)){
+ if(!Array.isArray(items))continue; // Documento no leído: no diagnosticar ausencias.
+ for(const g of items){
+   if(!g||g.id==null)continue;
+   const gid=str(g.id),sourceCG=str(g.cajaMovimientoId||g.cajaGerenciaMovimientoId),sourceCC=str(g.cajaChicaMovimientoId),sourcePN=str(g.panolMovimientoId),sourceAC=str(g.acopioRetiroId);
+   let conn='',reason='',action='';
+   if(sourceCG&&files['Caja Gerencia']&&!cgById.has(sourceCG)){
+     conn='Caja Gerencia → Gastos';reason='Gastos conserva un movimiento vinculado a Caja Gerencia, pero el gasto original ya no existe en la lista actual de Caja.';
+   }else if(sourceCC&&files['Caja Chica']&&!ccById.has(sourceCC)){
+     conn='Caja Chica → Gastos';reason='Gastos conserva un movimiento de Caja Chica, pero su gasto original ya no existe en Caja Chica.';
+   }else if(sourcePN&&files['Pañol']&&!pnById.has(sourcePN)){
+     conn='Pañol → Gastos';reason='Gastos conserva una salida del Pañol cuya operación original no aparece en el Pañol actual.';
+   }else if(sourceAC&&files['Acopio']&&!acopioRetirosPorId.has(sourceAC)){
+     conn='Acopio → Gastos';reason='Gastos conserva un retiro de Acopio cuyo movimiento original no figura entre los retiros actuales.';
+   }
+   if(conn)posible(conn,gid,oid,g,reason,action,[{label:'ID vinculado en Gastos',a:sourceCG||sourceCC||sourcePN||sourceAC},{label:'Categoría',a:str(g.cat||'Sin categoría')},{label:'Importe registrado',a:num(g.monto)}]);
+ }
+}
+if(auditAllObras&&auditCatalogComplete&&configuredObras.some(id=>!Array.isArray(gastoDocs[id]))){
+ log('warning','Cobertura de auditoría','Verificación parcial','No se pudieron leer una o más obras de Gastos; la búsqueda inversa no es exhaustiva.','','',{summary:'Algunas obras de Gastos no pudieron consultarse.',action:'Revisá las fuentes con error y repetí la verificación; no interpretes los resultados como auditoría completa.'});
+}
+if(auditAllObras&&!auditCatalogComplete){
+  log('warning','Cobertura de auditoría','Verificación parcial','No se pudo recuperar el catálogo completo de obras. La búsqueda inversa de Gastos es parcial.','','',{summary:'No se pudo ampliar la búsqueda a todas las obras.',action:'Repetí la verificación cuando Config de Gastos esté disponible. La revisión de Materiales, Pañol y Caja Chica sí se realizó.'});
+}
+
 if(files['Materiales'])for(const [id,items] of materialMap){if(items.length>1&& !id.startsWith('panol_')&&!id.startsWith('acopio_'))log('error','Materiales · duplicados','Identificador de integración repetido',items.length+' movimientos con ID '+id,'',id,{source:items[0]});}
  if(sources.some(s=>!s.ok))log('warning','Cobertura de lectura','Verificación parcial','Una o más fuentes no se pudieron leer. Revisar los avisos de origen.','','');
  if(!findings.length)log('warning','Cobertura de lectura','Sin vínculos reconocidos','Se consultaron las fuentes, pero no se encontraron vínculos que coincidan con las reglas de esta versión.','','');
  summarize();addModules();render();
  const failed=sources.filter(x=>!x.ok).length,err=findings.filter(f=>f.severity==='error'&&!isReviewed(f)).length;
  refreshStatus();
- el('info').textContent=`Consulta terminada. Fuentes consultadas: ${sources.length}; lecturas fallidas: ${failed}. Problemas activos para revisar: ${findings.filter(f=>['error','warning'].includes(f.severity)&&!isReviewed(f)).length}. Estados internos antiguos con vínculo localizado: ${findings.filter(f=>f.severity==='info').length} (informativos; NO es necesario revisarlos individualmente ni reenviarlos). Revisadas / ocultas: ${reviewedCount()}. El control no modifica datos de origen.`;
+ el('info').textContent=`Consulta terminada. Fuentes consultadas: ${sources.length}; lecturas fallidas: ${failed}. Problemas activos para revisar: ${findings.filter(f=>['error','warning'].includes(f.severity)&&!isReviewed(f)).length}. Huérfanos / borrados posibles: ${findings.filter(f=>f.auditType&&!isReviewed(f)).length} (ausencia de origen no demuestra borrado). Auditoría de todas las obras: ${auditAllObras?(auditCatalogComplete?'activada':'no completada'):'desactivada'}. Estados internos antiguos con vínculo localizado: ${findings.filter(f=>f.severity==='info').length} (informativos; NO es necesario revisarlos individualmente ni reenviarlos). Revisadas / ocultas: ${reviewedCount()}. El control no modifica datos de origen.`;
  }catch(e){status('La verificación no pudo completarse','error');el('info').textContent=prettyError(e);summarize();render();}
- finally{busy=false;el('run').disabled=!canRun;render();}
+ finally{busy=false;el('run').disabled=!canRun;el('scan-all-obras').disabled=false;render();}
 }
 el('type').addEventListener('change',render);el('module').addEventListener('change',render);el('search').addEventListener('input',render);el('run').addEventListener('click',verify);
 onAuthStateChanged(auth,async user=>{
