@@ -70,7 +70,7 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <main>
 <section class="panel">
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
-<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — auditoría completa · ingresos verificados</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — ingresos en 6 cuentas y cargas múltiples</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
 <label class="wide-scan"><input type="checkbox" id="scan-all-obras"><span><b>Revisar también Gastos de todas las obras</b><small>Opcional: detecta huérfanos en obras cuyo movimiento de origen ya fue eliminado. Agrega lecturas de Firebase según la cantidad de obras.</small></span></label>
 <div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div><div class="kpi orphan"><strong id="metric-orphan">—</strong><span>Posibles huérfanos / borrados incompletos</span></div></div>
 <div class="notice" id="cc-overview" hidden></div>
@@ -339,6 +339,7 @@ function enriquecerFichas(ctx){
                        b.cajaMovimientoId,b.cajaGerenciaMovimientoId,b.sourceMovementId);
    if(cuenta.has(direct))return direct;
    if(cuenta.has(s))return s;
+    if(s.startsWith('caja_ingreso_'))return s.slice('caja_ingreso_'.length);
    const match=s.match(/^caja_(\d{10,})(?:_|$)/);
    return match?match[1]:direct;
  };
@@ -432,6 +433,8 @@ function enriquecerFichas(ctx){
    // El monto de una transferencia por obras es el imputado a esta obra,
    // cuando puede identificarse. No atribuir todo el gasto a una sola obra.
    if(srcName==='Caja Gerencia'&&valorCaja!==null){
+     const usdCaja=str(refCaja?.cajaTipo).endsWith('-usd')||str(caja?.solapa).includes('u$s');
+     const fmtCaja=n=>moneda(n,usdCaja?'usd':'ars');
      const imputaciones=arr(refCaja?.imputaciones);
      const referenciaObra=texto(obj.sourceObraId,dest.sourceObraId,obj.gastosObraId,dest.gastosObraId,f.obra);
      const filaObra=imputaciones.find(i=>{
@@ -439,7 +442,7 @@ function enriquecerFichas(ctx){
        return referenciaObra&&(id===referenciaObra||label===referenciaObra||limpioObra(id)===limpioObra(referenciaObra));
      });
      const asignado=valorDe(filaObra,'monto');
-     importe=asignado!==null?pesos(asignado)+' (imputado a esta obra)':pesos(valorCaja)+(imputaciones.length>1?' (total en Caja, varias obras)':' (Caja Gerencia)');
+     importe=asignado!==null?fmtCaja(asignado)+' (imputado a esta obra)':fmtCaja(valorCaja)+(imputaciones.length>1?' (total en Caja, varias obras)':' (Caja Gerencia)');
    }else if(srcName==='Caja Chica'&&valorCC!==null){
      importe=moneda(valorCC,refCC?.currency||refCC?.moneda)+' (Caja Chica)';
    }else if(srcName==='Acopio'&&retiro){
@@ -491,9 +494,21 @@ try{
  const cc=arr(files['Caja Chica']?.state?.movements||files['Caja Chica']?.movements),cg=files['Caja Gerencia']||{},ac=arr(files['Acopio']?.acopios),pn=arr(files['Pañol']?.movimientos),mat=arr(files['Materiales']?.cargas);
  // Incluimos ingresos en el índice de identidad: Caja envía ingresos a Gastos
  // con monto NEGATIVO y un ID caja_ingreso_*. No son movimientos huérfanos.
- const cgPesosTodos=[...arr(cg.deudaPesos),...arr(cg.fondoPesosMovs),...arr(cg.santanderMovs)].filter(m=>m&&m.id!=null);
- const cgAllPesos=cgPesosTodos.filter(m=>m.tipo==='gasto');
- const cgIngresosGastos=cgPesosTodos.filter(m=>m.tipo==='ingreso'&&m.ingresoGastosAgregar===true&&m.ingresoGastosObraId);
+  // Caja Gerencia guarda movimientos en SEIS cuentas. El índice inverso debe
+  // incluir tanto pesos como dólares; en particular, los ingresos de las tres
+  // cuentas USD pueden llegar a Gastos con id caja_ingreso_<id>.
+  const cgCuentas=[
+    ['deudaPesos','Deuda $'],['deudaUsd','Deuda u$s'],
+    ['fondoPesosMovs','Fondo común $'],['fondoUsdMovs','Fondo común u$s'],
+    ['santanderMovs','Santander $'],['santanderUsdMovs','Santander u$s']
+  ];
+  const cgTodos=cgCuentas.flatMap(([clave,solapa])=>arr(cg[clave])
+    .filter(m=>m&&m.id!=null).map(m=>({mov:m,solapa,clave})));
+ const cgPesosTodos=cgTodos.filter(x=>!['deudaUsd','fondoUsdMovs','santanderUsdMovs'].includes(x.clave)).map(x=>x.mov);
+  // Los gastos con reparto existen solo en pesos; se admiten registros
+  // históricos sin campo tipo si conservan imputaciones explícitas.
+ const cgAllPesos=cgPesosTodos.filter(m=>m.tipo==='gasto'||(m.tipo!=='ingreso'&&arr(m.imputaciones).length>0));
+ const cgIngresosGastos=cgTodos.map(x=>x.mov).filter(m=>m.tipo==='ingreso'&&m.ingresoGastosAgregar===true&&m.ingresoGastosObraId);
  // Sólo buscamos obras que participan de vínculos reales; no leemos innecesariamente todas las obras del catálogo.
  const obraIds=new Set();
  const cgMovs=cgAllPesos.filter(m=>m.imputacionPendienteGastos!==false&&arr(m.imputaciones).length);
@@ -526,11 +541,35 @@ try{
  const gastosIndex={};
  for(const [oid,items] of Object.entries(gastoDocs)){
    if(!Array.isArray(items))continue;
-   const ids=new Map(),links=new Map();
-   items.forEach(g=>{if(!g)return;ids.set(str(g.id),g);['cajaMovimientoId','cajaGerenciaMovimientoId','cajaChicaMovimientoId','acopioRetiroId','panolMovimientoId'].forEach(k=>{if(g[k]!=null&&g[k]!=='')links.set(k+'|'+str(g[k]),g)});});
-   gastosIndex[oid]={ids,links};
+     const ids=new Map(),links=new Map();
+    items.forEach(g=>{
+      if(!g)return;
+      ids.set(str(g.id),g);
+      ['cajaMovimientoId','cajaGerenciaMovimientoId','cajaChicaMovimientoId','acopioRetiroId','panolMovimientoId'].forEach(k=>{
+        if(g[k]==null||g[k]==='')return;
+        const lk=k+'|'+str(g[k]);
+        if(!links.has(lk))links.set(lk,[]);
+        links.get(lk).push(g);
+      });
+    });
+    gastosIndex[oid]={ids,links};
  }
- const findG=(obraId,expected,linkField,sourceId)=>{const o=gastosIndex[obraId];if(!o)return undefined;return o.ids.get(expected)||(linkField?o.links.get(linkField+'|'+str(sourceId)):undefined);};
+
+  // Una carga múltiple puede conservar varias partidas con el mismo vínculo
+  // de origen, incluso si sus IDs en Gastos son distintos. Indexar una sola
+  // partida ocultaba el resto y podía generar diferencias de importe falsas.
+  const findGs=(obraId,expected,linkField,sourceId)=>{
+    const o=gastosIndex[obraId];if(!o)return [];
+    const rows=[],seen=new Set();
+    const add=g=>{if(g&&!seen.has(str(g.id))){seen.add(str(g.id));rows.push(g);}};
+    add(o.ids.get(expected));
+    if(linkField){
+      const fields=linkField==='cajaMovimientoId'?[linkField,'cajaGerenciaMovimientoId']: [linkField];
+      fields.forEach(k=>(o.links.get(k+'|'+str(sourceId))||[]).forEach(add));
+    }
+    return rows;
+  };
+  const findG=(obraId,expected,linkField,sourceId)=>findGs(obraId,expected,linkField,sourceId)[0];
  const reportStale=(connection,obra,id,m,field)=>{
   if(!m||!field||!['error','pendiente'].includes(str(m[field]).toLowerCase()))return;
   if(str(m[field])==='pendiente'&&ageMs(m?.updatedAt||m?.creadoAt||m?.createdAt||m?.fecha)<3*60*1000)return;
@@ -546,34 +585,50 @@ try{
    if(ci){if(!entradasPanolCaja.has(ci))entradasPanolCaja.set(ci,[]);entradasPanolCaja.get(ci).push(x);}
  });
  const check=(connection,title,obra,expected,linkField,sourceId,source,expectedAmount)=>{
-  if(!Array.isArray(gastoDocs[obra])){log('warning',connection,'Sin verificación de destino',`No se pudo leer Gastos de la obra ${obra}`,obra,sourceId,{source});return;}
-  const g=findG(obra,expected,linkField,sourceId);
-  if(!g){log(classifyMissing(source),connection,'No aparece en Gastos',title,obra,sourceId,{source});return;}
-  if(expectedAmount!=null&&Math.abs(num(g.monto)-num(expectedAmount))>0.05){
-    const diff=num(expectedAmount)-num(g.monto);
-    const money=n=>'$'+n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
-    log('error',connection,'Importe diferente en Gastos',`${title} · ${connection.split(' → ')[0]} ${money(num(expectedAmount))} · Gastos ${money(num(g.monto))} · diferencia ${money(Math.abs(diff))}`,obra,sourceId,{source,dest:g});return;
+  if(!Array.isArray(gastoDocs[obra])){
+    log('warning',connection,'Sin verificación de destino',`No se pudo leer Gastos de la obra ${obra}`,obra,sourceId,{source});
+    return false;
   }
-  log('ok',connection,'Vínculo verificado',title,obra,sourceId,{source,dest:g});
+  const matches=findGs(obra,expected,linkField,sourceId);
+  if(!matches.length){
+    log(classifyMissing(source),connection,'No aparece en Gastos',title,obra,sourceId,{source});
+    return false;
+  }
+  const g=matches[0],esMultiple=connection==='Caja Gerencia → Gastos'&&matches.length>1;
+  // En un reparto por varias obras se compara cada obra por separado; si
+  // dentro de una obra existe un desglose, se compara la SUMA de partidas.
+  const registrado=esMultiple?matches.reduce((total,x)=>total+num(x.monto),0):num(g.monto);
+  if(expectedAmount!=null&&Math.abs(registrado-num(expectedAmount))>0.05){
+    const diff=num(expectedAmount)-registrado;
+    const prefix=connection==='Caja Gerencia → Gastos'&&str(source?.cajaTipo).endsWith('-usd')?'US$':'$';
+    const money=n=>prefix+n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
+    const resumen=`El origen tiene ${money(num(expectedAmount))} y Gastos ${money(registrado)}${esMultiple?' en '+matches.length+' partidas':''}. Diferencia: ${money(Math.abs(diff))}.`;
+    log('error',connection,'Importe diferente en Gastos',`${title} · ${connection.split(' → ')[0]} ${money(num(expectedAmount))} · Gastos ${money(registrado)}${esMultiple?' ('+matches.length+' partidas)':''} · diferencia ${money(Math.abs(diff))}`,obra,sourceId,{source,dest:g,summary:resumen,
+      fields:esMultiple?[{label:'Partidas vinculadas en Gastos',a:matches.length},{label:'Suma en Gastos',a:money(registrado)}]:[]});
+    return false;
+  }
+  log('ok',connection,esMultiple?'Carga múltiple verificada':'Vínculo verificado',
+    esMultiple?`${matches.length} partidas vinculadas; suma comprobada para esta obra`:title,
+    obra,sourceId,{source,dest:g});
   if(connection!=='Caja Gerencia → Gastos')reportStale(connection+' · puntos Gastos',obra,sourceId,source,'gastosSyncEstado');
-};
+  return true;
+ };
  if(files['Caja Gerencia'])cgMovs.forEach(m=>{
   let todosOK=true;
   arr(m.imputaciones).forEach(i=>{
     const oid=str(i?.obraId);if(!oid)return;
-    const g=findG(oid,'caja_'+str(m.id)+'_'+oid,'cajaMovimientoId',m.id);
-    if(!g||Math.abs(num(g.monto)-num(i.monto))>0.05)todosOK=false;
-    check('Caja Gerencia → Gastos','Movimiento de Caja',oid,'caja_'+str(m.id)+'_'+oid,'cajaMovimientoId',m.id,m,num(i.monto));
+    if(!check('Caja Gerencia → Gastos','Movimiento de Caja',oid,
+        'caja_'+str(m.id)+'_'+oid,'cajaMovimientoId',m.id,m,num(i.monto)))todosOK=false;
   });
   if(todosOK)reportStale('Caja Gerencia · puntos Gastos',arr(m.imputaciones).map(i=>i.obraId).join(', '),str(m.id),m,'gastosSyncEstado');
-});
- // Ingreso desde Caja Gerencia → Gastos: Caja guarda +importe y Gastos
- // guarda -importe, como define cqIngresoGastosPayload() en Caja Gerencia.
+ });
+ // Caja guarda el ingreso positivo y Gastos lo registra con monto negativo.
+ // Se verifican las seis cuentas, incluyendo USD, y cada ingreso conserva
+ // el valor en su moneda original (igual que cqIngresoGastosPayload de Caja).
  if(files['Caja Gerencia'])cgIngresosGastos.forEach(m=>{
    const oid=str(m.ingresoGastosObraId),sid=str(m.id),expected=-Math.abs(num(m.monto));
-   const g=findG(oid,'caja_ingreso_'+sid,'cajaMovimientoId',sid);
-   check('Caja Gerencia → Gastos','Ingreso de Caja',oid,'caja_ingreso_'+sid,'cajaMovimientoId',sid,m,expected);
-   if(g&&Math.abs(num(g.monto)-expected)<=0.05)
+   if(check('Caja Gerencia → Gastos','Ingreso de Caja',oid,
+       'caja_ingreso_'+sid,'cajaMovimientoId',sid,m,expected))
      reportStale('Caja Gerencia · puntos Gastos (ingresos)',oid,sid,m,'ingresoGastosSyncEstado');
  });
  if(files['Caja Chica'])cc.filter(m=>m?.type==='gasto'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>{const oid=str(m.gastosObraId);const amount=str(m.currency)==='usd'?num(m.amount)*num(m.tc||files['Caja Chica'].exchangeRate):num(m.amount);check('Caja Chica → Gastos','Movimiento de Caja Chica',oid,'caja_chica_'+str(m.id),'cajaChicaMovimientoId',m.id,m,amount);});
@@ -744,9 +799,9 @@ ac.forEach(a=>arr(a?.retiros).forEach(r=>{
  acopioRetirosPorId.get(sid).push({a,r});
 }));
 const pnById=new Map(pn.filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
-// La auditoría inversa debe reconocer como origen tanto los gastos como los
-// ingresos de Caja; anteriormente solo indexaba gastos y generaba huérfanos falsos.
-const cgById=new Map(cgPesosTodos.map(m=>[str(m.id),m]));
+// La auditoría inversa incluye gastos e ingresos de las SEIS cuentas de Caja,
+// para no generar huérfanos falsos en cuentas USD ni repartos multiobra.
+const cgById=new Map(cgTodos.map(x=>[str(x.mov.id),x.mov]));
 const ccById=new Map(cc.filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
 const fondoById=new Map(arr(cg.fondoPesosMovs).filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
 const posible=(conn,id,obra,dest,reason,action,fields=[])=>{
@@ -853,7 +908,17 @@ for(const [oid,items] of Object.entries(gastoDocs)){
  if(!Array.isArray(items))continue; // Documento no leído: no diagnosticar ausencias.
  for(const g of items){
    if(!g||g.id==null)continue;
-   const gid=str(g.id),sourceCG=str(g.cajaMovimientoId||g.cajaGerenciaMovimientoId),sourceCC=str(g.cajaChicaMovimientoId),sourcePN=str(g.panolMovimientoId),sourceAC=str(g.acopioRetiroId);
+   const gid=str(g.id),rawCG=str(g.cajaMovimientoId||g.cajaGerenciaMovimientoId),sourceCC=str(g.cajaChicaMovimientoId),sourcePN=str(g.panolMovimientoId),sourceAC=str(g.acopioRetiroId);
+   // Algunas cargas históricas usan un ID sintético. Buscar el movimiento
+   // original antes de declarar huérfano un ingreso o una imputación múltiple.
+   const normalizeCajaId=raw=>{
+     if(cgById.has(raw))return raw;
+     if(raw.startsWith('caja_ingreso_')&&cgById.has(raw.slice('caja_ingreso_'.length)))return raw.slice('caja_ingreso_'.length);
+     const m=raw.match(/^caja_(\d{8,})(?:_|$)/);
+     if(m&&cgById.has(m[1]))return m[1];
+     return raw;
+   };
+   const sourceCG=normalizeCajaId(rawCG||(/cq_caja_gerencia/i.test(str(g.origen))?gid:''));
    let conn='',reason='',action='';
    if(sourceCG&&files['Caja Gerencia']&&!cgById.has(sourceCG)){
      conn='Caja Gerencia → Gastos';reason='Gastos conserva un movimiento vinculado a Caja Gerencia, pero no se encontró su gasto o ingreso de origen en la lista actual de Caja.';
