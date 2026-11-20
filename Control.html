@@ -49,6 +49,17 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 .wide-scan span{display:flex;flex-direction:column;gap:3px;font-size:12px}
 .wide-scan small{font-size:10px;line-height:1.45;color:#64748b}
 .kpi.orphan strong{color:#9d5a1d}
+/* CQ · Ficha de diagnóstico legible: datos operativos, no IDs */
+.cq-alert-ficha{margin-top:10px;border:1px solid #dce5ee;border-radius:11px;overflow:hidden;background:#fbfcfe}
+.cq-alert-fila{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:start;padding:9px 11px;border-bottom:1px solid #e8edf2}
+.cq-alert-fila:last-child{border-bottom:0}
+.cq-alert-etiqueta{font-size:11px;font-weight:800;color:#60748b}
+.cq-alert-valor{font-size:12px;line-height:1.45;font-weight:650;white-space:normal;overflow-wrap:anywhere;color:#21344d}
+.cq-alert-fila.cq-error-detectado{background:#fff8ed}.cq-alert-fila.cq-error-detectado .cq-alert-valor{color:#704c1c}
+.cq-alert-fila.cq-error-grave{background:#fff2f2}.cq-alert-fila.cq-error-grave .cq-alert-valor{color:#9b292d}
+.cq-tecnico{margin-top:9px;border-top:1px solid #e8edf2;padding-top:9px;font-size:11px;color:#60748b}
+.cq-tecnico>summary{cursor:pointer;font-weight:750}.cq-tecnico-contenido{margin-top:7px;line-height:1.55;overflow-wrap:anywhere}
+@media(max-width:560px){.cq-alert-fila{grid-template-columns:91px minmax(0,1fr);gap:8px;padding:9px 9px}.cq-alert-etiqueta{font-size:10.5px}.cq-alert-valor{font-size:11.7px}}
 .diag-raw{margin-top:9px;font-size:10px;color:#617388}.diag-raw summary{font-weight:700;cursor:pointer}.diag-raw div{white-space:pre-wrap;margin-top:6px;overflow-wrap:anywhere}
 @media(max-width:560px){.diag-values{grid-template-columns:1fr 1fr}.finding .origin{font-size:9px}}
 </style>
@@ -58,7 +69,7 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <main>
 <section class="panel">
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
-<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — auditoría completa</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — auditoría completa · ficha clara</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
 <label class="wide-scan"><input type="checkbox" id="scan-all-obras"><span><b>Revisar también Gastos de todas las obras</b><small>Opcional: detecta huérfanos en obras cuyo movimiento de origen ya fue eliminado. Agrega lecturas de Firebase según la cantidad de obras.</small></span></label>
 <div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div><div class="kpi orphan"><strong id="metric-orphan">—</strong><span>Posibles huérfanos / borrados incompletos</span></div></div>
 <div class="notice" id="cc-overview" hidden></div>
@@ -66,7 +77,7 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <details id="sources-disclosure" class="details-sources"><summary><span id="source-count">Fuentes consultadas: sin verificar</span></summary><div id="sources" class="sources"></div></details>
 </section>
 <section class="panel"><div class="tools"><b>Detalle de verificaciones</b><span id="count" style="font-size:11px;color:#64748b">Sin ejecutar</span></div>
-<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="orphan">Huérfanos y borrados</option><option value="info">Indicadores antiguos (informativo)</option><option value="reviewed">Revisados y ocultos</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Buscar fecha, obra, origen o ID" aria-label="Buscar resultado"></div>
+<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="orphan">Huérfanos y borrados</option><option value="info">Indicadores antiguos (informativo)</option><option value="reviewed">Revisados y ocultos</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Buscar fecha, obra, gasto o módulo" aria-label="Buscar resultado"></div>
 <div id="results" class="empty">Pulsá «Verificar ahora» para consultar el estado real de Firebase.</div><div class="review-feedback" id="review-feedback" role="status" aria-live="polite"></div><div id="cq-feedback-toast" class="cq-feedback-toast" role="status" aria-live="polite"></div>
 </section>
 <p class="hint">Cobertura de esta versión: comparación del destino efectivo en Caja Gerencia, el documento de integraciones y el ingreso real de Caja Gerencia → Caja Chica; además de vínculos reconocidos de Caja Gerencia, Caja Chica, Acopio y Pañol hacia Gastos, Materiales, Pañol y Caja Chica. La búsqueda inversa de huérfanos revisa Materiales, Pañol y Caja Chica. Para incluir movimientos de Gastos cuya fuente ya desapareció, activá «Revisar también Gastos de todas las obras»: consulta más documentos de Firebase. La ausencia del origen NO prueba por sí sola un borrado; pueden existir históricos migrados o archivados. Cuando Materiales conserva una baja explícita, esa evidencia se distingue de un simple huérfano. No puede leer pendientes guardados sólo en el dispositivo. Los puntos rojos intencionales «No se agregó» no son fallas de sincronización. Los estados internos antiguos se agrupan como informativos cuando se encuentra el ID vinculado en destino; esto no acredita una auditoría completa de cantidades, precios ni productos. Las marcas «Está OK» no alteran el estado real de Caja, Gastos, Acopio, Pañol ni Materiales; pueden deshacerse en el filtro Revisados. Las fechas indican la fecha registrada del movimiento; no la última sincronización. Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
@@ -214,7 +225,7 @@ function diagnostic(severity,connection,title,detail,meta={}){
  return a;
 }
 function log(severity,connection,title,detail,obra,id,meta={}){
- const f={severity,connection,title,detail:detail||'',obra:obra||'',id:id||'',auditType:meta.auditType||'',fechaOrigen:movementDate(meta.source),fechaGastos:movementDate(meta.dest),diag:diagnostic(severity,connection,title,detail,meta)};
+ const f={severity,connection,title,detail:detail||'',obra:obra||'',id:id||'',auditType:meta.auditType||'',fechaOrigen:movementDate(meta.source),fechaGastos:movementDate(meta.dest),diag:diagnostic(severity,connection,title,detail,meta),_source:meta.source||null,_dest:meta.dest||null};
  f.reviewKey=reviewKey(f);findings.push(f);
 }
 function normalizeDoc(data){const d=data?.db&&typeof data.db==='object'?data.db:data;return d&&typeof d==='object'?d:{};}
@@ -237,7 +248,7 @@ function render(){
  const filtered=findings.filter(f=>{
    const reviewed=isReviewed(f);
    const matches=kind==='reviewed'?reviewed:!reviewed&&(kind==='issues'?['error','warning'].includes(f.severity):kind==='orphan'?!!f.auditType:kind==='all'||f.severity===kind);
-   return matches&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.diag.summary+' '+f.connection+' '+f.obra+' '+f.id+' '+f.fechaOrigen+' '+f.fechaGastos).toLowerCase().includes(search));
+   return matches&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.diag.summary+' '+f.connection+' '+f.obra+' '+f.id+' '+f.fechaOrigen+' '+f.fechaGastos+' '+Object.values(f.ficha||{}).join(' ')).toLowerCase().includes(search));
  });
  if(kind==='all')filtered.sort((a,b)=>({error:0,warning:1,info:2,ok:3}[a.severity]??4)-({error:0,warning:1,info:2,ok:3}[b.severity]??4));
  const nodes=document.createDocumentFragment(),cap=60;
@@ -245,20 +256,38 @@ function render(){
   const row=tag('', 'finding'),dot=tag('', 'signal '+f.severity),body=tag('','body'),h=document.createElement('h3');
   h.textContent=f.title;body.append(h);
   if(f.severity!=='ok'){
-    const dates=tag('', 'date-line');
-    const sourceName=f.connection.split(' → ')[0]||'Origen';
-    if(f.fechaOrigen||!f.auditType)dates.append(tag(sourceName+': '+(f.fechaOrigen||'Sin fecha'),'date-chip'+(f.fechaOrigen?'':' missing')));
-    const destName=f.connection.split(' → ')[1];
-    if(f.fechaGastos)dates.append(tag((destName||'Destino')+': '+f.fechaGastos,'date-chip'));
-    body.append(dates);
-  }
-  body.append(tag(f.connection+(f.obra?' · Obra '+f.obra:'')+(f.id?' · ID '+f.id:''),'finding-context'));
-  if(f.severity!=='ok'){
-    const explanation=tag('', 'diagnostic');
-    explanation.append(tag('Qué se detectó','diag-label'),tag(f.diag.summary,'diag-summary'));
-    if(f.diag.fields?.length){const values=tag('', 'diag-values');f.diag.fields.forEach(v=>{const line=tag('', 'diag-value');line.append(tag(v.label,'diag-field'),tag(str(v.a),'diag-data'));values.append(line);});explanation.append(values);}
-    explanation.append(tag('Qué hacer','diag-label'),tag(f.diag.action,'diag-action'));body.append(explanation);
-    if(f.detail&&f.diag.summary!==f.detail){const extra=document.createElement('details');extra.className='diag-raw';const sum=document.createElement('summary');sum.textContent='Ver detalle técnico';extra.append(sum,tag(f.detail));body.append(extra);}
+    const info=f.ficha||{
+      fecha:f.fechaOrigen||f.fechaGastos||'Fecha no registrada',
+      modulos:f.connection,
+      obra:f.obra||'No disponible',
+      concepto:'Sin descripción registrada',
+      ubicacion:'Ubicación no disponible',
+      error:f.diag.summary||f.title
+    };
+    const ficha=tag('', 'cq-alert-ficha');
+    const filas=[
+      ['Fecha',info.fecha],
+      ['Módulos',info.modulos],
+      ['Obra',info.obra],
+      ['Gasto / material',info.concepto],
+      ['Dónde buscar',info.ubicacion],
+      ['Qué detectó',info.error]
+    ];
+    filas.forEach(([label,content],i)=>{
+      const row=tag('', 'cq-alert-fila'+(i===5?(f.severity==='error'?' cq-error-grave':' cq-error-detectado'):''));
+      row.append(tag(label,'cq-alert-etiqueta'),tag(content||'No disponible','cq-alert-valor'));
+      ficha.append(row);
+    });
+    body.append(ficha);
+    // Los identificadores siguen accesibles, pero no ocupan la vista principal.
+    const extra=document.createElement('details');extra.className='cq-tecnico';
+    const sum=document.createElement('summary');sum.textContent='Ver detalles adicionales';extra.append(sum);
+    const technical=tag('', 'cq-tecnico-contenido');
+    technical.append(tag('Referencia: '+(f.id||'No registrada')));
+    technical.append(tag('Recomendación: '+(f.diag.action||'Revisar el movimiento de origen.')));
+    if(f.diag.fields?.length){f.diag.fields.forEach(v=>technical.append(tag(v.label+': '+str(v.a))));}
+    if(f.detail)technical.append(tag('Detalle original: '+f.detail));
+    extra.append(technical);body.append(extra);
     if(['error','warning'].includes(f.severity)){const controls=tag('', 'review-controls');const button=document.createElement('button');button.type='button';button.className='review-button '+(isReviewed(f)?'restore':'');button.disabled=busy||reviewBusy.has(f.reviewKey);button.textContent=reviewBusy.has(f.reviewKey)?'Guardando…':isReviewed(f)?'Volver a mostrar':'✓ Está OK · Ocultar';
     button.addEventListener('click',()=>isReviewed(f)?undoReviewed(f):setReviewed(f));controls.append(button);
     if(isReviewed(f)){const record=remoteReviews[f.reviewKey]||localReviews[f.reviewKey]||{};const by=record.by||'Gerencia';const date=displayDate(record.at)||'sin fecha';const stored=remoteReviews[f.reviewKey]?'Firebase':'este dispositivo';controls.append(tag('Revisado por '+by+' · '+date+' · '+stored+' · no modifica los datos originales','review-note'));}
@@ -271,6 +300,119 @@ function render(){
  if(!filtered.length)holder.append(tag(findings.length?(kind==='reviewed'?'No hay alertas revisadas en esta verificación.':'No hay resultados para este filtro.'): 'Todavía no se efectuó una verificación.','empty'));
  else holder.append(nodes);
  el('count').textContent=filtered.length+' resultado(s)'+(filtered.length>cap?' · mostrando los primeros '+cap+'; podés usar la búsqueda para localizar otros':'');
+}
+
+
+// Completa la ficha con metadatos YA consultados: sin nuevas lecturas y sin
+// modificar registros. Cuando la fuente desapareció, no inventamos la solapa.
+function enriquecerFichas(ctx){
+ const {cg,cc,ac,pn,mat,configObras}=ctx;
+ const texto=(...args)=>args.map(v=>str(v).trim()).find(v=>v&&v!=='undefined'&&v!=='null')||'';
+ const cuenta=new Map();
+ const listas=[
+  ['deudaPesos','Deuda $'],['deudaUsd','Deuda u$s'],
+  ['fondoPesosMovs','Fondo común $'],['fondoUsdMovs','Fondo común u$s'],
+  ['santanderMovs','Santander $'],['santanderUsdMovs','Santander u$s']
+ ];
+ listas.forEach(([field,label])=>arr(cg?.[field]).forEach(m=>{if(m&&m.id!=null)cuenta.set(str(m.id),{mov:m,solapa:label});}));
+ const acopios=new Map(),retiros=new Map();
+ arr(ac).forEach(a=>{if(!a)return;acopios.set(str(a.id),a);arr(a.retiros).forEach(r=>{if(r?.id!=null)retiros.set(str(r.id),{a,r});});});
+ const movPanol=new Map(arr(pn).filter(x=>x?.id!=null).map(x=>[str(x.id),x]));
+ const movCajaChica=new Map(arr(cc).filter(x=>x?.id!=null).map(x=>[str(x.id),x]));
+ const obras=new Map();
+ arr(configObras).forEach(o=>{if(o?.id!=null)obras.set(str(o.id),texto(o.label,o.short,o.nombre,o.id));});
+ const buena=v=>texto(v)&&!/^\s*(gasto|material|movimiento|sin descripcion|no especificado)\s*$/i.test(str(v).trim());
+ const elegir=(...v)=>v.map(x=>texto(x)).find(x=>x&&buena(x))||'';
+ const limpioObra=v=>{
+   const s=texto(v);if(!s)return '';
+   if(obras.has(s))return obras.get(s);
+   const m=s.match(/^l?(\d+)[_/-]mz(\d+)$/i);
+   return m?'L'+m[1]+' Mz'+m[2]:s;
+ };
+ const origenCajaId=f=>{
+   const s=str(f.id),a=f._source||{},b=f._dest||{};
+   const direct=texto(a.cajaMovimientoId,a.cajaGerenciaMovimientoId,a.sourceMovementId,
+                       b.cajaMovimientoId,b.cajaGerenciaMovimientoId,b.sourceMovementId);
+   if(cuenta.has(direct))return direct;
+   if(cuenta.has(s))return s;
+   const match=s.match(/^caja_(\d{10,})(?:_|$)/);
+   return match?match[1]:direct;
+ };
+ const origenAcopio=f=>{
+   let aid='',rid='';const id=str(f.id),src=f._source||{},dst=f._dest||{};
+   const asLink=texto(dst.integracionId,dst.acopioEntradaId,id);
+   const m=asLink.match(/^acopio_([^_]+)_([^_]+)$/);
+   if(m){aid=m[1];rid=m[2];}
+   else if(id.includes(' / ')){const p=id.split(' / ');aid=p[0];rid=p[1];}
+   if(!aid)aid=texto(src.acopioId,dst.acopioId);
+   if(!rid)rid=texto(src.acopioRetiroId,dst.acopioRetiroId,src.id);
+   const hit=retiros.get(rid);
+   return {a:acopios.get(aid)||hit?.a||null,r:hit?.r||null};
+ };
+ findings.forEach(f=>{
+   if(f.severity==='ok')return;
+   const srcName=f.connection.split(' → ')[0].split(' · ')[0].trim();
+   const destName=f.connection.includes(' → ')?f.connection.split(' → ')[1].split(' · ')[0].trim():'';
+   const obj=f._source||{},dest=f._dest||{};
+   let caja=null,acData=null,panol=null,cajachica=null;
+   if(f.connection.includes('Caja Gerencia'))caja=cuenta.get(origenCajaId(f))||null;
+   if(f.connection.includes('Acopio'))acData=origenAcopio(f);
+   if(f.connection.includes('Pañol')){
+     const pid=texto(obj.panolMovimientoId,dest.panolMovimientoId,
+       str(f.id).startsWith('panol_')?str(f.id).slice(6):'',obj.id,dest.sourceMovementId);
+     panol=movPanol.get(pid)||null;
+   }
+   if(f.connection.includes('Caja Chica')){
+     const raw=texto(obj.cajaChicaMovimientoId,dest.cajaChicaMovimientoId,
+       str(f.id).startsWith('caja_chica_')?str(f.id).slice(11):'',obj.id,dest.sourceMovementId);
+     cajachica=movCajaChica.get(raw)||null;
+   }
+   const cgMov=caja?.mov||null;
+   const retiro=acData?.r||null,acopio=acData?.a||null;
+   const refCaja=cgMov||((srcName==='Caja Gerencia')?obj:null);
+   const refPanol=panol||((srcName==='Pañol')?obj:null);
+   const refCC=cajachica||((srcName==='Caja Chica')?obj:null);
+   const refMat=(destName==='Materiales'||srcName==='Materiales'||f.connection==='Bajas de Materiales → Materiales')
+     ?(texto(dest.matName,dest.materialNameOrigen)?dest:obj):null;
+   const conceptoCaja=elegir(refCaja?.imputacionSubrubroLabel,refCaja?.imputacionSubrubro,refCaja?.desc,refCaja?.imputacionComentario);
+   const conceptoAcopio=elegir(retiro?.materialName,refMat?.materialNameOrigen,refMat?.matName,retiro?.subrubro);
+   const conceptoPanol=elegir(refPanol?.materialName,refPanol?.gastosSubrubro);
+   const conceptoCC=elegir(refCC?.subrubro,refCC?.concept,refCC?.description,refCC?.nota);
+   const conceptoMaterial=elegir(refMat?.materialNameOrigen,refMat?.matName,obj.materialName,obj.matName,dest.materialName,dest.matName);
+   const conceptoGastos=elegir(obj.subrubro,dest.subrubro,obj.concepto,dest.concepto,obj.desc,dest.desc);
+   let concepto='';
+   if(srcName==='Caja Gerencia')concepto=elegir(conceptoCaja,conceptoMaterial,conceptoGastos);
+   else if(srcName==='Acopio')concepto=elegir(conceptoAcopio,conceptoMaterial,conceptoGastos);
+   else if(srcName==='Pañol')concepto=elegir(conceptoPanol,conceptoMaterial,conceptoGastos);
+   else if(srcName==='Caja Chica')concepto=elegir(conceptoCC,conceptoMaterial,conceptoGastos);
+   else concepto=elegir(conceptoMaterial,conceptoGastos,conceptoCaja,conceptoAcopio,conceptoPanol);
+   if(!concepto)concepto='No disponible en el registro consultado';
+   const obraId=texto(obj.gastosObraId,obj.sourceObraId,dest.gastosObraId,dest.sourceObraId,f.obra);
+   const obrasImputadas=arr(refCaja?.imputaciones).map(i=>texto(i?.obra)).filter(Boolean);
+   const obra=elegir(obras.get(obraId),obj.obraHistorica,dest.obraNameOrigen,dest.obraName,
+     obj.obraNameOrigen,obj.obraName,obj.obra,refPanol?.obra,obraId&&limpioObra(obraId),
+     obrasImputadas[0],retiro?.obraHistorica,limpioObra(f.obra))||'No disponible';
+   const fecha=elegir(f.fechaOrigen,f.fechaGastos,movementDate(retiro),movementDate(refCaja),
+     movementDate(refPanol),movementDate(refCC),movementDate(refMat),movementDate(dest))||'No registrada';
+   let ubicacion='';
+   if(srcName==='Caja Gerencia'){
+     const solapa=caja?.solapa||((f.connection==='Caja Gerencia → Caja Chica')?'Fondo común $':'Solapa no recuperable: origen ausente');
+     ubicacion='Caja Gerencia · '+solapa;
+   }else if(srcName==='Acopio'){
+     const nombre=elegir(acopio?.nombre,acopio?.nom,acopio?.name);
+     const alta=displayDate(acopio?.creado||acopio?.fecha||acopio?.createdAt);
+     ubicacion='Acopio · '+(nombre||'Nombre no recuperable')+(alta?' (creado '+alta+')':' (fecha de creación no disponible)');
+   }else if(srcName==='Pañol')ubicacion='Pañol · '+(refPanol?.tipo==='entrada'?'Entradas':refPanol?.tipo==='salida'?'Salidas':'Historial de movimientos');
+   else if(srcName==='Caja Chica')ubicacion='Caja Chica · '+(refCC?.type==='ingreso'?'Ingresos':'Gastos');
+   else if(srcName==='Materiales'||srcName==='Bajas de Materiales')ubicacion='Materiales · Historial de cargas';
+   else ubicacion=srcName||'Módulo no especificado';
+   if(destName==='Materiales'&&srcName!=='Materiales'&&(!caja||srcName!=='Caja Gerencia'))ubicacion+=' → Materiales · Historial de cargas';
+   if(destName==='Pañol'&&srcName!=='Pañol')ubicacion+=' → Pañol · Entradas';
+   if(destName==='Gastos'&&srcName!=='Gastos')ubicacion+=' → Gastos · Movimientos de obra';
+   if(destName==='Caja Chica'&&srcName!=='Caja Chica')ubicacion+=' → Caja Chica · Ingresos';
+   const error=elegir(f.diag?.summary,f.detail,f.title)||'Revisar el movimiento';
+   f.ficha={fecha,modulos:f.connection,obra,concepto,ubicacion,error};
+ });
 }
 
 function addModules(){const select=el('module'),chosen=select.value;select.replaceChildren(new Option('Todas las conexiones','all'));[...new Set(findings.map(x=>x.connection))].sort().forEach(x=>select.add(new Option(x,x)));select.value=[...select.options].some(o=>o.value===chosen)?chosen:'all';}
@@ -302,11 +444,11 @@ try{
  // de Gastos cuyo movimiento original ya desapareció: no inferir cobertura total
  // solamente de las obras que aparecen en los movimientos de origen.
  const auditAllObras=el('scan-all-obras').checked;
- let auditCatalogComplete=false,configuredObras=[];
+ let auditCatalogComplete=false,configuredObras=[],configObrasEtiquetas=[];
  if(auditAllObras){
    try{const configDoc=await read('config','app');
        if(!configDoc||!Array.isArray(configDoc.obras))throw new Error('Catálogo de obras no disponible');
-       configuredObras=configDoc.obras.map(o=>str(o?.id)).filter(Boolean);
+       configObrasEtiquetas=configDoc.obras;configuredObras=configDoc.obras.map(o=>str(o?.id)).filter(Boolean);
        configuredObras.forEach(id=>obraIds.add(id));auditCatalogComplete=true;
        sources.push({name:'Catálogo de Gastos',ok:true,text:configuredObras.length+' obras para auditoría ampliada'});
    }catch(e){sources.push({name:'Catálogo de Gastos',ok:false,text:prettyError(e)});}
@@ -649,6 +791,7 @@ if(auditAllObras&&!auditCatalogComplete){
 if(files['Materiales'])for(const [id,items] of materialMap){if(items.length>1&& !id.startsWith('panol_')&&!id.startsWith('acopio_'))log('error','Materiales · duplicados','Identificador de integración repetido',items.length+' movimientos con ID '+id,'',id,{source:items[0]});}
  if(sources.some(s=>!s.ok))log('warning','Cobertura de lectura','Verificación parcial','Una o más fuentes no se pudieron leer. Revisar los avisos de origen.','','');
  if(!findings.length)log('warning','Cobertura de lectura','Sin vínculos reconocidos','Se consultaron las fuentes, pero no se encontraron vínculos que coincidan con las reglas de esta versión.','','');
+ enriquecerFichas({cg,cc,ac,pn,mat,configObras:configObrasEtiquetas});
  summarize();addModules();render();
  const failed=sources.filter(x=>!x.ok).length,err=findings.filter(f=>f.severity==='error'&&!isReviewed(f)).length;
  refreshStatus();
