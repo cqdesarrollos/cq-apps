@@ -17,6 +17,14 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 .sources{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:7px;margin:14px 0}.source{border:1px solid var(--line);background:#f8fafc;border-radius:11px;padding:10px}.source b{display:block;font-size:11px}.source small{display:block;color:var(--muted);margin-top:3px;font-size:10px;word-break:break-word}.source.ok{border-color:#b9dec8;background:#f3fcf6}.source.error{border-color:#f3c8c8;background:#fff7f7}
 .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.filters select,.filters input{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff;min-width:130px;max-width:100%;font-size:12px}.filters input{flex:1;min-width:145px}
 .finding{display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 2px;border-bottom:1px solid #edf0f4}.finding:last-child{border:0}.signal{width:9px;height:9px;background:#9cacc0;border-radius:50%;margin-top:5px}.signal.error{background:#cb4549}.signal.warning{background:#d19b39}.signal.ok{background:#0f9e68}.finding h3{font-size:12px;margin:0 0 3px}.finding p{font-size:11px;margin:0;color:#64748b;line-height:1.5;overflow-wrap:anywhere}.origin{font-size:10px;color:#59708e;background:#f2f6fa;padding:4px 7px;border-radius:7px;white-space:nowrap}
+.details-sources{margin:12px 0 0;border:1px solid var(--line);border-radius:11px;background:#f8fafc;overflow:hidden}
+.details-sources>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;padding:11px 12px;font-size:12px;font-weight:800;color:#32455c}
+.details-sources>summary::-webkit-details-marker{display:none}
+.details-sources>summary:after{content:"Ver detalle ▾";font-size:10px;font-weight:650;color:#64748b;white-space:nowrap}
+.details-sources[open]>summary:after{content:"Ocultar ▴"}
+.details-sources .sources{padding:0 10px 10px;margin:0}
+.details-sources .source{background:#fff}
+.details-sources .source.ok{background:#f3fcf6}
 .empty{font-size:12px;color:var(--muted);padding:22px 3px;text-align:center}.hint{font-size:11px;color:#65768a;line-height:1.55;margin:8px 0 0}.notice{background:#f3f7fb;border-left:3px solid #5e88af;padding:11px 13px;font-size:11px;line-height:1.55;border-radius:7px;color:#3c536c}
 [hidden]{display:none!important}@media(max-width:560px){.brand h1{font-size:16px}.summary{grid-template-columns:repeat(2,1fr)}main{padding:12px 9px 30px}.panel{padding:12px}.finding{grid-template-columns:8px 1fr}.origin{grid-column:2;justify-self:start}.head{gap:7px}}
 </style>
@@ -26,16 +34,16 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <main>
 <section class="panel">
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
-<div class="tools"><div><b>Verificación de vínculos</b><p>Una consulta manual, exclusivamente de lectura</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · verificaciones locales sobre documentos consultados</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
 <div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Inconsistencias</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Para revisar</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div></div>
 <div class="notice" id="info">El sistema no reparará, eliminará ni modificará movimientos. Las operaciones sin lectura de Firebase quedarán como «No verificadas», nunca como correctas.</div>
-<div id="sources" class="sources"></div>
+<details id="sources-disclosure" class="details-sources"><summary><span id="source-count">Fuentes consultadas: sin verificar</span></summary><div id="sources" class="sources"></div></details>
 </section>
 <section class="panel"><div class="tools"><b>Detalle de verificaciones</b><span id="count" style="font-size:11px;color:#64748b">Sin ejecutar</span></div>
-<div class="filters" style="margin-top:13px"><select id="type"><option value="all">Todos los resultados</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="ok">Correctos</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Filtrar por obra, origen o ID" aria-label="Buscar resultado"></div>
+<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Filtrar por obra, origen o ID" aria-label="Buscar resultado"></div>
 <div id="results" class="empty">Pulsá «Verificar ahora» para consultar el estado real de Firebase.</div>
 </section>
-<p class="hint">Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Para reducir lecturas de Firebase, la comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
+<p class="hint">Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
 </main>
 <script type="module">
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -61,10 +69,22 @@ function classifyMissing(x){return ageMs(x?.createdAt||x?.creadoAt||x?.fecha||x?
 function prettyError(e){const c=str(e?.code||'');if(c.includes('permission-denied'))return 'Sin permisos Firebase';if(c.includes('unavailable'))return 'Sin conexión con Firebase';return str(e?.message||'Error de lectura').slice(0,150);}
 function summarize(){const c={error:0,warning:0,ok:0};findings.forEach(f=>c[f.severity]++);el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;}
 function tag(t,cls=''){const d=document.createElement('div');d.className=cls;d.textContent=t;return d;}
-function renderSources(){const box=el('sources');box.replaceChildren();sources.forEach(s=>{const d=tag('', 'source '+(s.ok?'ok':'error'));const b=document.createElement('b');b.textContent=s.name;d.replaceChildren(b,tag(s.text,'source-text'));box.append(d);});}
-function render(){const kind=el('type').value,mod=el('module').value,search=el('search').value.toLowerCase();const filtered=findings.filter(f=>(kind==='all'||f.severity===kind)&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.connection+' '+f.obra+' '+f.id).toLowerCase().includes(search)));const nodes=document.createDocumentFragment();filtered.slice(0,450).forEach(f=>{const row=tag('', 'finding');const dot=tag('', 'signal '+f.severity);const body=tag('','body');const h=document.createElement('h3');h.textContent=f.title;body.append(h,tag(`${f.connection}${f.obra?' · '+f.obra:''}${f.id?' · ID '+f.id:''}${f.detail?' — '+f.detail:''}`,'detail'));row.append(dot,body,tag(f.severity==='error'?'Inconsistencia':f.severity==='warning'?'Revisar':'Correcto','origin'));nodes.append(row)});const holder=el('results');holder.replaceChildren();if(!filtered.length)holder.append(tag(findings.length?'No hay resultados para este filtro.':'Todavía no se efectuó una verificación.','empty'));else holder.append(nodes);el('count').textContent=filtered.length+' resultado(s)'+(filtered.length>450?' · mostrando 450':'');}
+function renderSources(){const box=el('sources');box.replaceChildren();sources.forEach(s=>{const d=tag('', 'source '+(s.ok?'ok':'error'));const b=document.createElement('b');b.textContent=s.name;d.replaceChildren(b,tag(s.text,'source-text'));box.append(d);});const bad=sources.filter(s=>!s.ok).length;el('source-count').textContent=sources.length?`${sources.length} fuentes consultadas · ${bad} con problemas`:'Fuentes consultadas: sin verificar';}
+function render(){
+ const kind=el('type').value,mod=el('module').value,search=el('search').value.toLowerCase();
+ const filtered=findings.filter(f=>(kind==='issues'?f.severity!=='ok':kind==='all'||f.severity===kind)&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.connection+' '+f.obra+' '+f.id).toLowerCase().includes(search)));
+ // Si se pide ver todo, mostrar primero los problemas. No modifica los resultados ni el análisis.
+ if(kind==='all')filtered.sort((a,b)=>({error:0,warning:1,ok:2}[a.severity]??3)-({error:0,warning:1,ok:2}[b.severity]??3));
+ const nodes=document.createDocumentFragment();
+ const cap=60;
+ filtered.slice(0,cap).forEach(f=>{const row=tag('', 'finding');const dot=tag('', 'signal '+f.severity);const body=tag('','body');const h=document.createElement('h3');h.textContent=f.title;body.append(h,tag(`${f.connection}${f.obra?' · '+f.obra:''}${f.id?' · ID '+f.id:''}${f.detail?' — '+f.detail:''}`,'detail'));row.append(dot,body,tag(f.severity==='error'?'Inconsistencia':f.severity==='warning'?'Revisar':'Correcto','origin'));nodes.append(row)});
+ const holder=el('results');holder.replaceChildren();
+ if(!filtered.length)holder.append(tag(findings.length?'No hay movimientos en este filtro. Cambiá el filtro para consultar los vínculos correctos.':'Todavía no se efectuó una verificación.','empty'));
+ else holder.append(nodes);
+ el('count').textContent=filtered.length+' resultado(s)'+(filtered.length>cap?' · mostrando los primeros '+cap+' (utilizá el buscador para encontrar un movimiento)':'');
+}
 function addModules(){const select=el('module'),chosen=select.value;select.replaceChildren(new Option('Todas las conexiones','all'));[...new Set(findings.map(x=>x.connection))].sort().forEach(x=>select.add(new Option(x,x)));select.value=[...select.options].some(o=>o.value===chosen)?chosen:'all';}
-async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];summarize();
+async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];summarize();renderSources();el('sources-disclosure').open=false;
 try{
  const names=[['Configuración Gastos','config','app'],['Caja Gerencia','cq_caja','gastos_compartidos_v1'],['Caja Chica','caja_chica_app','main'],['Acopio','acopio_cq','acopio_cq_compartido_v3'],['Pañol','panol','stock_v1'],['Materiales','materiales','data_planilla_exacta_v4']];
  const files={};
