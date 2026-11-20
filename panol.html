@@ -3415,7 +3415,8 @@ function cqPanolSetSyncEstadoActual(movId,destino,estado,error){
     actual.materialesSyncAt=at;
   }
 }
-async function sincronizarConsumoConGastos(mov,activo){
+async function sincronizarConsumoConGastos(mov,activo,opciones){
+  var aplazarEstado=!!(opciones&&opciones.aplazarEstadoPanol);
   if(!mov)throw new Error('Consumo no encontrado');
   await cargarConfigGastosPanol();
   if(!mov.gastosObraId)throw new Error('La salida no tiene obra vinculada con Gastos');
@@ -3424,7 +3425,7 @@ async function sincronizarConsumoConGastos(mov,activo){
     mov.gastosSyncError='Pañol deshabilitado para esta obra desde Gastos';
     mov.gastosSyncAt=new Date().toISOString();
     cqPanolSetSyncEstadoActual(mov.id,'gastos','omitido',mov.gastosSyncError);
-    await persist();
+    if(!aplazarEstado)await persist();
     return true;
   }
   await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),activo===false);
@@ -3434,7 +3435,7 @@ async function sincronizarConsumoConGastos(mov,activo){
   // Actualizar también la referencia vigente dentro de state. Esto evita que un
   // reemplazo/reconciliación del estado deje el punto rojo aunque Gastos sí se guardó.
   cqPanolSetSyncEstadoActual(mov.id,'gastos',mov.gastosSyncEstado,mov.gastosSyncError);
-  await persist();
+  if(!aplazarEstado)await persist();
 }
 function puntoGastosPanol(mov){
   if(!mov||!mov.gastosObraId)return '';
@@ -3618,8 +3619,9 @@ function setSyncStatus(txt,cls){
   if(String(txt).toLowerCase().indexOf('guardando')>=0){
     cqSyncStatusTimerPanol=setTimeout(function(){
       if(el.textContent==='Guardando...'){
-        el.textContent='⚠ Guardado demorado';
-        el.className='sync-status err';
+        // Todavía no hay error: Firebase puede confirmar esta operación luego.
+        el.textContent='Confirmando guardado…';
+        el.className='sync-status';
       }
     },15000);
   }
@@ -3901,15 +3903,27 @@ function panolAplicarAcopioAutoritativo(local,remote){
 }
 
 function cqPanolConTimeout(promise,ms,etiqueta){
-  return Promise.race([
-    promise,
-    new Promise(function(_resolve,reject){
-      setTimeout(function(){reject(new Error((etiqueta||'Operación')+' demoró más de '+Math.round(ms/1000)+' s'));},ms);
-    })
-  ]);
+  return new Promise(function(resolve,reject){
+    var timer=setTimeout(function(){
+      reject(new Error((etiqueta||'Operación')+' demoró más de '+Math.round(ms/1000)+' s'));
+    },ms);
+    Promise.resolve(promise).then(function(valor){
+      clearTimeout(timer);resolve(valor);
+    },function(error){
+      clearTimeout(timer);reject(error);
+    });
+  });
 }
 
+// Las escrituras de stock se ejecutan en orden. Una sincronización anterior
+// no puede terminar después y sobrescribir un consumo más reciente.
+var cqPanolTurnoPersist=Promise.resolve();
 async function persist(opts){
+  var turnoAnterior=cqPanolTurnoPersist;
+  var liberarTurno;
+  cqPanolTurnoPersist=new Promise(function(resolve){liberarTurno=resolve;});
+  await turnoAnterior;
+  try{
   opts=opts||{};
   // No iniciar un guardado sobre una copia local cuya escritura inicial sigue en curso.
   await cqPanolCacheInicialEnCurso;
@@ -3921,7 +3935,7 @@ async function persist(opts){
   if(window._dbReady){
     try{
       cqLecturaTempranaPanol=cqPanolConTimeout(
-        window._getDoc(window._doc(window._db,DOC_COL,DOC_ID)),12000,'Lectura de Pañol'
+        window._getDoc(window._doc(window._db,DOC_COL,DOC_ID)),18000,'Lectura de Pañol'
       ).then(function(snap){return {snap:snap};},function(error){return {error:error};});
     }catch(error){cqLecturaTempranaPanol=Promise.resolve({error:error});}
   }
@@ -3939,7 +3953,7 @@ async function persist(opts){
       var ref=window._doc(window._db,DOC_COL,DOC_ID);
       var lectura=cqLecturaTempranaPanol
         ? await cqLecturaTempranaPanol
-        : {snap:await cqPanolConTimeout(window._getDoc(ref),12000,'Lectura de Pañol')};
+        : {snap:await cqPanolConTimeout(window._getDoc(ref),18000,'Lectura de Pañol')};
       if(lectura.error)throw lectura.error;
       var snapPrev=lectura.snap;
       var remotoPrev=null;
@@ -4021,7 +4035,7 @@ async function persist(opts){
       await cqPanolConTimeout(window._setDoc(
         ref,
         JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
-      ),12000,'Guardado de Pañol');
+      ),30000,'Guardado de Pañol');
 
       if(panolTieneDatos(state)){
         await panolGuardarBackupLocal(state,'último estado válido');
@@ -4056,6 +4070,9 @@ async function persist(opts){
     }
   }
   return true;
+  }finally{
+    liberarTurno();
+  }
 }
 
 // Una vez fallido un guardado, el error se muestra con detalle al pulsar el
@@ -6367,7 +6384,8 @@ function iniciarVerificacionMaterialesPanol(){
           cambioEstado=true;
         }
       }else{
-        if(!cqReparandoMaterialesPanol.has(String(iid))){
+        if(!cqReparandoMaterialesPanol.has(String(iid)) &&
+           !(typeof cqSyncIdsEnColaPanol!=='undefined'&&cqSyncIdsEnColaPanol&&cqSyncIdsEnColaPanol.has(String(m.id)))){
           m.materialesSyncEstado='pendiente';
           m.materialesSyncError='La carga faltaba en Materiales · reparación automática en curso';
           cambioEstado=true;
@@ -6902,56 +6920,69 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
 // al terminar: así una sincronización anterior nunca borra la carga nueva
 // que el usuario esté completando en pantalla.
 var cqColaSyncConsumosPanol=Promise.resolve();
+var cqSyncIdsEnColaPanol=new Set();
 
 function cqEncolarSyncConsumoPanol(movId,meta){
   meta=meta||{};
+  var id=String(movId);
+  cqSyncIdsEnColaPanol.add(id);
   cqColaSyncConsumosPanol=cqColaSyncConsumosPanol.then(async function(){
-    var mov=(state.movimientos||[]).find(function(m){
-      return String(m&&m.id||'')===String(movId);
-    });
-    if(!mov)return;
+    try{
+      var mov=(state.movimientos||[]).find(function(m){
+        return String(m&&m.id||'')===id;
+      });
+      if(!mov)return;
 
-    var okMat=!meta.cargarMateriales;
-    var okGas=!meta.gastosDebeCargar;
-
-    if(meta.cargarMateriales){
-      try{
-        await sincronizarConsumoConMateriales(mov,true);
-        cqPanolSetSyncEstadoActual(mov.id,'materiales','ok','');
-        okMat=true;
-        await persist();
-      }catch(e){
-        console.warn('Materiales',e);
-        cqPanolSetSyncEstadoActual(mov.id,'materiales','error',String(e&&e.message||e));
-        try{await persist();}catch(_e){}
+      var okMat=!meta.cargarMateriales;
+      var okGas=!meta.gastosDebeCargar;
+      if(meta.cargarMateriales){
+        try{
+          await sincronizarConsumoConMateriales(mov,true);
+          cqPanolSetSyncEstadoActual(mov.id,'materiales','ok','');
+          okMat=true;
+        }catch(e){
+          console.warn('Materiales',e);
+          cqPanolSetSyncEstadoActual(mov.id,'materiales','error',String(e&&e.message||e));
+        }
       }
-    }
 
-    if(meta.gastosDebeCargar){
-      try{
-        await sincronizarConsumoConGastos(mov,true);
-        okGas=true;
-      }catch(e){
-        console.warn('Gastos',e);
-        cqPanolSetSyncEstadoActual(mov.id,'gastos','error',String(e&&e.message||e));
-        try{await persist();}catch(_e){}
+      if(meta.gastosDebeCargar){
+        try{
+          // El estado de Gastos se publica junto con el de Materiales abajo.
+          await sincronizarConsumoConGastos(mov,true,{aplazarEstadoPanol:true});
+          okGas=true;
+        }catch(e){
+          console.warn('Gastos',e);
+          cqPanolSetSyncEstadoActual(mov.id,'gastos','error',String(e&&e.message||e));
+        }
       }
-    }
 
-    // No renderizar la obra acá: el usuario puede estar cargando el siguiente producto.
-    if(meta.cargarMateriales&&okMat&&meta.gastosDebeCargar&&okGas)showToast(
-      Number(meta.cantidadNoMateriales)>0
-        ?'✓ Sincronizado · Materiales '+fmtN(meta.cantidadMateriales)+' u · Gastos OK'
-        :'✓ Sincronizado con Materiales y Gastos'
-    );
-    else if(meta.cargarMateriales&&okMat&&!meta.gastosDebeCargar)showToast('✓ Sincronizado con Materiales');
-    else if(!meta.cargarMateriales&&meta.gastosDebeCargar&&okGas)showToast('✓ Sincronizado con Gastos');
-    else if((meta.cargarMateriales&&!okMat)||(meta.gastosDebeCargar&&!okGas))showToast('⚠️ El consumo quedó en Pañol, pero una sincronización falló. Verificar.','err');
+      if(meta.cargarMateriales||meta.gastosDebeCargar){
+        // Una sola escritura de indicadores en vez de una por módulo.
+        var estadosConfirmados=await persist();
+        if(estadosConfirmados===false){
+          showToast('⚠ No se confirmó la actualización de Pañol. Revisá la barra superior.','err');
+          return;
+        }
+      }
+
+      // Nunca recrear el formulario mientras el usuario escribe otro consumo.
+      if(meta.cargarMateriales&&okMat&&meta.gastosDebeCargar&&okGas)showToast(
+        Number(meta.cantidadNoMateriales)>0
+          ?'✓ Sincronizado · Materiales '+fmtN(meta.cantidadMateriales)+' u · Gastos OK'
+          :'✓ Sincronizado con Materiales y Gastos'
+      );
+      else if(meta.cargarMateriales&&okMat&&!meta.gastosDebeCargar)showToast('✓ Sincronizado con Materiales');
+      else if(!meta.cargarMateriales&&meta.gastosDebeCargar&&okGas)showToast('✓ Sincronizado con Gastos');
+      else if((meta.cargarMateriales&&!okMat)||(meta.gastosDebeCargar&&!okGas))showToast('⚠️ El consumo quedó en Pañol, pero una sincronización falló. Verificar.','err');
+    }finally{
+      cqSyncIdsEnColaPanol.delete(id);
+    }
   }).catch(function(e){
+    cqSyncIdsEnColaPanol.delete(id);
     console.warn('Cola de sincronización Pañol',e);
   });
 }
-
 var cqPanolConsumoObraOcupado=false;
 async function registrarConsumo(){
   if(cqPanolConsumoObraOcupado)return;
@@ -10669,7 +10700,10 @@ function r(){setTimeout(mount,100)}document.addEventListener("change",r);window.
     // El listener ya leyó Materiales: no realizar otra consulta ni tocar el flujo.
     if(!cqMaterialesDocCachePanol&&window._dbReady&&window._getDoc&&window._doc&&window._db){
       try{
-        var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+        var snap=await cqPanolConTimeout(
+          window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4')),
+          4000,'Consulta de subrubro en Materiales'
+        );
         if(snap.exists()){
           cqMaterialesDocCachePanol=snap.data()||{};
           cqMaterialesDocCacheAtPanol=Date.now();
