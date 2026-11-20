@@ -2275,6 +2275,26 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
 .cq-panol-cola-salidas.busy{display:block;color:#315B79;background:#EDF5FB;border:1px solid #D5E8F5}
 .cq-panol-cola-salidas.error{display:block;color:#A53A2E;background:#FFF1EF;border:1px solid #F1C7C0}
 </style>
+<style id="cq-panol-aviso-eliminando-css">
+/* Aviso visual exclusivo del borrado de consumos; no modifica el proceso. */
+#cq-panol-aviso-eliminando{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:100000;display:flex;align-items:center;gap:11px;
+  padding:16px 22px;border-radius:15px;
+  background:#173F34;color:#fff;
+  border:1px solid rgba(255,255,255,.2);
+  box-shadow:0 12px 45px rgba(0,0,0,.27);
+  font:800 16px 'Space Grotesk',sans-serif;
+  white-space:nowrap;pointer-events:none;
+}
+#cq-panol-aviso-eliminando .cq-panol-spinner{
+  width:19px;height:19px;flex:0 0 19px;
+  border:2.5px solid rgba(255,255,255,.35);
+  border-top-color:#fff;border-radius:50%;
+  animation:cq-panol-giro .75s linear infinite;
+}
+@keyframes cq-panol-giro{to{transform:rotate(360deg)}}
+</style>
 </head>
 <body>
 
@@ -7674,6 +7694,25 @@ async function editarConsumo(movId){
   else showToast('⚠️ Consumo modificado, pero alguna sincronización falló. Verificar.','err');
 }
 
+// Aviso persistente mientras Firebase confirma el borrado de una salida.
+// Es solo visual y no cambia la cola, el stock ni las integraciones.
+function cqPanolMostrarAvisoEliminando(){
+  var aviso=document.getElementById('cq-panol-aviso-eliminando');
+  if(!aviso){
+    aviso=document.createElement('div');
+    aviso.id='cq-panol-aviso-eliminando';
+    aviso.setAttribute('role','status');
+    aviso.setAttribute('aria-live','polite');
+    aviso.innerHTML='<span class="cq-panol-spinner" aria-hidden="true"></span><span>Eliminando...</span>';
+    document.body.appendChild(aviso);
+  }
+}
+function cqPanolOcultarAvisoEliminando(){
+  if(cqPanolBorrandoConsumos.size)return;
+  var aviso=document.getElementById('cq-panol-aviso-eliminando');
+  if(aviso)aviso.remove();
+}
+
 async function eliminarConsumo(movId){
   var id=String(movId);
   if(cqPanolBorrandoConsumos.has(id))return;
@@ -7685,6 +7724,7 @@ async function eliminarConsumo(movId){
     return;
   }
   cqPanolBorrandoConsumos.add(id);
+  cqPanolMostrarAvisoEliminando();
   var matBorrado=false,gasBorrado=false,estadoAnterior=null;
   var fallback=null;
   var errorPrincipal=null;
@@ -7759,6 +7799,7 @@ async function eliminarConsumo(movId){
     alert(msg+'\n\nComprobá los puntos de Materiales y Gastos antes de volver a intentar.');
   }finally{
     cqPanolBorrandoConsumos.delete(id);
+    cqPanolOcultarAvisoEliminando();
   }
 }
 
