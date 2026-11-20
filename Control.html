@@ -430,6 +430,10 @@ try{
    catch(e){sources.push({name:'Bajas de Materiales',ok:false,text:prettyError(e)});}
  }
  const bb=new Set([...arr(bajaMateriales?.ids),...arr(bajaMateriales?.ignoredIntegrationIds),...arr(files['Materiales']?.ignoredIntegrationIds)].map(str).filter(Boolean));
+ // Una restauración explícita no elimina los tombstones históricos: Materiales
+ // autoriza ese integrationId mediante restoredIntegrationIds y vuelve a mostrarlo.
+ // Control debe respetar esa misma excepción para no informar falsos borrados.
+ const restoredMatIds=new Set(arr(files['Materiales']?.restoredIntegrationIds).map(str).filter(Boolean));
  renderSources();
  const cc=arr(files['Caja Chica']?.state?.movements||files['Caja Chica']?.movements),cg=files['Caja Gerencia']||{},ac=arr(files['Acopio']?.acopios),pn=arr(files['Pañol']?.movimientos),mat=arr(files['Materiales']?.cargas);
  const cgAllPesos=[...arr(cg.deudaPesos),...arr(cg.fondoPesosMovs),...arr(cg.santanderMovs)].filter(m=>m&&m.tipo==='gasto');
@@ -685,11 +689,22 @@ if(files['Materiales']){
  for(const [iid,items] of materialMap){
    for(const c of items){
      if(!bajasLeidas||!bb.has(iid))continue;
-     log('error','Bajas de Materiales → Materiales','Borrado incompleto confirmado',
-       'La carga '+iid+' figura en el registro de bajas y sigue activa en Materiales.',
+     if(restoredMatIds.has(iid)){
+       // Baja pasada + autorización de restauración vigente = carga válida.
+       // Conservamos el chequeo inverso de su aplicación de origen más abajo.
+       log('ok','Bajas de Materiales → Materiales','Carga restaurada y vigente',
+         'La carga está activa y tiene una restauración explícita que prevalece sobre la baja histórica.',
+         str(c.obraNameOrigen||c.obraName||''),iid,{dest:c,
+         summary:'La baja histórica se mantiene como antecedente, pero este vínculo tiene una restauración autorizada en Materiales.',
+         fields:[{label:'Cantidad actual',a:num(c.qty)}]});
+       continue;
+     }
+     log('warning','Bajas de Materiales → Materiales','Baja histórica sin restauración confirmada',
+       'La carga está activa, pero su identidad todavía figura en las bajas y no se encontró una autorización de restauración.',
        str(c.obraNameOrigen||c.obraName||''),iid,{auditType:'deleted',dest:c,
-       summary:'Materiales conserva una carga activa cuya misma identidad figura en el registro explícito de bajas.',
-       fields:[{label:'Integración eliminada',a:iid},{label:'Cantidad conservada',a:num(c.qty)}]});
+       summary:'Materiales muestra una carga activa, pero su mismo vínculo sigue marcado como baja histórica sin restauración autorizada. No significa necesariamente que falte el material.',
+       action:'Comprobá que el movimiento sea correcto en Caja Gerencia y en Materiales. Si está vigente, verificá su restauración puntual desde Caja; no lo vuelvas a enviar ni lo borres desde Control.',
+       fields:[{label:'Identidad con baja histórica',a:iid},{label:'Cantidad actual',a:num(c.qty)}]});
    }
    // Los identificadores explícitos son la única evidencia para cotejar
    // hacia atrás sin inventar movimientos anteriores que ya no se guardan.
