@@ -2226,6 +2226,50 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
   @media(prefers-reduced-motion:reduce){#cq-panol-cargando .cq-carga-rueda{animation-duration:2s}}
 </style>
 
+
+<style id="cq-panol-tablet-iconos-stock-sin-superposicion">
+/* Solo tablet tactil: reservar el ancho real para los cuatro iconos
+   de cada producto, sin modificar telefono ni escritorio. */
+@media (min-width:700px) and (max-width:1600px) and (any-pointer:coarse) {
+  #view-stock #stock-list .prod-top{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 170px!important;
+    gap:10px!important;
+    align-items:center!important;
+  }
+  #view-stock #stock-list .prod-right{
+    width:170px!important;
+    min-width:170px!important;
+    max-width:170px!important;
+    justify-self:end!important;
+    overflow:visible!important;
+  }
+  #view-stock #stock-list .prod-icons{
+    box-sizing:border-box!important;
+    width:170px!important;
+    min-width:170px!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,36px)!important;
+    justify-content:end!important;
+    gap:6px!important;
+    margin-top:7px!important;
+  }
+  #view-stock #stock-list .prod-icons .icon-mini{
+    box-sizing:border-box!important;
+    display:inline-flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    width:36px!important;
+    min-width:36px!important;
+    height:36px!important;
+    flex:0 0 36px!important;
+    font-size:17px!important;
+    line-height:1!important;
+    padding:0!important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -3013,7 +3057,7 @@ async function cargarConfigGastosPanol(){
       if(!snap.exists())throw new Error('No existe config/app de Gastos');
       var d=snap.data()||{};
       if(!Array.isArray(d.obras)||!d.subrubros)throw new Error('Configuración de Gastos incompleta');
-      gastosConfigPanol={obras:d.obras,subrubros:d.subrubros,defaultTC:Number(d.defaultTC)||0};
+      gastosConfigPanol={obras:d.obras,subrubros:d.subrubros,categoryLabels:d.categoryLabels||{},categoriasExtra:Array.isArray(d.categoriasExtra)?d.categoriasExtra:[],defaultTC:Number(d.defaultTC)||0};
       return gastosConfigPanol;
     }finally{gastosConfigLoadingPanol=null;}
   })();
@@ -3088,13 +3132,16 @@ function nombreObraMovPanol(m){
   return m&&m.obra?m.obra:'';
 }
 function categoriasGastosPanol(){
-  return [
+  const names=gastosConfigPanol?.categoryLabels||{};
+  const base=[
     {id:'lote',label:'Lote + Servicios + Impuestos'},
     {id:'arq',label:'Arquitectura'},
     {id:'mat',label:'Materiales'},
     {id:'mo',label:'Mano de obra'},
     {id:'ext',label:'Mano de obra extras'}
-  ];
+  ].map(x=>({...x,label:names[x.id]||x.label}));
+  const extras=(gastosConfigPanol?.categoriasExtra||[]).filter(x=>x&&x.id&&x.activa!==false).map(x=>({id:x.id,label:names[x.id]||x.label||x.id}));
+  return [...base,...extras];
 }
 function subrubrosGastosPanol(cat){
   return gastosConfigPanol&&gastosConfigPanol.subrubros&&Array.isArray(gastosConfigPanol.subrubros[cat])
@@ -3217,8 +3264,10 @@ document.addEventListener('keydown',function(e){
 function llenarCategoriasConsumoPanol(selected){
   var el=document.getElementById('consumo-categoria');
   if(!el)return;
-  el.innerHTML=categoriasGastosPanol().map(function(c){
-    return '<option value="'+c.id+'"'+(c.id===selected?' selected':'')+'>'+c.label+'</option>';
+  var categorias=categoriasGastosPanol();
+  if(selected&&!categorias.some(function(c){return c.id===selected;}))categorias.push({id:selected,label:String(gastosConfigPanol?.categoryLabels?.[selected]||selected)+' (histórica)'});
+  el.innerHTML=categorias.map(function(c){
+    return '<option value="'+escHTML(c.id)+'"'+(c.id===selected?' selected':'')+'>'+escHTML(c.label)+'</option>';
   }).join('');
   el.value=selected||'mat';
   renderSubrubrosPanol('');
@@ -3866,6 +3915,16 @@ async function persist(opts){
   await cqPanolCacheInicialEnCurso;
   normalizeState();
 
+  // Ahorra el tiempo secuencial de lectura de Firebase + copia de seguridad.
+  // No cambia la protección contra conflictos ni el orden de escritura.
+  var cqLecturaTempranaPanol=null;
+  if(window._dbReady){
+    try{
+      cqLecturaTempranaPanol=cqPanolConTimeout(
+        window._getDoc(window._doc(window._db,DOC_COL,DOC_ID)),12000,'Lectura de Pañol'
+      ).then(function(snap){return {snap:snap};},function(error){return {error:error};});
+    }catch(error){cqLecturaTempranaPanol=Promise.resolve({error:error});}
+  }
   if(panolTieneDatos(state))await panolGuardarBackupLocal(state,opts.restauracion?'restauración':'antes de guardar');
   var copiaLocalGuardada=await cqPanolGuardarLocalSeguro(DB_KEY,JSON.stringify(state));
   // Sin Firebase y sin almacenamiento local NO confirmar un guardado inexistente.
@@ -3878,7 +3937,11 @@ async function persist(opts){
     try{
       setSyncStatus('Guardando...');
       var ref=window._doc(window._db,DOC_COL,DOC_ID);
-      var snapPrev=await cqPanolConTimeout(window._getDoc(ref),12000,'Lectura de Pañol');
+      var lectura=cqLecturaTempranaPanol
+        ? await cqLecturaTempranaPanol
+        : {snap:await cqPanolConTimeout(window._getDoc(ref),12000,'Lectura de Pañol')};
+      if(lectura.error)throw lectura.error;
+      var snapPrev=lectura.snap;
       var remotoPrev=null;
       if(snapPrev.exists()){
         remotoPrev=snapPrev.data()||{};
@@ -4111,8 +4174,25 @@ function startFirebase(){
     if(unsub)unsub();
     // Suscripción instalada DESPUÉS de la carga inicial: no duplicar lecturas
     // y copias en paralelo con la consulta que permite habilitar la pantalla.
-    unsub=window._onSnapshot(window._doc(window._db,DOC_COL,DOC_ID),async function(snap){
-      if(Date.now()<suppressRemoteUntil)return;
+    // CQ: si un cambio de Acopio llega durante la breve ventana de guardado
+    // local, diferirlo. Descartarlo hacía que el movimiento siguiera visible
+    // hasta la siguiente modificación de Firebase.
+    var cqPanolCambioDiferido=null;
+    var cqPanolTimerDiferido=null;
+    async function cqPanolProcesarSnapshot(snap){
+      if(Date.now()<suppressRemoteUntil){
+        // Sólo eventos confirmados del servidor; no reinyectar cache ni pendientes.
+        if(snap.metadata&&(snap.metadata.fromCache||snap.metadata.hasPendingWrites))return;
+        cqPanolCambioDiferido=snap;
+        if(cqPanolTimerDiferido)clearTimeout(cqPanolTimerDiferido);
+        cqPanolTimerDiferido=setTimeout(function(){
+          cqPanolTimerDiferido=null;
+          var ult=cqPanolCambioDiferido;
+          cqPanolCambioDiferido=null;
+          if(ult)cqPanolProcesarSnapshot(ult).catch(function(e){console.warn('Snapshot diferido Pañol',e);});
+        },Math.max(50,suppressRemoteUntil-Date.now()+80));
+        return;
+      }
       // Si un guardado no fue confirmado, no reemplazar lo pendiente por un
       // snapshot de otra sesión. La situación requiere diagnóstico antes de operar.
       if(window.__cqPanolUltimoErrorGuardado)return;
@@ -4142,7 +4222,8 @@ function startFirebase(){
         setSyncStatus(cachéActualizado?'Actualizado':'Firebase ON · memoria local llena','ok');
       renderActive();
       panolGuardarBackupFirebase(state,'snapshot válido').catch(function(e){console.warn(e);});
-    },function(e){
+    }
+    unsub=window._onSnapshot(window._doc(window._db,DOC_COL,DOC_ID),cqPanolProcesarSnapshot,function(e){
       console.warn(e);
       setSyncStatus('🟠 Error de sync','err');
     });
@@ -4597,33 +4678,13 @@ function cqNormProductoPanol(v){
   return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
 }
 function cqProductoEquivalenteIdsPanol(prodId){
-  var base=state.productos.find(function(p){return String(p.id)===String(prodId);});
-  if(!base)return [String(prodId)];
-  var baseMat=base.materialesProducto&&base.materialesProducto.id?String(base.materialesProducto.id):'';
-  var baseCod=cqNormProductoPanol(base.codigo);
-  var baseNom=cqNormProductoPanol(base.nombre);
-  return state.productos.filter(function(p){
-    if(String(p.id)===String(base.id))return true;
-    var mat=p.materialesProducto&&p.materialesProducto.id?String(p.materialesProducto.id):'';
-    var cod=cqNormProductoPanol(p.codigo);
-    var nom=cqNormProductoPanol(p.nombre);
-
-    // Identidad fuerte: mismo código o mismo nombre exacto normalizado.
-    // IMPORTANTE: no fusionar stock solo porque coincida materialesProducto.id;
-    // ese vínculo puede haber quedado viejo/reutilizado y mezclar productos distintos.
-    if(baseCod&&cod&&baseCod===cod)return true;
-    if(baseNom&&nom&&baseNom===nom)return true;
-
-    // Compatibilidad adicional muy conservadora: si comparten id de Materiales,
-    // exigir además que código o nombre sean compatibles (no contradictorios).
-    if(baseMat&&mat&&baseMat===mat){
-      var codCompat=(!baseCod||!cod||baseCod===cod);
-      var nomCompat=(!baseNom||!nom||baseNom===nom);
-      if(codCompat&&nomCompat)return true;
-    }
-    return false;
-  }).map(function(p){return String(p.id);});
+  // CQ 19/11/2026: NO agrupar lotes por nombre/código ni por la referencia de
+  // Materiales. Pueden existir registros históricos duplicados con saldos
+  // diferentes; unirlos les mostraba el mismo total a ambos (ej. 137/137).
+  // Cada lote pertenece exclusivamente al id con el que fue registrado.
+  return [String(prodId)];
 }
+
 function stockDeProducto(prodId){
   var ids=cqProductoEquivalenteIdsPanol(prodId);
   return state.lotes.filter(function(l){return ids.indexOf(String(l.prodId))>=0;})
@@ -4641,15 +4702,17 @@ function findProductoPorCodigo(codigo){
 }
 function codigoTag(p){ return p.codigo?(' ('+p.codigo+')'):''; }
 function findProductoPorNombre(nombre){
-  nombre=(nombre||'').trim().toLowerCase();
-  if(!nombre) return null;
-  return state.productos.find(function(p){return p.nombre.trim().toLowerCase()===nombre;});
+  nombre=cqNormProductoPanol(nombre);
+  if(!nombre)return null;
+  return state.productos.find(function(p){
+    return cqNormProductoPanol(p.nombre)===nombre;
+  })||null;
 }
 function buscarProductoParaCarga(codigo,nombre){
   codigo=(codigo||'').trim();
   if(codigo){
     var porCodigo=findProductoPorCodigo(codigo);
-    if(porCodigo) return porCodigo;
+    if(porCodigo && (!nombre || cqNormProductoPanol(porCodigo.nombre)===cqNormProductoPanol(nombre)))return porCodigo;
   }
   // Siempre intentar también por nombre exacto: evita duplicar un mismo material
   // cuando una carga vieja no tenía código o el código se completó después.
@@ -5156,7 +5219,7 @@ function renderStockList(){
 
   lista.innerHTML=productos.map(function(p){
     var lotes=lotesDeProducto(p.id);
-    var total=lotes.reduce(function(a,l){return a+l.cantidad;},0);
+    var total=lotes.reduce(function(a,l){return a+(Number(l.cantidad)||0);},0);
     var precioTxt;
     if(lotes.length===0) precioTxt='sin stock';
     else if(lotes.length===1) precioTxt='$ '+fmtN(lotes[0].precio)+' / u';
@@ -5186,7 +5249,11 @@ function toggleLotes(prodId){
   document.getElementById('lotes-'+prodId).classList.toggle('open');
 }
 
+var cqPanolEntradaUnitariaOcupada=false;
 async function cargarProductoUnitario(){
+  if(cqPanolEntradaUnitariaOcupada)return;
+  cqPanolEntradaUnitariaOcupada=true;
+  try{
   if(window.__cqPanolUltimoErrorGuardado){
     alert('Hay un guardado de Pañol sin confirmar. No registres otra entrada hasta revisar el error de la barra superior.');
     return;
@@ -5239,6 +5306,7 @@ async function cargarProductoUnitario(){
   cfMaterialSeleccionadoPanol=null;
   cfNuevoProductoManual=false;
   showToast(precio===0?'✓ Cantidad cargada sin precio':'✓ Cargado al stock');
+  }finally{cqPanolEntradaUnitariaOcupada=false;}
 }
 
 function agregarStock(rubro,codigo,nombre,cantidad,precio,tipoCambio,usuario,materialesProducto,noCargarMaterialesSalida){
@@ -5249,9 +5317,14 @@ function agregarStock(rubro,codigo,nombre,cantidad,precio,tipoCambio,usuario,mat
   var prod=buscarProductoParaCarga(codigo,nombre);
 
   if(!prod && materialesProducto){
+    var nombreClave=cqNormProductoPanol(nombre);
+    var codigoClave=cqNormProductoPanol(codigo);
     prod=state.productos.find(function(p){
-      return p.materialesProducto &&
-        String(p.materialesProducto.id)===String(materialesProducto.id);
+      if(!p.materialesProducto || String(p.materialesProducto.id)!==String(materialesProducto.id))return false;
+      // Un ID de Materiales reutilizado no autoriza mezclar dos productos diferentes.
+      if(cqNormProductoPanol(p.nombre)!==nombreClave)return false;
+      var codigoAnterior=cqNormProductoPanol(p.codigo);
+      return !codigoClave || !codigoAnterior || codigoClave===codigoAnterior;
     })||null;
   }
 
@@ -6057,9 +6130,15 @@ async function cargarCatalogoMaterialesPanol(){
   var list=CQ_BASE_CATALOGO_MATERIALES_PANOL.map(function(x){return Object.assign({},x);});
   try{
     if(window._dbReady&&window._getDoc){
-      var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
-      if(snap.exists()){
-        var d=snap.data()||{};
+      // Ya hay un listener de Materiales en Pañol: reutilizar su copia reciente.
+      // Sin copia válida, mantener la lectura directa que existía antes.
+      var d=(cqMaterialesDocCachePanol&&Date.now()-cqMaterialesDocCacheAtPanol<120000)
+        ?cqMaterialesDocCachePanol:null;
+      if(!d){
+        var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+        if(snap.exists())d=snap.data()||{};
+      }
+      if(d){
         var ren=d.matNombres||{},cod=d.matCodigos||{},cats=d.matCategorias||{},catRen=d.catRenames||{};
         var deleted=(d.deletedMatIds||[]).map(Number);
 
@@ -6162,6 +6241,8 @@ function renderMaterialSeleccionadoPanol(){
 var materialesIntegradosPanol=null;
 var materialesVerificacionErrorPanol=false;
 var unsubVerificacionMaterialesPanol=null;
+var cqMaterialesDocCachePanol=null;
+var cqMaterialesDocCacheAtPanol=0;
 
 // CQ 14/09/2026 — si una salida que DEBE estar en Materiales desaparece del
 // documento principal, Pañol la vuelve a materializar. El Set evita bucles.
@@ -6254,9 +6335,15 @@ function iniciarVerificacionMaterialesPanol(){
     setTimeout(iniciarVerificacionMaterialesPanol,700);
     return;
   }
-  try{ if(unsubVerificacionMaterialesPanol) unsubVerificacionMaterialesPanol(); }catch(_e){}
+  // Evitar desuscribir y reinstalar el mismo listener al recibir los dos
+  // eventos de inicio (cq-db-ready y el reintento programado).
+  if(unsubVerificacionMaterialesPanol)return;
   unsubVerificacionMaterialesPanol=window._onSnapshot(window._doc(window._db,'materiales','data_planilla_exacta_v4'),function(snap){
     materialesVerificacionErrorPanol=false;
+    if(snap.exists()){
+      cqMaterialesDocCachePanol=snap.data()||{};
+      cqMaterialesDocCacheAtPanol=Date.now();
+    }else{cqMaterialesDocCachePanol=null;cqMaterialesDocCacheAtPanol=0;}
     var ids=new Set();
     if(snap.exists()){
       var d=snap.data()||{};
@@ -6465,6 +6552,20 @@ function cqMatResolverMaterialDirecto(data,ev){
     data.extraMats.push(mat);
     data.matCategorias[mat.id]=cat;
     if(mat.codigo)data.matCodigos[mat.id]=mat.codigo;
+  }
+
+  // Si Materiales todavía lo clasificaba en "Varios", una salida nueva
+  // con subrubro válido y específico corrige sólo ese dato. No se modifican
+  // otras categorías específicas ni se reescribe el historial de Materiales.
+  if(mat && ev.cqCorregirCategoriaGenerica===true){
+    var actual=String(data.matCategorias[mat.id]||mat.catName||'').trim();
+    var propuesto=String(ev.materialCategory||ev.category||'').trim();
+    var normalizarCat=function(x){return String(x||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');};
+    if((!actual||normalizarCat(actual)==='varios') && propuesto && normalizarCat(propuesto)!=='varios'){
+      data.matCategorias[mat.id]=propuesto;
+      var yaExiste=data.extraCats.some(function(c){return normalizarCat(c&&c.name)===normalizarCat(propuesto);});
+      if(!yaExiste)data.extraCats.push({name:propuesto,color:'#6FA58D',autoCreated:true,source:'panol'});
+    }
   }
 
   var incomingCode=String(ev.materialCode||'').trim();
@@ -6711,8 +6812,11 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
   // Materiales puede resolver uno existente por código/nombre o crear uno nuevo.
   var materialCode=destino?String(destino.code||''):(prod?String(prod.codigo||''):String(mov.materialCode||''));
   var materialName=destino?String(destino.name||''):(prod?String(prod.nombre||''):String(mov.materialName||''));
-  var materialCategory=destino?String(destino.category||''):'';
-  if(!materialCategory)materialCategory=String(mov.gastosSubrubro||(prod&&prod.rubro)||'VARIOS').trim()||'VARIOS';
+  // No priorizar una vinculación antigua (por ejemplo "Varios") sobre
+  // el subrubro que se confirmó al descontar el producto de la obra.
+  var materialCategory=String(mov.gastosSubrubro||'').trim();
+  if(!materialCategory)materialCategory=destino?String(destino.category||'').trim():'';
+  if(!materialCategory)materialCategory=String((prod&&prod.rubro)||'VARIOS').trim()||'VARIOS';
 
   if(activo!==false && !materialName && !materialCode){
     throw new Error('No se pudo identificar el producto para Materiales');
@@ -6731,6 +6835,7 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
     materialName:materialName,
     category:materialCategory,
     materialCategory:materialCategory,
+    cqCorregirCategoriaGenerica:mov.cqSubrubroConfirmadoSalida===true,
     autoCreateCatalog:true,
     qty:(mov.materialesCantidad!=null?Number(mov.materialesCantidad):Number(mov.cantidad))||0,
     unidad:'u',
@@ -6847,12 +6952,21 @@ function cqEncolarSyncConsumoPanol(movId,meta){
   });
 }
 
+var cqPanolConsumoObraOcupado=false;
 async function registrarConsumo(){
+  if(cqPanolConsumoObraOcupado)return;
+  cqPanolConsumoObraOcupado=true;
+  try{
   if(window.__cqPanolUltimoErrorGuardado){
     alert('Hay un guardado de Pañol sin confirmar. No registres otra salida hasta revisar el error de la barra superior.');
     return;
   }
   var prod=getProductoDesdeConsumoInput();
+  // Confirmar la categoría vigente de Materiales antes de registrar la salida.
+  // Sólo actualiza el formulario si el subrubro no fue corregido manualmente.
+  if(prod && typeof window.cqPanolConfirmarSubrubroSalida==='function'){
+    await window.cqPanolConfirmarSubrubroSalida(prod);
+  }
   var prodId=prod?prod.id:'';
   var cantidad=parseFloat(document.getElementById('consumo-cantidad').value);
   var categoria='mat';
@@ -6896,6 +7010,11 @@ async function registrarConsumo(){
     alert('No hay stock suficiente.\n\nDisponible: '+fmtN(disponible)+'\nPedido: '+fmtN(cantidad));
     return;
   }
+
+  // El subrubro validado y visible es el que se guarda en Pañol y viaja a
+  // Gastos/Materiales. Corrige también productos antiguos clasificados "Varios".
+  prod.rubro=subrubro;
+  if(prod.materialesProducto){prod.materialesProducto.category=subrubro;}
 
   var res=consumirStockFIFO(prodId,cantidad);
 
@@ -6951,6 +7070,9 @@ async function registrarConsumo(){
           :'No corresponde enviar este consumo a Materiales.')
     ),
     gastosCategoria:categoria,gastosSubrubro:subrubro,comentario:comentario,
+    // Sólo las nuevas salidas habilitan la corrección de una categoría genérica
+    // en el catálogo de Materiales. Los históricos no se reclasifican.
+    cqSubrubroConfirmadoSalida:subrubro.trim().toLowerCase()!=='varios',
     gastosDebeCargar:gastosDebeCargar,
     gastosSyncEstado:gastosDebeCargar?'pendiente':'no',
     gastosSyncError:gastosDebeCargar?'':'No se envía a Gastos porque el stock consumido fue ingresado sin precio.',
@@ -6987,6 +7109,7 @@ async function registrarConsumo(){
 
   showToast('✓ Consumo guardado en Pañol · sincronizando en segundo plano');
 
+  }finally{cqPanolConsumoObraOcupado=false;}
 }
 
 function consumirStockFIFO(prodId,cantidad){
@@ -10205,6 +10328,11 @@ async function guardar(kind){
     var now=new Date(), day=fechaAR(now), id;
     if(kind==="auto"){
       id="daily_"+day;
+      // Consultar primero el índice pequeño, no el respaldo completo de hoy.
+      var ixAuto=await window._getDoc(window._doc(window._db,COLL,"backup_index_v1"));
+      var entradasAuto=ixAuto.exists()&&Array.isArray((ixAuto.data()||{}).ids)?ixAuto.data().ids:[];
+      if(entradasAuto.some(function(x){return x&&x.id===id;}))return true;
+      // Compatibilidad con respaldos antiguos anteriores al índice.
       var ex=await window._getDoc(window._doc(window._db,COLL,id));
       if(ex.exists())return true;
     }else if(kind==="pre_restore"){
@@ -10228,7 +10356,9 @@ async function guardar(kind){
     // NO se toca last_good_stock_v1 (respaldo nativo de Pañol) ni backup_index_v1.
     var sobrantes=ids.slice(30);
     ids=ids.slice(0,30);
-    await window._setDoc(idxRef,{ids:ids,updatedAt:now.toISOString()});
+    // Conservar la marca de migración del historial anterior.
+    var historicosRevisados=!!(idxSnap.exists()&&(idxSnap.data()||{}).legacyScanned);
+    await window._setDoc(idxRef,{ids:ids,updatedAt:now.toISOString(),legacyScanned:historicosRevisados});
 
     if(window._deleteDoc){
       for(var z=0;z<sobrantes.length;z++){
@@ -10270,40 +10400,70 @@ async function leerBackupId(id,meta){
   }catch(e){return null;}
 }
 async function disponibles(){
-  var arr=[],seen={};
-
-  // 1) Índice de backups nuevos (manuales, pre_restore y diarios).
+  var arr=[],seen={},ixRef=window._doc(window._db,COLL,"backup_index_v1");
+  var idxSnap=null, idx={}, ids=[];
   try{
-    var ix=await window._getDoc(window._doc(window._db,COLL,"backup_index_v1"));
-    var ids=ix.exists()&&Array.isArray(ix.data().ids)?ix.data().ids:[];
-    for(var i=0;i<ids.length;i++){
-      var d=await leerBackupId(ids[i].id,ids[i]);
-      if(d&&d.state&&tieneDatos(d.state)){arr.push(d);seen[d.id]=1;}
-    }
-  }catch(e){}
+    idxSnap=await window._getDoc(ixRef);
+    idx=idxSnap.exists()?(idxSnap.data()||{}):{};
+    ids=Array.isArray(idx.ids)?idx.ids.slice():[];
+  }catch(e){console.warn("No se pudo consultar el índice de Pañol",e);}
 
-  // 2) Diarios de los últimos 30 días, incluso si el índice aún no existía.
-  for(var j=0;j<DAYS;j++){
-    var f=offsetFecha(j),id="daily_"+f;
-    if(seen[id])continue;
-    var d2=await leerBackupId(id,{kind:"auto",fecha:f});
-    if(d2&&d2.state&&tieneDatos(d2.state)){arr.push(d2);seen[id]=1;}
+  // Los registros del índice sólo tienen datos de presentación. Antes se
+  // descargaba cada copia completa para mostrar únicamente la fecha.
+  ids.forEach(function(b){
+    if(!b||!b.id||seen[b.id])return;
+    arr.push({id:b.id,kind:b.kind||"auto",fecha:b.fecha||"",createdAt:b.createdAt||""});
+    seen[b.id]=1;
+  });
+
+  // Migración UNA SOLA VEZ: descubrir los diarios anteriores al índice y
+  // registrar su metadata. No se modifica ni elimina ningún backup antiguo.
+  // Si falla una lectura, NO marcar la migración como terminada.
+  if(idxSnap && !idx.legacyScanned){
+    var completar=true,nuevos=[];
+    for(var j=0;j<DAYS;j++){
+      var f=offsetFecha(j),id="daily_"+f;
+      if(seen[id])continue;
+      try{
+        var s=await window._getDoc(window._doc(window._db,COLL,id));
+        if(!s.exists())continue;
+        var d=s.data()||{};
+        if(!d.state||!tieneDatos(d.state))continue;
+        var meta={id:id,kind:d.kind||"auto",fecha:d.fecha||f,createdAt:d.createdAt||""};
+        arr.push(meta);nuevos.push(meta);seen[id]=1;
+      }catch(e){completar=false;console.warn("No se pudo verificar diario histórico de Pañol",id,e);}
+    }
+    if(completar){
+      try{
+        // Recargar el índice antes de fusionar: puede haber backups hechos
+        // desde otro teléfono durante la exploración del historial.
+        var ultimo=await window._getDoc(ixRef);
+        var actuales=ultimo.exists()&&Array.isArray((ultimo.data()||{}).ids)?ultimo.data().ids:[];
+        var conjunto={},mezcla=[];
+        actuales.concat(ids,nuevos).forEach(function(x){
+          if(x&&x.id&&!conjunto[x.id]){conjunto[x.id]=1;mezcla.push(x);}
+        });
+        await window._setDoc(ixRef,{ids:mezcla,updatedAt:new Date().toISOString(),legacyScanned:true});
+      }catch(e){console.warn("No se pudo registrar índice histórico de Pañol",e);}
+    }
   }
 
-  // 3) Backup de seguridad que Pañol YA TRAÍA en el archivo original.
+  // El backup nativo permanece accesible; su contenido se lee SOLO si se
+  // solicita restaurarlo. No descargarlo para mostrar una fila en el modal.
   if(!seen["last_good_stock_v1"]){
-    var old=await leerBackupId("last_good_stock_v1",{kind:"seguridad"});
-    if(old&&old.state&&tieneDatos(old.state)){
-      old.createdAt=old.createdAt||old.savedAt||"";
-      arr.push(old);seen[old.id]=1;
-    }
+    arr.push({id:"last_good_stock_v1",kind:"seguridad",fecha:"",createdAt:""});
   }
-
   arr.sort(function(a,b){return String(b.createdAt||"").localeCompare(String(a.createdAt||""));});
   return arr;
 }
 async function restaurar(b){
-  if(!b||!b.state||!tieneDatos(b.state)){alert("Backup inválido.");return;}
+  if(!b||!b.id){alert("Backup inválido.");return;}
+  // Descarga a demanda: el listado no necesita el estado completo.
+  if(!b.state){
+    b=await leerBackupId(b.id,b);
+    if(!b){alert("No se pudo abrir este backup. Puede haber sido eliminado.");return;}
+  }
+  if(!b.state||!tieneDatos(b.state)){alert("Backup inválido.");return;}
   if(!confirm("¿Restaurar este backup de Pañol?\\n\\nEsto reemplazará el estado actual."))return;
   if(String(prompt("Escribí RESTAURAR para confirmar:")||"").trim().toUpperCase()!=="RESTAURAR"){
     alert("Restauración cancelada.");return;
@@ -10386,7 +10546,186 @@ function go(t){var a=items();if(!a.length)return;if(t==="stock"){share(makePdf("
 document.addEventListener("click",function(e){var b=e.target.closest("[data-sharepdf]");if(!b)return;e.preventDefault();e.stopPropagation();go(b.getAttribute("data-sharepdf"))},true);
 function r(){setTimeout(mount,100)}document.addEventListener("change",r);window.addEventListener("load",r);r()
 })();
-</script></body>
+</script>
+
+<!-- CQ 19/11/2026 — Subrubro real de Materiales en salidas de Pañol -->
+<script id="cq-panol-subrubro-salida-real-v1">
+(function(){
+  function norm(v){
+    return String(v||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  function generico(v){return !norm(v)||norm(v)==='varios';}
+  function valido(v){
+    try{return validarSubrubroPanol('mat',v);}catch(e){return '';}
+  }
+  function catalogoActual(){
+    var doc=(typeof cqMaterialesDocCachePanol!=='undefined'&&cqMaterialesDocCachePanol)||null;
+    if(!doc){
+      return (typeof cqCatalogoMaterialesPanol!=='undefined'&&cqCatalogoMaterialesPanol.length
+        ? cqCatalogoMaterialesPanol : CQ_BASE_CATALOGO_MATERIALES_PANOL).slice();
+    }
+    var nombres=doc.matNombres||{},codigos=doc.matCodigos||{},cats=doc.matCategorias||{},renombres=doc.catRenames||{};
+    var eliminados=new Set((doc.deletedMatIds||[]).map(String));
+    var base=CQ_BASE_CATALOGO_MATERIALES_PANOL.map(function(x){
+      return {id:x.id,name:x.name,code:x.code||'',category:x.category||''};
+    });
+    (doc.extraMats||[]).forEach(function(x){
+      if(!x)return;
+      base.push({id:x.id,name:x.mat||'',code:x.codigo||'',category:x.catName||''});
+    });
+    var vistos=new Set();
+    return base.filter(function(x){
+      var k=String(x.id);
+      if(eliminados.has(k)||vistos.has(k))return false;
+      vistos.add(k);return true;
+    }).map(function(x){
+      var id=String(x.id);
+      if(nombres[id]!=null)x.name=String(nombres[id]);
+      if(codigos[id]!=null)x.code=String(codigos[id]);
+      if(cats[id]!=null)x.category=String(cats[id]);
+      if(renombres[x.category]!=null)x.category=String(renombres[x.category]);
+      return x;
+    });
+  }
+  function materialDelProducto(prod){
+    if(!prod)return null;
+    var catalogo=catalogoActual();
+    var ligado=prod.materialesProducto||null;
+    var nombre=norm(prod.nombre),nombreLigado=norm(ligado&&ligado.name);
+    var codigo=String(prod.codigo||(ligado&&ligado.code)||'').trim().toLowerCase();
+    var idLigado=ligado&&ligado.id!=null?String(ligado.id):'';
+    // Un ID se usa sólo si coincide con la identidad del producto, no por sí solo.
+    if(idLigado){
+      var porId=catalogo.find(function(x){return String(x.id)===idLigado;});
+      if(porId&&(norm(porId.name)===nombre||norm(porId.name)===nombreLigado))return porId;
+    }
+    if(nombre){
+      var porNombre=catalogo.find(function(x){return norm(x.name)===nombre;});
+      if(porNombre)return porNombre;
+    }
+    if(codigo){
+      var candidatos=catalogo.filter(function(x){return String(x.code||'').trim().toLowerCase()===codigo;});
+      var compatibles=candidatos.filter(function(x){
+        return norm(x.name)===nombre||norm(x.name)===nombreLigado;
+      });
+      if(compatibles.length===1)return compatibles[0];
+    }
+    return null;
+  }
+  function resolver(prod){
+    if(!prod)return {categoria:'',origen:'',material:null};
+    var material=materialDelProducto(prod);
+    var catReal=material?valido(material.category):'';
+    var catLigada=valido(prod.materialesProducto&&prod.materialesProducto.category);
+    var catStock=valido(prod.rubro);
+    // La categoría vigente de Materiales es la autoridad cuando es específica.
+    // Si es "Varios", preferir otra clasificación específica conocida.
+    var opciones=[
+      {categoria:catReal,origen:'Materiales'},
+      {categoria:catLigada,origen:'vínculo Materiales'},
+      {categoria:catStock,origen:'stock Pañol'}
+    ];
+    var especifica=opciones.find(function(x){return x.categoria&&!generico(x.categoria);});
+    var elegida=especifica||opciones.find(function(x){return !!x.categoria;})||{categoria:'',origen:''};
+    return {categoria:elegida.categoria,origen:elegida.origen,material:material};
+  }
+  function aplicar(prod,manual){
+    if(!prod||String(cqConsumoProdIdPanol)!==String(prod.id))return;
+    var input=document.getElementById('consumo-subrubro');
+    if(!input)return;
+    var r=resolver(prod);
+    if(r.material){
+      // Mantener el enlace al material existente: evita crear duplicados.
+      prod.materialesProducto={
+        id:r.material.id,name:r.material.name,code:r.material.code||'',
+        category:r.categoria||r.material.category||''
+      };
+      cqMaterialSeleccionadoPanol=Object.assign({},prod.materialesProducto);
+      var row=document.getElementById('consumo-materiales-check');
+      var chk=document.getElementById('consumo-cargar-materiales');
+      var auto=document.getElementById('consumo-materiales-auto');
+      if(row)row.classList.remove('hidden-manual');
+      if(chk){chk.checked=true;chk.disabled=true;}
+      if(auto){auto.style.display='block';auto.textContent='✓ Materiales automático: '+r.material.name;}
+    }
+    if(!manual && r.categoria){
+      input.value=r.categoria;
+      input.dataset.cqSubOrigen=r.origen;
+      input.dataset.cqUserEdited='0';
+    }
+    var help=document.getElementById('consumo-prod-help');
+    if(help){
+      var cat=input.value.trim();
+      help.textContent='Stock disponible: '+fmtN(stockDeProducto(prod.id))+' u · Subrubro: '+
+        (cat||'sin definir')+
+        (manual?' (seleccionado manualmente)':(!generico(cat)&&r.origen?' · '+r.origen:''))+
+        (generico(cat)?' · Podés corregirlo antes de descontar.':'');
+      help.style.color=generico(cat)?'#9A651B':'var(--verde2)';
+    }
+  }
+  async function confirmar(prod){
+    if(!prod)return;
+    // El listener ya leyó Materiales: no realizar otra consulta ni tocar el flujo.
+    if(!cqMaterialesDocCachePanol&&window._dbReady&&window._getDoc&&window._doc&&window._db){
+      try{
+        var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+        if(snap.exists()){
+          cqMaterialesDocCachePanol=snap.data()||{};
+          cqMaterialesDocCacheAtPanol=Date.now();
+        }
+      }catch(e){console.warn('Pañol: categoría actual de Materiales no disponible',e);}
+    }
+    var input=document.getElementById('consumo-subrubro');
+    aplicar(prod,!!(input&&input.dataset.cqUserEdited==='1'));
+  }
+  window.cqPanolConfirmarSubrubroSalida=confirmar;
+
+  var completarAnterior=window.completarConsumoProducto;
+  if(typeof completarAnterior==='function'){
+    window.completarConsumoProducto=function(prod){
+      // Las versiones previas del selector pueden sobrescribir prod.rubro con
+      // una categoría enlazada vieja. Conservar la clasificación válida previa.
+      var categoriaAntes=resolver(prod);
+      var resultado=completarAnterior.apply(this,arguments);
+      if(prod && categoriaAntes.categoria && !generico(categoriaAntes.categoria) && generico(prod.rubro)){
+        prod.rubro=categoriaAntes.categoria;
+      }
+      var input=document.getElementById('consumo-subrubro');
+      if(input)input.dataset.cqUserEdited='0';
+      aplicar(prod,false);
+      return resultado;
+    };
+    completarConsumoProducto=window.completarConsumoProducto;
+  }
+
+  // Tras elegir un producto se puede corregir su subrubro sin perder la
+  // selección de código/producto. Sin producto seleccionado, se mantienen
+  // los filtros y el comportamiento previo de los desplegables.
+  var entradaAnterior=window.onConsumoSubrubroInput;
+  window.onConsumoSubrubroInput=function(){
+    var input=document.getElementById('consumo-subrubro');
+    if(input)input.dataset.cqUserEdited='1';
+    var prod=getProductoDesdeConsumoInput();
+    if(prod&&cqConsumoProdIdPanol){aplicar(prod,true);return;}
+    if(typeof entradaAnterior==='function')return entradaAnterior.apply(this,arguments);
+  };
+  onConsumoSubrubroInput=window.onConsumoSubrubroInput;
+
+  var seleccionAnterior=window.onConsumoSubrubroSeleccionado;
+  window.onConsumoSubrubroSeleccionado=function(){
+    var input=document.getElementById('consumo-subrubro');
+    if(input)input.dataset.cqUserEdited='1';
+    var prod=getProductoDesdeConsumoInput();
+    if(prod&&cqConsumoProdIdPanol){aplicar(prod,true);return;}
+    if(typeof seleccionAnterior==='function')return seleccionAnterior.apply(this,arguments);
+  };
+  onConsumoSubrubroSeleccionado=window.onConsumoSubrubroSeleccionado;
+})();
+</script>
+
+
+</body>
 </html>
 <style id="cq-stock-report-darker-final">
 /* Reporte Stock: un tono más oscuro, sin alterar lógica */
@@ -10918,5 +11257,57 @@ function r(){setTimeout(mount,100)}document.addEventListener("change",r);window.
     font-size:11.5px!important;
     line-height:1.05!important;
   }
+}
+</style>
+
+<style id="cq-obras-grilla-acopio-20261119">
+/* Distribución tipo Acopio: misma grilla, pero con solapas más compactas. */
+#view-obras #obras-chips{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:7px!important;
+  justify-content:stretch!important;
+  align-items:stretch!important;
+  width:100%!important;
+  margin:0 0 12px!important;
+}
+#view-obras #obras-chips .chip{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-width:0!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:42px!important;
+  margin:0!important;
+  padding:6px 4px!important;
+  border-radius:12px!important;
+  font-family:'Space Grotesk',sans-serif!important;
+  font-size:9.25px!important;
+  font-weight:800!important;
+  line-height:1.14!important;
+  white-space:normal!important;
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+  text-align:center!important;
+  box-shadow:0 2px 0 rgba(28,61,53,.10),0 4px 11px rgba(28,61,53,.045)!important;
+}
+#view-obras #obras-chips .chip.active{
+  background:linear-gradient(135deg,#075641,#138360)!important;
+  border-color:#075641!important;
+  color:#fff!important;
+  box-shadow:0 2px 0 #043a2c,0 5px 13px rgba(4,83,62,.15)!important;
+}
+@media (min-width:600px) and (orientation:landscape){
+  #view-obras #obras-chips{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:8px!important}
+  #view-obras #obras-chips .chip{min-height:46px!important;padding:6px 5px!important;font-size:10.5px!important;border-radius:13px!important}
+}
+@media (min-width:600px) and (orientation:portrait){
+  #view-obras #obras-chips{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important}
+  #view-obras #obras-chips .chip{min-height:45px!important;font-size:10px!important;padding:6px 5px!important}
+}
+@media (max-width:360px){
+  #view-obras #obras-chips{gap:5px!important}
+  #view-obras #obras-chips .chip{min-height:40px!important;font-size:8.6px!important;padding:5px 3px!important}
 }
 </style>
