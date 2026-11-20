@@ -13,10 +13,10 @@ header{background:linear-gradient(125deg,#081638,#0b1b51 70%,#163a74);color:#fff
 main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 3px 16px #0b1b510a}
 .tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}.tools p{font-size:12px;color:var(--muted);margin:4px 0 0}.btn{border:0;border-radius:10px;background:var(--blue);color:#fff;padding:11px 17px;font-size:12px;font-weight:800;cursor:pointer;min-height:39px}.btn:disabled{opacity:.5;cursor:wait}.btn.outline{background:#fff;border:1px solid var(--line);color:var(--blue)}
 .status{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:11px}.circle{height:8px;width:8px;background:#94a3b8;border-radius:50%;display:inline-block}.circle.ok{background:#16a66c}.circle.error{background:#e05958}.circle.run{background:#dba32e}
-.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:14px 0}.kpi{padding:12px;background:#f6f8fa;border-radius:12px;border:1px solid #e5edf3}.kpi strong{font-size:23px;display:block}.kpi span{font-size:10px;color:#64748b;font-weight:750}.kpi.bad strong{color:var(--error)}.kpi.warn strong{color:var(--warn)}.kpi.ok strong{color:var(--green)}.kpi.reviewed strong{color:#596b93}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:14px 0}.kpi{padding:12px;background:#f6f8fa;border-radius:12px;border:1px solid #e5edf3}.kpi strong{font-size:23px;display:block}.kpi span{font-size:10px;color:#64748b;font-weight:750}.kpi.bad strong{color:var(--error)}.kpi.warn strong{color:var(--warn)}.kpi.ok strong{color:var(--green)}.kpi.reviewed strong{color:#596b93}.kpi.info strong{color:#52799d}
 .sources{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:7px;margin:14px 0}.source{border:1px solid var(--line);background:#f8fafc;border-radius:11px;padding:10px}.source b{display:block;font-size:11px}.source small{display:block;color:var(--muted);margin-top:3px;font-size:10px;word-break:break-word}.source.ok{border-color:#b9dec8;background:#f3fcf6}.source.error{border-color:#f3c8c8;background:#fff7f7}
 .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.filters select,.filters input{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff;min-width:130px;max-width:100%;font-size:12px}.filters input{flex:1;min-width:145px}
-.finding{display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 2px;border-bottom:1px solid #edf0f4}.finding:last-child{border:0}.signal{width:9px;height:9px;background:#9cacc0;border-radius:50%;margin-top:5px}.signal.error{background:#cb4549}.signal.warning{background:#d19b39}.signal.ok{background:#0f9e68}.finding h3{font-size:12px;margin:0 0 3px}
+.finding{display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 2px;border-bottom:1px solid #edf0f4}.finding:last-child{border:0}.signal{width:9px;height:9px;background:#9cacc0;border-radius:50%;margin-top:5px}.signal.error{background:#cb4549}.signal.warning{background:#d19b39}.signal.info{background:#6a90b5}.signal.ok{background:#0f9e68}.finding h3{font-size:12px;margin:0 0 3px}
 .repair-hint{margin-top:8px;color:#52657d;font-size:11px;line-height:1.5;background:#f5f7fa;border-radius:7px;padding:7px 9px}.date-line{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:7px 0 3px}.date-chip{display:inline-block;border:1px solid #d7e2ea;background:#f4f8fb;border-radius:7px;padding:5px 8px;font-size:11px;color:#263f57;font-weight:700}.date-chip strong{font-weight:900}.date-chip.missing{color:#8a5560;background:#fff6f6;border-color:#f2d9d9}.finding p{font-size:11px;margin:0;color:#64748b;line-height:1.5;overflow-wrap:anywhere}.origin{font-size:10px;color:#59708e;background:#f2f6fa;padding:4px 7px;border-radius:7px;white-space:nowrap}
 .details-sources{margin:12px 0 0;border:1px solid var(--line);border-radius:11px;background:#f8fafc;overflow:hidden}
 .details-sources>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;padding:11px 12px;font-size:12px;font-weight:800;color:#32455c}
@@ -50,16 +50,16 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <main>
 <section class="panel">
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
-<div class="tools"><div><b>Verificación de vínculos</b><p>Control de solo lectura · las marcas «Está OK» se guardan aparte, sin cambiar movimientos</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
-<div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · los estados antiguos con vínculo localizado se separan de los problemas reales</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div></div>
 <div class="notice" id="info">El control no modifica movimientos. «Está OK · Ocultar» solo registra tu revisión; no corrige el vínculo. Si ese dato cambia, aparecerá una alerta nueva.</div>
 <details id="sources-disclosure" class="details-sources"><summary><span id="source-count">Fuentes consultadas: sin verificar</span></summary><div id="sources" class="sources"></div></details>
 </section>
 <section class="panel"><div class="tools"><b>Detalle de verificaciones</b><span id="count" style="font-size:11px;color:#64748b">Sin ejecutar</span></div>
-<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="reviewed">Revisados y ocultos</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Buscar fecha, obra, origen o ID" aria-label="Buscar resultado"></div>
+<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="info">Indicadores antiguos (informativo)</option><option value="reviewed">Revisados y ocultos</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Buscar fecha, obra, origen o ID" aria-label="Buscar resultado"></div>
 <div id="results" class="empty">Pulsá «Verificar ahora» para consultar el estado real de Firebase.</div><div class="review-feedback" id="review-feedback" role="status" aria-live="polite"></div>
 </section>
-<p class="hint">Cobertura de esta versión: vínculos reconocidos de Caja Gerencia, Caja Chica, Acopio y Pañol hacia Gastos, Materiales, Pañol y Caja Chica. No comprueba todos los movimientos huérfanos ni los borrados históricos, ni puede leer pendientes guardados sólo en el dispositivo. Los puntos rojos intencionales «No se agregó» no son fallas de sincronización. Las marcas «Está OK» no alteran el estado real de Caja, Gastos, Acopio, Pañol ni Materiales; pueden deshacerse en el filtro Revisados. Las fechas indican la fecha registrada del movimiento; no la última sincronización. Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
+<p class="hint">Cobertura de esta versión: vínculos reconocidos de Caja Gerencia, Caja Chica, Acopio y Pañol hacia Gastos, Materiales, Pañol y Caja Chica. No comprueba todos los movimientos huérfanos ni los borrados históricos, ni puede leer pendientes guardados sólo en el dispositivo. Los puntos rojos intencionales «No se agregó» no son fallas de sincronización. Los estados internos antiguos se agrupan como informativos cuando se encuentra el ID vinculado en destino; esto no acredita una auditoría completa de cantidades, precios ni productos. Las marcas «Está OK» no alteran el estado real de Caja, Gastos, Acopio, Pañol ni Materiales; pueden deshacerse en el filtro Revisados. Las fechas indican la fecha registrada del movimiento; no la última sincronización. Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
 </main>
 <script type="module">
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -82,7 +82,7 @@ const hashText=(text,seed)=>{let h=seed>>>0;for(let i=0;i<text.length;i++){h^=te
 function reviewKey(f){const key=[f.severity,f.connection,f.obra,f.id,f.title,f.detail].map(x=>str(x)).join('|');return 'r'+hashText(key,2166136261)+hashText(key,5381);}
 function readLocalReviews(){try{return JSON.parse(localStorage.getItem(REVIEW_LOCAL_KEY)||'{}')||{};}catch(_){return {};}}
 function persistLocalReviews(){try{localStorage.setItem(REVIEW_LOCAL_KEY,JSON.stringify(localReviews));return true;}catch(_){return false;}}
-function isReviewed(f){return f&&f.severity!=='ok'&&!!(remoteReviews[f.reviewKey]||localReviews[f.reviewKey]);}
+function isReviewed(f){return f&&(f.severity==='error'||f.severity==='warning')&&!!(remoteReviews[f.reviewKey]||localReviews[f.reviewKey]);}
 function reviewedCount(){return findings.filter(isReviewed).length;}
 function showReviewMessage(message,failed=false){const area=el('review-feedback');area.textContent=message;area.className='review-feedback'+(failed?' failed':'');}
 async function loadReviews(){
@@ -91,7 +91,7 @@ async function loadReviews(){
   catch(e){remoteReviews={};reviewMode='local';showReviewMessage('No se pudieron leer las revisiones compartidas de Firebase. Las marcas nuevas quedarán solo en este dispositivo.',true);}
 }
 async function setReviewed(f){
- if(!canRun||busy||reviewBusy.has(f.reviewKey)||f.severity==='ok')return;
+ if(!canRun||busy||reviewBusy.has(f.reviewKey)||!['error','warning'].includes(f.severity))return;
  reviewBusy.add(f.reviewKey);render();
  const record={at:new Date().toISOString(),by:(str(auth.currentUser?.email||'').toLowerCase().startsWith('emilio@')?'Emilio':str(auth.currentUser?.email||'').toLowerCase().startsWith('juan@')?'Juan':'Gerencia'),connection:f.connection,obra:f.obra,id:str(f.id),description:f.title,detail:f.detail.slice(0,180)};
  try{await setDoc(reviewRef,{items:{[f.reviewKey]:record}},{merge:true});remoteReviews[f.reviewKey]=record;delete localReviews[f.reviewKey];persistLocalReviews();reviewMode='firebase';showReviewMessage('Marcado como revisado. Visible en «Revisados y ocultos». Se comparte por Firebase.');}
@@ -139,11 +139,11 @@ function diagnostic(severity,connection,title,detail,meta={}){
  const a={summary:detail||title,action:'Abrí el movimiento original y comprobá los datos antes de modificarlo. Marcar «Está OK» solo oculta esta alerta, no corrige la integración.',fields:arr(meta.fields)};
  if(meta.summary)a.summary=meta.summary;
  if(meta.action)a.action=meta.action;
- if(title.includes('Indicador pendiente o rojo desactualizado')){
+ if(title.includes('Estado interno de sincronización antiguo')){
   const status=detail.match(/(?:Estado|SyncEstado|estado):\s*(error|pendiente)/i)?.[1]||detail.match(/:\s*(error|pendiente)/i)?.[1]||'pendiente';
-  a.summary=`El destino ya contiene el movimiento y el vínculo coincide. Solo quedó el indicador «${status}» en ${src}.`;
-  a.fields=a.fields.length?a.fields:[{label:'Movimiento en destino',a:'Encontrado y coincidente'},{label:'Indicador en origen',a:status}];
-  a.action=`No vuelvas a enviar el movimiento porque podrías duplicarlo. Revisá el punto en ${src}; si comprobaste que está bien, tocá «Está OK · Ocultar».`;
+  a.summary=`Se localizó en el destino un movimiento con el ID de integración esperado. El origen conserva el estado «${status}». Este estado por sí solo no demuestra un error en la carga.`;
+  a.fields=a.fields.length?a.fields:[{label:'ID de integración',a:'Localizado en destino'},{label:'Estado interno en origen',a:status}];
+  a.action=`No hace falta revisar estos estados uno por uno ni volver a enviar el movimiento. Se muestran aparte como información. Si necesitás corregir el color del punto en ${src}, revisá esa aplicación; las diferencias reales de importe, cantidad o registros faltantes se alertan por separado cuando esas comparaciones están implementadas.`;
  }else if(title.includes('No aparece en Gastos')||title.includes('ausente')||title.includes('sin carga')||title.includes('Retiro sin entrada')||title.includes('Ingreso no localizado')){
   a.summary=`Se esperaba un movimiento vinculado en ${dst}, pero no apareció con los identificadores comprobados.`;
   a.action=`Revisá la fecha, la obra y el ID en ${src} y ${dst}. No lo reenvíes hasta confirmar que no existe con otro identificador.`;
@@ -177,17 +177,17 @@ function activeGastos(d){const a=new Map();arr(d?.gastos).forEach(g=>{if(g&&g.id
 function ageMs(x){const d=Date.parse(str(x||''));return Number.isFinite(d)?Date.now()-d:Infinity;}
 function classifyMissing(x){return ageMs(x?.createdAt||x?.creadoAt||x?.fecha||x?.date||x?.ts)<3*60*1000?'warning':'error';}
 function prettyError(e){const c=str(e?.code||'');if(c.includes('permission-denied'))return 'Sin permisos Firebase';if(c.includes('unavailable'))return 'Sin conexión con Firebase';return str(e?.message||'Error de lectura').slice(0,150);}
-function summarize(){const c={error:0,warning:0,ok:0};findings.forEach(f=>{if(!isReviewed(f))c[f.severity]++;});el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;el('metric-reviewed').textContent=reviewedCount();}
+function summarize(){const c={error:0,warning:0,ok:0,info:0};findings.forEach(f=>{if(!isReviewed(f))c[f.severity]++;});el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;el('metric-reviewed').textContent=reviewedCount();el('metric-info').textContent=c.info;}
 function tag(t,cls=''){const d=document.createElement('div');d.className=cls;d.textContent=t;return d;}
 function renderSources(){const box=el('sources');box.replaceChildren();sources.forEach(s=>{const d=tag('', 'source '+(s.ok?'ok':'error'));const b=document.createElement('b');b.textContent=s.name;d.replaceChildren(b,tag(s.text,'source-text'));box.append(d);});const bad=sources.filter(s=>!s.ok).length;el('source-count').textContent=sources.length?`${sources.length} fuentes consultadas · ${bad} con problemas`:'Fuentes consultadas: sin verificar';}
 function render(){
  const kind=el('type').value,mod=el('module').value,search=el('search').value.toLowerCase();
  const filtered=findings.filter(f=>{
    const reviewed=isReviewed(f);
-   const matches=kind==='reviewed'?reviewed:!reviewed&&(kind==='issues'?f.severity!=='ok':kind==='all'||f.severity===kind);
+   const matches=kind==='reviewed'?reviewed:!reviewed&&(kind==='issues'?['error','warning'].includes(f.severity):kind==='all'||f.severity===kind);
    return matches&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.diag.summary+' '+f.connection+' '+f.obra+' '+f.id+' '+f.fechaOrigen+' '+f.fechaGastos).toLowerCase().includes(search));
  });
- if(kind==='all')filtered.sort((a,b)=>({error:0,warning:1,ok:2}[a.severity]??3)-({error:0,warning:1,ok:2}[b.severity]??3));
+ if(kind==='all')filtered.sort((a,b)=>({error:0,warning:1,info:2,ok:3}[a.severity]??4)-({error:0,warning:1,info:2,ok:3}[b.severity]??4));
  const nodes=document.createDocumentFragment(),cap=60;
  filtered.slice(0,cap).forEach(f=>{
   const row=tag('', 'finding'),dot=tag('', 'signal '+f.severity),body=tag('','body'),h=document.createElement('h3');
@@ -207,12 +207,12 @@ function render(){
     if(f.diag.fields?.length){const values=tag('', 'diag-values');f.diag.fields.forEach(v=>{const line=tag('', 'diag-value');line.append(tag(v.label,'diag-field'),tag(str(v.a),'diag-data'));values.append(line);});explanation.append(values);}
     explanation.append(tag('Qué hacer','diag-label'),tag(f.diag.action,'diag-action'));body.append(explanation);
     if(f.detail&&f.diag.summary!==f.detail){const extra=document.createElement('details');extra.className='diag-raw';const sum=document.createElement('summary');sum.textContent='Ver detalle técnico';extra.append(sum,tag(f.detail));body.append(extra);}
-    const controls=tag('', 'review-controls');const button=document.createElement('button');button.type='button';button.className='review-button '+(isReviewed(f)?'restore':'');button.disabled=busy||reviewBusy.has(f.reviewKey);button.textContent=reviewBusy.has(f.reviewKey)?'Guardando…':isReviewed(f)?'Volver a mostrar':'✓ Está OK · Ocultar';
+    if(['error','warning'].includes(f.severity)){const controls=tag('', 'review-controls');const button=document.createElement('button');button.type='button';button.className='review-button '+(isReviewed(f)?'restore':'');button.disabled=busy||reviewBusy.has(f.reviewKey);button.textContent=reviewBusy.has(f.reviewKey)?'Guardando…':isReviewed(f)?'Volver a mostrar':'✓ Está OK · Ocultar';
     button.addEventListener('click',()=>isReviewed(f)?undoReviewed(f):setReviewed(f));controls.append(button);
     if(isReviewed(f)){const record=remoteReviews[f.reviewKey]||localReviews[f.reviewKey]||{};const by=record.by||'Gerencia';const date=displayDate(record.at)||'sin fecha';const stored=remoteReviews[f.reviewKey]?'Firebase':'este dispositivo';controls.append(tag('Revisado por '+by+' · '+date+' · '+stored+' · no modifica los datos originales','review-note'));}
-    body.append(controls);
+    body.append(controls);}
   }else body.append(tag(f.detail||'El vínculo coincide.','detail'));
-  row.append(dot,body,tag(isReviewed(f)?'Revisado':f.severity==='error'?'Inconsistencia':f.severity==='warning'?'Revisar':'Correcto','origin'));
+  row.append(dot,body,tag(isReviewed(f)?'Revisado':f.severity==='error'?'Inconsistencia':f.severity==='warning'?'Revisar':f.severity==='info'?'Informativo':'Correcto','origin'));
   nodes.append(row);
  });
  const holder=el('results');holder.replaceChildren();
@@ -254,7 +254,7 @@ try{
  const reportStale=(connection,obra,id,m,field)=>{
   if(!m||!field||!['error','pendiente'].includes(str(m[field]).toLowerCase()))return;
   if(str(m[field])==='pendiente'&&ageMs(m?.updatedAt||m?.creadoAt||m?.createdAt||m?.fecha)<3*60*1000)return;
-  log('warning',connection,'Indicador pendiente o rojo desactualizado',`El destino existe y coincide, pero el origen conserva ${field}: ${str(m[field])}`,obra,id,{source:m,fields:[{label:'Registro en destino',a:'Existe y coincide'},{label:'Estado del indicador en origen',a:str(m[field])}]});
+  log('info',connection,'Estado interno de sincronización antiguo',`El vínculo por ID fue localizado en el destino; el origen conserva ${field}: ${str(m[field])}`,obra,id,{source:m,fields:[{label:'Vínculo por ID en destino',a:'Localizado'},{label:'Estado interno en origen',a:str(m[field])}]});
  };
 
  const entradasPanolAcopio=new Map(),entradasPanolCaja=new Map();
@@ -372,7 +372,7 @@ try{
  summarize();addModules();render();
  const failed=sources.filter(x=>!x.ok).length,err=findings.filter(f=>f.severity==='error'&&!isReviewed(f)).length;
  refreshStatus();
- el('info').textContent=`Consulta terminada. Fuentes consultadas: ${sources.length}; lecturas fallidas: ${failed}. Alertas activas: ${findings.filter(f=>f.severity!=='ok'&&!isReviewed(f)).length}. Revisadas / ocultas: ${reviewedCount()}. Las marcas no reparan los datos de origen.`;
+ el('info').textContent=`Consulta terminada. Fuentes consultadas: ${sources.length}; lecturas fallidas: ${failed}. Problemas activos para revisar: ${findings.filter(f=>['error','warning'].includes(f.severity)&&!isReviewed(f)).length}. Estados internos antiguos con vínculo localizado: ${findings.filter(f=>f.severity==='info').length} (informativos; NO es necesario revisarlos individualmente ni reenviarlos). Revisadas / ocultas: ${reviewedCount()}. El control no modifica datos de origen.`;
  }catch(e){status('La verificación no pudo completarse','error');el('info').textContent=prettyError(e);summarize();render();}
  finally{busy=false;el('run').disabled=!canRun;}
 }
