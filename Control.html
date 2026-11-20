@@ -16,7 +16,8 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:14px 0}.kpi{padding:12px;background:#f6f8fa;border-radius:12px;border:1px solid #e5edf3}.kpi strong{font-size:23px;display:block}.kpi span{font-size:10px;color:#64748b;font-weight:750}.kpi.bad strong{color:var(--error)}.kpi.warn strong{color:var(--warn)}.kpi.ok strong{color:var(--green)}
 .sources{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:7px;margin:14px 0}.source{border:1px solid var(--line);background:#f8fafc;border-radius:11px;padding:10px}.source b{display:block;font-size:11px}.source small{display:block;color:var(--muted);margin-top:3px;font-size:10px;word-break:break-word}.source.ok{border-color:#b9dec8;background:#f3fcf6}.source.error{border-color:#f3c8c8;background:#fff7f7}
 .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.filters select,.filters input{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff;min-width:130px;max-width:100%;font-size:12px}.filters input{flex:1;min-width:145px}
-.finding{display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 2px;border-bottom:1px solid #edf0f4}.finding:last-child{border:0}.signal{width:9px;height:9px;background:#9cacc0;border-radius:50%;margin-top:5px}.signal.error{background:#cb4549}.signal.warning{background:#d19b39}.signal.ok{background:#0f9e68}.finding h3{font-size:12px;margin:0 0 3px}.finding p{font-size:11px;margin:0;color:#64748b;line-height:1.5;overflow-wrap:anywhere}.origin{font-size:10px;color:#59708e;background:#f2f6fa;padding:4px 7px;border-radius:7px;white-space:nowrap}
+.finding{display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 2px;border-bottom:1px solid #edf0f4}.finding:last-child{border:0}.signal{width:9px;height:9px;background:#9cacc0;border-radius:50%;margin-top:5px}.signal.error{background:#cb4549}.signal.warning{background:#d19b39}.signal.ok{background:#0f9e68}.finding h3{font-size:12px;margin:0 0 3px}
+.repair-hint{margin-top:8px;color:#52657d;font-size:11px;line-height:1.5;background:#f5f7fa;border-radius:7px;padding:7px 9px}.date-line{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:7px 0 3px}.date-chip{display:inline-block;border:1px solid #d7e2ea;background:#f4f8fb;border-radius:7px;padding:5px 8px;font-size:11px;color:#263f57;font-weight:700}.date-chip strong{font-weight:900}.date-chip.missing{color:#8a5560;background:#fff6f6;border-color:#f2d9d9}.finding p{font-size:11px;margin:0;color:#64748b;line-height:1.5;overflow-wrap:anywhere}.origin{font-size:10px;color:#59708e;background:#f2f6fa;padding:4px 7px;border-radius:7px;white-space:nowrap}
 .details-sources{margin:12px 0 0;border:1px solid var(--line);border-radius:11px;background:#f8fafc;overflow:hidden}
 .details-sources>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;padding:11px 12px;font-size:12px;font-weight:800;color:#32455c}
 .details-sources>summary::-webkit-details-marker{display:none}
@@ -34,16 +35,16 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <main>
 <section class="panel">
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
-<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · verificaciones locales sobre documentos consultados</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · comparación de vínculos conocidos entre aplicaciones</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
 <div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Inconsistencias</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Para revisar</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div></div>
 <div class="notice" id="info">El sistema no reparará, eliminará ni modificará movimientos. Las operaciones sin lectura de Firebase quedarán como «No verificadas», nunca como correctas.</div>
 <details id="sources-disclosure" class="details-sources"><summary><span id="source-count">Fuentes consultadas: sin verificar</span></summary><div id="sources" class="sources"></div></details>
 </section>
 <section class="panel"><div class="tools"><b>Detalle de verificaciones</b><span id="count" style="font-size:11px;color:#64748b">Sin ejecutar</span></div>
-<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Filtrar por obra, origen o ID" aria-label="Buscar resultado"></div>
+<div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Buscar fecha, obra, origen o ID" aria-label="Buscar resultado"></div>
 <div id="results" class="empty">Pulsá «Verificar ahora» para consultar el estado real de Firebase.</div>
 </section>
-<p class="hint">Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
+<p class="hint">Cobertura de esta versión: vínculos reconocidos de Caja Gerencia, Caja Chica, Acopio y Pañol hacia Gastos, Materiales, Pañol y Caja Chica. No comprueba todos los movimientos huérfanos ni los borrados históricos, ni puede leer pendientes guardados sólo en el dispositivo. Los puntos rojos intencionales «No se agregó» no son fallas de sincronización. Las fechas indican la fecha registrada del movimiento; no la última sincronización. Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
 </main>
 <script type="module">
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -61,7 +62,33 @@ const read=async (col,id)=>{
 };
 let canRun=false,busy=false,findings=[],sources=[];
 function status(t,cls=''){el('status').textContent=t;el('dot').className='circle '+cls;}
-function log(severity,connection,title,detail,obra,id){findings.push({severity,connection,title,detail:detail||'',obra:obra||'',id:id||''});}
+// Fecha de la operación (no la fecha de sincronización). Soporta YYYY-MM-DD, DD/MM/YYYY y Timestamp de Firestore.
+function displayDate(input){
+ if(input==null||input==='')return '';
+ if(typeof input==='object'){
+   if(typeof input.toDate==='function')return displayDate(input.toDate());
+   if(typeof input.seconds==='number')return displayDate(new Date(input.seconds*1000));
+   if(input instanceof Date){if(!Number.isFinite(input.getTime()))return '';return String(input.getDate()).padStart(2,'0')+'/'+String(input.getMonth()+1).padStart(2,'0')+'/'+input.getFullYear();}
+ }
+ if(typeof input==='number'){if(input>1e9)return displayDate(new Date(input>1e12?input:input*1000));return '';}
+ const v=str(input).trim();
+ const iso=v.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+ if(iso)return iso[3]+'/'+iso[2]+'/'+iso[1];
+ const ar=v.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+ if(ar)return ar[1]+'/'+ar[2]+'/'+ar[3];
+ const parsed=new Date(v);
+ return Number.isFinite(parsed.getTime())?displayDate(parsed):'';
+}
+function movementDate(obj){
+ if(!obj)return '';
+ if(typeof obj!=='object')return displayDate(obj);
+ const keys=['fecha','fechaMovimiento','fechaRetiro','date','fechaTs','createdAt','creadoAt','ts','timestamp'];
+ for(const key of keys){if(obj[key]!=null&&obj[key]!==''){const date=displayDate(obj[key]);if(date)return date;}}
+ return '';
+}
+function log(severity,connection,title,detail,obra,id,meta={}){
+ findings.push({severity,connection,title,detail:detail||'',obra:obra||'',id:id||'',fechaOrigen:movementDate(meta.source),fechaGastos:movementDate(meta.dest)});
+}
 function normalizeDoc(data){const d=data?.db&&typeof data.db==='object'?data.db:data;return d&&typeof d==='object'?d:{};}
 function activeGastos(d){const a=new Map();arr(d?.gastos).forEach(g=>{if(g&&g.id!=null&&g.activo!==false)a.set(str(g.id),g)});const items=d?.gastosItems&&typeof d.gastosItems==='object'?d.gastosItems:{};Object.entries(items).forEach(([k,g])=>{if(!g)return;const id=str(g.id??k);if(g.activo===false)a.delete(id);else a.set(id,g);});return [...a.values()];}
 function ageMs(x){const d=Date.parse(str(x||''));return Number.isFinite(d)?Date.now()-d:Infinity;}
@@ -72,12 +99,28 @@ function tag(t,cls=''){const d=document.createElement('div');d.className=cls;d.t
 function renderSources(){const box=el('sources');box.replaceChildren();sources.forEach(s=>{const d=tag('', 'source '+(s.ok?'ok':'error'));const b=document.createElement('b');b.textContent=s.name;d.replaceChildren(b,tag(s.text,'source-text'));box.append(d);});const bad=sources.filter(s=>!s.ok).length;el('source-count').textContent=sources.length?`${sources.length} fuentes consultadas · ${bad} con problemas`:'Fuentes consultadas: sin verificar';}
 function render(){
  const kind=el('type').value,mod=el('module').value,search=el('search').value.toLowerCase();
- const filtered=findings.filter(f=>(kind==='issues'?f.severity!=='ok':kind==='all'||f.severity===kind)&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.connection+' '+f.obra+' '+f.id).toLowerCase().includes(search)));
+ const filtered=findings.filter(f=>(kind==='issues'?f.severity!=='ok':kind==='all'||f.severity===kind)&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.connection+' '+f.obra+' '+f.id+' '+f.fechaOrigen+' '+f.fechaGastos).toLowerCase().includes(search)));
  // Si se pide ver todo, mostrar primero los problemas. No modifica los resultados ni el análisis.
  if(kind==='all')filtered.sort((a,b)=>({error:0,warning:1,ok:2}[a.severity]??3)-({error:0,warning:1,ok:2}[b.severity]??3));
  const nodes=document.createDocumentFragment();
  const cap=60;
- filtered.slice(0,cap).forEach(f=>{const row=tag('', 'finding');const dot=tag('', 'signal '+f.severity);const body=tag('','body');const h=document.createElement('h3');h.textContent=f.title;body.append(h,tag(`${f.connection}${f.obra?' · '+f.obra:''}${f.id?' · ID '+f.id:''}${f.detail?' — '+f.detail:''}`,'detail'));row.append(dot,body,tag(f.severity==='error'?'Inconsistencia':f.severity==='warning'?'Revisar':'Correcto','origin'));nodes.append(row)});
+ filtered.slice(0,cap).forEach(f=>{
+  const row=tag('', 'finding'), dot=tag('', 'signal '+f.severity), body=tag('','body'), h=document.createElement('h3');
+  h.textContent=f.title;body.append(h);
+  // Las fechas se muestran para problemas; los vínculos correctos no recargan la pantalla.
+  if(f.severity!=='ok'){
+    const dates=tag('', 'date-line');
+    const sourceName=f.connection.split(' → ')[0]||'Origen';
+    const originDate=tag(sourceName+': '+(f.fechaOrigen||'No registrada'), 'date-chip'+(f.fechaOrigen?'':' missing'));
+    dates.append(originDate);
+    if(f.connection.includes('→ Gastos'))dates.append(tag('Gastos: '+(f.fechaGastos||'No disponible'), 'date-chip'+(f.fechaGastos?'':' missing')));
+    body.append(dates);
+  }
+  body.append(tag(`${f.connection}${f.obra?' · '+f.obra:''}${f.id?' · ID '+f.id:''}${f.detail?' — '+f.detail:''}`,'detail'));
+  if(f.severity==='error'&&f.connection==='Caja Gerencia → Gastos'&&f.title==='Importe diferente en Gastos')body.append(tag('Para corregir: contrastá el comprobante con la imputación de esa obra en Caja Gerencia. Si Caja está correcta, editá y guardá nuevamente el movimiento en Caja para reenviar el vínculo.','repair-hint'));
+  row.append(dot,body,tag(f.severity==='error'?'Inconsistencia':f.severity==='warning'?'Revisar':'Correcto','origin'));
+  nodes.append(row);
+});
  const holder=el('results');holder.replaceChildren();
  if(!filtered.length)holder.append(tag(findings.length?'No hay movimientos en este filtro. Cambiá el filtro para consultar los vínculos correctos.':'Todavía no se efectuó una verificación.','empty'));
  else holder.append(nodes);
@@ -86,42 +129,135 @@ function render(){
 function addModules(){const select=el('module'),chosen=select.value;select.replaceChildren(new Option('Todas las conexiones','all'));[...new Set(findings.map(x=>x.connection))].sort().forEach(x=>select.add(new Option(x,x)));select.value=[...select.options].some(o=>o.value===chosen)?chosen:'all';}
 async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];summarize();renderSources();el('sources-disclosure').open=false;
 try{
- const names=[['Configuración Gastos','config','app'],['Caja Gerencia','cq_caja','gastos_compartidos_v1'],['Caja Chica','caja_chica_app','main'],['Acopio','acopio_cq','acopio_cq_compartido_v3'],['Pañol','panol','stock_v1'],['Materiales','materiales','data_planilla_exacta_v4']];
+ const names=[['Caja Gerencia','cq_caja','gastos_compartidos_v1'],['Caja Chica','caja_chica_app','main'],['Acopio','acopio_cq','acopio_cq_compartido_v3'],['Pañol','panol','stock_v1'],['Materiales','materiales','data_planilla_exacta_v4']];
  const files={};
  await Promise.all(names.map(async ([name,col,id])=>{try{const data=await read(col,id);if(!data)throw new Error('Documento no encontrado');files[name]=normalizeDoc(data);sources.push({name,ok:true,text:'Lectura confirmada'});}catch(e){files[name]=null;sources.push({name,ok:false,text:prettyError(e)});}}));
  renderSources();
- const cc=arr(files['Caja Chica']?.movements),cg=files['Caja Gerencia']||{},ac=arr(files['Acopio']?.acopios),pn=arr(files['Pañol']?.movimientos),mat=arr(files['Materiales']?.cargas);
+ const cc=arr(files['Caja Chica']?.state?.movements||files['Caja Chica']?.movements),cg=files['Caja Gerencia']||{},ac=arr(files['Acopio']?.acopios),pn=arr(files['Pañol']?.movimientos),mat=arr(files['Materiales']?.cargas);
+ const cgAllPesos=[...arr(cg.deudaPesos),...arr(cg.fondoPesosMovs),...arr(cg.santanderMovs)].filter(m=>m&&m.tipo==='gasto');
  // Sólo buscamos obras que participan de vínculos reales; no leemos innecesariamente todas las obras del catálogo.
  const obraIds=new Set();
- const cgMovs=[...arr(cg.deudaPesos),...arr(cg.fondoPesosMovs),...arr(cg.santanderMovs)].filter(m=>m&&m.tipo==='gasto'&&m.imputacionPendienteGastos!==false&&arr(m.imputaciones).length);
+ const cgMovs=cgAllPesos.filter(m=>m.imputacionPendienteGastos!==false&&arr(m.imputaciones).length);
  cgMovs.forEach(m=>arr(m.imputaciones).forEach(i=>{if(i?.obraId)obraIds.add(str(i.obraId))}));
- cc.filter(m=>m?.type==='gasto'&&m.gastosObraId).forEach(m=>obraIds.add(str(m.gastosObraId)));
- ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(r?.gastosObraId)obraIds.add(str(r.gastosObraId))}));
- pn.filter(m=>m?.tipo==='salida'&&m.gastosObraId).forEach(m=>obraIds.add(str(m.gastosObraId)));
+ cc.filter(m=>m?.type==='gasto'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>obraIds.add(str(m.gastosObraId)));
+ ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(r?.gastosObraId&&r.cargarGastos!==false)obraIds.add(str(r.gastosObraId))}));
+ pn.filter(m=>m?.tipo==='salida'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>obraIds.add(str(m.gastosObraId)));
  const obras=[...obraIds].filter(Boolean);
  const gastoDocs={},todo=obras.slice();let index=0;
  async function worker(){while(index<todo.length){const id=todo[index++];try{const d=await read('gastos',id);gastoDocs[id]=d?activeGastos(d):[];sources.push({name:'Gastos · '+id,ok:true,text:d?'Leído':'Sin movimientos'});}catch(e){gastoDocs[id]=null;sources.push({name:'Gastos · '+id,ok:false,text:prettyError(e)});}}}
  await Promise.all(Array.from({length:Math.min(3,todo.length)},worker));
  renderSources();
  const materialMap=new Map();mat.forEach(c=>{const id=str(c?.integracionId);if(id&&c?.activo!==false){if(!materialMap.has(id))materialMap.set(id,[]);materialMap.get(id).push(c);}});
- const findG=(obraId,expected,linkField,sourceId)=>{const list=gastoDocs[obraId];if(!Array.isArray(list))return undefined;return list.find(g=>str(g.id)===expected||(linkField&&str(g[linkField])===str(sourceId)));};
- const check=(connection,title,obra,expected,linkField,sourceId,source,expectedAmount)=>{if(!Array.isArray(gastoDocs[obra])){log('warning',connection,'Sin verificación de destino',`No se pudo leer Gastos de la obra ${obra}`,obra,sourceId);return;}const g=findG(obra,expected,linkField,sourceId);if(!g){log(classifyMissing(source),connection,'No aparece en Gastos',title,obra,sourceId);return;}if(expectedAmount!=null&&Math.abs(num(g.monto)-num(expectedAmount))>0.05){log('error',connection,'Importe diferente en Gastos',`${title} · origen $${num(expectedAmount).toLocaleString('es-AR')} · Gastos $${num(g.monto).toLocaleString('es-AR')}`,obra,sourceId);return;}log('ok',connection,'Vínculo verificado',title,obra,sourceId);};
- if(files['Caja Gerencia'])cgMovs.forEach(m=>arr(m.imputaciones).forEach(i=>{const oid=str(i?.obraId);if(oid)check('Caja Gerencia → Gastos','Movimiento de Caja',oid,'caja_'+str(m.id)+'_'+oid,'cajaMovimientoId',m.id,m,num(i.monto));}));
+ const gastosIndex={};
+ for(const [oid,items] of Object.entries(gastoDocs)){
+   if(!Array.isArray(items))continue;
+   const ids=new Map(),links=new Map();
+   items.forEach(g=>{if(!g)return;ids.set(str(g.id),g);['cajaMovimientoId','cajaGerenciaMovimientoId','cajaChicaMovimientoId','acopioRetiroId','panolMovimientoId'].forEach(k=>{if(g[k]!=null&&g[k]!=='')links.set(k+'|'+str(g[k]),g)});});
+   gastosIndex[oid]={ids,links};
+ }
+ const findG=(obraId,expected,linkField,sourceId)=>{const o=gastosIndex[obraId];if(!o)return undefined;return o.ids.get(expected)||(linkField?o.links.get(linkField+'|'+str(sourceId)):undefined);};
+ const reportStale=(connection,obra,id,m,field)=>{
+  if(!m||!field||!['error','pendiente'].includes(str(m[field]).toLowerCase()))return;
+  if(str(m[field])==='pendiente'&&ageMs(m?.updatedAt||m?.creadoAt||m?.createdAt||m?.fecha)<3*60*1000)return;
+  log('warning',connection,'Indicador pendiente o rojo desactualizado',`El destino existe y coincide, pero el origen conserva ${field}: ${str(m[field])}`,obra,id,{source:m});
+ };
+
+ const entradasPanolAcopio=new Map(),entradasPanolCaja=new Map();
+ pn.filter(x=>x?.tipo==='entrada').forEach(x=>{
+   let ai=str(x.acopioEntradaId);
+   if(!ai&&x.acopioId&&x.acopioRetiroId)ai='acopio_'+str(x.acopioId)+'_'+str(x.acopioRetiroId);
+   if(ai){if(!entradasPanolAcopio.has(ai))entradasPanolAcopio.set(ai,[]);entradasPanolAcopio.get(ai).push(x);}
+   const ci=str(x.cajaGerenciaEntradaId|| (x.cajaMovimientoId?'caja_gerencia_'+str(x.cajaMovimientoId):''));
+   if(ci){if(!entradasPanolCaja.has(ci))entradasPanolCaja.set(ci,[]);entradasPanolCaja.get(ci).push(x);}
+ });
+ const check=(connection,title,obra,expected,linkField,sourceId,source,expectedAmount)=>{
+  if(!Array.isArray(gastoDocs[obra])){log('warning',connection,'Sin verificación de destino',`No se pudo leer Gastos de la obra ${obra}`,obra,sourceId,{source});return;}
+  const g=findG(obra,expected,linkField,sourceId);
+  if(!g){log(classifyMissing(source),connection,'No aparece en Gastos',title,obra,sourceId,{source});return;}
+  if(expectedAmount!=null&&Math.abs(num(g.monto)-num(expectedAmount))>0.05){
+    const diff=num(expectedAmount)-num(g.monto);
+    const money=n=>'$'+n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
+    log('error',connection,'Importe diferente en Gastos',`${title} · ${connection.split(' → ')[0]} ${money(num(expectedAmount))} · Gastos ${money(num(g.monto))} · diferencia ${money(Math.abs(diff))}`,obra,sourceId,{source,dest:g});return;
+  }
+  log('ok',connection,'Vínculo verificado',title,obra,sourceId,{source,dest:g});
+  if(connection!=='Caja Gerencia → Gastos')reportStale(connection+' · puntos Gastos',obra,sourceId,source,'gastosSyncEstado');
+};
+ if(files['Caja Gerencia'])cgMovs.forEach(m=>{
+  let todosOK=true;
+  arr(m.imputaciones).forEach(i=>{
+    const oid=str(i?.obraId);if(!oid)return;
+    const g=findG(oid,'caja_'+str(m.id)+'_'+oid,'cajaMovimientoId',m.id);
+    if(!g||Math.abs(num(g.monto)-num(i.monto))>0.05)todosOK=false;
+    check('Caja Gerencia → Gastos','Movimiento de Caja',oid,'caja_'+str(m.id)+'_'+oid,'cajaMovimientoId',m.id,m,num(i.monto));
+  });
+  if(todosOK)reportStale('Caja Gerencia · puntos Gastos',arr(m.imputaciones).map(i=>i.obraId).join(', '),str(m.id),m,'gastosSyncEstado');
+});
  if(files['Caja Chica'])cc.filter(m=>m?.type==='gasto'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>{const oid=str(m.gastosObraId);const amount=str(m.currency)==='usd'?num(m.amount)*num(m.tc||files['Caja Chica'].exchangeRate):num(m.amount);check('Caja Chica → Gastos','Movimiento de Caja Chica',oid,'caja_chica_'+str(m.id),'cajaChicaMovimientoId',m.id,m,amount);});
- if(files['Acopio'])ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(!r?.id)return;const oid=str(r.gastosObraId);const sid=str(a.id)+' / '+str(r.id);if(r.cargarGastos!==false&&oid)check('Acopio → Gastos','Retiro de Acopio',oid,'acopio_'+str(a.id)+'_'+str(r.id),'acopioRetiroId',r.id,r,null);if(r.cargarMateriales!==true)return;if(!files['Materiales']){log('warning','Acopio → Materiales','No verificable','Materiales no respondió',oid,sid);return;}const iid='acopio_'+str(a.id)+'_'+str(r.id);const matches=materialMap.get(iid)||[];if(matches.length===0)log(classifyMissing(r),'Acopio → Materiales','Retiro sin carga en Materiales','No se encontró integración '+iid,oid,sid);else if(matches.length>1)log('error','Acopio → Materiales','Integración duplicada en Materiales',matches.length+' registros con el mismo ID',oid,sid);else log('ok','Acopio → Materiales','Vínculo verificado','Carga vinculada',oid,sid);}));
+ if(files['Acopio'])ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(!r?.id)return;const oid=str(r.gastosObraId);const sid=str(a.id)+' / '+str(r.id);if(r.cargarGastos!==false&&oid)check('Acopio → Gastos','Retiro de Acopio',oid,'acopio_'+str(a.id)+'_'+str(r.id),'acopioRetiroId',r.id,r,null);if(r.cargarMateriales!==true)return;if(!files['Materiales']){log('warning','Acopio → Materiales','No verificable','Materiales no respondió',oid,sid,{source:r});return;}const iid='acopio_'+str(a.id)+'_'+str(r.id);const matches=materialMap.get(iid)||[];if(matches.length===0)log(classifyMissing(r),'Acopio → Materiales','Retiro sin carga en Materiales','No se encontró integración '+iid,oid,sid,{source:r});else if(matches.length>1)log('error','Acopio → Materiales','Integración duplicada en Materiales',matches.length+' registros con el mismo ID',oid,sid,{source:r});else {log('ok','Acopio → Materiales','Vínculo verificado','Carga vinculada',oid,sid);reportStale('Acopio · puntos Materiales',oid,sid,r,'materialesSyncEstado');}}));
  // Los retiros destinados a Pañol crean una entrada con identidad estable.
  if(files['Acopio'])ac.forEach(a=>arr(a?.retiros).forEach(r=>{
    if(!r?.id||r.cargarPanol!==true)return;
    const oid=str(r.gastosObraId),sid=str(a.id)+' / '+str(r.id);
-   if(!files['Pañol']){log('warning','Acopio → Pañol','No verificable','Pañol no respondió',oid,sid);return;}
+   if(!files['Pañol']){log('warning','Acopio → Pañol','No verificable','Pañol no respondió',oid,sid,{source:r});return;}
    const entrada='acopio_'+str(a.id)+'_'+str(r.id);
-   const matches=pn.filter(m=>m?.tipo==='entrada'&&(str(m.acopioEntradaId)===entrada||(str(m.acopioId)===str(a.id)&&str(m.acopioRetiroId)===str(r.id))));
-   if(!matches.length)log(classifyMissing(r),'Acopio → Pañol','Retiro sin entrada en Pañol','No se encontró la entrada '+entrada,oid,sid);
-   else if(matches.length>1)log('error','Acopio → Pañol','Entrada duplicada',matches.length+' entradas con el mismo vínculo',oid,sid);
-   else log('ok','Acopio → Pañol','Vínculo verificado','Entrada vinculada',oid,sid);
+   const matches=entradasPanolAcopio.get(entrada)||[];
+   if(!matches.length)log(classifyMissing(r),'Acopio → Pañol','Retiro sin entrada en Pañol','No se encontró la entrada '+entrada,oid,sid,{source:r});
+   else if(matches.length>1)log('error','Acopio → Pañol','Entrada duplicada',matches.length+' entradas con el mismo vínculo',oid,sid,{source:r});
+   else {log('ok','Acopio → Pañol','Vínculo verificado','Entrada vinculada',oid,sid);reportStale('Acopio · puntos Pañol',oid,sid,r,'panolSyncEstado');}
  }));
- if(files['Pañol'])pn.filter(m=>m?.tipo==='salida').forEach(m=>{const oid=str(m.gastosObraId),sid=str(m.id);if(m.gastosDebeCargar!==false&&oid)check('Pañol → Gastos','Salida de Pañol',oid,'panol_'+sid,'panolMovimientoId',m.id,m,null);if(m.materialesAgregar===false)return;if(!files['Materiales']){log('warning','Pañol → Materiales','No verificable','Materiales no respondió',oid,sid);return;}const ms=materialMap.get('panol_'+sid)||[];if(!ms.length)log(classifyMissing(m),'Pañol → Materiales','Salida sin carga en Materiales','No se encontró la integración',oid,sid);else if(ms.length>1)log('error','Pañol → Materiales','Integración duplicada en Materiales',ms.length+' registros con el mismo ID',oid,sid);else log('ok','Pañol → Materiales','Vínculo verificado','Carga vinculada',oid,sid);});
- if(files['Materiales'])for(const [id,items] of materialMap){if(items.length>1&& !id.startsWith('panol_')&&!id.startsWith('acopio_'))log('error','Materiales · duplicados','Identificador de integración repetido',items.length+' movimientos con ID '+id,'',id);}
+ if(files['Pañol'])pn.filter(m=>m?.tipo==='salida').forEach(m=>{const oid=str(m.gastosObraId),sid=str(m.id);if(m.gastosDebeCargar!==false&&oid)check('Pañol → Gastos','Salida de Pañol',oid,'panol_'+sid,'panolMovimientoId',m.id,m,null);if(m.materialesAgregar===false)return;if(!files['Materiales']){log('warning','Pañol → Materiales','No verificable','Materiales no respondió',oid,sid,{source:m});return;}const ms=materialMap.get('panol_'+sid)||[];if(!ms.length)log(classifyMissing(m),'Pañol → Materiales','Salida sin carga en Materiales','No se encontró la integración',oid,sid,{source:m});else if(ms.length>1)log('error','Pañol → Materiales','Integración duplicada en Materiales',ms.length+' registros con el mismo ID',oid,sid,{source:m});else {log('ok','Pañol → Materiales','Vínculo verificado','Carga vinculada',oid,sid);reportStale('Pañol · puntos Materiales',oid,sid,m,'materialesSyncEstado');}});
+ // Caja Gerencia → Materiales: control de cantidades / producto para cada obra vinculada.
+ if(files['Caja Gerencia'])cgMovs.filter(m=>m.materialesAgregar===true&&m.imputacionRubro==='mat').forEach(m=>{
+   const parts=arr(m.materialesCantidades).filter(x=>x&&x.obraId&&num(x.qty)>0);
+   if(!parts.length){log('warning','Caja Gerencia → Materiales','Sin cantidades asociadas','El movimiento indica envío a Materiales pero no conserva una cantidad positiva por obra','',str(m.id),{source:m});return;}
+   parts.forEach(x=>{
+     const oid=str(x.obraId),iid='caja_'+str(m.id)+'_'+oid;
+     if(!files['Materiales']){log('warning','Caja Gerencia → Materiales','No verificable','Materiales no respondió',oid,str(m.id),{source:m});return;}
+     let matches=materialMap.get(iid)||[];
+     if(!matches.length){
+       const norm=v=>str(v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');
+       matches=mat.filter(c=>c?.activo!==false&&str(c.sourceMovementId)===str(m.id)&&['caja_gerencia','cq_caja_gerencia'].includes(str(c.source||c.origen).toLowerCase())&&
+           (str(c.sourceObraId)===oid||norm(c.obraNameOrigen||c.obraName)===norm(x.obra)));
+     }
+     if(!matches.length){log(classifyMissing(m),'Caja Gerencia → Materiales','Carga ausente en Materiales','No se encontró '+iid,oid,str(m.id),{source:m});return;}
+     if(matches.length>1){log('error','Caja Gerencia → Materiales','Carga duplicada',matches.length+' registros vinculados al mismo movimiento',oid,str(m.id),{source:m});return;}
+     const c=matches[0],nom=str(m.materialesProducto?.name).trim().toLowerCase();
+     if(Math.abs(num(c.qty)-num(x.qty))>0.0001||(nom&&str(c.matName).trim().toLowerCase()!==nom))log('error','Caja Gerencia → Materiales','Producto o cantidad diferente','Cantidad Caja '+num(x.qty)+' · Materiales '+num(c.qty)+(nom?' · '+str(c.matName):''),oid,str(m.id),{source:m,dest:c});
+     else {log('ok','Caja Gerencia → Materiales','Vínculo verificado','Carga y cantidad coinciden',oid,str(m.id),{source:m,dest:c});reportStale('Caja Gerencia · puntos Materiales',oid,str(m.id),m,'materialesSyncEstado');}
+   });
+ });
+ // Caja Chica → Materiales. Los movimientos viven en caja_chica_app/main.state.movements.
+ if(files['Caja Chica'])cc.filter(m=>m?.type==='gasto'&&m.category==='mat'&&m.materialesAgregar===true).forEach(m=>{
+   const oid=str(m.gastosObraId),iid='caja_chica_'+str(m.id),sid=str(m.id);
+   if(!files['Materiales']){log('warning','Caja Chica → Materiales','No verificable','Materiales no respondió',oid,sid,{source:m});return;}
+   const matches=materialMap.get(iid)||[];
+   if(!matches.length){log(classifyMissing(m),'Caja Chica → Materiales','Carga ausente en Materiales','No se encontró '+iid,oid,sid,{source:m});return;}
+   if(matches.length>1){log('error','Caja Chica → Materiales','Carga duplicada',matches.length+' registros vinculados al mismo movimiento',oid,sid,{source:m});return;}
+   const c=matches[0],nom=str(m.materialesProducto?.name).trim().toLowerCase();
+   if(Math.abs(num(c.qty)-num(m.materialesCantidad))>0.0001||(nom&&str(c.matName).trim().toLowerCase()!==nom))log('error','Caja Chica → Materiales','Producto o cantidad diferente','Cantidad Caja Chica '+num(m.materialesCantidad)+' · Materiales '+num(c.qty),oid,sid,{source:m,dest:c});
+   else {log('ok','Caja Chica → Materiales','Vínculo verificado','Carga y cantidad coinciden',oid,sid,{source:m,dest:c});reportStale('Caja Chica · puntos Materiales',oid,sid,m,'materialesSyncEstado');}
+ });
+ // Caja Gerencia → Pañol. Sólo entradas cuya casilla de destino Pañol estaba marcada.
+ if(files['Caja Gerencia'])cgAllPesos.filter(m=>m.panolAgregar===true).forEach(m=>{
+   const sid=str(m.id),eid='caja_gerencia_'+sid;
+   if(!files['Pañol']){log('warning','Caja Gerencia → Pañol','No verificable','Pañol no respondió','',sid,{source:m});return;}
+   const matches=entradasPanolCaja.get(eid)||[];
+   if(!matches.length){log(classifyMissing(m),'Caja Gerencia → Pañol','Entrada ausente en Pañol','No aparece la entrada '+eid,'',sid,{source:m});return;}
+   if(matches.length>1){log('error','Caja Gerencia → Pañol','Entrada duplicada','Varias entradas con el mismo vínculo','',sid,{source:m});return;}
+   const entrada=matches[0];
+   if(Math.abs(num(entrada.cantidad)-num(m.panolCantidad))>0.0001)log('error','Caja Gerencia → Pañol','Cantidad diferente','Cantidad Caja '+num(m.panolCantidad)+' · Pañol '+num(entrada.cantidad),'',sid,{source:m,dest:entrada});
+   else {log('ok','Caja Gerencia → Pañol','Vínculo verificado','Entrada y cantidad coinciden','',sid,{source:m,dest:entrada});reportStale('Caja Gerencia · puntos Pañol','',sid,m,'panolSyncEstado');}
+ });
+ // Caja Gerencia → Caja Chica: el ingreso debe existir en el estado actual de Caja Chica.
+ if(files['Caja Gerencia']&&files['Caja Chica'])arr(cg.fondoPesosMovs).filter(m=>m&&m.cajaChicaIngreso===true).forEach(m=>{
+   const sid=str(m.id),iid='caja_gerencia_fondo_'+sid;
+   const matches=cc.filter(x=>x?.type==='ingreso'&&(str(x.id)===iid||str(x.integrationId)===iid||str(x.cajaGerenciaOrigenId)===sid||str(x.sourceMovementId)===sid));
+   if(!matches.length){log('warning','Caja Gerencia → Caja Chica','Ingreso no localizado en Caja Chica','Verificar el vínculo y el ingreso de Fondo común $ (podría existir bajo un identificador histórico).','',sid,{source:m});return;}
+   if(matches.length>1){log('error','Caja Gerencia → Caja Chica','Ingreso duplicado',matches.length+' ingresos con el mismo origen','',sid,{source:m});return;}
+   if(Math.abs(num(matches[0].amount)-num(m.monto))>0.05)log('error','Caja Gerencia → Caja Chica','Importe diferente','Caja Gerencia '+num(m.monto)+' · Caja Chica '+num(matches[0].amount),'',sid,{source:m,dest:matches[0]});
+   else {log('ok','Caja Gerencia → Caja Chica','Vínculo verificado','Ingreso y monto coinciden','',sid,{source:m,dest:matches[0]});reportStale('Caja Gerencia · puntos Caja Chica','',sid,m,'cajaChicaSyncEstado');}
+ });
+ if(files['Materiales'])for(const [id,items] of materialMap){if(items.length>1&& !id.startsWith('panol_')&&!id.startsWith('acopio_'))log('error','Materiales · duplicados','Identificador de integración repetido',items.length+' movimientos con ID '+id,'',id,{source:items[0]});}
  if(sources.some(s=>!s.ok))log('warning','Cobertura de lectura','Verificación parcial','Una o más fuentes no se pudieron leer. Revisar los avisos de origen.','','');
  if(!findings.length)log('warning','Cobertura de lectura','Sin vínculos reconocidos','Se consultaron las fuentes, pero no se encontraron vínculos que coincidan con las reglas de esta versión.','','');
  summarize();addModules();render();
