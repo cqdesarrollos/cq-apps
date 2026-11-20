@@ -57,6 +57,7 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 .cq-alert-valor{font-size:12px;line-height:1.45;font-weight:650;white-space:normal;overflow-wrap:anywhere;color:#21344d}
 .cq-alert-fila.cq-error-detectado{background:#fff8ed}.cq-alert-fila.cq-error-detectado .cq-alert-valor{color:#704c1c}
 .cq-alert-fila.cq-error-grave{background:#fff2f2}.cq-alert-fila.cq-error-grave .cq-alert-valor{color:#9b292d}
+.cq-alert-fila.cq-alert-importe{background:#f1f7fa}.cq-alert-fila.cq-alert-importe .cq-alert-valor{color:#0b3457;font-weight:800}
 .cq-tecnico{margin-top:9px;border-top:1px solid #e8edf2;padding-top:9px;font-size:11px;color:#60748b}
 .cq-tecnico>summary{cursor:pointer;font-weight:750}.cq-tecnico-contenido{margin-top:7px;line-height:1.55;overflow-wrap:anywhere}
 @media(max-width:560px){.cq-alert-fila{grid-template-columns:91px minmax(0,1fr);gap:8px;padding:9px 9px}.cq-alert-etiqueta{font-size:10.5px}.cq-alert-valor{font-size:11.7px}}
@@ -69,7 +70,7 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <main>
 <section class="panel">
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
-<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — auditoría completa · ficha clara</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — auditoría completa · importes visibles</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
 <label class="wide-scan"><input type="checkbox" id="scan-all-obras"><span><b>Revisar también Gastos de todas las obras</b><small>Opcional: detecta huérfanos en obras cuyo movimiento de origen ya fue eliminado. Agrega lecturas de Firebase según la cantidad de obras.</small></span></label>
 <div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div><div class="kpi orphan"><strong id="metric-orphan">—</strong><span>Posibles huérfanos / borrados incompletos</span></div></div>
 <div class="notice" id="cc-overview" hidden></div>
@@ -261,6 +262,7 @@ function render(){
       modulos:f.connection,
       obra:f.obra||'No disponible',
       concepto:'Sin descripción registrada',
+      importe:'Sin importe registrado',
       ubicacion:'Ubicación no disponible',
       error:f.diag.summary||f.title
     };
@@ -270,11 +272,13 @@ function render(){
       ['Módulos',info.modulos],
       ['Obra',info.obra],
       ['Gasto / material',info.concepto],
+      ['Importe',info.importe||'Sin importe registrado'],
+      ...(info.cantidad?[['Cantidad',info.cantidad]]:[]),
       ['Dónde buscar',info.ubicacion],
       ['Qué detectó',info.error]
     ];
     filas.forEach(([label,content],i)=>{
-      const row=tag('', 'cq-alert-fila'+(i===5?(f.severity==='error'?' cq-error-grave':' cq-error-detectado'):''));
+      const row=tag('', 'cq-alert-fila'+(label==='Qué detectó'?(f.severity==='error'?' cq-error-grave':' cq-error-detectado'):'')+(label==='Importe'?' cq-alert-importe':''));
       row.append(tag(label,'cq-alert-etiqueta'),tag(content||'No disponible','cq-alert-valor'));
       ficha.append(row);
     });
@@ -410,8 +414,57 @@ function enriquecerFichas(ctx){
    if(destName==='Pañol'&&srcName!=='Pañol')ubicacion+=' → Pañol · Entradas';
    if(destName==='Gastos'&&srcName!=='Gastos')ubicacion+=' → Gastos · Movimientos de obra';
    if(destName==='Caja Chica'&&srcName!=='Caja Chica')ubicacion+=' → Caja Chica · Ingresos';
+   // Los importes se obtienen de los movimientos YA leídos en esta verificación.
+   // Materiales almacena cantidades, no precios. Nunca convertir falta de precio en $0.
+   const existeNumero=(o,k)=>o&&o[k]!==undefined&&o[k]!==null&&o[k]!==''&&Number.isFinite(Number(o[k]));
+   const valorDe=(o,...keys)=>{for(const k of keys)if(existeNumero(o,k))return Number(o[k]);return null;};
+   const pesos=n=>'$'+n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
+   const moneda=(n,m='ars')=>(String(m).toLowerCase()==='usd'?'US$':'$')+n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
+   let importe='',cantidad='';
+   const valorCaja=valorDe(refCaja,'monto');
+   const valorCC=valorDe(refCC,'amount');
+   const valorGastos=valorDe(obj,'monto')??valorDe(dest,'monto');
+   const panolRef=(refPanol&&refPanol.tipo)?refPanol:(dest?.tipo==='entrada'||dest?.tipo==='salida'?dest:obj?.tipo==='entrada'||obj?.tipo==='salida'?obj:null);
+   const qtyPanol=valorDe(panolRef,'cantidad');
+   const precioPanol=valorDe(panolRef,'precio');
+   const qtyMat=valorDe(refMat,'qty');
+   const qtyRetiro=valorDe(retiro,'qty');
+   // El monto de una transferencia por obras es el imputado a esta obra,
+   // cuando puede identificarse. No atribuir todo el gasto a una sola obra.
+   if(srcName==='Caja Gerencia'&&valorCaja!==null){
+     const imputaciones=arr(refCaja?.imputaciones);
+     const referenciaObra=texto(obj.sourceObraId,dest.sourceObraId,obj.gastosObraId,dest.gastosObraId,f.obra);
+     const filaObra=imputaciones.find(i=>{
+       const id=texto(i?.obraId),label=texto(i?.obra);
+       return referenciaObra&&(id===referenciaObra||label===referenciaObra||limpioObra(id)===limpioObra(referenciaObra));
+     });
+     const asignado=valorDe(filaObra,'monto');
+     importe=asignado!==null?pesos(asignado)+' (imputado a esta obra)':pesos(valorCaja)+(imputaciones.length>1?' (total en Caja, varias obras)':' (Caja Gerencia)');
+   }else if(srcName==='Caja Chica'&&valorCC!==null){
+     importe=moneda(valorCC,refCC?.currency||refCC?.moneda)+' (Caja Chica)';
+   }else if(srcName==='Acopio'&&retiro){
+     // Con retiro vigente es posible recuperar cantidades. El precio del acopio
+     // no está en la ficha de retiro: solo usarlo si quedó registrado en el movimiento.
+     const total=valorDe(retiro,'monto','importe','total','valorTotal');
+     if(total!==null)importe=pesos(total)+' (Acopio)';
+   }
+   if(!importe&&panolRef){
+     if(qtyPanol!==null&&precioPanol!==null&&precioPanol>0)
+       importe=pesos(qtyPanol*precioPanol)+' (Pañol · cantidad × precio unitario)';
+     else importe='Sin importe registrado en Pañol'+(precioPanol===0?' · entrada sin precio':'');
+   }
+   if(!importe&&valorGastos!==null)importe=pesos(valorGastos)+' (Gastos)';
+   if(!importe&&valorCC!==null)importe=moneda(valorCC,refCC?.currency||refCC?.moneda)+' (Caja Chica)';
+   if(!importe)importe=destName==='Materiales'||srcName==='Materiales'||srcName==='Bajas de Materiales'
+       ?'Sin importe registrado · Materiales guarda cantidades'
+       :'Sin importe registrado';
+   const q=qtyPanol??qtyRetiro??qtyMat;
+   if(q!==null&&(srcName==='Acopio'||srcName==='Pañol'||destName==='Pañol'||destName==='Materiales'||srcName==='Bajas de Materiales')){
+     const unidad=elegir(refPanol?.unidad,refMat?.unidad,retiro?.materialUnidad,dest?.unidad,obj?.unidad);
+     cantidad=q.toLocaleString('es-AR',{maximumFractionDigits:3})+(unidad?' '+unidad:' unidades');
+   }
    const error=elegir(f.diag?.summary,f.detail,f.title)||'Revisar el movimiento';
-   f.ficha={fecha,modulos:f.connection,obra,concepto,ubicacion,error};
+   f.ficha={fecha,modulos:f.connection,obra,concepto,importe,cantidad,ubicacion,error};
  });
 }
 
@@ -746,8 +799,8 @@ if(files['Pañol']&&files['Acopio']){
    if(entradaId.startsWith('acopio_')||aid&&rid){
      const key=entradaId||('acopio_'+aid+'_'+rid),r=acopioRetiros.get(key);
      if(!r)posible('Acopio → Pañol',str(m.id||key),str(m.obraName||m.obra||''),m,
-       'Pañol conserva una entrada asociada a Acopio, pero no aparece su retiro original.',
-       'Buscá ese retiro en Acopio (incluidos los archivados) antes de considerar el stock como sobrante.',
+       'Pañol tiene esta entrada de material registrada, pero no encontramos el retiro que la originó entre los retiros actuales de Acopio. Puede ser histórico o haberse eliminado; NO significa que falte dinero ni que el material esté mal cargado.',
+       'Buscá el retiro en Acopio, incluidos los registros archivados. Si el stock es correcto, podés marcar la alerta como revisada; no borres ni vuelvas a enviar el material.',
        [{label:'ID del retiro esperado',a:key}]);
      else if(r.r.cargarPanol===false)posible('Acopio → Pañol',str(m.id||key),'',m,
        'La entrada existe en Pañol, pero el retiro original ya no tiene habilitado el envío a Pañol.');
