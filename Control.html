@@ -70,7 +70,7 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <main>
 <section class="panel">
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
-<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — auditoría completa · importes visibles</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — auditoría completa · ingresos verificados</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
 <label class="wide-scan"><input type="checkbox" id="scan-all-obras"><span><b>Revisar también Gastos de todas las obras</b><small>Opcional: detecta huérfanos en obras cuyo movimiento de origen ya fue eliminado. Agrega lecturas de Firebase según la cantidad de obras.</small></span></label>
 <div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div><div class="kpi orphan"><strong id="metric-orphan">—</strong><span>Posibles huérfanos / borrados incompletos</span></div></div>
 <div class="notice" id="cc-overview" hidden></div>
@@ -489,11 +489,18 @@ try{
  const restoredMatIds=new Set(arr(files['Materiales']?.restoredIntegrationIds).map(str).filter(Boolean));
  renderSources();
  const cc=arr(files['Caja Chica']?.state?.movements||files['Caja Chica']?.movements),cg=files['Caja Gerencia']||{},ac=arr(files['Acopio']?.acopios),pn=arr(files['Pañol']?.movimientos),mat=arr(files['Materiales']?.cargas);
- const cgAllPesos=[...arr(cg.deudaPesos),...arr(cg.fondoPesosMovs),...arr(cg.santanderMovs)].filter(m=>m&&m.tipo==='gasto');
+ // Incluimos ingresos en el índice de identidad: Caja envía ingresos a Gastos
+ // con monto NEGATIVO y un ID caja_ingreso_*. No son movimientos huérfanos.
+ const cgPesosTodos=[...arr(cg.deudaPesos),...arr(cg.fondoPesosMovs),...arr(cg.santanderMovs)].filter(m=>m&&m.id!=null);
+ const cgAllPesos=cgPesosTodos.filter(m=>m.tipo==='gasto');
+ const cgIngresosGastos=cgPesosTodos.filter(m=>m.tipo==='ingreso'&&m.ingresoGastosAgregar===true&&m.ingresoGastosObraId);
  // Sólo buscamos obras que participan de vínculos reales; no leemos innecesariamente todas las obras del catálogo.
  const obraIds=new Set();
  const cgMovs=cgAllPesos.filter(m=>m.imputacionPendienteGastos!==false&&arr(m.imputaciones).length);
  cgMovs.forEach(m=>arr(m.imputaciones).forEach(i=>{if(i?.obraId)obraIds.add(str(i.obraId))}));
+ // El destino de los ingresos también se consulta en el control normal,
+ // para que un ingreso confirmado no dependa solo de la auditoría ampliada.
+ cgIngresosGastos.forEach(m=>obraIds.add(str(m.ingresoGastosObraId)));
  cc.filter(m=>m?.type==='gasto'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>obraIds.add(str(m.gastosObraId)));
  ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(r?.gastosObraId&&r.cargarGastos!==false)obraIds.add(str(r.gastosObraId))}));
  pn.filter(m=>m?.tipo==='salida'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>obraIds.add(str(m.gastosObraId)));
@@ -560,6 +567,15 @@ try{
   });
   if(todosOK)reportStale('Caja Gerencia · puntos Gastos',arr(m.imputaciones).map(i=>i.obraId).join(', '),str(m.id),m,'gastosSyncEstado');
 });
+ // Ingreso desde Caja Gerencia → Gastos: Caja guarda +importe y Gastos
+ // guarda -importe, como define cqIngresoGastosPayload() en Caja Gerencia.
+ if(files['Caja Gerencia'])cgIngresosGastos.forEach(m=>{
+   const oid=str(m.ingresoGastosObraId),sid=str(m.id),expected=-Math.abs(num(m.monto));
+   const g=findG(oid,'caja_ingreso_'+sid,'cajaMovimientoId',sid);
+   check('Caja Gerencia → Gastos','Ingreso de Caja',oid,'caja_ingreso_'+sid,'cajaMovimientoId',sid,m,expected);
+   if(g&&Math.abs(num(g.monto)-expected)<=0.05)
+     reportStale('Caja Gerencia · puntos Gastos (ingresos)',oid,sid,m,'ingresoGastosSyncEstado');
+ });
  if(files['Caja Chica'])cc.filter(m=>m?.type==='gasto'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>{const oid=str(m.gastosObraId);const amount=str(m.currency)==='usd'?num(m.amount)*num(m.tc||files['Caja Chica'].exchangeRate):num(m.amount);check('Caja Chica → Gastos','Movimiento de Caja Chica',oid,'caja_chica_'+str(m.id),'cajaChicaMovimientoId',m.id,m,amount);});
  if(files['Acopio'])ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(!r?.id)return;const oid=str(r.gastosObraId);const sid=str(a.id)+' / '+str(r.id);if(r.cargarGastos!==false&&oid)check('Acopio → Gastos','Retiro de Acopio',oid,'acopio_'+str(a.id)+'_'+str(r.id),'acopioRetiroId',r.id,r,null);if(r.cargarMateriales!==true)return;if(!files['Materiales']){log('warning','Acopio → Materiales','No verificable','Materiales no respondió',oid,sid,{source:r});return;}const iid='acopio_'+str(a.id)+'_'+str(r.id);const matches=materialMap.get(iid)||[];if(matches.length===0)log(classifyMissing(r),'Acopio → Materiales','Retiro sin carga en Materiales','No se encontró integración '+iid,oid,sid,{source:r});else if(matches.length>1)log('error','Acopio → Materiales','Integración duplicada en Materiales',matches.length+' registros con el mismo ID',oid,sid,{source:r});else {log('ok','Acopio → Materiales','Vínculo verificado','Carga vinculada',oid,sid);reportStale('Acopio · puntos Materiales',oid,sid,r,'materialesSyncEstado');}}));
  // Los retiros destinados a Pañol crean una entrada con identidad estable.
@@ -728,7 +744,9 @@ ac.forEach(a=>arr(a?.retiros).forEach(r=>{
  acopioRetirosPorId.get(sid).push({a,r});
 }));
 const pnById=new Map(pn.filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
-const cgById=new Map(cgAllPesos.filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
+// La auditoría inversa debe reconocer como origen tanto los gastos como los
+// ingresos de Caja; anteriormente solo indexaba gastos y generaba huérfanos falsos.
+const cgById=new Map(cgPesosTodos.map(m=>[str(m.id),m]));
 const ccById=new Map(cc.filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
 const fondoById=new Map(arr(cg.fondoPesosMovs).filter(m=>m&&m.id!=null).map(m=>[str(m.id),m]));
 const posible=(conn,id,obra,dest,reason,action,fields=[])=>{
@@ -838,7 +856,7 @@ for(const [oid,items] of Object.entries(gastoDocs)){
    const gid=str(g.id),sourceCG=str(g.cajaMovimientoId||g.cajaGerenciaMovimientoId),sourceCC=str(g.cajaChicaMovimientoId),sourcePN=str(g.panolMovimientoId),sourceAC=str(g.acopioRetiroId);
    let conn='',reason='',action='';
    if(sourceCG&&files['Caja Gerencia']&&!cgById.has(sourceCG)){
-     conn='Caja Gerencia → Gastos';reason='Gastos conserva un movimiento vinculado a Caja Gerencia, pero el gasto original ya no existe en la lista actual de Caja.';
+     conn='Caja Gerencia → Gastos';reason='Gastos conserva un movimiento vinculado a Caja Gerencia, pero no se encontró su gasto o ingreso de origen en la lista actual de Caja.';
    }else if(sourceCC&&files['Caja Chica']&&!ccById.has(sourceCC)){
      conn='Caja Chica → Gastos';reason='Gastos conserva un movimiento de Caja Chica, pero su gasto original ya no existe en Caja Chica.';
    }else if(sourcePN&&files['Pañol']&&!pnById.has(sourcePN)){
