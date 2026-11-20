@@ -433,6 +433,23 @@ try{
       if(!files['Caja Chica']||!ccIntData){
         log('warning',name,'Verificación parcial del vínculo de Caja Chica','Faltó consultar Caja Chica o su documento de integraciones','',sid,{...meta,summary:'No se pudieron consultar las tres fuentes necesarias para confirmar el vínculo.',action:'Repetí la verificación cuando estén disponibles Caja Chica y sus integraciones; no corrijas movimientos por esta alerta.'});return;
       }
+      // La vinculación con Caja Chica NO corresponde cuando el gasto ya se
+      // imputa a Gastos. Una marca vieja por sí sola no es una falla.
+      const aGastos=m.imputacionPendienteGastos===true||arr(m.imputaciones).some(i=>i&&i.obraId);
+      if(aGastos){
+        if(active||connected){
+          log('warning',name,'Gasto de obra con vínculo residual en Caja Chica',
+            'Este gasto se imputa a Gastos, pero '+(active?'hay una integración activa. ':'')+(connected?'existe un ingreso en Caja Chica.':''),
+            '',sid,{...meta,summary:'El gasto ya se imputa a Gastos; no debería enviar un ingreso a Caja Chica. El control encontró '+(active?'un vínculo activo':'')+(active&&connected?' y ':'')+(connected?'un ingreso registrado':'')+'.',
+              action:'No vuelvas a enviarlo. Revisá si el ingreso en Caja Chica fue creado por error y corregilo desde las aplicaciones correspondientes, sin borrar movimientos desde Control.'});
+        }else if(marcado){
+          log('info',name,'Marca histórica de Caja Chica no aplicable',
+            'El gasto se imputa a Gastos y no existe ingreso ni integración activa en Caja Chica.',
+            '',sid,{...meta,summary:'El campo antiguo de Caja Chica quedó marcado en este gasto, pero no hay vínculo ni ingreso activo y el gasto pertenece a Gastos.',
+              action:'No requiere revisión individual. La vista de Caja Gerencia ya no mostrará el punto de Caja Chica para gastos imputados a Gastos.'});
+        }
+        return;
+      }
       if(!marcado){
         if(active||connected){
           log('warning',name,'Casilla desmarcada, pero queda un vínculo activo','La casilla está apagada en Caja Gerencia; '+(active?'su integración sigue activa. ':'')+(connected?'Todavía existe un ingreso vinculado en Caja Chica.':''),'',sid,{...meta,summary:'Caja Gerencia ya guarda la casilla DESMARCADA, pero '+(active?'la integración sigue ACTIVA':'persiste un ingreso en Caja Chica')+'.',action:'No vuelvas a marcar la casilla. Revisá en Caja Chica si el ingreso debe eliminarse y comprobá que el vínculo se haya desactivado correctamente. No lo borres desde este control.'});
