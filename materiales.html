@@ -1,3 +1,4 @@
+<!-- CQ 20/11/2026 · Materiales: protege bajas por identidad; huellas sólo para registros sin ID estable -->
 <!-- CQ 20/11/2026 · Sólo restauraciones explícitas por ID: conserva todas las demás bajas. -->
 <!-- CQ 13/11/2026 · SOLO MATERIALES v5.1 · ID nuevo reservado en todas las fuentes sin perder protección de identidad -->
 <!DOCTYPE html>
@@ -8113,7 +8114,20 @@ function cqClaveIntegracionRespaldo(x){
   return 'fp:'+origen+'|obra:'+obra+'|mat:'+material+'|fecha:'+fecha+'|qty:'+cantidad;
 }
 
+// La huella de respaldo (producto/obra/fecha/cantidad) puede repetirse entre compras.
+// Para Caja Gerencia, un ID de integracion + movimiento + obra es más preciso.
+// Una baja real sigue protegida por ignoredIntegrationIds o ignoredIntegrationKeys.
+function cqCajaGerenciaIdentidadExactaMateriales(x){
+  if(!x)return false;
+  var origen=cqOrigenCargaNormalizado(x);
+  if(origen!=='caja_gerencia'&&origen!=='cq_caja_gerencia')return false;
+  var mov=String(x.sourceMovementId||'').trim();
+  var iid=String(x.integracionId||'').trim();
+  var obra=cqClaveObraIntegracion(x.obraNameOrigen||x.obraName||'');
+  return !!(mov&&iid&&obra);
+}
 function cqIntegracionRespaldoIgnorada(x){
+  if(cqCajaGerenciaIdentidadExactaMateriales(x))return false;
   var k=cqClaveIntegracionRespaldo(x);
   return !!k && Array.isArray(state.ignoredIntegrationFingerprints)
     && state.ignoredIntegrationFingerprints.some(function(v){return String(v)===k;});
@@ -8935,7 +8949,8 @@ async function cqGuardarMaterialesSeguro(extra){
       var lk=cqClaveIntegracionLogica(c);
       if(lk && clavesIgnoradas.indexOf(String(lk))>=0)return false;
       var fp=cqClaveIntegracionRespaldo(c);
-      if(fp && fpsIgnoradas.indexOf(String(fp))>=0)return false;
+      // No descartar compras distintas de Caja con la misma huella histórica.
+      if(!cqCajaGerenciaIdentidadExactaMateriales(c)&&fp&&fpsIgnoradas.indexOf(String(fp))>=0)return false;
       return true;
     }
     locCargas.filter(esAuto).filter(autoPermitida).forEach(function(c){
