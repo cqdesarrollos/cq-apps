@@ -2270,6 +2270,31 @@ body{background:radial-gradient(circle at 20% 0%,rgba(46,125,94,.07),transparent
 }
 </style>
 
+<style id="cq-panol-carga-continua-2026-11-20">
+.cq-panol-cola-salidas{display:none;margin-top:7px;padding:7px 10px;border-radius:9px;font-size:10px;font-weight:800;line-height:1.35}
+.cq-panol-cola-salidas.busy{display:block;color:#315B79;background:#EDF5FB;border:1px solid #D5E8F5}
+.cq-panol-cola-salidas.error{display:block;color:#A53A2E;background:#FFF1EF;border:1px solid #F1C7C0}
+</style>
+<style id="cq-panol-aviso-eliminando-css">
+/* Aviso visual exclusivo del borrado de consumos; no modifica el proceso. */
+#cq-panol-aviso-eliminando{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:100000;display:flex;align-items:center;gap:11px;
+  padding:16px 22px;border-radius:15px;
+  background:#173F34;color:#fff;
+  border:1px solid rgba(255,255,255,.2);
+  box-shadow:0 12px 45px rgba(0,0,0,.27);
+  font:800 16px 'Space Grotesk',sans-serif;
+  white-space:nowrap;pointer-events:none;
+}
+#cq-panol-aviso-eliminando .cq-panol-spinner{
+  width:19px;height:19px;flex:0 0 19px;
+  border:2.5px solid rgba(255,255,255,.35);
+  border-top-color:#fff;border-radius:50%;
+  animation:cq-panol-giro .75s linear infinite;
+}
+@keyframes cq-panol-giro{to{transform:rotate(360deg)}}
+</style>
 </head>
 <body>
 
@@ -3414,8 +3439,68 @@ function cqPanolSetSyncEstadoActual(movId,destino,estado,error){
     actual.materialesSyncError=String(error||'');
     actual.materialesSyncAt=at;
   }
+  // CQ: actualizar en vivo SOLAMENTE el punto correspondiente. Antes el
+  // movimiento ya estaba validado pero la pantalla seguía mostrando gris
+  // hasta entrar de nuevo, porque la cola no reconstruye el formulario.
+  cqPanolActualizarPuntosMovimiento(actual.id,destino);
 }
-async function sincronizarConsumoConGastos(mov,activo){
+function cqPanolActualizarPuntosMovimiento(movId,destino){
+  var mov=(state.movimientos||[]).find(function(m){return String(m&&m.id||'')===String(movId);});
+  if(!mov)return;
+  var filas=document.querySelectorAll('#obra-detalle [data-cq-mov-id]');
+  for(var i=0;i<filas.length;i++){
+    if(String(filas[i].getAttribute('data-cq-mov-id'))!==String(movId))continue;
+    var destinos=destino?[destino]:['gastos','materiales'];
+    destinos.forEach(function(d){
+      var clase=d==='gastos'?'gasto-sync-cell':'mat-sync-cell';
+      var raiz=filas[i].querySelector('.'+clase+' .sync-labeled-panol');
+      if(!raiz)return;
+      var viejo=raiz.querySelector(d==='gastos'?'.gasto-sync-dot':'.mat-sync-dot');
+      if(!viejo)return;
+      var nuevo=document.createElement('span');
+      nuevo.innerHTML=d==='gastos'?puntoGastosPanol(mov):puntoMaterialesConsumo(mov);
+      if(nuevo.firstElementChild)viejo.replaceWith(nuevo.firstElementChild);
+    });
+    break;
+  }
+}
+// Control de concurrencia por salida. Se necesita además de la cola global:
+// los reintentos automáticos y el botón Actualizar pueden escribir por separado.
+var cqPanolBorrandoConsumos=new Set();
+var cqPanolMaterialesActivos=new Map();
+var cqPanolGastosActivos=new Map();
+function cqPanolConteoOperacion(mapa,id,delta){
+  id=String(id||'');
+  if(!id)return;
+  var n=Math.max(0,(mapa.get(id)||0)+delta);
+  if(n)mapa.set(id,n);else mapa.delete(id);
+}
+function cqPanolConsumoOcupado(id){
+  id=String(id);
+  return !!((typeof cqPanolSalidasPendientesPersist!=='undefined'&&cqPanolSalidasPendientesPersist.has(id))||
+    (typeof cqSyncIdsEnColaPanol!=='undefined'&&cqSyncIdsEnColaPanol.has(id))||
+    (typeof cqReparandoMaterialesPanol!=='undefined'&&cqReparandoMaterialesPanol.has(integracionConsumoId(id)))||
+    cqPanolMaterialesActivos.has(id)||cqPanolGastosActivos.has(id));
+}
+async function cqPanolEsperarConsumoLibre(id){
+  var hasta=Date.now()+45000;
+  while(cqPanolConsumoOcupado(id)){
+    if(window.__cqPanolUltimoErrorGuardado)throw new Error('Existe un guardado no confirmado en Firebase. No se borró nada.');
+    if(Date.now()>hasta)throw new Error('La sincronización de esta salida sigue pendiente. Reintentá cuando termine; no se borró nada.');
+    await new Promise(function(resolve){setTimeout(resolve,140);});
+  }
+  if(window.__cqPanolUltimoErrorGuardado)throw new Error('Existe un guardado no confirmado en Firebase. No se borró nada.');
+}
+
+async function sincronizarConsumoConGastos(mov,activo,opciones){
+  var __cqSyncMovId=String(mov&&mov.id||'');
+  var __cqEsAlta=activo!==false;
+  if(__cqEsAlta&&cqPanolBorrandoConsumos.has(__cqSyncMovId)&&!(opciones&&opciones.permitirDuranteBorrado)){
+    throw new Error('La salida se está eliminando; no se puede volver a publicar.');
+  }
+  if(__cqEsAlta)cqPanolConteoOperacion(cqPanolGastosActivos,__cqSyncMovId,1);
+  try{
+  var aplazarEstado=!!(opciones&&opciones.aplazarEstadoPanol);
   if(!mov)throw new Error('Consumo no encontrado');
   await cargarConfigGastosPanol();
   if(!mov.gastosObraId)throw new Error('La salida no tiene obra vinculada con Gastos');
@@ -3424,7 +3509,7 @@ async function sincronizarConsumoConGastos(mov,activo){
     mov.gastosSyncError='Pañol deshabilitado para esta obra desde Gastos';
     mov.gastosSyncAt=new Date().toISOString();
     cqPanolSetSyncEstadoActual(mov.id,'gastos','omitido',mov.gastosSyncError);
-    await persist();
+    if(!aplazarEstado)await persist();
     return true;
   }
   await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),activo===false);
@@ -3434,7 +3519,10 @@ async function sincronizarConsumoConGastos(mov,activo){
   // Actualizar también la referencia vigente dentro de state. Esto evita que un
   // reemplazo/reconciliación del estado deje el punto rojo aunque Gastos sí se guardó.
   cqPanolSetSyncEstadoActual(mov.id,'gastos',mov.gastosSyncEstado,mov.gastosSyncError);
-  await persist();
+  if(!aplazarEstado)await persist();
+  }finally{
+    if(__cqEsAlta)cqPanolConteoOperacion(cqPanolGastosActivos,__cqSyncMovId,-1);
+  }
 }
 function puntoGastosPanol(mov){
   if(!mov||!mov.gastosObraId)return '';
@@ -3451,7 +3539,8 @@ function puntoGastosPanol(mov){
 }
 var verificandoGastosPanol=false;
 async function verificarGastosPanol(){
-  if(verificandoGastosPanol||!window._dbReady||!gastosConfigPanol)return;
+  // Una verificación simultánea no debe pintar rojo sobre una reparación activa.
+  if(verificandoGastosPanol||cqPanolRecuperandoGastosPendientes||!window._dbReady||!gastosConfigPanol)return;
   verificandoGastosPanol=true;
   try{
     var movs=state.movimientos.filter(function(m){
@@ -3466,6 +3555,8 @@ async function verificarGastosPanol(){
     }
     var cambio=false;
     movs.forEach(function(m){
+      if((typeof cqSyncIdsEnColaPanol!=='undefined'&&cqSyncIdsEnColaPanol&&cqSyncIdsEnColaPanol.has(String(m.id))) ||
+         (typeof cqPanolSalidasPendientesPersist!=='undefined'&&cqPanolSalidasPendientesPersist&&cqPanolSalidasPendientesPersist.has(String(m.id))))return;
       var arr=docs[m.gastosObraId],next='error',err='';
       if(arr===null)err='No se pudo verificar Firebase';
       else{
@@ -3477,12 +3568,14 @@ async function verificarGastosPanol(){
       }
       if(m.gastosSyncEstado!==next||m.gastosSyncError!==err){
         m.gastosSyncEstado=next;m.gastosSyncError=err;m.gastosSyncAt=new Date().toISOString();cambio=true;
+        cqPanolActualizarPuntosMovimiento(m.id,'gastos');
       }
     });
     if(cambio){
       // Estado de verificación calculado: no sobreescribir TODO el stock en Firebase
       // por el resultado de una lectura de Gastos. Se recalcula en cada inicio.
-      if(curTab==='obras')renderObrasTab();
+      // Los puntos ya fueron actualizados individualmente arriba.
+      // No reconstruir el formulario mientras el usuario carga una salida.
     }
   }finally{verificandoGastosPanol=false;}
 }
@@ -3618,8 +3711,9 @@ function setSyncStatus(txt,cls){
   if(String(txt).toLowerCase().indexOf('guardando')>=0){
     cqSyncStatusTimerPanol=setTimeout(function(){
       if(el.textContent==='Guardando...'){
-        el.textContent='⚠ Guardado demorado';
-        el.className='sync-status err';
+        // Todavía no hay error: Firebase puede confirmar esta operación luego.
+        el.textContent='Confirmando guardado…';
+        el.className='sync-status';
       }
     },15000);
   }
@@ -3901,15 +3995,27 @@ function panolAplicarAcopioAutoritativo(local,remote){
 }
 
 function cqPanolConTimeout(promise,ms,etiqueta){
-  return Promise.race([
-    promise,
-    new Promise(function(_resolve,reject){
-      setTimeout(function(){reject(new Error((etiqueta||'Operación')+' demoró más de '+Math.round(ms/1000)+' s'));},ms);
-    })
-  ]);
+  return new Promise(function(resolve,reject){
+    var timer=setTimeout(function(){
+      reject(new Error((etiqueta||'Operación')+' demoró más de '+Math.round(ms/1000)+' s'));
+    },ms);
+    Promise.resolve(promise).then(function(valor){
+      clearTimeout(timer);resolve(valor);
+    },function(error){
+      clearTimeout(timer);reject(error);
+    });
+  });
 }
 
+// Las escrituras de stock se ejecutan en orden. Una sincronización anterior
+// no puede terminar después y sobrescribir un consumo más reciente.
+var cqPanolTurnoPersist=Promise.resolve();
 async function persist(opts){
+  var turnoAnterior=cqPanolTurnoPersist;
+  var liberarTurno;
+  cqPanolTurnoPersist=new Promise(function(resolve){liberarTurno=resolve;});
+  await turnoAnterior;
+  try{
   opts=opts||{};
   // No iniciar un guardado sobre una copia local cuya escritura inicial sigue en curso.
   await cqPanolCacheInicialEnCurso;
@@ -3921,7 +4027,7 @@ async function persist(opts){
   if(window._dbReady){
     try{
       cqLecturaTempranaPanol=cqPanolConTimeout(
-        window._getDoc(window._doc(window._db,DOC_COL,DOC_ID)),12000,'Lectura de Pañol'
+        window._getDoc(window._doc(window._db,DOC_COL,DOC_ID)),18000,'Lectura de Pañol'
       ).then(function(snap){return {snap:snap};},function(error){return {error:error};});
     }catch(error){cqLecturaTempranaPanol=Promise.resolve({error:error});}
   }
@@ -3939,7 +4045,7 @@ async function persist(opts){
       var ref=window._doc(window._db,DOC_COL,DOC_ID);
       var lectura=cqLecturaTempranaPanol
         ? await cqLecturaTempranaPanol
-        : {snap:await cqPanolConTimeout(window._getDoc(ref),12000,'Lectura de Pañol')};
+        : {snap:await cqPanolConTimeout(window._getDoc(ref),18000,'Lectura de Pañol')};
       if(lectura.error)throw lectura.error;
       var snapPrev=lectura.snap;
       var remotoPrev=null;
@@ -4021,7 +4127,7 @@ async function persist(opts){
       await cqPanolConTimeout(window._setDoc(
         ref,
         JSON.parse(JSON.stringify(Object.assign({},state,{updatedAt:new Date().toISOString()})))
-      ),12000,'Guardado de Pañol');
+      ),30000,'Guardado de Pañol');
 
       if(panolTieneDatos(state)){
         await panolGuardarBackupLocal(state,'último estado válido');
@@ -4056,6 +4162,9 @@ async function persist(opts){
     }
   }
   return true;
+  }finally{
+    liberarTurno();
+  }
 }
 
 // Una vez fallido un guardado, el error se muestra con detalle al pulsar el
@@ -4193,6 +4302,10 @@ function startFirebase(){
         },Math.max(50,suppressRemoteUntil-Date.now()+80));
         return;
       }
+      // CQ carga continua: un snapshot remoto no debe quitar salidas recién
+      // descontadas mientras están esperando su confirmación de guardado.
+      // La cola conserva el orden, y persist() sigue consultando Firebase.
+      if(typeof cqPanolSalidasPendientesPersist!=='undefined' && cqPanolSalidasPendientesPersist.size)return;
       // Si un guardado no fue confirmado, no reemplazar lo pendiente por un
       // snapshot de otra sesión. La situación requiere diagnóstico antes de operar.
       if(window.__cqPanolUltimoErrorGuardado)return;
@@ -5868,7 +5981,7 @@ async function actualizarMaterialesObraPanol(){
     var d=snap.exists()?(snap.data()||{}):{};
     var existentes=new Set((Array.isArray(d.cargas)?d.cargas:[]).map(function(c){return String(c&&c.integracionId||'');}).filter(Boolean));
     var movs=state.movimientos.filter(function(m){
-      if(!m||m.tipo!=='salida'||m.materialesAgregar===false)return false;
+      if(!m||m.tipo!=='salida'||m.materialesAgregar===false||cqPanolBorrandoConsumos.has(String(m.id)))return false;
       if(!movimientoVisiblePanol(m))return false;
       if(m.gastosObraId && !obraPermiteMaterialesPanol(m.gastosObraId))return false;
       if(obraId!=='__all__'&&m.gastosObraId!==obraId)return false;
@@ -5896,7 +6009,7 @@ async function actualizarGastosObraPanol(){
     if(!window._dbReady)throw new Error('Firebase no está disponible');
     await cargarConfigGastosPanol();
     var movs=state.movimientos.filter(function(m){
-      return m&&m.tipo==='salida'&&movimientoVisiblePanol(m)&&(obraId==='__all__'||m.gastosObraId===obraId)&&m.gastosDebeCargar!==false&&m.gastosSyncEstado!=='ok';
+      return m&&m.tipo==='salida'&&!cqPanolBorrandoConsumos.has(String(m.id))&&movimientoVisiblePanol(m)&&(obraId==='__all__'||m.gastosObraId===obraId)&&m.gastosDebeCargar!==false&&m.gastosSyncEstado!=='ok';
     });
     var errores=[];
     for(var i=0;i<movs.length;i++){
@@ -5909,6 +6022,74 @@ async function actualizarGastosObraPanol(){
 }
 window.actualizarMaterialesObraPanol=actualizarMaterialesObraPanol;
 window.actualizarGastosObraPanol=actualizarGastosObraPanol;
+
+// Si el usuario cerró Pañol después de confirmar stock y antes de terminar
+// Gastos, reanudar SÓLO esos movimientos pendientes al volver a entrar.
+// Se consulta el documento real: si el gasto ya existe con el importe correcto,
+// sólo se corrige su indicador; jamás se inserta un duplicado.
+var cqPanolRecuperandoGastosPendientes=false;
+async function cqPanolRecuperarGastosPendientes(){
+  if(cqPanolRecuperandoGastosPendientes||!window._dbReady||!window.__cqPanolDataReady)return;
+  if(window.__cqPanolUltimoErrorGuardado)return;
+  var movs=(state.movimientos||[]).filter(function(m){
+    return m&&m.tipo==='salida'&&m.gastosSyncEstado==='pendiente'&&
+      m.gastosDebeCargar!==false&&m.gastosObraId&&obraIntegrablePanol(m.gastosObraId)&&
+      !cqPanolBorrandoConsumos.has(String(m.id))&&
+      !cqSyncIdsEnColaPanol.has(String(m.id))&&!cqPanolSalidasPendientesPersist.has(String(m.id));
+  });
+  if(!movs.length)return;
+  cqPanolRecuperandoGastosPendientes=true;
+  try{
+    var grupos={};
+    movs.forEach(function(m){(grupos[m.gastosObraId]||(grupos[m.gastosObraId]=[])).push(m);});
+    var cambio=false;
+    for(var obraId of Object.keys(grupos)){
+      var listado;
+      try{
+        var snap=await window._getDocFromServer(window._doc(window._db,'gastos',obraId));
+        listado=snap.exists()&&Array.isArray((snap.data()||{}).gastos)?snap.data().gastos:[];
+      }catch(e){
+        console.warn('No se pudo verificar Gastos pendiente de Pañol',obraId,e);
+        continue; // Sin lectura confiable, no reescribir a ciegas.
+      }
+      for(var m of grupos[obraId]){
+        if(cqPanolBorrandoConsumos.has(String(m.id))||cqSyncIdsEnColaPanol.has(String(m.id))||cqPanolSalidasPendientesPersist.has(String(m.id)))continue;
+        var existente=listado.find(function(g){return String(g.id)===String(gastoPanolId(m.id));});
+        var importe=importeDetallePanol(m.detalle||[]);
+        if(existente && Math.abs((Number(existente.monto)||0)-importe)<=0.01){
+          cqPanolSetSyncEstadoActual(m.id,'gastos','ok','');
+          cambio=true;
+          continue;
+        }
+        if(existente){
+          cqPanolSetSyncEstadoActual(m.id,'gastos','error','El gasto existe con otro importe. Revisar antes de actualizar.');
+          cambio=true;
+          continue;
+        }
+        try{
+          await cqPanolConTimeout(sincronizarConsumoConGastos(m,true,{aplazarEstadoPanol:true}),20000,'Recuperar Gastos');
+          cambio=true;
+        }catch(e){
+          cqPanolSetSyncEstadoActual(m.id,'gastos','error',String(e&&e.message||e));
+          cambio=true;
+          console.warn('Recuperar Gastos de Pañol',m.id,e);
+        }
+      }
+    }
+    if(cambio){
+      var ok=await persist();
+      if(ok===false)console.warn('Estados de Gastos recuperados sin confirmación de Pañol');
+    }
+  }finally{
+    cqPanolRecuperandoGastosPendientes=false;
+    // Verificación posterior, cuando las transacciones pendientes ya terminaron.
+    setTimeout(function(){verificarGastosPanol().catch(function(e){console.warn(e);});},250);
+  }
+}
+document.addEventListener('cq-panol-data-ready',function(){
+  // No bloquear la apertura. Esta reparación no toca salidas confirmadas.
+  setTimeout(function(){cqPanolRecuperarGastosPendientes().catch(function(e){console.warn('Pendientes Gastos Pañol',e);});},300);
+});
 
 function renderObraDetalle(){
   cqCapturarBorradorConsumoPanol();
@@ -5959,6 +6140,7 @@ function renderObraDetalle(){
   html+='<div class="cq-mat-picker" id="consumo-materiales-picker"><input class="cq-mat-search" id="consumo-materiales-search" placeholder="Buscar producto, código o categoría..." autocomplete="off" oninput="window.renderCatalogoMaterialesConsumoPanol()"><div class="cq-mat-results" id="consumo-materiales-results"></div><div class="cq-mat-selected" id="consumo-materiales-selected">Ningún producto seleccionado</div></div>';
   html+='<div class="fld"><label>Comentario (opcional)</label><textarea class="consumo-comment" id="consumo-comentario" placeholder="Comentario para Gastos y Materiales"></textarea></div>';
   html+='<button id="cq-btn-cargar-obra" class="btn-cargar" onclick="window.registrarConsumo()">➖ Descontar de stock</button>';
+  html+='<div id="cq-panol-cola-salidas" class="cq-panol-cola-salidas" role="status" aria-live="polite"></div>';
   html+='</div></div>';
 
   var histSubs=[];
@@ -6001,7 +6183,7 @@ function renderObraDetalle(){
     html+=movs.map(function(m){
       var prod=state.productos.find(function(p){return p.id===m.prodId;});
       var total=m.cantidad*m.precio;
-      return '<div class="hist-entry">'
+      return '<div class="hist-entry" data-cq-mov-id="'+escHTML(String(m.id))+'">'
         +'<div class="hist-fecha">'+fmtFecha(m.ts).replace(' ','<br>')+'</div>'
         +'<div class="hist-mid"><div class="hist-mat">'+(prod?prod.nombre:'(producto eliminado)')+'</div><div class="hist-sub">'+m.usuario+' · '+(m.gastosDebeCargar===false
           ?('Sin precio · '+(m.materialesAgregar===false?'solo Pañol':'Materiales'))
@@ -6027,6 +6209,7 @@ function renderObraDetalle(){
   det.innerHTML=html;
   renderSubrubrosPanol('');
   cqRestaurarBorradorConsumoPanol(curObra);
+  if(typeof cqPanolActualizarAvisoSalidas==='function')cqPanolActualizarAvisoSalidas();
 }
 
 const CQ_BASE_CATALOGO_MATERIALES_PANOL=[{"id":1,"name":"Hierro 6","code":"","category":"HIERROS"},{"id":2,"name":"Hierro 8","code":"","category":"HIERROS"},{"id":3,"name":"Hierro 10","code":"","category":"HIERROS"},{"id":4,"name":"Mallas Q188","code":"","category":"HIERROS"},{"id":5,"name":"Mallas Q100 (4mm)","code":"","category":"HIERROS"},{"id":6,"name":"Mallas Q131","code":"","category":"HIERROS"},{"id":7,"name":"Cemento","code":"","category":"CEMENTO Y HERCAL"},{"id":8,"name":"Hercal","code":"","category":"CEMENTO Y HERCAL"},{"id":9,"name":"Pallets Cemento","code":"","category":"CEMENTO Y HERCAL"},{"id":10,"name":"Pallets Hercal","code":"","category":"CEMENTO Y HERCAL"},{"id":11,"name":"Portante 12 (126u)","code":"","category":"LADRILLOS"},{"id":12,"name":"Portante 18 (90u)","code":"","category":"LADRILLOS"},{"id":13,"name":"Techo 16,5 (60u)","code":"","category":"LADRILLOS"},{"id":14,"name":"Techo 11 (80u)","code":"","category":"LADRILLOS"},{"id":15,"name":"Tabique 12 Palmar (144u)","code":"","category":"LADRILLOS"},{"id":16,"name":"Tabique 8 Palmar (198u)","code":"","category":"LADRILLOS"},{"id":17,"name":"Portante bloque 12","code":"","category":"LADRILLOS"},{"id":18,"name":"Portante bloque 18","code":"","category":"LADRILLOS"},{"id":19,"name":"Bovedillas","code":"","category":"LADRILLOS"},{"id":20,"name":"Ladrillon 18","code":"","category":"LADRILLOS"},{"id":21,"name":"Ladrillos comunes","code":"","category":"LADRILLOS"},{"id":22,"name":"Techi Cau emuls. Asf.","code":"","category":"IMPERMEABILIZANTES"},{"id":23,"name":"Hidrofugo 20 kgs","code":"","category":"IMPERMEABILIZANTES"},{"id":24,"name":"Agrotileno","code":"","category":"IMPERMEABILIZANTES"},{"id":25,"name":"Sika Latex 5 Lts","code":"","category":"IMPERMEABILIZANTES"},{"id":26,"name":"Alambre kgs","code":"","category":"ALAMBRES Y CLAVOS"},{"id":27,"name":"Clavos kgs","code":"","category":"ALAMBRES Y CLAVOS"},{"id":28,"name":"Fino interior","code":"","category":"REVOQUES Y YESO"},{"id":29,"name":"Fino exterior","code":"","category":"REVOQUES Y YESO"},{"id":30,"name":"Yeso (40 kgs)","code":"","category":"REVOQUES Y YESO"},{"id":31,"name":"Guardacanto yesero x 2m","code":"","category":"REVOQUES Y YESO"},{"id":32,"name":"Viguetas 6,5 mts","code":"","category":"VIGUETAS"},{"id":33,"name":"Viguetas 4,20 mts","code":"","category":"VIGUETAS"},{"id":34,"name":"Viguetas 4 mts","code":"","category":"VIGUETAS"},{"id":35,"name":"Viguetas 3,20 mts","code":"","category":"VIGUETAS"},{"id":36,"name":"Viguetas 3 mts","code":"","category":"VIGUETAS"},{"id":37,"name":"Viguetas 2,80 mts","code":"","category":"VIGUETAS"},{"id":38,"name":"Viguetas 2 mts","code":"","category":"VIGUETAS"},{"id":39,"name":"Viguetas 1,80 mts","code":"","category":"VIGUETAS"},{"id":40,"name":"Viguetas 1,60 mts","code":"","category":"VIGUETAS"},{"id":41,"name":"Viguetas 1,40 mts","code":"","category":"VIGUETAS"},{"id":42,"name":"Viguetas 1 mts","code":"","category":"VIGUETAS"},{"id":43,"name":"Peg. Porcelanato x25kg","code":"","category":"PEGAMENTOS Y PISOS"},{"id":44,"name":"Peg. Ceramica x25kg","code":"","category":"PEGAMENTOS Y PISOS"},{"id":45,"name":"Pastina kgs","code":"","category":"PEGAMENTOS Y PISOS"},{"id":46,"name":"Revestimiento cocina","code":"","category":"PEGAMENTOS Y PISOS"},{"id":47,"name":"Revestimiento bano 2 par.","code":"","category":"PEGAMENTOS Y PISOS"},{"id":48,"name":"Piso interior","code":"","category":"PEGAMENTOS Y PISOS"},{"id":49,"name":"Piso exterior","code":"","category":"PEGAMENTOS Y PISOS"},{"id":50,"name":"Interior blanca","code":"","category":"PINTURAS"},{"id":51,"name":"General exterior 1","code":"","category":"PINTURAS"},{"id":52,"name":"Color fuerte ext.","code":"","category":"PINTURAS"},{"id":53,"name":"Fijadores","code":"","category":"PINTURAS"},{"id":54,"name":"Fijador fondo madera","code":"","category":"PINTURAS"},{"id":55,"name":"Techos (pintura)","code":"","category":"PINTURAS"},{"id":56,"name":"Masilla Durlock","code":"","category":"PINTURAS"},{"id":57,"name":"Bolsas Telgopor","code":"","category":"VARIOS"}];
@@ -6250,6 +6433,7 @@ var cqReparandoMaterialesPanol=new Set();
 
 function cqProgramarReparacionMaterialesPanol(mov){
   if(!mov||mov.tipo!=='salida'||mov.materialesAgregar===false)return;
+  if(cqPanolBorrandoConsumos.has(String(mov.id)))return;
   if(!movimientoVisiblePanol(mov) || (mov.gastosObraId&&!obraPermiteMaterialesPanol(mov.gastosObraId)))return;
   var iid=integracionConsumoId(mov.id);
   if(cqReparandoMaterialesPanol.has(String(iid)))return;
@@ -6262,8 +6446,10 @@ function cqProgramarReparacionMaterialesPanol(mov){
     try{
       var actual=state.movimientos.find(function(x){
         return x && String(x.id)===String(mov.id) && x.tipo==='salida';
-      })||mov;
-
+      });
+      // Nunca usar el objeto viejo como respaldo: si la salida ya se borró,
+      // repararla desde esa referencia la vuelve a crear en Materiales.
+      if(!actual||cqPanolBorrandoConsumos.has(String(mov.id)))return;
       if(actual.materialesAgregar===false)return;
 
       var prod=state.productos.find(function(p){
@@ -6281,9 +6467,11 @@ function cqProgramarReparacionMaterialesPanol(mov){
     }catch(e){
       var actualErr=state.movimientos.find(function(x){
         return x && String(x.id)===String(mov.id);
-      })||mov;
-      actualErr.materialesSyncEstado='error';
-      actualErr.materialesSyncError='No se pudo reparar Materiales: '+String(e&&e.message||e);
+      });
+      if(actualErr&&!cqPanolBorrandoConsumos.has(String(mov.id))){
+        actualErr.materialesSyncEstado='error';
+        actualErr.materialesSyncError='No se pudo reparar Materiales: '+String(e&&e.message||e);
+      }
       // Evitar sobrescribir el stock por un error en otra integración.
       console.warn('Reparación automática Pañol → Materiales',e);
     }finally{
@@ -6356,7 +6544,7 @@ function iniciarVerificacionMaterialesPanol(){
     // Pañol la reconstruye automáticamente en Materiales.
     var cambioEstado=false;
     state.movimientos.forEach(function(m){
-      if(!m||m.tipo!=='salida'||m.materialesAgregar===false||!movimientoVisiblePanol(m)||(m.gastosObraId&&!obraPermiteMaterialesPanol(m.gastosObraId)))return;
+      if(!m||m.tipo!=='salida'||m.materialesAgregar===false||cqPanolBorrandoConsumos.has(String(m.id))||!movimientoVisiblePanol(m)||(m.gastosObraId&&!obraPermiteMaterialesPanol(m.gastosObraId)))return;
       var iid=integracionConsumoId(m.id);
       var existe=ids.has(String(iid));
 
@@ -6367,7 +6555,8 @@ function iniciarVerificacionMaterialesPanol(){
           cambioEstado=true;
         }
       }else{
-        if(!cqReparandoMaterialesPanol.has(String(iid))){
+        if(!cqReparandoMaterialesPanol.has(String(iid)) &&
+           !(typeof cqSyncIdsEnColaPanol!=='undefined'&&cqSyncIdsEnColaPanol&&cqSyncIdsEnColaPanol.has(String(m.id)))){
           m.materialesSyncEstado='pendiente';
           m.materialesSyncError='La carga faltaba en Materiales · reparación automática en curso';
           cambioEstado=true;
@@ -6789,7 +6978,14 @@ async function cqVerificarCargaMaterialesReal(iid,payload){
   return qtyOk&&obraOk;
 }
 
-async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
+async function sincronizarConsumoConMateriales(mov,activo,prodFallback,opciones){
+  var __cqSyncMovId=String(mov&&mov.id||'');
+  var __cqEsAlta=activo!==false;
+  if(__cqEsAlta&&cqPanolBorrandoConsumos.has(__cqSyncMovId)&&!(opciones&&opciones.permitirDuranteBorrado)){
+    throw new Error('La salida se está eliminando; no se puede volver a publicar.');
+  }
+  if(__cqEsAlta)cqPanolConteoOperacion(cqPanolMaterialesActivos,__cqSyncMovId,1);
+  try{
   if(!window._dbReady) throw new Error('Firebase no disponible');
   if(!mov) throw new Error('Consumo no encontrado');
   if(activo!==false && mov.gastosObraId && !obraIntegrablePanol(mov.gastosObraId)){
@@ -6895,6 +7091,89 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
     cqPanolSetSyncEstadoActual(mov.id,'materiales','no','');
   }
   return true;
+  }finally{
+    if(__cqEsAlta)cqPanolConteoOperacion(cqPanolMaterialesActivos,__cqSyncMovId,-1);
+  }
+}
+
+// CQ 20/11/2026 — carga continua de salidas.
+// Al tocar Descontar, el movimiento ya reserva los lotes en memoria. La
+// escritura de Pañol queda en cola y el formulario se libera sin esperar red.
+// Si Firebase falla, NO se publican integraciones de esa salida y se detiene
+// la cola: las salidas pendientes permanecen identificadas para diagnóstico.
+var cqPanolSalidasPendientesPersist=new Map();
+var cqPanolColaPersistSalidas=Promise.resolve(true);
+var cqPanolColaPersistSalidasDetenida=false;
+
+function cqPanolActualizarAvisoSalidas(){
+  var el=document.getElementById('cq-panol-cola-salidas');
+  if(!el)return;
+  var pendientes=cqPanolSalidasPendientesPersist.size;
+  var sincronizando=(typeof cqSyncIdsEnColaPanol!=='undefined'&&cqSyncIdsEnColaPanol)?cqSyncIdsEnColaPanol.size:0;
+  if(cqPanolColaPersistSalidasDetenida && pendientes){
+    el.className='cq-panol-cola-salidas error';
+    el.textContent='Guardado no confirmado ('+pendientes+' salida'+(pendientes===1?'':'s')+'). Revisá el aviso superior. No repitas estas salidas.';
+  }else if(pendientes){
+    el.className='cq-panol-cola-salidas busy';
+    el.textContent='Guardando '+pendientes+' salida'+(pendientes===1?'':'s')+' en Pañol. Podés cargar otra; no cierres la app aún.';
+  }else if(sincronizando){
+    el.className='cq-panol-cola-salidas busy';
+    el.textContent='Pañol guardado. Validando en Materiales y Gastos en segundo plano.';
+  }else{
+    el.className='cq-panol-cola-salidas';
+    el.textContent='';
+  }
+}
+
+function cqEncolarPersistSalidaPanol(movId,meta){
+  var id=String(movId);
+  cqPanolSalidasPendientesPersist.set(id,meta||{});
+  cqPanolActualizarAvisoSalidas();
+
+  var tarea=async function(){
+    if(cqPanolColaPersistSalidasDetenida||window.__cqPanolUltimoErrorGuardado)return false;
+    var confirmado=false;
+    try{
+      // persist() ya serializa las escrituras de stock e incluye respaldo,
+      // reconciliación de Acopio y confirmación real de Firebase.
+      confirmado=await persist();
+    }catch(e){
+      console.warn('Guardado en cola de salida de Pañol',e);
+      window.__cqPanolUltimoErrorGuardado={
+        codigo:String(e&&e.code||'error'),
+        detalle:String(e&&e.message||e).slice(0,330),
+        fecha:new Date().toISOString()
+      };
+      setSyncStatus('Error al guardar','err');
+    }
+    if(confirmado===false){
+      cqPanolColaPersistSalidasDetenida=true;
+      // persist() también puede rechazar la escritura por sus protecciones
+      // de integridad; en ese caso no dejar el indicador superior como OK.
+      if(!window.__cqPanolUltimoErrorGuardado){
+        window.__cqPanolUltimoErrorGuardado={
+          codigo:'guardado-no-confirmado',
+          detalle:'Pañol rechazó o no pudo confirmar esta escritura. Revisar los datos antes de repetir la salida.',
+          fecha:new Date().toISOString()
+        };
+        setSyncStatus('Guardado no confirmado','err');
+      }
+      cqPanolActualizarAvisoSalidas();
+      showToast('No se confirmó una salida. No la repitas: revisá el aviso de Firebase.','err');
+      return false;
+    }
+    cqPanolSalidasPendientesPersist.delete(id);
+    // Los vínculos externos se ejecutan SÓLO después de confirmar Pañol.
+    cqEncolarSyncConsumoPanol(id,meta);
+    cqPanolActualizarAvisoSalidas();
+    if(cqPanolSalidasPendientesPersist.size===0){
+      showToast('Salida guardada en Pañol · podés seguir cargando');
+    }
+    return true;
+  };
+  var promesa=cqPanolColaPersistSalidas.then(tarea,tarea);
+  cqPanolColaPersistSalidas=promesa.then(function(){return true;},function(){return true;});
+  return promesa;
 }
 
 // CQ — cola de sincronización no bloqueante para consumos.
@@ -6902,71 +7181,106 @@ async function sincronizarConsumoConMateriales(mov,activo,prodFallback){
 // al terminar: así una sincronización anterior nunca borra la carga nueva
 // que el usuario esté completando en pantalla.
 var cqColaSyncConsumosPanol=Promise.resolve();
+var cqSyncIdsEnColaPanol=new Set();
 
 function cqEncolarSyncConsumoPanol(movId,meta){
   meta=meta||{};
+  var id=String(movId);
+  cqSyncIdsEnColaPanol.add(id);
   cqColaSyncConsumosPanol=cqColaSyncConsumosPanol.then(async function(){
-    var mov=(state.movimientos||[]).find(function(m){
-      return String(m&&m.id||'')===String(movId);
-    });
-    if(!mov)return;
+    try{
+      var mov=(state.movimientos||[]).find(function(m){
+        return String(m&&m.id||'')===id;
+      });
+      if(!mov)return;
 
-    var okMat=!meta.cargarMateriales;
-    var okGas=!meta.gastosDebeCargar;
-
-    if(meta.cargarMateriales){
-      try{
-        await sincronizarConsumoConMateriales(mov,true);
-        cqPanolSetSyncEstadoActual(mov.id,'materiales','ok','');
-        okMat=true;
-        await persist();
-      }catch(e){
-        console.warn('Materiales',e);
-        cqPanolSetSyncEstadoActual(mov.id,'materiales','error',String(e&&e.message||e));
-        try{await persist();}catch(_e){}
+      var okMat=!meta.cargarMateriales;
+      var okGas=!meta.gastosDebeCargar;
+      // CQ 20/11/2026 — validación simultánea y segura.
+      // Materiales y Gastos escriben en DOCUMENTOS DISTINTOS; no dependen entre sí.
+      // Mantener la cola de consumos, esperar ambas confirmaciones reales y
+      // recién después persistir los estados en Pañol evita recortar controles.
+      var verificaciones=[];
+      if(meta.cargarMateriales){
+        verificaciones.push((async function(){
+          try{
+            await sincronizarConsumoConMateriales(mov,true);
+            cqPanolSetSyncEstadoActual(mov.id,'materiales','ok','');
+            okMat=true;
+          }catch(e){
+            console.warn('Materiales',e);
+            cqPanolSetSyncEstadoActual(mov.id,'materiales','error',String(e&&e.message||e));
+          }
+        })());
       }
-    }
 
-    if(meta.gastosDebeCargar){
-      try{
-        await sincronizarConsumoConGastos(mov,true);
-        okGas=true;
-      }catch(e){
-        console.warn('Gastos',e);
-        cqPanolSetSyncEstadoActual(mov.id,'gastos','error',String(e&&e.message||e));
-        try{await persist();}catch(_e){}
+      if(meta.gastosDebeCargar){
+        verificaciones.push((async function(){
+          try{
+            // Se preserva la confirmación de la transacción en Gastos.
+            await sincronizarConsumoConGastos(mov,true,{aplazarEstadoPanol:true});
+            okGas=true;
+          }catch(e){
+            console.warn('Gastos',e);
+            cqPanolSetSyncEstadoActual(mov.id,'gastos','error',String(e&&e.message||e));
+          }
+        })());
       }
-    }
+      if(verificaciones.length)await Promise.all(verificaciones);
 
-    // No renderizar la obra acá: el usuario puede estar cargando el siguiente producto.
-    if(meta.cargarMateriales&&okMat&&meta.gastosDebeCargar&&okGas)showToast(
-      Number(meta.cantidadNoMateriales)>0
-        ?'✓ Sincronizado · Materiales '+fmtN(meta.cantidadMateriales)+' u · Gastos OK'
-        :'✓ Sincronizado con Materiales y Gastos'
-    );
-    else if(meta.cargarMateriales&&okMat&&!meta.gastosDebeCargar)showToast('✓ Sincronizado con Materiales');
-    else if(!meta.cargarMateriales&&meta.gastosDebeCargar&&okGas)showToast('✓ Sincronizado con Gastos');
-    else if((meta.cargarMateriales&&!okMat)||(meta.gastosDebeCargar&&!okGas))showToast('⚠️ El consumo quedó en Pañol, pero una sincronización falló. Verificar.','err');
+      if(meta.cargarMateriales||meta.gastosDebeCargar){
+        // Una sola escritura de indicadores en vez de una por módulo.
+        var estadosConfirmados=await persist();
+        if(estadosConfirmados===false){
+          showToast('⚠ No se confirmó la actualización de Pañol. Revisá la barra superior.','err');
+          return;
+        }
+      }
+
+      // Nunca recrear el formulario mientras el usuario escribe otro consumo.
+      if(meta.cargarMateriales&&okMat&&meta.gastosDebeCargar&&okGas)showToast(
+        Number(meta.cantidadNoMateriales)>0
+          ?'✓ Sincronizado · Materiales '+fmtN(meta.cantidadMateriales)+' u · Gastos OK'
+          :'✓ Sincronizado con Materiales y Gastos'
+      );
+      else if(meta.cargarMateriales&&okMat&&!meta.gastosDebeCargar)showToast('✓ Sincronizado con Materiales');
+      else if(!meta.cargarMateriales&&meta.gastosDebeCargar&&okGas)showToast('✓ Sincronizado con Gastos');
+      else if((meta.cargarMateriales&&!okMat)||(meta.gastosDebeCargar&&!okGas))showToast('⚠️ El consumo quedó en Pañol, pero una sincronización falló. Verificar.','err');
+    }finally{
+      cqSyncIdsEnColaPanol.delete(id);
+      cqPanolActualizarAvisoSalidas();
+    }
   }).catch(function(e){
+    cqSyncIdsEnColaPanol.delete(id);
+    cqPanolActualizarAvisoSalidas();
     console.warn('Cola de sincronización Pañol',e);
   });
 }
-
 var cqPanolConsumoObraOcupado=false;
 async function registrarConsumo(){
   if(cqPanolConsumoObraOcupado)return;
   cqPanolConsumoObraOcupado=true;
   try{
-  if(window.__cqPanolUltimoErrorGuardado){
+  if(window.__cqPanolUltimoErrorGuardado||cqPanolColaPersistSalidasDetenida){
     alert('Hay un guardado de Pañol sin confirmar. No registres otra salida hasta revisar el error de la barra superior.');
     return;
   }
   var prod=getProductoDesdeConsumoInput();
+  var prodIdInicial=prod?String(prod.id):'';
   // Confirmar la categoría vigente de Materiales antes de registrar la salida.
   // Sólo actualiza el formulario si el subrubro no fue corregido manualmente.
   if(prod && typeof window.cqPanolConfirmarSubrubroSalida==='function'){
     await window.cqPanolConfirmarSubrubroSalida(prod);
   }
+  // El guardado anterior puede reemplazar el estado al reconciliar Acopio.
+  // Volver a tomar la referencia VIGENTE del mismo producto evita descontar
+  // desde una referencia vieja o un producto cambiado durante la consulta.
+  var prodActual=getProductoDesdeConsumoInput();
+  if(prodIdInicial && (!prodActual||String(prodActual.id)!==prodIdInicial)){
+    showToast('El producto cambió durante la validación. Volvé a confirmar la salida.','err');
+    return;
+  }
+  prod=prodIdInicial?state.productos.find(function(p){return String(p.id)===prodIdInicial;})||null:null;
   var prodId=prod?prod.id:'';
   var cantidad=parseFloat(document.getElementById('consumo-cantidad').value);
   var categoria='mat';
@@ -7079,14 +7393,16 @@ async function registrarConsumo(){
     usuario:usuario||'—',detalle:res.detalle
   };
   state.movimientos.push(mov);
-  var confirmado=await persist();
-  if(confirmado===false){
-    // Conservamos el formulario y el movimiento pendiente; no repetir la salida.
-    showToast('⚠ No se confirmó la salida. No la repitas; tocá el aviso superior.','err');
-    return;
-  }
-  delete cqConsumoDraftsPanol[String(curObra||'')];
+  // La cola confirma primero Pañol y recién luego dispara Gastos/Materiales.
+  // El usuario no tiene que esperar esta escritura para completar otra salida.
+  var confirmacionEnCola=cqEncolarPersistSalidaPanol(mov.id,{
+    cargarMateriales:cargarMateriales,
+    gastosDebeCargar:gastosDebeCargar,
+    cantidadNoMateriales:cantidadNoMateriales,
+    cantidadMateriales:cantidadMateriales
+  });
 
+  delete cqConsumoDraftsPanol[String(curObra||'')];
   document.getElementById('consumo-cantidad').value='';
   document.getElementById('consumo-subrubro').value='';
   document.getElementById('consumo-comentario').value='';
@@ -7095,19 +7411,11 @@ async function registrarConsumo(){
   cqConsumoProdIdPanol='';
   cqMaterialSeleccionadoPanol=null;
   renderObraDetalle();
+  showToast('Salida en cola de guardado · cargá la siguiente');
 
-  // CQ — sincronización en segundo plano.
-  // El consumo ya quedó guardado en Pañol y el formulario se liberó arriba.
-  // Materiales/Gastos continúan linkeándose sin bloquear una nueva carga ni
-  // volver a renderizar el formulario mientras el usuario está escribiendo.
-  cqEncolarSyncConsumoPanol(mov.id,{
-    cargarMateriales:cargarMateriales,
-    gastosDebeCargar:gastosDebeCargar,
-    cantidadNoMateriales:cantidadNoMateriales,
-    cantidadMateriales:cantidadMateriales
-  });
-
-  showToast('✓ Consumo guardado en Pañol · sincronizando en segundo plano');
+  // La promesa se conserva para la auditoría y Deshacer. El finally libera
+  // el formulario inmediatamente, sin esperar confirmaciones de red.
+  return confirmacionEnCola;
 
   }finally{cqPanolConsumoObraOcupado=false;}
 }
@@ -7291,6 +7599,10 @@ async function eliminarCarga(movId){
 
 // ---------- EDITAR / BORRAR CONSUMOS (SALIDA) ----------
 async function editarConsumo(movId){
+  if(cqPanolBorrandoConsumos.has(String(movId))||cqPanolConsumoOcupado(movId)){
+    showToast('Esta salida todavía se está sincronizando. Esperá para modificarla.','err');
+    return;
+  }
   var mov=state.movimientos.find(function(m){return m.id===movId && m.tipo==='salida';});
   if(!mov) return;
 
@@ -7382,37 +7694,113 @@ async function editarConsumo(movId){
   else showToast('⚠️ Consumo modificado, pero alguna sincronización falló. Verificar.','err');
 }
 
+// Aviso persistente mientras Firebase confirma el borrado de una salida.
+// Es solo visual y no cambia la cola, el stock ni las integraciones.
+function cqPanolMostrarAvisoEliminando(){
+  var aviso=document.getElementById('cq-panol-aviso-eliminando');
+  if(!aviso){
+    aviso=document.createElement('div');
+    aviso.id='cq-panol-aviso-eliminando';
+    aviso.setAttribute('role','status');
+    aviso.setAttribute('aria-live','polite');
+    aviso.innerHTML='<span class="cq-panol-spinner" aria-hidden="true"></span><span>Eliminando...</span>';
+    document.body.appendChild(aviso);
+  }
+}
+function cqPanolOcultarAvisoEliminando(){
+  if(cqPanolBorrandoConsumos.size)return;
+  var aviso=document.getElementById('cq-panol-aviso-eliminando');
+  if(aviso)aviso.remove();
+}
+
 async function eliminarConsumo(movId){
-  var mov=state.movimientos.find(function(m){return String(m.id)===String(movId)&&m.tipo==='salida';});
+  var id=String(movId);
+  if(cqPanolBorrandoConsumos.has(id))return;
+  var mov=state.movimientos.find(function(m){return m&&String(m.id)===id&&m.tipo==='salida';});
   if(!mov)return;
-  if(!confirm('¿Eliminar este consumo? El stock se repone.'))return;
-
-  restaurarStockDesdeDetalle(mov.detalle);
-  state.movimientos=state.movimientos.filter(function(m){return String(m.id)!==String(movId);});
-  await persist({eliminarMovimientoIds:[String(movId)]});
-  refrescarVistaActual(mov.prodId);
-
-  var okMat=mov.materialesAgregar===false,okGas=true;
-  if(mov.materialesAgregar!==false){
-    try{
-      var prodFallback=state.productos.find(function(p){return p.id===mov.prodId;}) || {
-        codigo:mov.materialCode||'',nombre:mov.materialName||''
-      };
-      await sincronizarConsumoConMateriales(mov,false,prodFallback);
-      okMat=true;
-    }catch(e){console.warn(e);}
+  if(!confirm('¿Eliminar este consumo? Se quitará de Materiales y Gastos, y se repondrá el stock.'))return;
+  if(!window._dbReady){
+    showToast('Sin Firebase: no se puede confirmar el borrado en Materiales y Gastos.','err');
+    return;
   }
+  cqPanolBorrandoConsumos.add(id);
+  cqPanolMostrarAvisoEliminando();
+  var matBorrado=false,gasBorrado=false,estadoAnterior=null;
+  var fallback=null;
+  var errorPrincipal=null;
+  try{
+    // Una salida puede estar guardada en Pañol pero seguir en la cola de
+    // Materiales/Gastos. Esperar a que TODAS sus escrituras terminen antes
+    // de retirar cualquier vínculo. Esto no bloquea las nuevas salidas.
+    if(cqPanolConsumoOcupado(id))showToast('Esperando que finalice la sincronización para borrar…');
+    await cqPanolEsperarConsumoLibre(id);
+    mov=state.movimientos.find(function(m){return m&&String(m.id)===id&&m.tipo==='salida';});
+    if(!mov)throw new Error('La salida ya no existe en Pañol; revisá el historial.');
+    fallback=state.productos.find(function(p){return String(p.id)===String(mov.prodId);}) ||
+      {codigo:mov.materialCode||'',nombre:mov.materialName||''};
+    estadoAnterior=panolClonarEstado(state);
 
-  if(mov.gastosDebeCargar!==false || mov.gastosSyncEstado==='ok'){
-    okGas=false;
-    try{
-      if(mov.gastosObraId)await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),true);
-      okGas=true;
-    }catch(e){console.warn(e);}
+    // Eliminar por ID aunque el flag diga 'no': puede haber un vínculo
+    // rezagado creado por una sincronización anterior.
+    matBorrado=true; // si la verificación falla, también intentar revertir
+    await sincronizarConsumoConMateriales(mov,false,fallback);
+    // Confirmación fresca de Firebase, sin usar una caché del navegador.
+    if(window._getDocFromServer){
+      var matSnap=await window._getDocFromServer(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+      var cargas=matSnap.exists()&&Array.isArray((matSnap.data()||{}).cargas)?matSnap.data().cargas:[];
+      if(cargas.some(function(c){return String(c&&c.integracionId||'')===integracionConsumoId(id)||
+        (String(c&&c.sourceMovementId||'')===id&&String(c&&c.origen||'').toLowerCase().indexOf('panol')>=0);}))
+        throw new Error('Materiales todavía contiene esta salida. No se confirmó su borrado.');
+    }
+    if(mov.gastosObraId){
+      gasBorrado=true; // transacción con resultado incierto: reponer si abortamos
+      await upsertGastoPanol(mov.gastosObraId,gastoPayloadPanol(mov),true);
+      if(window._getDocFromServer){
+        var snap=await window._getDocFromServer(window._doc(window._db,'gastos',mov.gastosObraId));
+        var gastos=snap.exists()&&Array.isArray((snap.data()||{}).gastos)?snap.data().gastos:[];
+        if(gastos.some(function(g){return String(g&&g.id||'')===String(gastoPanolId(mov.id));})){
+          throw new Error('Gastos todavía contiene esta salida. No se confirmó su borrado.');
+        }
+      }
+    }
+
+    // Recién después de confirmar los destinos, quitar de Pañol y reponer
+    // el FIFO. Así si falla Firebase el registro no desaparece silenciosamente.
+    restaurarStockDesdeDetalle(mov.detalle);
+    state.movimientos=state.movimientos.filter(function(m){return String(m&&m.id||'')!==id;});
+    var confirmado=await persist({eliminarMovimientoIds:[id]});
+    if(confirmado===false)throw new Error('Firebase no confirmó el borrado de Pañol.');
+    refrescarVistaActual(mov.prodId);
+    showToast('✓ Eliminado de Pañol, Materiales y Gastos · stock repuesto');
+    return;
+  }catch(e){
+    errorPrincipal=e;
+    console.warn('Pañol · eliminación incompleta',id,e);
+    // Dejar la salida tal como estaba (también el stock) si algo falló.
+    if(estadoAnterior){state=panolClonarEstado(estadoAnterior);normalizeState();}
+    var restauracion=[];
+    // Si un destino ya fue borrado, reponer la vinculación para no dejar
+    // consumos inconsistentes al abortar la operación.
+    if(matBorrado&&mov&&mov.materialesAgregar!==false){
+      try{
+        await sincronizarConsumoConMateriales(mov,true,fallback,{permitirDuranteBorrado:true});
+      }catch(re){restauracion.push('Materiales: '+String(re&&re.message||re));}
+    }
+    if(gasBorrado&&mov&&mov.gastosObraId&&mov.gastosDebeCargar!==false){
+      try{
+        await sincronizarConsumoConGastos(mov,true,{aplazarEstadoPanol:true,permitirDuranteBorrado:true});
+      }catch(re){restauracion.push('Gastos: '+String(re&&re.message||re));}
+    }
+    if(estadoAnterior){try{refrescarVistaActual(mov&&mov.prodId);}catch(_e){}}
+    var causa=String(errorPrincipal&&errorPrincipal.message||errorPrincipal||'Error sin detalle');
+    var msg='No se completó el borrado: '+causa;
+    if(restauracion.length)msg+=' · Revisar vínculos: '+restauracion.join(' / ');
+    showToast('⚠️ '+msg,'err');
+    alert(msg+'\n\nComprobá los puntos de Materiales y Gastos antes de volver a intentar.');
+  }finally{
+    cqPanolBorrandoConsumos.delete(id);
+    cqPanolOcultarAvisoEliminando();
   }
-
-  if(okMat&&okGas)showToast('✓ Consumo eliminado y vínculos actualizados');
-  else showToast('⚠️ Consumo eliminado de Pañol, pero una sincronización falló. Verificar.','err');
 }
 
 // ---------- GESTIONAR OBRAS ----------
@@ -7902,10 +8290,15 @@ window.showConsumoCodigoDropdown=showConsumoCodigoDropdown;
     b.style.opacity=(b.disabled?'.55':'1');
   }
 
+  var colaGuardarUndo=Promise.resolve();
   async function saveUndo(before,fn){
-    var ok=await cqPanolGuardarLocalSeguro(UNDO_KEY,JSON.stringify({state:before,fn:fn||'',ts:Date.now()}));
-    if(!ok)console.warn('No se pudo guardar Deshacer de Pañol');
-    await setUndoButtonState();
+    var tarea=async function(){
+      var ok=await cqPanolGuardarLocalSeguro(UNDO_KEY,JSON.stringify({state:before,fn:fn||'',ts:Date.now()}));
+      if(!ok)console.warn('No se pudo guardar Deshacer de Pañol');
+      await setUndoButtonState();
+    };
+    colaGuardarUndo=colaGuardarUndo.then(tarea,tarea);
+    return colaGuardarUndo;
   }
 
   function wrapMutation(fn){
@@ -7984,6 +8377,11 @@ window.showConsumoCodigoDropdown=showConsumoCodigoDropdown;
 
   window.deshacerUltimaAccionPanol=async function(){
     if(undoBusy)return;
+    if((typeof cqPanolSalidasPendientesPersist!=='undefined'&&cqPanolSalidasPendientesPersist.size)||
+       (typeof cqSyncIdsEnColaPanol!=='undefined'&&cqSyncIdsEnColaPanol.size)){
+      showToast('Esperá la confirmación de las salidas y sus vínculos antes de usar Deshacer.','err');
+      return;
+    }
     var raw=await cqPanolLeerCopia(UNDO_KEY);
     if(!raw){
       if(window.showToast)showToast('No hay una acción para deshacer');
@@ -9648,12 +10046,15 @@ document.addEventListener("DOMContentLoaded",function(){
       if(btn && btn.dataset.cqBusy==="1") return;
 
       var changed=busy(btn,busyText);
+      var inicio=Date.now();
       try{
         return await original.apply(this,arguments);
       }finally{
-        // Un mínimo visual evita que en operaciones muy rápidas parezca que no tomó el toque.
+        // Mantener 220 ms MÍNIMOS de respuesta visual, no 220 ms extra
+        // después de una confirmación lenta de Firebase.
         if(changed){
-          await new Promise(function(resolve){setTimeout(resolve,220);});
+          var restante=Math.max(0,220-(Date.now()-inicio));
+          if(restante)await new Promise(function(resolve){setTimeout(resolve,restante);});
           free(btn);
         }
       }
@@ -10669,7 +11070,10 @@ function r(){setTimeout(mount,100)}document.addEventListener("change",r);window.
     // El listener ya leyó Materiales: no realizar otra consulta ni tocar el flujo.
     if(!cqMaterialesDocCachePanol&&window._dbReady&&window._getDoc&&window._doc&&window._db){
       try{
-        var snap=await window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4'));
+        var snap=await cqPanolConTimeout(
+          window._getDoc(window._doc(window._db,'materiales','data_planilla_exacta_v4')),
+          4000,'Consulta de subrubro en Materiales'
+        );
         if(snap.exists()){
           cqMaterialesDocCachePanol=snap.data()||{};
           cqMaterialesDocCacheAtPanol=Date.now();

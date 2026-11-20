@@ -2393,6 +2393,16 @@ window.cqOpenFirebaseDiagnostic=function(){
 #cqFirebaseModal [hidden]{display:none!important}
 </style>
 
+
+<style id="cq-control-integraciones-menu-v1">
+/* Sólo se activa el acceso que antes era Comercial. Sin cambios de grilla ni de permisos. */
+.grid>.btn.btn-comercial{opacity:1!important;filter:none!important;cursor:pointer!important;}
+.grid>.btn.btn-comercial .cq-card-title{color:#fff!important;opacity:1!important;}
+.grid>.btn.btn-comercial .cq-card-desc{color:#d6e8f4!important;opacity:1!important;}
+.grid>.btn.btn-comercial .icon,.grid>.btn.btn-comercial .arrow{opacity:1!important;}
+.grid>.btn.btn-comercial .cq-card-copy{opacity:1!important;}
+.grid>.btn.btn-comercial:focus-visible{outline:2px solid #41d99e!important;outline-offset:2px!important;}
+</style>
 </head>
 <body>
 <div id="cq-boot-loader" role="status" aria-live="polite">
@@ -2451,8 +2461,8 @@ window.cqOpenFirebaseDiagnostic=function(){
         <a class="btn btn-arquitectura" href="arquitectura.html" data-cq-module="arquitectura"><span class="cq-top-tab" aria-hidden="true"></span>
           <span class="btn-left"><span class="icon">📐</span><span class="cq-card-copy"><span class="cq-card-title">Arquitectura</span><span class="cq-accent-line"></span><span class="cq-card-desc">Planos · Trámites · Servicios</span></span></span><span class="arrow">›</span>
         </a>
-        <a class="btn btn-comercial cq-en-construccion cq-proximamente" data-cq-gerencia-only="1" href="#" data-modulo="Comercial"><span class="cq-top-tab" aria-hidden="true"></span>
-          <span class="btn-left"><span class="icon">🤝</span><span class="cq-card-copy"><span class="cq-card-title">Comercial</span><span class="cq-accent-line"></span><span class="cq-card-desc">CRM · Clientes · Ventas</span><small>Próximamente</small></span></span><span class="arrow">›</span>
+        <a class="btn btn-comercial" data-cq-gerencia-only="1" data-cq-control-duenos="1" href="Control.html" aria-label="Abrir Control de Integraciones"><span class="cq-top-tab" aria-hidden="true"></span>
+          <span class="btn-left"><span class="icon">🛡️</span><span class="cq-card-copy"><span class="cq-card-title">Control de Integraciones</span><span class="cq-accent-line"></span><span class="cq-card-desc">Caja · Gastos · Materiales · Acopio · Pañol</span></span></span><span class="arrow">›</span>
         </a>
         <div class="cq-secundarios">
           <a class="btn btn-agenda" href="agenda.html" data-cq-gerencia-only="1"><span class="cq-top-tab" aria-hidden="true"></span>
@@ -2747,6 +2757,11 @@ function applyUnifiedPermissions(profile){
   document.documentElement.classList.toggle("cq-layout-empleado", !isGerencia);
   const allowed=new Set((profile.modulos||[]).map(normalizeModuleName));
   document.querySelectorAll('[data-cq-gerencia-only="1"]').forEach(el=>{el.style.display=isGerencia?"":"none";});
+  // Control de Integraciones: acceso visual exclusivo de Emilio y Juan.
+  document.querySelectorAll('[data-cq-control-duenos="1"]').forEach(el=>{
+    const autorizado=isGerencia && ["emilio@cqgerencia.com","juan@cqgerencia.com"].includes(String(profile.email||"").toLowerCase());
+    el.style.display=autorizado?"":"none";
+  });
   document.querySelectorAll('[data-cq-module]').forEach(el=>{
     const mod=normalizeModuleName(el.dataset.cqModule);
     el.style.display=(isGerencia||allowed.has(mod))?"":"none";
@@ -5579,7 +5594,7 @@ document.querySelectorAll('.cq-ia-quick button[data-q]').forEach(b=>b.addEventLi
 .grid{grid-template-rows:repeat(7,minmax(0,1fr))!important;gap:6px!important}
 .btn-arquitectura{--accent:#e09a45!important;--glow:rgba(224,154,69,.15)!important}
 .btn-comercial{--accent:#e05f86!important;--glow:rgba(224,95,134,.15)!important}
-.footer span:first-child::after{content:"Finanzas · Materiales y logística · Obras · Arquitectura · Comercial · Agenda · Indicadores"!important}
+.footer span:first-child::after{content:"Finanzas · Materiales y logística · Obras · Arquitectura · Control · Agenda · Indicadores"!important}
 @media(max-height:800px){.btn{min-height:43px!important;padding:6px 10px!important}.btn .icon{width:30px!important;height:30px!important;min-width:30px!important}.grid{gap:5px!important}.logo{max-height:58px!important}.title{margin-bottom:4px!important}}
 @media(max-height:690px){.logo-wrap{display:none!important}.btn{min-height:39px!important;padding:4px 9px!important}.btn .icon{width:27px!important;height:27px!important;min-width:27px!important}.grid{gap:4px!important}}
 .cq-build-modal{display:none;position:fixed;inset:0;z-index:40000;background:rgba(3,18,28,.91);backdrop-filter:blur(12px);align-items:center;justify-content:center;padding:18px}
@@ -6362,7 +6377,7 @@ body{overflow-x:hidden!important}
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 340 120'%3E%3Cg opacity='.19' fill='%235debd6'%3E%3Crect x='180' y='91' width='18' height='14'/%3E%3Crect x='207' y='78' width='18' height='27'/%3E%3Crect x='234' y='63' width='18' height='42'/%3E%3Crect x='261' y='47' width='18' height='58'/%3E%3Crect x='288' y='28' width='18' height='77'/%3E%3C/g%3E%3Cpath d='M170 92 C215 85 245 67 302 27' fill='none' stroke='%235debd6' opacity='.20' stroke-width='2'/%3E%3C/svg%3E"),radial-gradient(circle at 96% 0%,rgba(72,231,206,.20),transparent 42%),linear-gradient(150deg,#0b7b87,#075a73 68%,#06415f)!important;
 }
 .footer{padding:7px 1px 0!important;font-size:7.8px!important;color:#8e9fb9!important;white-space:nowrap!important;overflow:hidden!important}
-.footer span:first-child::after{content:"Finanzas · Materiales y logística · Obras · Arquitectura · Comercial · Agenda · Indicadores"!important;font-size:7.8px!important}
+.footer span:first-child::after{content:"Finanzas · Materiales y logística · Obras · Arquitectura · Control · Agenda · Indicadores"!important;font-size:7.8px!important}
 
 @media(max-width:390px){
   .app{padding:8px 10px 9px!important}

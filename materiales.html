@@ -1,3 +1,5 @@
+<!-- CQ 20/11/2026 · Materiales: protege bajas por identidad; huellas sólo para registros sin ID estable -->
+<!-- CQ 20/11/2026 · Sólo restauraciones explícitas por ID: conserva todas las demás bajas. -->
 <!-- CQ 13/11/2026 · SOLO MATERIALES v5.1 · ID nuevo reservado en todas las fuentes sin perder protección de identidad -->
 <!DOCTYPE html>
 <!-- CQ 13/10/2026 · permisos individuales de obra: Materiales -->
@@ -8112,7 +8114,20 @@ function cqClaveIntegracionRespaldo(x){
   return 'fp:'+origen+'|obra:'+obra+'|mat:'+material+'|fecha:'+fecha+'|qty:'+cantidad;
 }
 
+// La huella de respaldo (producto/obra/fecha/cantidad) puede repetirse entre compras.
+// Para Caja Gerencia, un ID de integracion + movimiento + obra es más preciso.
+// Una baja real sigue protegida por ignoredIntegrationIds o ignoredIntegrationKeys.
+function cqCajaGerenciaIdentidadExactaMateriales(x){
+  if(!x)return false;
+  var origen=cqOrigenCargaNormalizado(x);
+  if(origen!=='caja_gerencia'&&origen!=='cq_caja_gerencia')return false;
+  var mov=String(x.sourceMovementId||'').trim();
+  var iid=String(x.integracionId||'').trim();
+  var obra=cqClaveObraIntegracion(x.obraNameOrigen||x.obraName||'');
+  return !!(mov&&iid&&obra);
+}
 function cqIntegracionRespaldoIgnorada(x){
+  if(cqCajaGerenciaIdentidadExactaMateriales(x))return false;
   var k=cqClaveIntegracionRespaldo(x);
   return !!k && Array.isArray(state.ignoredIntegrationFingerprints)
     && state.ignoredIntegrationFingerprints.some(function(v){return String(v)===k;});
@@ -8161,6 +8176,10 @@ function cqGuardarTombstonesLocalesDesdeState(){
 
 function cqRegistrarTombstoneCarga(c){
   if(!c||!cqEsCargaAutomaticaExterna(c))return false;
+  // Si se vuelve a eliminar una carga que se restauró expresamente,
+  // revocar esa autorización sólo para su integrationId.
+  if(c.integracionId&&Array.isArray(state.restoredIntegrationIds))
+    state.restoredIntegrationIds=state.restoredIntegrationIds.filter(function(id){return String(id)!==String(c.integracionId);});
   if(c.integracionId)cqIgnorarIntegracion(c.integracionId);
   cqIgnorarIntegracionLogica(c);
   cqIgnorarIntegracionRespaldo(c);
@@ -8170,6 +8189,8 @@ function cqRegistrarTombstoneCarga(c){
 
 function cqCargaAutomaticaBloqueada(c){
   if(!c||!cqEsCargaAutomaticaExterna(c))return false;
+  if(c.integracionId&&Array.isArray(state.restoredIntegrationIds)
+      && state.restoredIntegrationIds.some(function(id){return String(id)===String(c.integracionId);}))return false;
   if(c.integracionId&&cqIntegracionIgnorada(c.integracionId))return true;
   if(cqIntegracionLogicaIgnorada(c))return true;
   if(cqIntegracionRespaldoIgnorada(c))return true;
@@ -8596,6 +8617,7 @@ function normalizeState(){
   if(!state.deletedMaterialKeys)state.deletedMaterialKeys=[];
   if(!state.ignoredIntegrationKeys)state.ignoredIntegrationKeys=[];
   if(!state.ignoredIntegrationFingerprints)state.ignoredIntegrationFingerprints=[];
+  if(!state.restoredIntegrationIds)state.restoredIntegrationIds=[];
   if(!state.deletedCatNames)state.deletedCatNames=[];
   if(!state.matNombres)state.matNombres={};
   if(!state.matCodigos)state.matCodigos={};
@@ -8921,11 +8943,14 @@ async function cqGuardarMaterialesSeguro(extra){
     function autoPermitida(c){
       if(!c||cqEsAcopioAnteriorAlLinkeo(c))return false;
       var iid=String(c.integracionId||'');
+      var restaurados=Array.isArray(local.restoredIntegrationIds)?local.restoredIntegrationIds.map(String):[];
+      if(iid&&restaurados.indexOf(iid)>=0)return true;
       if(iid && idsIgnorados.indexOf(iid)>=0)return false;
       var lk=cqClaveIntegracionLogica(c);
       if(lk && clavesIgnoradas.indexOf(String(lk))>=0)return false;
       var fp=cqClaveIntegracionRespaldo(c);
-      if(fp && fpsIgnoradas.indexOf(String(fp))>=0)return false;
+      // No descartar compras distintas de Caja con la misma huella histórica.
+      if(!cqCajaGerenciaIdentidadExactaMateriales(c)&&fp&&fpsIgnoradas.indexOf(String(fp))>=0)return false;
       return true;
     }
     locCargas.filter(esAuto).filter(autoPermitida).forEach(function(c){
@@ -9561,7 +9586,10 @@ function aplicarIntegracion(ev){
   // no permitir que el listener de Firebase la vuelva a crear. Se bloquea tanto
   // el integrationId actual como la identidad lógica del movimiento, porque Caja
   // Gerencia puede republicarlo con un integrationId distinto.
-  if(ev.active!==false && (cqIntegracionIgnorada(ev.integrationId)||cqIntegracionLogicaIgnorada(ev)||cqIntegracionRespaldoIgnorada(ev))) return false;
+  var restaurado=Array.isArray(state.restoredIntegrationIds)
+    && state.restoredIntegrationIds.some(function(id){return String(id)===String(ev.integrationId);});
+  if(ev.active!==false && !restaurado
+      && (cqIntegracionIgnorada(ev.integrationId)||cqIntegracionLogicaIgnorada(ev)||cqIntegracionRespaldoIgnorada(ev))) return false;
 
   if(cqEsTechiCau29_77Integracion(ev)){
     var idxBloq=(state.cargas||[]).findIndex(function(c){return c.integracionId===ev.integrationId;});
