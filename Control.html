@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Control de Integraciones · CQ Desarrollos</title>
+<meta name="theme-color" content="#0b1b51">
+<style>
+:root{--blue:#0b1b51;--green:#00875b;--mint:#00ce7c;--bg:#f4f6f9;--ink:#17243b;--line:#dbe5ec;--muted:#64748b;--error:#b93336;--warn:#a36a12}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;color:var(--ink);background:var(--bg)}
+header{background:linear-gradient(125deg,#081638,#0b1b51 70%,#163a74);color:#fff;padding:15px 18px;box-shadow:0 5px 18px #0b1b5127}
+.head{display:flex;align-items:center;gap:12px;max-width:1100px;margin:auto}.back{border:1px solid #ffffff45;color:#fff;background:#ffffff18;border-radius:10px;padding:9px 12px;text-decoration:none;font-size:12px;font-weight:750}.brand{flex:1;min-width:0}.brand small{color:#a4eacb;display:block;font-size:10px;letter-spacing:.11em;font-weight:800}.brand h1{font-size:18px;margin:2px 0;line-height:1.12}.brand p{font-size:11px;color:#d3e3f6;margin:3px 0 0}
+main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 3px 16px #0b1b510a}
+.tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}.tools p{font-size:12px;color:var(--muted);margin:4px 0 0}.btn{border:0;border-radius:10px;background:var(--blue);color:#fff;padding:11px 17px;font-size:12px;font-weight:800;cursor:pointer;min-height:39px}.btn:disabled{opacity:.5;cursor:wait}.btn.outline{background:#fff;border:1px solid var(--line);color:var(--blue)}
+.status{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:11px}.circle{height:8px;width:8px;background:#94a3b8;border-radius:50%;display:inline-block}.circle.ok{background:#16a66c}.circle.error{background:#e05958}.circle.run{background:#dba32e}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:14px 0}.kpi{padding:12px;background:#f6f8fa;border-radius:12px;border:1px solid #e5edf3}.kpi strong{font-size:23px;display:block}.kpi span{font-size:10px;color:#64748b;font-weight:750}.kpi.bad strong{color:var(--error)}.kpi.warn strong{color:var(--warn)}.kpi.ok strong{color:var(--green)}
+.sources{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:7px;margin:14px 0}.source{border:1px solid var(--line);background:#f8fafc;border-radius:11px;padding:10px}.source b{display:block;font-size:11px}.source small{display:block;color:var(--muted);margin-top:3px;font-size:10px;word-break:break-word}.source.ok{border-color:#b9dec8;background:#f3fcf6}.source.error{border-color:#f3c8c8;background:#fff7f7}
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.filters select,.filters input{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff;min-width:130px;max-width:100%;font-size:12px}.filters input{flex:1;min-width:145px}
+.finding{display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 2px;border-bottom:1px solid #edf0f4}.finding:last-child{border:0}.signal{width:9px;height:9px;background:#9cacc0;border-radius:50%;margin-top:5px}.signal.error{background:#cb4549}.signal.warning{background:#d19b39}.signal.ok{background:#0f9e68}.finding h3{font-size:12px;margin:0 0 3px}.finding p{font-size:11px;margin:0;color:#64748b;line-height:1.5;overflow-wrap:anywhere}.origin{font-size:10px;color:#59708e;background:#f2f6fa;padding:4px 7px;border-radius:7px;white-space:nowrap}
+.empty{font-size:12px;color:var(--muted);padding:22px 3px;text-align:center}.hint{font-size:11px;color:#65768a;line-height:1.55;margin:8px 0 0}.notice{background:#f3f7fb;border-left:3px solid #5e88af;padding:11px 13px;font-size:11px;line-height:1.55;border-radius:7px;color:#3c536c}
+[hidden]{display:none!important}@media(max-width:560px){.brand h1{font-size:16px}.summary{grid-template-columns:repeat(2,1fr)}main{padding:12px 9px 30px}.panel{padding:12px}.finding{grid-template-columns:8px 1fr}.origin{grid-column:2;justify-self:start}.head{gap:7px}}
+</style>
+</head>
+<body>
+<header><div class="head"><a class="back" href="index.html" aria-label="Volver al índice">← Índice</a><div class="brand"><small>CQ DESARROLLOS · GERENCIA</small><h1>Control de Integraciones</h1><p>Caja · Gastos · Materiales · Acopio · Pañol</p></div></div></header>
+<main>
+<section class="panel">
+<div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
+<div class="tools"><div><b>Verificación de vínculos</b><p>Una consulta manual, exclusivamente de lectura</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
+<div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Inconsistencias</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Para revisar</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div></div>
+<div class="notice" id="info">El sistema no reparará, eliminará ni modificará movimientos. Las operaciones sin lectura de Firebase quedarán como «No verificadas», nunca como correctas.</div>
+<div id="sources" class="sources"></div>
+</section>
+<section class="panel"><div class="tools"><b>Detalle de verificaciones</b><span id="count" style="font-size:11px;color:#64748b">Sin ejecutar</span></div>
+<div class="filters" style="margin-top:13px"><select id="type"><option value="all">Todos los resultados</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="ok">Correctos</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Filtrar por obra, origen o ID" aria-label="Buscar resultado"></div>
+<div id="results" class="empty">Pulsá «Verificar ahora» para consultar el estado real de Firebase.</div>
+</section>
+<p class="hint">Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Para reducir lecturas de Firebase, la comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
+</main>
+<script type="module">
+import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {getAuth,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import {getFirestore,doc,getDocFromServer} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+const firebaseConfig={apiKey:'AIzaSyAf7vM8Og4jSe7QGHQUK-afvuXka9MCKU8',authDomain:'cq-mano-de-obra.firebaseapp.com',projectId:'cq-mano-de-obra',storageBucket:'cq-mano-de-obra.firebasestorage.app',messagingSenderId:'502127540211',appId:'1:502127540211:web:8daefc75bdaafad412c486'};
+const app=getApps().length?getApp():initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+const USERS={emilio:'emilio@cqgerencia.com',juan:'juan@cqgerencia.com',eugenia:'eugenia@cqoperaciones.com',hebe:'hebe@cqoperaciones.com',jose:'jose@cqoperaciones.com'};
+const el=id=>document.getElementById(id), str=x=>String(x??''), arr=x=>Array.isArray(x)?x:[], num=x=>Number(x)||0;
+const safe=s=>String(s??'');
+const read=async (col,id)=>{
+  const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Tiempo de espera agotado')),22000));
+  const snap=await Promise.race([getDocFromServer(doc(db,col,id)),timeout]);
+  return snap.exists()?snap.data():null;
+};
+let canRun=false,busy=false,findings=[],sources=[];
+function status(t,cls=''){el('status').textContent=t;el('dot').className='circle '+cls;}
+function log(severity,connection,title,detail,obra,id){findings.push({severity,connection,title,detail:detail||'',obra:obra||'',id:id||''});}
+function normalizeDoc(data){const d=data?.db&&typeof data.db==='object'?data.db:data;return d&&typeof d==='object'?d:{};}
+function activeGastos(d){const a=new Map();arr(d?.gastos).forEach(g=>{if(g&&g.id!=null&&g.activo!==false)a.set(str(g.id),g)});const items=d?.gastosItems&&typeof d.gastosItems==='object'?d.gastosItems:{};Object.entries(items).forEach(([k,g])=>{if(!g)return;const id=str(g.id??k);if(g.activo===false)a.delete(id);else a.set(id,g);});return [...a.values()];}
+function ageMs(x){const d=Date.parse(str(x||''));return Number.isFinite(d)?Date.now()-d:Infinity;}
+function classifyMissing(x){return ageMs(x?.createdAt||x?.creadoAt||x?.fecha||x?.date||x?.ts)<3*60*1000?'warning':'error';}
+function prettyError(e){const c=str(e?.code||'');if(c.includes('permission-denied'))return 'Sin permisos Firebase';if(c.includes('unavailable'))return 'Sin conexión con Firebase';return str(e?.message||'Error de lectura').slice(0,150);}
+function summarize(){const c={error:0,warning:0,ok:0};findings.forEach(f=>c[f.severity]++);el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;}
+function tag(t,cls=''){const d=document.createElement('div');d.className=cls;d.textContent=t;return d;}
+function renderSources(){const box=el('sources');box.replaceChildren();sources.forEach(s=>{const d=tag('', 'source '+(s.ok?'ok':'error'));const b=document.createElement('b');b.textContent=s.name;d.replaceChildren(b,tag(s.text,'source-text'));box.append(d);});}
+function render(){const kind=el('type').value,mod=el('module').value,search=el('search').value.toLowerCase();const filtered=findings.filter(f=>(kind==='all'||f.severity===kind)&&(mod==='all'||f.connection===mod)&&(!search||(f.title+' '+f.detail+' '+f.connection+' '+f.obra+' '+f.id).toLowerCase().includes(search)));const nodes=document.createDocumentFragment();filtered.slice(0,450).forEach(f=>{const row=tag('', 'finding');const dot=tag('', 'signal '+f.severity);const body=tag('','body');const h=document.createElement('h3');h.textContent=f.title;body.append(h,tag(`${f.connection}${f.obra?' · '+f.obra:''}${f.id?' · ID '+f.id:''}${f.detail?' — '+f.detail:''}`,'detail'));row.append(dot,body,tag(f.severity==='error'?'Inconsistencia':f.severity==='warning'?'Revisar':'Correcto','origin'));nodes.append(row)});const holder=el('results');holder.replaceChildren();if(!filtered.length)holder.append(tag(findings.length?'No hay resultados para este filtro.':'Todavía no se efectuó una verificación.','empty'));else holder.append(nodes);el('count').textContent=filtered.length+' resultado(s)'+(filtered.length>450?' · mostrando 450':'');}
+function addModules(){const select=el('module'),chosen=select.value;select.replaceChildren(new Option('Todas las conexiones','all'));[...new Set(findings.map(x=>x.connection))].sort().forEach(x=>select.add(new Option(x,x)));select.value=[...select.options].some(o=>o.value===chosen)?chosen:'all';}
+async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];summarize();
+try{
+ const names=[['Configuración Gastos','config','app'],['Caja Gerencia','cq_caja','gastos_compartidos_v1'],['Caja Chica','caja_chica_app','main'],['Acopio','acopio_cq','acopio_cq_compartido_v3'],['Pañol','panol','stock_v1'],['Materiales','materiales','data_planilla_exacta_v4']];
+ const files={};
+ await Promise.all(names.map(async ([name,col,id])=>{try{const data=await read(col,id);if(!data)throw new Error('Documento no encontrado');files[name]=normalizeDoc(data);sources.push({name,ok:true,text:'Lectura confirmada'});}catch(e){files[name]=null;sources.push({name,ok:false,text:prettyError(e)});}}));
+ renderSources();
+ const cc=arr(files['Caja Chica']?.movements),cg=files['Caja Gerencia']||{},ac=arr(files['Acopio']?.acopios),pn=arr(files['Pañol']?.movimientos),mat=arr(files['Materiales']?.cargas);
+ // Sólo buscamos obras que participan de vínculos reales; no leemos innecesariamente todas las obras del catálogo.
+ const obraIds=new Set();
+ const cgMovs=[...arr(cg.deudaPesos),...arr(cg.fondoPesosMovs),...arr(cg.santanderMovs)].filter(m=>m&&m.tipo==='gasto'&&m.imputacionPendienteGastos!==false&&arr(m.imputaciones).length);
+ cgMovs.forEach(m=>arr(m.imputaciones).forEach(i=>{if(i?.obraId)obraIds.add(str(i.obraId))}));
+ cc.filter(m=>m?.type==='gasto'&&m.gastosObraId).forEach(m=>obraIds.add(str(m.gastosObraId)));
+ ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(r?.gastosObraId)obraIds.add(str(r.gastosObraId))}));
+ pn.filter(m=>m?.tipo==='salida'&&m.gastosObraId).forEach(m=>obraIds.add(str(m.gastosObraId)));
+ const obras=[...obraIds].filter(Boolean);
+ const gastoDocs={},todo=obras.slice();let index=0;
+ async function worker(){while(index<todo.length){const id=todo[index++];try{const d=await read('gastos',id);gastoDocs[id]=d?activeGastos(d):[];sources.push({name:'Gastos · '+id,ok:true,text:d?'Leído':'Sin movimientos'});}catch(e){gastoDocs[id]=null;sources.push({name:'Gastos · '+id,ok:false,text:prettyError(e)});}}}
+ await Promise.all(Array.from({length:Math.min(3,todo.length)},worker));
+ renderSources();
+ const materialMap=new Map();mat.forEach(c=>{const id=str(c?.integracionId);if(id&&c?.activo!==false){if(!materialMap.has(id))materialMap.set(id,[]);materialMap.get(id).push(c);}});
+ const findG=(obraId,expected,linkField,sourceId)=>{const list=gastoDocs[obraId];if(!Array.isArray(list))return undefined;return list.find(g=>str(g.id)===expected||(linkField&&str(g[linkField])===str(sourceId)));};
+ const check=(connection,title,obra,expected,linkField,sourceId,source,expectedAmount)=>{if(!Array.isArray(gastoDocs[obra])){log('warning',connection,'Sin verificación de destino',`No se pudo leer Gastos de la obra ${obra}`,obra,sourceId);return;}const g=findG(obra,expected,linkField,sourceId);if(!g){log(classifyMissing(source),connection,'No aparece en Gastos',title,obra,sourceId);return;}if(expectedAmount!=null&&Math.abs(num(g.monto)-num(expectedAmount))>0.05){log('error',connection,'Importe diferente en Gastos',`${title} · origen $${num(expectedAmount).toLocaleString('es-AR')} · Gastos $${num(g.monto).toLocaleString('es-AR')}`,obra,sourceId);return;}log('ok',connection,'Vínculo verificado',title,obra,sourceId);};
+ if(files['Caja Gerencia'])cgMovs.forEach(m=>arr(m.imputaciones).forEach(i=>{const oid=str(i?.obraId);if(oid)check('Caja Gerencia → Gastos','Movimiento de Caja',oid,'caja_'+str(m.id)+'_'+oid,'cajaMovimientoId',m.id,m,num(i.monto));}));
+ if(files['Caja Chica'])cc.filter(m=>m?.type==='gasto'&&m.gastosObraId&&m.gastosDebeCargar!==false).forEach(m=>{const oid=str(m.gastosObraId);const amount=str(m.currency)==='usd'?num(m.amount)*num(m.tc||files['Caja Chica'].exchangeRate):num(m.amount);check('Caja Chica → Gastos','Movimiento de Caja Chica',oid,'caja_chica_'+str(m.id),'cajaChicaMovimientoId',m.id,m,amount);});
+ if(files['Acopio'])ac.forEach(a=>arr(a?.retiros).forEach(r=>{if(!r?.id)return;const oid=str(r.gastosObraId);const sid=str(a.id)+' / '+str(r.id);if(r.cargarGastos!==false&&oid)check('Acopio → Gastos','Retiro de Acopio',oid,'acopio_'+str(a.id)+'_'+str(r.id),'acopioRetiroId',r.id,r,null);if(r.cargarMateriales!==true)return;if(!files['Materiales']){log('warning','Acopio → Materiales','No verificable','Materiales no respondió',oid,sid);return;}const iid='acopio_'+str(a.id)+'_'+str(r.id);const matches=materialMap.get(iid)||[];if(matches.length===0)log(classifyMissing(r),'Acopio → Materiales','Retiro sin carga en Materiales','No se encontró integración '+iid,oid,sid);else if(matches.length>1)log('error','Acopio → Materiales','Integración duplicada en Materiales',matches.length+' registros con el mismo ID',oid,sid);else log('ok','Acopio → Materiales','Vínculo verificado','Carga vinculada',oid,sid);}));
+ // Los retiros destinados a Pañol crean una entrada con identidad estable.
+ if(files['Acopio'])ac.forEach(a=>arr(a?.retiros).forEach(r=>{
+   if(!r?.id||r.cargarPanol!==true)return;
+   const oid=str(r.gastosObraId),sid=str(a.id)+' / '+str(r.id);
+   if(!files['Pañol']){log('warning','Acopio → Pañol','No verificable','Pañol no respondió',oid,sid);return;}
+   const entrada='acopio_'+str(a.id)+'_'+str(r.id);
+   const matches=pn.filter(m=>m?.tipo==='entrada'&&(str(m.acopioEntradaId)===entrada||(str(m.acopioId)===str(a.id)&&str(m.acopioRetiroId)===str(r.id))));
+   if(!matches.length)log(classifyMissing(r),'Acopio → Pañol','Retiro sin entrada en Pañol','No se encontró la entrada '+entrada,oid,sid);
+   else if(matches.length>1)log('error','Acopio → Pañol','Entrada duplicada',matches.length+' entradas con el mismo vínculo',oid,sid);
+   else log('ok','Acopio → Pañol','Vínculo verificado','Entrada vinculada',oid,sid);
+ }));
+ if(files['Pañol'])pn.filter(m=>m?.tipo==='salida').forEach(m=>{const oid=str(m.gastosObraId),sid=str(m.id);if(m.gastosDebeCargar!==false&&oid)check('Pañol → Gastos','Salida de Pañol',oid,'panol_'+sid,'panolMovimientoId',m.id,m,null);if(m.materialesAgregar===false)return;if(!files['Materiales']){log('warning','Pañol → Materiales','No verificable','Materiales no respondió',oid,sid);return;}const ms=materialMap.get('panol_'+sid)||[];if(!ms.length)log(classifyMissing(m),'Pañol → Materiales','Salida sin carga en Materiales','No se encontró la integración',oid,sid);else if(ms.length>1)log('error','Pañol → Materiales','Integración duplicada en Materiales',ms.length+' registros con el mismo ID',oid,sid);else log('ok','Pañol → Materiales','Vínculo verificado','Carga vinculada',oid,sid);});
+ if(files['Materiales'])for(const [id,items] of materialMap){if(items.length>1&& !id.startsWith('panol_')&&!id.startsWith('acopio_'))log('error','Materiales · duplicados','Identificador de integración repetido',items.length+' movimientos con ID '+id,'',id);}
+ if(sources.some(s=>!s.ok))log('warning','Cobertura de lectura','Verificación parcial','Una o más fuentes no se pudieron leer. Revisar los avisos de origen.','','');
+ if(!findings.length)log('warning','Cobertura de lectura','Sin vínculos reconocidos','Se consultaron las fuentes, pero no se encontraron vínculos que coincidan con las reglas de esta versión.','','');
+ summarize();addModules();render();
+ const failed=sources.filter(x=>!x.ok).length,err=findings.filter(f=>f.severity==='error').length;
+ status(failed?'Verificación parcial: faltan lecturas':err?'Verificación terminada: hay inconsistencias':'Verificación terminada',failed||err?'error':'ok');
+ el('info').textContent=`Consulta terminada. Fuentes consultadas: ${sources.length}; lecturas fallidas: ${failed}. ${err?'Hay movimientos para revisar.':'No se detectaron inconsistencias en los vínculos reconocidos.'} Los resultados no modifican Firebase.`;
+ }catch(e){status('La verificación no pudo completarse','error');el('info').textContent=prettyError(e);summarize();render();}
+ finally{busy=false;el('run').disabled=!canRun;}
+}
+el('type').addEventListener('change',render);el('module').addEventListener('change',render);el('search').addEventListener('input',render);el('run').addEventListener('click',verify);
+onAuthStateChanged(auth,async user=>{
+  canRun=false;el('run').disabled=true;
+  if(!user){status('No hay sesión activa. Ingresá desde el índice.','error');return;}
+  const key=Object.keys(USERS).find(k=>USERS[k]===str(user.email).toLowerCase());
+  if(!['emilio','juan'].includes(key)){status('Acceso exclusivo de Emilio y Juan','error');return;}
+  try{const profile=await read('cq_operaciones_usuarios',key);if(!profile||str(profile.email).toLowerCase()!==str(user.email).toLowerCase()||!arr(profile.modulos).includes('gerencia'))throw new Error('Acceso exclusivo de Gerencia');canRun=true;el('run').disabled=false;status('Acceso confirmado. Listo para verificar.','ok');}
+  catch(e){status(prettyError(e),'error');}
+});
+</script>
+</body></html>
