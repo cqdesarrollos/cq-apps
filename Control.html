@@ -41,6 +41,9 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 .review-button.restore{background:#f0f4fd;color:#253e71;border-color:#b8c7e7}
 .review-button:disabled{opacity:.55;cursor:wait}.review-note{color:#64748b;font-size:10px}
 .review-feedback{font-size:11px;color:#235b43;line-height:1.5;margin-top:12px}.review-feedback.failed{color:#9b4e1e}
+.cq-feedback-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:8000;max-width:min(96vw,530px);padding:12px 15px;background:#173a30;color:white;box-shadow:0 8px 28px #142b3140;border-radius:10px;font-size:12px;line-height:1.4;font-weight:750;pointer-events:none;opacity:0;transition:opacity .15s}
+.cq-feedback-toast.visible{opacity:1}.cq-feedback-toast.warning{background:#7b421c}
+.review-button{touch-action:manipulation}
 .diag-raw{margin-top:9px;font-size:10px;color:#617388}.diag-raw summary{font-weight:700;cursor:pointer}.diag-raw div{white-space:pre-wrap;margin-top:6px;overflow-wrap:anywhere}
 @media(max-width:560px){.diag-values{grid-template-columns:1fr 1fr}.finding .origin{font-size:9px}}
 </style>
@@ -52,14 +55,15 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
 <div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · los estados antiguos con vínculo localizado se separan de los problemas reales</p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
 <div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div></div>
-<div class="notice" id="info">El control no modifica movimientos. «Está OK · Ocultar» solo registra tu revisión; no corrige el vínculo. Si ese dato cambia, aparecerá una alerta nueva.</div>
+<div class="notice" id="cc-overview" hidden></div>
+<div class="notice" id="info">El control no modifica movimientos. «Está OK · Ocultar» guarda inmediatamente la revisión en este dispositivo; intenta compartirla en Firebase sin bloquear el botón. No corrige el vínculo. Si ese dato cambia, aparecerá una alerta nueva.</div>
 <details id="sources-disclosure" class="details-sources"><summary><span id="source-count">Fuentes consultadas: sin verificar</span></summary><div id="sources" class="sources"></div></details>
 </section>
 <section class="panel"><div class="tools"><b>Detalle de verificaciones</b><span id="count" style="font-size:11px;color:#64748b">Sin ejecutar</span></div>
 <div class="filters" style="margin-top:13px"><select id="type"><option value="issues">Solo problemas (recomendado)</option><option value="error">Inconsistencias</option><option value="warning">Para revisar</option><option value="info">Indicadores antiguos (informativo)</option><option value="reviewed">Revisados y ocultos</option><option value="ok">Correctos</option><option value="all">Todos los resultados</option></select><select id="module"><option value="all">Todas las conexiones</option></select><input id="search" type="search" placeholder="Buscar fecha, obra, origen o ID" aria-label="Buscar resultado"></div>
-<div id="results" class="empty">Pulsá «Verificar ahora» para consultar el estado real de Firebase.</div><div class="review-feedback" id="review-feedback" role="status" aria-live="polite"></div>
+<div id="results" class="empty">Pulsá «Verificar ahora» para consultar el estado real de Firebase.</div><div class="review-feedback" id="review-feedback" role="status" aria-live="polite"></div><div id="cq-feedback-toast" class="cq-feedback-toast" role="status" aria-live="polite"></div>
 </section>
-<p class="hint">Cobertura de esta versión: vínculos reconocidos de Caja Gerencia, Caja Chica, Acopio y Pañol hacia Gastos, Materiales, Pañol y Caja Chica. No comprueba todos los movimientos huérfanos ni los borrados históricos, ni puede leer pendientes guardados sólo en el dispositivo. Los puntos rojos intencionales «No se agregó» no son fallas de sincronización. Los estados internos antiguos se agrupan como informativos cuando se encuentra el ID vinculado en destino; esto no acredita una auditoría completa de cantidades, precios ni productos. Las marcas «Está OK» no alteran el estado real de Caja, Gastos, Acopio, Pañol ni Materiales; pueden deshacerse en el filtro Revisados. Las fechas indican la fecha registrada del movimiento; no la última sincronización. Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
+<p class="hint">Cobertura de esta versión: comparación de la casilla, el documento de integraciones y el ingreso real de Caja Gerencia → Caja Chica; además de vínculos reconocidos de Caja Gerencia, Caja Chica, Acopio y Pañol hacia Gastos, Materiales, Pañol y Caja Chica. No comprueba todos los movimientos huérfanos ni los borrados históricos, ni puede leer pendientes guardados sólo en el dispositivo. Los puntos rojos intencionales «No se agregó» no son fallas de sincronización. Los estados internos antiguos se agrupan como informativos cuando se encuentra el ID vinculado en destino; esto no acredita una auditoría completa de cantidades, precios ni productos. Las marcas «Está OK» no alteran el estado real de Caja, Gastos, Acopio, Pañol ni Materiales; pueden deshacerse en el filtro Revisados. Las fechas indican la fecha registrada del movimiento; no la última sincronización. Este control compara los vínculos identificados entre aplicaciones; no realiza una auditoría contable completa ni verifica movimientos guardados únicamente en un dispositivo. Cada vínculo analizado no equivale a una lectura de Firebase: el control lee documentos y compara localmente sus movimientos. La comprobación sólo se realiza al pulsar el botón. Antes de corregir una alerta, verificá el movimiento en su aplicación de origen.</p>
 </main>
 <script type="module">
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -82,7 +86,10 @@ const hashText=(text,seed)=>{let h=seed>>>0;for(let i=0;i<text.length;i++){h^=te
 function reviewKey(f){const key=[f.severity,f.connection,f.obra,f.id,f.title,f.detail].map(x=>str(x)).join('|');return 'r'+hashText(key,2166136261)+hashText(key,5381);}
 function readLocalReviews(){try{return JSON.parse(localStorage.getItem(REVIEW_LOCAL_KEY)||'{}')||{};}catch(_){return {};}}
 function persistLocalReviews(){try{localStorage.setItem(REVIEW_LOCAL_KEY,JSON.stringify(localReviews));return true;}catch(_){return false;}}
-function isReviewed(f){return f&&(f.severity==='error'||f.severity==='warning')&&!!(remoteReviews[f.reviewKey]||localReviews[f.reviewKey]);}
+function isReviewed(f){if(!f||!['error','warning'].includes(f.severity))return false;const local=localReviews[f.reviewKey];if(local?.revoked===true)return false;return !!(remoteReviews[f.reviewKey]||local);}
+const reviewWait=(promise,limit=5500)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Firebase tardó demasiado en confirmar')),limit))]);
+let toastTimer=0;
+function reviewToast(message,warning=false){const t=el('cq-feedback-toast');if(!t)return;t.textContent=message;t.className='cq-feedback-toast visible'+(warning?' warning':'');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.className='cq-feedback-toast',4600);}
 function reviewedCount(){return findings.filter(isReviewed).length;}
 function showReviewMessage(message,failed=false){const area=el('review-feedback');area.textContent=message;area.className='review-feedback'+(failed?' failed':'');}
 async function loadReviews(){
@@ -90,22 +97,48 @@ async function loadReviews(){
   try{const snap=await Promise.race([getDocFromServer(reviewRef),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Sin respuesta de Firebase')),12000))]);remoteReviews=snap.exists()?(snap.data().items||{}):{};reviewMode='firebase';}
   catch(e){remoteReviews={};reviewMode='local';showReviewMessage('No se pudieron leer las revisiones compartidas de Firebase. Las marcas nuevas quedarán solo en este dispositivo.',true);}
 }
+// Guardado local inmediato: el botón nunca depende de la latencia o permisos de Firebase.
 async function setReviewed(f){
  if(!canRun||busy||reviewBusy.has(f.reviewKey)||!['error','warning'].includes(f.severity))return;
- reviewBusy.add(f.reviewKey);render();
+ const key=f.reviewKey;
  const record={at:new Date().toISOString(),by:(str(auth.currentUser?.email||'').toLowerCase().startsWith('emilio@')?'Emilio':str(auth.currentUser?.email||'').toLowerCase().startsWith('juan@')?'Juan':'Gerencia'),connection:f.connection,obra:f.obra,id:str(f.id),description:f.title,detail:f.detail.slice(0,180)};
- try{await setDoc(reviewRef,{items:{[f.reviewKey]:record}},{merge:true});remoteReviews[f.reviewKey]=record;delete localReviews[f.reviewKey];persistLocalReviews();reviewMode='firebase';showReviewMessage('Marcado como revisado. Visible en «Revisados y ocultos». Se comparte por Firebase.');}
- catch(e){localReviews[f.reviewKey]=record;if(!persistLocalReviews()){delete localReviews[f.reviewKey];showReviewMessage('No se pudo guardar la revisión: '+prettyError(e),true);}else {reviewMode='local';showReviewMessage('Revisión guardada SOLO en este navegador porque Firebase no permitió escribir. Si cambiás de dispositivo o borrás los datos locales, puede reaparecer.',true);}}
- finally{reviewBusy.delete(f.reviewKey);summarize();render();refreshStatus();}
+ const previous=localReviews[key];localReviews[key]=record;
+ if(!persistLocalReviews()){
+   if(previous===undefined)delete localReviews[key];else localReviews[key]=previous;
+   showReviewMessage('No se pudo guardar en este navegador. No se ocultó la alerta.',true);
+   reviewToast('No se pudo guardar la revisión; la alerta sigue visible.',true);return;
+ }
+ reviewBusy.add(key);
+ summarize();render();refreshStatus();
+ reviewToast('Marcado como revisado y oculto en este dispositivo.');
+ showReviewMessage('Revisión guardada inmediatamente en este dispositivo. Intentando compartir en Firebase…');
+ try{
+   await reviewWait(setDoc(reviewRef,{items:{[key]:record}},{merge:true}));
+   remoteReviews[key]=record;reviewMode='firebase';
+   // Mantenemos la copia local por resiliencia ante lecturas temporales fallidas.
+   showReviewMessage('Revisión guardada en este dispositivo y compartida por Firebase.');
+ }catch(e){reviewMode='local';showReviewMessage('Revisión ocultada y guardada SOLO en este navegador. Firebase no confirmó la escritura: '+prettyError(e)+'. Podés continuar usando el botón.',true);}
+ finally{reviewBusy.delete(key);summarize();render();refreshStatus();}
 }
+
 async function undoReviewed(f){
  if(!canRun||busy||reviewBusy.has(f.reviewKey))return;
- reviewBusy.add(f.reviewKey);render();
+ const key=f.reviewKey,prior=localReviews[key],hasRemote=!!remoteReviews[key];
+ // La revocación local tiene prioridad, incluso si Firebase está sin conexión.
+ localReviews[key]={revoked:true,at:new Date().toISOString()};
+ if(!persistLocalReviews()){
+   if(prior===undefined)delete localReviews[key];else localReviews[key]=prior;
+   reviewToast('No se pudo deshacer en este dispositivo.',true);return;
+ }
+ reviewBusy.add(key);summarize();render();refreshStatus();
+ reviewToast('Alerta restaurada en este dispositivo.');
+ if(!hasRemote){reviewBusy.delete(key);summarize();render();refreshStatus();showReviewMessage('La alerta volvió a estar activa en este navegador.');return;}
  try{
-   if(remoteReviews[f.reviewKey]){await updateDoc(reviewRef,{['items.'+f.reviewKey]:deleteField()});delete remoteReviews[f.reviewKey];}
-   delete localReviews[f.reviewKey];persistLocalReviews();showReviewMessage('La alerta volvió a estar activa.');
- }catch(e){showReviewMessage('No se pudo deshacer en Firebase: '+prettyError(e),true);}
- finally{reviewBusy.delete(f.reviewKey);summarize();render();refreshStatus();}
+   await reviewWait(updateDoc(reviewRef,{['items.'+key]:deleteField()}));
+   delete remoteReviews[key];delete localReviews[key];persistLocalReviews();
+   showReviewMessage('La alerta volvió a estar activa en los dispositivos sincronizados.');
+ }catch(e){showReviewMessage('Alerta visible en este navegador. Firebase no confirmó la restauración: '+prettyError(e),true);}
+ finally{reviewBusy.delete(key);summarize();render();refreshStatus();}
 }
 function refreshStatus(){if(!findings.length)return;const count=findings.filter(f=>f.severity==='error'&&!isReviewed(f)).length;const warn=findings.filter(f=>f.severity==='warning'&&!isReviewed(f)).length;const failed=sources.filter(s=>!s.ok).length;status(failed?'Verificación parcial: faltan lecturas':count?'Verificación terminada: hay inconsistencias':warn?'Verificación terminada: hay avisos pendientes':'Verificación terminada',failed||count?'error':warn?'run':'ok');}
 
@@ -177,7 +210,14 @@ function activeGastos(d){const a=new Map();arr(d?.gastos).forEach(g=>{if(g&&g.id
 function ageMs(x){const d=Date.parse(str(x||''));return Number.isFinite(d)?Date.now()-d:Infinity;}
 function classifyMissing(x){return ageMs(x?.createdAt||x?.creadoAt||x?.fecha||x?.date||x?.ts)<3*60*1000?'warning':'error';}
 function prettyError(e){const c=str(e?.code||'');if(c.includes('permission-denied'))return 'Sin permisos Firebase';if(c.includes('unavailable'))return 'Sin conexión con Firebase';return str(e?.message||'Error de lectura').slice(0,150);}
-function summarize(){const c={error:0,warning:0,ok:0,info:0};findings.forEach(f=>{if(!isReviewed(f))c[f.severity]++;});el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;el('metric-reviewed').textContent=reviewedCount();el('metric-info').textContent=c.info;}
+function summarize(){
+ const c={error:0,warning:0,ok:0,info:0};findings.forEach(f=>{if(!isReviewed(f))c[f.severity]++;});
+ el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;el('metric-reviewed').textContent=reviewedCount();el('metric-info').textContent=c.info;
+ const box=el('cc-overview'),issues=findings.filter(f=>f.connection==='Caja Gerencia → Caja Chica'&&['error','warning'].includes(f.severity)&&!isReviewed(f));
+ if(!issues.length){box.hidden=true;box.textContent='';return;}
+ const counts={};issues.forEach(f=>counts[f.title]=(counts[f.title]||0)+1);
+ box.hidden=false;box.textContent='Caja Gerencia ↔ Caja Chica: '+issues.length+' aviso(s) activos. '+Object.entries(counts).map(([reason,n])=>n+' × '+reason).join(' · ')+'. Agrupación de causas; no modifica registros.';
+}
 function tag(t,cls=''){const d=document.createElement('div');d.className=cls;d.textContent=t;return d;}
 function renderSources(){const box=el('sources');box.replaceChildren();sources.forEach(s=>{const d=tag('', 'source '+(s.ok?'ok':'error'));const b=document.createElement('b');b.textContent=s.name;d.replaceChildren(b,tag(s.text,'source-text'));box.append(d);});const bad=sources.filter(s=>!s.ok).length;el('source-count').textContent=sources.length?`${sources.length} fuentes consultadas · ${bad} con problemas`:'Fuentes consultadas: sin verificar';}
 function render(){
@@ -224,7 +264,7 @@ function render(){
 function addModules(){const select=el('module'),chosen=select.value;select.replaceChildren(new Option('Todas las conexiones','all'));[...new Set(findings.map(x=>x.connection))].sort().forEach(x=>select.add(new Option(x,x)));select.value=[...select.options].some(o=>o.value===chosen)?chosen:'all';}
 async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];summarize();renderSources();el('sources-disclosure').open=false;await loadReviews();
 try{
- const names=[['Caja Gerencia','cq_caja','gastos_compartidos_v1'],['Caja Chica','caja_chica_app','main'],['Acopio','acopio_cq','acopio_cq_compartido_v3'],['Pañol','panol','stock_v1'],['Materiales','materiales','data_planilla_exacta_v4']];
+ const names=[['Caja Gerencia','cq_caja','gastos_compartidos_v1'],['Caja Chica','caja_chica_app','main'],['Integraciones Caja Chica','caja_chica_integraciones','main'],['Acopio','acopio_cq','acopio_cq_compartido_v3'],['Pañol','panol','stock_v1'],['Materiales','materiales','data_planilla_exacta_v4']];
  const files={};
  await Promise.all(names.map(async ([name,col,id])=>{try{const data=await read(col,id);if(!data)throw new Error('Documento no encontrado');files[name]=normalizeDoc(data);sources.push({name,ok:true,text:'Lectura confirmada'});}catch(e){files[name]=null;sources.push({name,ok:false,text:prettyError(e)});}}));
  renderSources();
@@ -357,16 +397,74 @@ try{
    if(Math.abs(num(entrada.cantidad)-num(m.panolCantidad))>0.0001)log('error','Caja Gerencia → Pañol','Cantidad diferente','Cantidad Caja '+num(m.panolCantidad)+' · Pañol '+num(entrada.cantidad),'',sid,{source:m,dest:entrada});
    else {log('ok','Caja Gerencia → Pañol','Vínculo verificado','Entrada y cantidad coinciden','',sid,{source:m,dest:entrada});reportStale('Caja Gerencia · puntos Pañol','',sid,m,'panolSyncEstado');}
  });
- // Caja Gerencia → Caja Chica: el ingreso debe existir en el estado actual de Caja Chica.
- if(files['Caja Gerencia']&&files['Caja Chica'])arr(cg.fondoPesosMovs).filter(m=>m&&m.cajaChicaIngreso===true).forEach(m=>{
-   const sid=str(m.id),iid='caja_gerencia_fondo_'+sid;
-   const matches=cc.filter(x=>x?.type==='ingreso'&&(str(x.id)===iid||str(x.integrationId)===iid||str(x.cajaGerenciaOrigenId)===sid||str(x.sourceMovementId)===sid));
-   if(!matches.length){log('warning','Caja Gerencia → Caja Chica','Ingreso no localizado en Caja Chica','Verificar el vínculo y el ingreso de Fondo común $ (podría existir bajo un identificador histórico).','',sid,{source:m});return;}
-   if(matches.length>1){log('error','Caja Gerencia → Caja Chica','Ingreso duplicado',matches.length+' ingresos con el mismo origen','',sid,{source:m});return;}
-   if(Math.abs(num(matches[0].amount)-num(m.monto))>0.05)log('error','Caja Gerencia → Caja Chica','Importe diferente','Caja Gerencia '+num(m.monto)+' · Caja Chica '+num(matches[0].amount),'',sid,{source:m,dest:matches[0]});
-   else {log('ok','Caja Gerencia → Caja Chica','Vínculo verificado','Ingreso y monto coinciden','',sid,{source:m,dest:matches[0]});reportStale('Caja Gerencia · puntos Caja Chica','',sid,m,'cajaChicaSyncEstado');}
- });
- if(files['Materiales'])for(const [id,items] of materialMap){if(items.length>1&& !id.startsWith('panol_')&&!id.startsWith('acopio_'))log('error','Materiales · duplicados','Identificador de integración repetido',items.length+' movimientos con ID '+id,'',id,{source:items[0]});}
+   // Caja Gerencia → Caja Chica: comparar por separado las tres fuentes reales.
+  // (1) casilla persistida en Caja Gerencia, (2) catálogo de integraciones y
+  // (3) ingreso reflejado en Caja Chica. Una casilla antigua NO prueba un ingreso.
+  if(files['Caja Gerencia']){
+    const ccIntData=files['Integraciones Caja Chica'];
+    const integrationRows=arr(ccIntData?.items);
+    const intBySource=new Map(),ccBySource=new Map();
+    integrationRows.forEach(x=>{
+      if(!x)return;
+      const sid=str(x.sourceMovementId||'')||str(x.integrationId||'').replace(/^caja_gerencia_fondo_/,'');
+      if(sid){if(!intBySource.has(sid))intBySource.set(sid,[]);intBySource.get(sid).push(x);}
+    });
+    cc.filter(x=>x&&x.type==='ingreso'&&(x.origen==='cq_caja_gerencia'||x.cajaGerenciaVinculado===true||str(x.integrationId).startsWith('caja_gerencia_fondo_')||str(x.id).startsWith('caja_gerencia_fondo_'))).forEach(x=>{
+      const sid=str(x.cajaGerenciaOrigenId||x.sourceMovementId||'')||str(x.integrationId||x.id).replace(/^caja_gerencia_fondo_/,'');
+      if(sid){if(!ccBySource.has(sid))ccBySource.set(sid,[]);ccBySource.get(sid).push(x);}
+    });
+    const dinero=n=>'$'+num(n).toLocaleString('es-AR',{maximumFractionDigits:2});
+    arr(cg.fondoPesosMovs).filter(m=>m&&m.tipo==='gasto'&&m.id!=null).forEach(m=>{
+      const sid=str(m.id),marcado=m.cajaChicaIngreso===true,intRows=intBySource.get(sid)||[],ccRows=ccBySource.get(sid)||[];
+      const activeRows=intRows.filter(x=>x.active!==false&&x.deletedFromCajaChica!==true);
+      const active=activeRows.length>0,connected=ccRows.length>0;
+      // Evitar registrar cada gasto sin Caja Chica: sólo auditar intentos de vínculo.
+      if(!marcado&&!intRows.length&&!connected)return;
+      const state=active?'Activa':intRows.length?'Inactiva':'Sin integración';
+      const fields=[
+        {label:'Casilla Caja Chica guardada en Caja Gerencia',a:marcado?'MARCADA (Sí)':'DESMARCADA (No)'},
+        {label:'Integración Caja → Caja Chica',a:ccIntData?state:'No se pudo consultar'},
+        {label:'Ingreso encontrado en Caja Chica',a:files['Caja Chica']?(ccRows.length?ccRows.length+' registro(s)':'No'):'No se pudo consultar'},
+        {label:'Importe de Caja Gerencia',a:dinero(m.monto)},
+        {label:'Descripción de Caja',a:str(m.desc||'Sin descripción').slice(0,110)}
+      ];
+      const meta={source:m,dest:ccRows[0],fields};
+      const name='Caja Gerencia → Caja Chica';
+      if(!files['Caja Chica']||!ccIntData){
+        log('warning',name,'Verificación parcial del vínculo de Caja Chica','Faltó consultar Caja Chica o su documento de integraciones','',sid,{...meta,summary:'No se pudieron consultar las tres fuentes necesarias para confirmar el vínculo.',action:'Repetí la verificación cuando estén disponibles Caja Chica y sus integraciones; no corrijas movimientos por esta alerta.'});return;
+      }
+      if(!marcado){
+        if(active||connected){
+          log('warning',name,'Casilla desmarcada, pero queda un vínculo activo','La casilla está apagada en Caja Gerencia; '+(active?'su integración sigue activa. ':'')+(connected?'Todavía existe un ingreso vinculado en Caja Chica.':''),'',sid,{...meta,summary:'Caja Gerencia ya guarda la casilla DESMARCADA, pero '+(active?'la integración sigue ACTIVA':'persiste un ingreso en Caja Chica')+'.',action:'No vuelvas a marcar la casilla. Revisá en Caja Chica si el ingreso debe eliminarse y comprobá que el vínculo se haya desactivado correctamente. No lo borres desde este control.'});
+        }
+        return;
+      }
+      if(intRows.length>1){
+        log('error',name,'Integraciones duplicadas para Caja Chica','Hay '+intRows.length+' integraciones con el mismo movimiento de origen','',sid,{...meta,summary:'El mismo gasto aparece más de una vez en el documento de integraciones.',action:'Revisá las integraciones antes de volver a sincronizar. No elimines ingresos sin comprobar cuáles son legítimos.'});return;
+      }
+      if(ccRows.length>1){
+        log('error',name,'Ingresos duplicados en Caja Chica','Hay '+ccRows.length+' ingresos vinculados al mismo gasto','',sid,{...meta,summary:'Caja Chica contiene varios ingresos para un mismo gasto de Fondo común.',action:'Compará fecha, importe e ID de los ingresos. Evitá volver a enviar el gasto.'});return;
+      }
+      if(!connected){
+        if(active){
+          log('warning',name,'Integración activa; ingreso aún no reflejado','La integración está activa, pero no se encontró el ingreso en el estado actual de Caja Chica','',sid,{...meta,summary:'La casilla de Caja Gerencia sigue MARCADA y la integración está ACTIVA, pero falta comprobar el ingreso en Caja Chica.',action:'Abrí Caja Chica y dejá que sincronice; después ejecutá Verificar ahora. Si no correspondía enviarlo, desmarcá y guardá el gasto específico en Caja Gerencia; no hace falta crear un ingreso manual.'});
+        }else{
+          log('warning',name,'La casilla sigue marcada en Caja Gerencia','No existe ingreso en Caja Chica y la integración está '+state.toLowerCase(),'',sid,{...meta,summary:'Firebase todavía registra cajaChicaIngreso = true en este movimiento, aunque no se encontró el ingreso ni una integración activa.',action:'Si ya desmarcaste la casilla, buscá este gasto por fecha, descripción e importe en Caja Gerencia. Comprobá que quedó guardado y sincronizado (no solo desmarcado en pantalla) y volvé a verificar. El Control no puede cambiar ese campo.'});
+        }
+        return;
+      }
+      if(Math.abs(num(ccRows[0].amount)-num(m.monto))>0.05){
+        fields.push({label:'Importe en Caja Chica',a:dinero(ccRows[0].amount)});
+        log('error',name,'Importe diferente en Caja Chica','Caja Gerencia '+dinero(m.monto)+' · Caja Chica '+dinero(ccRows[0].amount),'',sid,{...meta,summary:'El ingreso existe en Caja Chica pero su monto no coincide con Caja Gerencia.',action:'Revisá el gasto en Caja Gerencia y el ingreso de Caja Chica. No ajustes uno de los importes sin comprobar cuál es el correcto.'});return;
+      }
+      if(!active){
+        log('warning',name,'Ingreso existe, pero la integración está inactiva','El ingreso coincide en importe, pero el documento de integración no está activo','',sid,{...meta,summary:'El ingreso está en Caja Chica y coincide en monto, pero Caja conserva la casilla marcada y la integración no está activa.',action:'Revisá el estado del enlace en ambas aplicaciones antes de reactivar o eliminar datos.'});return;
+      }
+      log('ok',name,'Vínculo verificado','La casilla, la integración y el ingreso coinciden en importe','',sid,{source:m,dest:ccRows[0]});
+      reportStale('Caja Gerencia · puntos Caja Chica','',sid,m,'cajaChicaSyncEstado');
+    });
+  }
+if(files['Materiales'])for(const [id,items] of materialMap){if(items.length>1&& !id.startsWith('panol_')&&!id.startsWith('acopio_'))log('error','Materiales · duplicados','Identificador de integración repetido',items.length+' movimientos con ID '+id,'',id,{source:items[0]});}
  if(sources.some(s=>!s.ok))log('warning','Cobertura de lectura','Verificación parcial','Una o más fuentes no se pudieron leer. Revisar los avisos de origen.','','');
  if(!findings.length)log('warning','Cobertura de lectura','Sin vínculos reconocidos','Se consultaron las fuentes, pero no se encontraron vínculos que coincidan con las reglas de esta versión.','','');
  summarize();addModules();render();
@@ -374,7 +472,7 @@ try{
  refreshStatus();
  el('info').textContent=`Consulta terminada. Fuentes consultadas: ${sources.length}; lecturas fallidas: ${failed}. Problemas activos para revisar: ${findings.filter(f=>['error','warning'].includes(f.severity)&&!isReviewed(f)).length}. Estados internos antiguos con vínculo localizado: ${findings.filter(f=>f.severity==='info').length} (informativos; NO es necesario revisarlos individualmente ni reenviarlos). Revisadas / ocultas: ${reviewedCount()}. El control no modifica datos de origen.`;
  }catch(e){status('La verificación no pudo completarse','error');el('info').textContent=prettyError(e);summarize();render();}
- finally{busy=false;el('run').disabled=!canRun;}
+ finally{busy=false;el('run').disabled=!canRun;render();}
 }
 el('type').addEventListener('change',render);el('module').addEventListener('change',render);el('search').addEventListener('input',render);el('run').addEventListener('click',verify);
 onAuthStateChanged(auth,async user=>{
