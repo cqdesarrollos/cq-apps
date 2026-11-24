@@ -63,6 +63,28 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 @media(max-width:560px){.cq-alert-fila{grid-template-columns:91px minmax(0,1fr);gap:8px;padding:9px 9px}.cq-alert-etiqueta{font-size:10.5px}.cq-alert-valor{font-size:11.7px}}
 .diag-raw{margin-top:9px;font-size:10px;color:#617388}.diag-raw summary{font-weight:700;cursor:pointer}.diag-raw div{white-space:pre-wrap;margin-top:6px;overflow-wrap:anywhere}
 @media(max-width:560px){.diag-values{grid-template-columns:1fr 1fr}.finding .origin{font-size:9px}}
+
+/* CQ · Indicadores prioritarios: únicamente presentación */
+.summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:12px}
+.summary .kpi{min-width:0;display:flex;align-items:center;gap:10px;background:#f6f8fa}
+.summary .kpi.ok{background:#edf8f4;border-color:#cce8dd}
+.kpi-copy{min-width:0;flex:1}.kpi-copy span{display:block;line-height:1.35;overflow-wrap:anywhere}
+.cq-kpi-icon{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:11px;background:#e4edf9;color:#315c99}
+.cq-kpi-icon svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.summary .ok .cq-kpi-icon{background:#d1eee1;color:#00875b}.summary .reviewed .cq-kpi-icon{background:#e5e9f3;color:#596b93}.summary .info .cq-kpi-icon{background:#e5eef7;color:#52799d}
+.cq-priority{border:1px solid #dbe5ec;background:#f8fafc;border-radius:13px;padding:11px;margin:0 0 14px}
+.cq-priority-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 10px;color:#17243b;font-size:13px;font-weight:800}
+.cq-priority-head .cq-kpi-icon{width:22px;height:22px;flex-basis:22px;border-radius:6px;background:transparent;color:#60748b}.cq-priority-head .cq-kpi-icon svg{width:18px;height:18px}
+.cq-priority-head .cq-priority-status{margin-left:auto;font-size:10px;font-weight:750;color:#64748b}
+.cq-priority-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cq-priority-grid .kpi{min-width:0;padding:10px 8px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;border-color:#dbe5ec;background:#f0f4f8;color:#64748b}
+.cq-priority-grid .kpi strong,.cq-priority-grid .kpi span{color:inherit}.cq-priority-grid .kpi span{font-size:11px;line-height:1.3;overflow-wrap:anywhere}.cq-priority-grid .cq-kpi-icon{width:27px;height:27px;flex-basis:27px;background:#e2e9f1;color:inherit;border-radius:50%}.cq-priority-grid .cq-kpi-icon svg{width:16px;height:16px}
+.cq-priority-grid .kpi[data-state="clear"]{background:#edf9f2;border-color:#b6dfc8;color:#08784e}.cq-priority-grid .kpi[data-state="clear"] .cq-kpi-icon{background:#d3efdf}
+.cq-priority-grid .kpi[data-state="alert"].bad,.cq-priority-grid .kpi[data-state="alert"].orphan{background:#fff0f0;border-color:#e9a8aa;color:#b52e35}.cq-priority-grid .kpi[data-state="alert"].bad .cq-kpi-icon,.cq-priority-grid .kpi[data-state="alert"].orphan .cq-kpi-icon{background:#f8d6d7}
+.cq-priority-grid .kpi[data-state="alert"].warn{background:#fff5e0;border-color:#edc77d;color:#97600c}.cq-priority-grid .kpi[data-state="alert"].warn .cq-kpi-icon{background:#ffe7b6}
+.cq-priority[data-state="clear"] .cq-priority-status,.cq-priority[data-state="clear"] .cq-priority-head .cq-kpi-icon{color:#08784e}.cq-priority[data-state="alert"] .cq-priority-head .cq-kpi-icon,.cq-priority[data-state="alert"] .cq-priority-status{color:#b52e35}
+@media(max-width:560px){.summary .kpi{padding:10px 8px;gap:7px}.summary .cq-kpi-icon{width:27px;height:27px;flex-basis:27px}.summary .cq-kpi-icon svg{width:16px;height:16px}.cq-priority{padding:9px}.cq-priority-grid{gap:6px}.cq-priority-grid .kpi{padding:9px 4px}.cq-priority-grid .kpi span{font-size:10px}.cq-priority-grid .kpi strong{font-size:23px}}
+@media(max-width:330px){.cq-priority-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cq-priority-grid .orphan{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -72,7 +94,8 @@ main{max-width:1100px;margin:0 auto;padding:18px 14px 45px}.panel{background:#ff
 <div class="status"><span id="dot" class="circle"></span><span id="status" aria-live="polite">Comprobando acceso a Gerencia…</span></div>
 <div class="tools"><div><b>Verificación de vínculos</b><p>Solo lectura · vínculos, posibles borrados incompletos y movimientos huérfanos · <strong>Versión 20/11 — ingresos en 6 cuentas y cargas múltiples</strong></p></div><button class="btn" type="button" id="run" disabled>Verificar ahora</button></div>
 <label class="wide-scan"><input type="checkbox" id="scan-all-obras"><span><b>Revisar también Gastos de todas las obras</b><small>Opcional: detecta huérfanos en obras cuyo movimiento de origen ya fue eliminado. Agrega lecturas de Firebase según la cantidad de obras.</small></span></label>
-<div class="summary"><div class="kpi"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div><div class="kpi bad"><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn"><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi ok"><strong id="metric-ok">—</strong><span>Correctos</span></div><div class="kpi reviewed"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div><div class="kpi info"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div><div class="kpi orphan"><strong id="metric-orphan">—</strong><span>Posibles huérfanos / borrados incompletos</span></div></div>
+<div class="summary"><div class="kpi "><i class="cq-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="2"/><rect x="3" y="10" width="18" height="5" rx="2"/><rect x="3" y="16" width="18" height="5" rx="2"/></svg></i><div class="kpi-copy"><strong id="metric-checked">—</strong><span>Vínculos analizados</span></div></div><div class="kpi ok"><i class="cq-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4 10-10"/></svg></i><div class="kpi-copy"><strong id="metric-ok">—</strong><span>Correctos</span></div></div><div class="kpi reviewed"><i class="cq-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i><div class="kpi-copy"><strong id="metric-reviewed">—</strong><span>Revisados / ocultos</span></div></div><div class="kpi info"><i class="cq-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></i><div class="kpi-copy"><strong id="metric-info">—</strong><span>Indicadores antiguos · informativo</span></div></div></div>
+<section class="cq-priority" id="cq-priority" aria-labelledby="cq-priority-title" data-state="neutral"><div class="cq-priority-head"><i class="cq-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10.3 4.2 2.6 18a1.7 1.7 0 0 0 1.5 2.5h15.8a1.7 1.7 0 0 0 1.5-2.5L13.7 4.2a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 16h.01"/></svg></i><span id="cq-priority-title">Alertas importantes</span><span class="cq-priority-status" id="cq-priority-status" aria-live="polite">Sin verificar</span></div><div class="cq-priority-grid"><div class="kpi bad" data-state="neutral"><i class="cq-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16h.01"/></svg></i><strong id="metric-error">—</strong><span>Errores activos</span></div><div class="kpi warn" data-state="neutral"><i class="cq-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></i><strong id="metric-warning">—</strong><span>Pendientes activos</span></div><div class="kpi orphan" data-state="neutral"><i class="cq-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 5.7 0M16 8l1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-5.7 0" transform="translate(1 0) scale(.92)"/><path d="m4 20 16-16"/></svg></i><strong id="metric-orphan">—</strong><span>Posibles huérfanos / borrados incompletos</span></div></div></section>
 <div class="notice" id="cc-overview" hidden></div>
 <div class="notice" id="info">El control no modifica movimientos. «Está OK · Ocultar» guarda inmediatamente la revisión en este dispositivo; intenta compartirla en Firebase sin bloquear el botón. No corrige el vínculo. Si ese dato cambia, aparecerá una alerta nueva.</div>
 <details id="sources-disclosure" class="details-sources"><summary><span id="source-count">Fuentes consultadas: sin verificar</span></summary><div id="sources" class="sources"></div></details>
@@ -98,6 +121,7 @@ const read=async (col,id)=>{
   return snap.exists()?snap.data():null;
 };
 let canRun=false,busy=false,findings=[],sources=[];
+let cqPriorityPhase="idle";
 const reviewRef=doc(db,'cq_control_integraciones','revisiones_v1'),REVIEW_LOCAL_KEY='cq_control_revisiones_locales_v1';
 let remoteReviews={},localReviews={},reviewMode='firebase',reviewBusy=new Set(),reviewMessage='';
 const hashText=(text,seed)=>{let h=seed>>>0;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h.toString(36)};
@@ -237,6 +261,13 @@ function prettyError(e){const c=str(e?.code||'');if(c.includes('permission-denie
 function summarize(){
  const c={error:0,warning:0,ok:0,info:0};findings.forEach(f=>{if(!isReviewed(f))c[f.severity]++;});
  el('metric-checked').textContent=findings.length.toLocaleString('es-AR');el('metric-error').textContent=c.error;el('metric-warning').textContent=c.warning;el('metric-ok').textContent=c.ok;el('metric-reviewed').textContent=reviewedCount();el('metric-info').textContent=c.info;el('metric-orphan').textContent=findings.filter(f=>f.auditType&&!isReviewed(f)).length;
+ // CQ · Estado visual de alertas (no modifica resultados ni datos).
+ const cqPriorityValues=[['error',c.error],['warning',c.warning],['orphan',findings.filter(f=>f.auditType&&!isReviewed(f)).length]];
+ const cqPriorityComplete=cqPriorityPhase==='complete'&&sources.length>0&&!sources.some(s=>!s.ok)&&!findings.some(f=>f.title==='Verificación parcial'||f.title==='Sin vínculos reconocidos');
+ const cqPriorityHasAlerts=cqPriorityValues.some(([,n])=>n>0);
+ cqPriorityValues.forEach(([key,n])=>{el('metric-'+key).closest('.kpi').dataset.state=cqPriorityPhase==='running'?'neutral':n>0?'alert':cqPriorityComplete?'clear':'neutral';});
+ el('cq-priority').dataset.state=cqPriorityPhase==='running'?'neutral':cqPriorityHasAlerts?'alert':cqPriorityComplete?'clear':'neutral';
+ el('cq-priority-status').textContent=cqPriorityPhase==='running'?'Verificando…':cqPriorityPhase==='idle'?'Sin verificar':cqPriorityPhase==='failed'?'Verificación incompleta':cqPriorityHasAlerts?'Requiere revisión':cqPriorityComplete?'Sin alertas activas':'Verificación parcial';
  const box=el('cc-overview'),issues=findings.filter(f=>f.connection==='Caja Gerencia → Caja Chica'&&['error','warning'].includes(f.severity)&&!isReviewed(f));
  if(!issues.length){box.hidden=true;box.textContent='';return;}
  const counts={};issues.forEach(f=>counts[f.title]=(counts[f.title]||0)+1);
@@ -472,7 +503,7 @@ function enriquecerFichas(ctx){
 }
 
 function addModules(){const select=el('module'),chosen=select.value;select.replaceChildren(new Option('Todas las conexiones','all'));[...new Set(findings.map(x=>x.connection))].sort().forEach(x=>select.add(new Option(x,x)));select.value=[...select.options].some(o=>o.value===chosen)?chosen:'all';}
-async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('scan-all-obras').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];summarize();renderSources();el('sources-disclosure').open=false;await loadReviews();
+async function verify(){if(!canRun||busy)return;busy=true;el('run').disabled=true;el('scan-all-obras').disabled=true;el('results').replaceChildren(tag('Consultando Firebase y comparando vínculos…','empty'));status('Verificando datos en Firebase…','run');findings=[];sources=[];cqPriorityPhase='running';summarize();renderSources();el('sources-disclosure').open=false;await loadReviews();
 try{
  const names=[['Caja Gerencia','cq_caja','gastos_compartidos_v1'],['Caja Chica','caja_chica_app','main'],['Integraciones Caja Chica','caja_chica_integraciones','main'],['Acopio','acopio_cq','acopio_cq_compartido_v3'],['Pañol','panol','stock_v1'],['Materiales','materiales','data_planilla_exacta_v4']];
  const files={};
@@ -943,11 +974,11 @@ if(files['Materiales'])for(const [id,items] of materialMap){if(items.length>1&& 
  if(sources.some(s=>!s.ok))log('warning','Cobertura de lectura','Verificación parcial','Una o más fuentes no se pudieron leer. Revisar los avisos de origen.','','');
  if(!findings.length)log('warning','Cobertura de lectura','Sin vínculos reconocidos','Se consultaron las fuentes, pero no se encontraron vínculos que coincidan con las reglas de esta versión.','','');
  enriquecerFichas({cg,cc,ac,pn,mat,configObras:configObrasEtiquetas});
- summarize();addModules();render();
+ cqPriorityPhase='complete';summarize();addModules();render();
  const failed=sources.filter(x=>!x.ok).length,err=findings.filter(f=>f.severity==='error'&&!isReviewed(f)).length;
  refreshStatus();
  el('info').textContent=`Consulta terminada. Fuentes consultadas: ${sources.length}; lecturas fallidas: ${failed}. Problemas activos para revisar: ${findings.filter(f=>['error','warning'].includes(f.severity)&&!isReviewed(f)).length}. Huérfanos / borrados posibles: ${findings.filter(f=>f.auditType&&!isReviewed(f)).length} (ausencia de origen no demuestra borrado). Auditoría de todas las obras: ${auditAllObras?(auditCatalogComplete?'activada':'no completada'):'desactivada'}. Estados internos antiguos con vínculo localizado: ${findings.filter(f=>f.severity==='info').length} (informativos; NO es necesario revisarlos individualmente ni reenviarlos). Revisadas / ocultas: ${reviewedCount()}. El control no modifica datos de origen.`;
- }catch(e){status('La verificación no pudo completarse','error');el('info').textContent=prettyError(e);summarize();render();}
+ }catch(e){cqPriorityPhase='failed';status('La verificación no pudo completarse','error');el('info').textContent=prettyError(e);summarize();render();}
  finally{busy=false;el('run').disabled=!canRun;el('scan-all-obras').disabled=false;render();}
 }
 el('type').addEventListener('change',render);el('module').addEventListener('change',render);el('search').addEventListener('input',render);el('run').addEventListener('click',verify);

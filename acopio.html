@@ -2914,6 +2914,13 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
 .cq-entregas-back{
   background:#fff;color:var(--green);
 }
+.cq-entregas-folder{background:#FFF4E2;color:#815513;border-color:#DDBB7D}
+.cq-entregas-archivo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:12px 0}
+.cq-entregas-archivo-head strong{font-size:15px;color:var(--green)}
+.cq-entregas-borrar{background:#FDECEA;color:var(--red);border-color:#E8B7AF}
+.cq-entregas-borrar-uno{border:1px solid #E8B7AF;border-radius:8px;background:#FFF4F2;color:var(--red);padding:7px 9px;cursor:pointer;font-weight:800;font-size:11px}
+.cq-entregas-archivo-meta{font-size:10px;color:#6F897B;margin-top:3px}
+
 .cq-obra-badge{
   font-weight:900!important;
   white-space:nowrap!important;
@@ -3671,7 +3678,7 @@ body.cq-acopio-cargando{overflow:hidden!important}
         <div id="retiro-material-diagnostico" style="display:none;margin-top:8px;padding:10px;border:1px solid #D5CFC3;border-radius:8px;background:#F7F6F3;font-size:10px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere"></div>
       </div>
       <div class="row2">
-        <div class="fld"><label>Cantidad</label><input type="number" id="retiro-qty" min="0.01" step="0.01"></div>
+        <div class="fld"><label>Cantidad (+ retiro / − devolución)</label><input type="number" id="retiro-qty" step="0.01" inputmode="text" title="Cantidad negativa = devolución"></div>
         <div class="fld"><label>Fecha</label><input type="date" id="retiro-fecha"></div>
       </div>
       <div class="fld"><label>Subrubro · Materiales</label>
@@ -3885,10 +3892,12 @@ body.cq-acopio-cargando{overflow:hidden!important}
       <button type="button" class="cq-entregas-action cq-entregas-undo" id="cq-entregas-undo" onclick="deshacer()" disabled>↶ Deshacer</button>
       <button type="button" class="cq-entregas-action cq-entregas-all" id="cq-entregas-marcar-todo" onclick="marcarTodasEntregasPendientes()">✓ Marcar todo</button>
       <button type="button" class="cq-entregas-action cq-entregas-wsp" id="cq-entregas-whatsapp" onclick="compartirEntregasPendientesPDF()">◉ WhatsApp PDF</button>
+      <button type="button" class="cq-entregas-action cq-entregas-folder" id="cq-entregas-folder" onclick="cqToggleCarpetaEntregas()">📁 Entregados (0)</button>
       <button type="button" class="cq-entregas-action cq-entregas-back" onclick="goHome()">← Volver</button>
     </div>
   </div>
   <div id="cq-entregas-pendientes-content"></div>
+  <div id="cq-entregas-archivo-content" style="display:none"></div>
 </div>
 
 <!-- ═══════════════ TABS (dentro de un acopio) ═══════════════ -->
@@ -3928,7 +3937,7 @@ body.cq-acopio-cargando{overflow:hidden!important}
     <div class="card" style="padding:14px 16px">
       <div class="fld"><label>Material</label><div class="combo-wrap"><input type="text" id="retirar-mat-search" placeholder="🔎 Buscar material..." autocomplete="off" oninput="filterRetirarMatCombo()" onfocus="filterRetirarMatCombo()" onclick="clearRetirarMatSearch()" title="Tocar para borrar y buscar otro material"><div id="retirar-mat-dropdown" class="combo-dropdown" style="display:none"></div></div><select id="retirar-mat-sel" style="display:none"></select></div>
       <div class="row2">
-        <div class="fld"><label>Cantidad</label><input type="number" id="retirar-qty" min="0.01" step="0.01" placeholder="0"></div>
+        <div class="fld"><label>Cantidad (+ retiro / − devolución)</label><input type="number" id="retirar-qty" step="0.01" inputmode="text" placeholder="0 o -2" title="Cantidad negativa = devolución"></div>
         <div class="fld"><label>Fecha</label><input type="date" id="retirar-fecha"></div>
       </div>
       <div class="fld"><label>Subrubro · Materiales</label>
@@ -5024,7 +5033,9 @@ function currentVisibleTab(){
 function deshacer(){
   if(!undoStack.length){toast('No hay nada para deshacer');return;}
   try{
+    var antesUndoEntrega=DB;
     DB=sanitizeDB(JSON.parse(undoStack.pop()));
+    cqEntregaUndoEstado(antesUndoEntrega,DB);
     // Si Deshacer restauró un retiro eliminado, liberar únicamente ese tombstone.
     // Así el borrado normal sigue blindado contra snapshots viejos, pero Undo conserva su función.
     try{
@@ -5151,6 +5162,8 @@ async function saveToFirebase(){
             if(!idsLocales.has(rid) && !(tomb && cqRetirosBorradosPendientes && cqRetirosBorradosPendientes.has(tomb))){
               locales.push(r);
               idsLocales.add(rid);
+            }else if(idsLocales.has(rid)){
+              cqEntregaCopiarEstado(locales.find(function(x){return String(x&&x.id)===rid;}),r);
             }
           });
           acLocal.retiros=locales;
@@ -5241,6 +5254,8 @@ async function saveToFirebase(){
             if(!ids.has(rid) && !(tomb && cqRetirosBorradosPendientes && cqRetirosBorradosPendientes.has(tomb))){
               arr.push(r);
               ids.add(rid);
+            }else if(ids.has(rid)){
+              cqEntregaCopiarEstado(arr.find(function(x){return String(x&&x.id)===rid;}),r);
             }
           });
           acActual.retiros=arr;
@@ -6202,7 +6217,7 @@ function payloadGastoAcopio(r,obraId){
   // porque Gastos hoy renderiza ese campo y todavía no muestra por separado
   // comentarioAcopio / notaSecundaria.
   // El salto de línea permite distinguir visualmente material/cantidad del comentario.
-  var notaGasto=detalleMaterial+(comentario?'\n'+comentario:'');
+  var notaGasto=(cantidad<0?'Devolución · ':'')+detalleMaterial+(comentario?'\n'+comentario:'');
 
   return {
     id:gastoAcopioId(a.id,r.id),
@@ -6450,6 +6465,7 @@ function abrirMenuAcopios(){
 function abrirEntregasPendientes(){
   curAcopioId=null;
   cqSeccionAcopio='entregas';
+  cqCarpetaEntregasAbierta=false;
   cqOcultarVistasRaiz();
   document.getElementById('view-entregas-pendientes').style.display='block';
   cqResetHeaderRaiz();
@@ -8401,6 +8417,76 @@ async function cqEliminarGastoPanolPorMov(mov){
   }
 }
 
+
+// CQ devoluciones: ajustar lotes existentes del mismo acopio y modo de precio.
+// Se guarda un movimiento independiente, con asignaciones reversibles por ID.
+function cqPanolAplicarDevolucion(data,acopioId,retiro,precio,tc,activo){
+  var entradaId=cqPanolEntradaId(acopioId,retiro.id);
+  var movimientos=Array.isArray(data.movimientos)?data.movimientos:[];
+  var lotes=Array.isArray(data.lotes)?data.lotes:[];
+  var productos=Array.isArray(data.productos)?data.productos:[];
+  var prev=movimientos.find(function(m){return cqPanolIngresoCoincide(m,entradaId,acopioId,retiro.id);});
+  if(prev&&!prev.devolucionAcopio)throw new Error('El vínculo existente no es una devolución.');
+  if(prev&&activo!==false&&Number(prev.cantidad)===Number(retiro.qty))return false;
+  if(prev){
+    (prev.devolucionLotes||[]).forEach(function(d){
+      var l=lotes.find(function(x){return String(x.id)===String(d.loteId);});
+      // Si se eliminó el ingreso original, no recrear un lote inexistente.
+      if(!l)return;
+      l.cantidad=Number(((Number(l.cantidad)||0)+Number(d.cantidad)).toFixed(6));
+      l.cantidadOriginal=Number(((Number(l.cantidadOriginal)||0)+Number(d.cantidad)).toFixed(6));
+    });
+    movimientos=movimientos.filter(function(x){return x!==prev;});
+  }
+  if(activo===false){data.movimientos=movimientos;return !!prev;}
+  var codigo=String(retiro.materialCode||'').trim().toLowerCase();
+  var nombre=cqNormPanol(retiro.materialName||'');
+  var candidatos=lotes.filter(function(l){
+    if(!l||String(l.acopioId||'')!==String(acopioId)||!(Number(l.cantidad)>0))return false;
+    if((Number(l.precio)>0)!==(retiro.panolSinPrecio!==true))return false;
+    var p=productos.find(function(x){return String(x.id)===String(l.prodId);});
+    if(!p)return false;
+    var c=String(p.codigo||'').trim().toLowerCase();
+    return codigo&&c?codigo===c:!!nombre&&cqNormPanol(p.nombre||'')===nombre;
+  }).sort(function(a,b){return Number(a.fechaTs||0)-Number(b.fechaTs||0)||String(a.id).localeCompare(String(b.id));});
+  var falta=-Number(retiro.qty);
+  var disponible=candidatos.reduce(function(t,l){return t+Number(l.cantidad);},0);
+  if(!(falta>0)||falta>disponible+0.000001)throw new Error('Stock disponible de este Acopio en Pañol: '+fmtN(disponible,6)+'. No se puede devolver más.');
+  var asignaciones=[];
+  for(var i=0;i<candidatos.length&&falta>0.000001;i++){
+    var l=candidatos[i], tomar=Math.min(Number(l.cantidad),falta);
+    l.cantidad=Number((Number(l.cantidad)-tomar).toFixed(6));
+    l.cantidadOriginal=Number(((Number(l.cantidadOriginal)||0)-tomar).toFixed(6));
+    asignaciones.push({loteId:l.id,cantidad:tomar});
+    falta=Number((falta-tomar).toFixed(6));
+  }
+  movimientos.push({id:entradaId+'_mov',ts:Date.now(),tipo:'entrada',prodId:candidatos[0].prodId,
+    cantidad:Number(retiro.qty),precio:precio,tipoCambio:tc,usd:tc&&precio>0?Number(retiro.qty)*precio/tc:null,
+    usuario:window._cqUsuarioActual||'Acopio',detalle:[{loteId:entradaId+'_devolucion',cantidad:Number(retiro.qty),precio:precio,tipoCambio:tc}],
+    devolucionAcopio:true,devolucionLotes:asignaciones,origen:'cq_acopio',acopioEntradaId:entradaId,
+    acopioId:String(acopioId),acopioRetiroId:String(retiro.id),materialCode:String(retiro.materialCode||''),
+    materialName:String(retiro.materialName||''),comentario:'Devolución'+(retiro.comentario?' · '+retiro.comentario:'')});
+  data.movimientos=movimientos;data.lotes=lotes;return true;
+}
+async function cqPanolGuardarDevolucion(acopioId,retiro,precio,tc,activo,verificarFuente){
+  var f=window._cqFirebase,ref=f.doc(f.db,'panol','stock_v1');
+  await f.runTransaction(f.db,async function(tx){
+    if(verificarFuente){
+      var fs=await tx.get(f.doc(f.db,FIRESTORE_COLLECTION,FIRESTORE_DOC_ID));
+      if(!fs.exists()||!fs.data().db)throw new Error('Acopio no disponible');
+      var a=(fs.data().db.acopios||[]).find(function(x){return String(x.id)===String(acopioId);});
+      if(a&&(a.retiros||[]).some(function(r){return String(r.id)===String(retiro.id);}))throw new Error('El retiro sigue vigente');
+    }
+    var snap=await tx.get(ref);
+    if(!snap.exists()){if(activo===false)return;throw new Error('No hay stock en Pañol');}
+    var data=snap.data()||{};
+    if(cqPanolAplicarDevolucion(data,acopioId,retiro,precio,tc,activo)){
+      data.updatedAt=new Date().toISOString();tx.set(ref,data);
+    }
+  });
+  return true;
+}
+
 async function sincronizarRetiroConPanol(retiro,activo){
   if(!window._cqFirebaseReady||!window._cqFirebase)throw new Error('Firebase no disponible');
   var a=getAcopio();
@@ -8424,6 +8510,14 @@ async function sincronizarRetiroConPanol(retiro,activo){
   var f=window._cqFirebase;
   var ref=f.doc(f.db,'panol','stock_v1');
   var entradaId=cqPanolEntradaId(a.id,retiro.id);
+
+  if(cantidad<0){
+    await cqPanolGuardarDevolucion(a.id,retiro,precio,tc,activo,false);
+    retiro.panolSyncEstado=activo===false?'omitido':'ok';retiro.panolSyncError='';retiro.panolSyncAt=new Date().toISOString();
+    var actual=(getAcopio()&&getAcopio().retiros||[]).find(function(r){return String(r.id)===String(retiro.id);});
+    if(actual){actual.panolSyncEstado=retiro.panolSyncEstado;actual.panolSyncError='';actual.panolSyncAt=retiro.panolSyncAt;}
+    persist();try{renderRetirarHistorial();}catch(_e){}return true;
+  }
 
   // BORRADO EN CASCADA:
   // Si el ingreso de Acopio ya fue consumido desde Pañol, primero eliminamos
@@ -8570,6 +8664,9 @@ async function sincronizarRetiroConPanol(retiro,activo){
       (x.detalle||[]).forEach(function(d){if(d&&d.loteId)prevLoteIds.push(String(d.loteId));});
     });
 
+    if(prevLoteIds.length && movimientos.some(function(x){return x&&x.devolucionAcopio&&(x.devolucionLotes||[]).some(function(d){return prevLoteIds.indexOf(String(d.loteId))>=0;});})){
+      throw new Error('Este ingreso tiene devoluciones vinculadas. Eliminá primero las devoluciones desde Acopio.');
+    }
     // Para editar un ingreso que ya tuvo consumo, conservar la protección.
     // El borrado total sí usa la rama de cascada de arriba.
     if(prevLoteIds.length){
@@ -9293,6 +9390,8 @@ function cqConfirmarRetiroBonito(datos){
       return;
     }
 
+    var titulo=bg.querySelector('.cq-confirm-title');
+    if(titulo)titulo.textContent=datos.devolucion?'¿Registrar esta devolución?':'¿Registrar este material?';
     obra.textContent=datos.obra||'—';
     material.textContent=datos.material||'—';
     cantidad.textContent=String(datos.cantidad||'')+(datos.unidad?' '+datos.unidad:'');
@@ -9382,7 +9481,7 @@ async function cqGuardarRetiroFuenteExacto(acopioId,retiro,activo){
     }else{
       var copia=JSON.parse(JSON.stringify(retiro));
       var pos=ac.retiros.findIndex(function(r){return String(r&&r.id)===rid;});
-      if(pos>=0)ac.retiros[pos]=copia;
+      if(pos>=0){cqEntregaCopiarEstado(copia,ac.retiros[pos]);ac.retiros[pos]=copia;}
       else ac.retiros.push(copia);
     }
 
@@ -9609,7 +9708,7 @@ async function guardarRetiro(){
 
   if(curRetirarObra<0){alert('Seleccioná una obra antes de registrar el material.');return;}
   if(!matId){alert('Seleccioná un material');return;}
-  if(!qty||qty<=0){alert('Ingresá una cantidad válida');return;}
+  if(!Number.isFinite(qty)||qty===0){alert('Ingresá una cantidad distinta de cero. Usá un negativo para devoluciones.');return;}
   if(!fecha){alert('Seleccioná una fecha');return;}
 
   // El subrubro es obligatorio si se registra en Gastos o si ingresa a Pañol.
@@ -9649,8 +9748,17 @@ async function guardarRetiro(){
     if(qty>saldoCantidad+0.000001){alert('Stock insuficiente. Disponible: '+fmtN(saldoCantidad,2)+' '+(matSeleccionado.unidad||'')+'.');return;}
   }
 
+  if(qty<0&&cargarPanol){
+    try{
+      var fDev=window._cqFirebase;if(!window._cqFirebaseReady||!fDev)throw new Error('Firebase no disponible');
+      var snapDev=await (fDev.getDocFromServer||fDev.getDoc)(fDev.doc(fDev.db,'panol','stock_v1'));
+      cqPanolAplicarDevolucion(snapDev.exists()?snapDev.data():{},a.id,{id:'preflight',qty:qty,materialCode:matSeleccionado.cod,materialName:matSeleccionado.nom,panolSinPrecio:panolSinPrecio},0,null,true);
+    }catch(e){alert('No se puede registrar la devolución en Pañol: '+String(e.message||e));return;}
+  }
+
   var obraConfirmar=obraSel.label||obraSel.short||obraSel.id||getObras()[curRetirarObra]||'';
   var confirmado=await cqConfirmarRetiroBonito({
+    devolucion:qty<0,
     obra:obraConfirmar,
     material:String(matSeleccionado.nom||''),
     cantidad:fmtN(qty,2),
@@ -9733,7 +9841,7 @@ async function guardarRetiro(){
   // La interfaz termina acá. Nada de Materiales/Gastos/Pañol puede dejar
   // el botón clavado porque todo eso continúa fuera del flujo del usuario.
   cqSetRetiroButtonState('success');
-  toast('✓ Retiro registrado');
+  toast(qty<0?'✓ Devolución registrada':'✓ Retiro registrado');
 
   var cqSyncKey=String(a.id)+'::'+String(retiro.id);
   var cqSyncPromise=Promise.resolve().then(function(){
@@ -9972,6 +10080,7 @@ function renderRetirarHistorial(){
       +'<td class="mono" style="color:#A8BFA8">'+fmtFecha(r.fecha)+'</td>'
       +'<td><span class="badge" style="background:#EBF7F0;color:#0A6E3A">'+retiroObraLabel(r)+'</span></td>'
       +'<td style="font-size:12px;font-weight:600">'+(m?m.nom:(r.materialName||('⚠ Sin ficha de material'+(r.materialCode?' · Código '+r.materialCode:''))))
+        +(Number(r.qty)<0?'<div style="font-size:10px;color:#C0392B;font-weight:800">DEVOLUCIÓN</div>':'')
         +(r.subrubro?'<div style="font-size:9px;color:#7A9E82;margin-top:2px;font-weight:800">'+r.subrubro+'</div>':'')
         +(r.comentario?'<div style="font-size:9px;color:#7A9E82;margin-top:2px">💬 '+String(r.comentario).replace(/</g,'&lt;')+'</div>':'')+'</td>'
       +'<td class="mono r" style="font-weight:700">'+fmtN(r.qty,2)+' '+(m?m.unidad:(r.materialUnidad||''))+'</td>'
@@ -10007,31 +10116,90 @@ function marcarLlegadaObra(retiroId,checked){
   r.llegoObra=!!checked;
   r.llegoObraAt=checked?new Date().toISOString():'';
   r.llegoObraPor=checked?cqNombreUsuarioLlegada():'';
+  r.entregaHistorialBorrado=false;
+  cqEntregaMarcarCambio(r);
   persist();
   renderControlLlegadas();
   toast(checked?'✓ Material marcado como recibido en obra':'Llegada desmarcada');
 }
 
-function cqTodosRetirosPendientes(){
+// Control de entregas: sólo modifica el estado de recepción, nunca el retiro económico.
+var cqCarpetaEntregasAbierta=false;
+function cqEsServicioEntrega(r,m){
+  return [r&&r.materialName,m&&m.nom,r&&r.subrubro,m&&m.cat].some(function(v){
+    var n=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+    return /\bservicios?\s+(?:(?:de|del|para)\s+)?(?:entregas?|envios?|fletes?)\b/.test(n) || /^(?:entregas?|envios?|fletes?)\s+(?:de\s+)?servicios?$/.test(n);
+  });
+}
+function cqTodosRetirosEntrega(entregados){
   var salida=[];
   (DB.acopios||[]).forEach(function(a){
     (a.retiros||[]).forEach(function(r){
-      if(r && r.llegoObra!==true){
-        var m=(a.mats||[]).find(function(x){return String(x.id)===String(r.matId);});
-        var obra='';
-        if(r.obraHistorica) obra=r.obraHistorica;
-        else if(Array.isArray(a.obras) && a.obras[r.obraIdx]!=null) obra=a.obras[r.obraIdx];
-        salida.push({
-          acopioId:a.id,
-          acopioNombre:a.nombre||'Acopio',
-          retiro:r,
-          material:m,
-          obra:obra||'—'
-        });
-      }
+      if(!r || !(Number(r.qty)>0) || (r.llegoObra===true)!==entregados || r.entregaHistorialBorrado===true)return;
+      var m=(a.mats||[]).find(function(x){return String(x.id)===String(r.matId);});
+      if(cqEsServicioEntrega(r,m))return;
+      var obra=r.obraHistorica||(Array.isArray(a.obras)?a.obras[r.obraIdx]:'');
+      salida.push({acopioId:a.id,acopioNombre:a.nombre||'Acopio',retiro:r,material:m,obra:obra||'—'});
     });
   });
   return salida;
+}
+function cqTodosRetirosPendientes(){return cqTodosRetirosEntrega(false);}
+function cqTodosRetirosEntregados(){return cqTodosRetirosEntrega(true);}
+function cqEntregaVersion(r){return String(r&&(r.entregaEstadoAt||r.llegoObraAt)||'');}
+function cqEntregaMarcarCambio(r){
+  var previo=Date.parse(cqEntregaVersion(r))||0;
+  r.entregaEstadoAt=new Date(Math.max(Date.now(),previo+1)).toISOString();
+}
+function cqEntregaCopiarEstado(dest,src){
+  if(!dest||!src||cqEntregaVersion(src)<=cqEntregaVersion(dest))return;
+  ['llegoObra','llegoObraAt','llegoObraPor','entregaHistorialBorrado','entregaEstadoAt'].forEach(function(k){
+    if(Object.prototype.hasOwnProperty.call(src,k))dest[k]=src[k];else delete dest[k];
+  });
+}
+function cqEntregaUndoEstado(antes,despues){
+  (despues.acopios||[]).forEach(function(a){
+    var viejo=(antes.acopios||[]).find(function(x){return String(x.id)===String(a.id);});
+    if(!viejo)return;
+    (a.retiros||[]).forEach(function(r){
+      var v=(viejo.retiros||[]).find(function(x){return String(x.id)===String(r.id);});
+      if(!v)return;
+      if((r.llegoObra===true)!==(v.llegoObra===true)||(r.entregaHistorialBorrado===true)!==(v.entregaHistorialBorrado===true)||String(r.llegoObraAt||'')!==String(v.llegoObraAt||'')){
+        r.entregaEstadoAt=cqEntregaVersion(v)>cqEntregaVersion(r)?cqEntregaVersion(v):cqEntregaVersion(r);
+        cqEntregaMarcarCambio(r);
+      }
+    });
+  });
+}
+function cqToggleCarpetaEntregas(){
+  cqCarpetaEntregasAbierta=!cqCarpetaEntregasAbierta;
+  renderEntregasPendientesGlobal();
+}
+function cqBorrarHistorialEntregas(acopioId,retiroId){
+  var items=cqTodosRetirosEntregados().filter(function(it){return acopioId==null||(String(it.acopioId)===String(acopioId)&&String(it.retiro.id)===String(retiroId));});
+  if(!items.length)return;
+  var msg=acopioId==null?'¿Borrar las '+items.length+' entregas del historial?':'¿Borrar esta entrega del historial?';
+  if(!confirm(msg+'\n\nNo se eliminarán los retiros, materiales, gastos ni stock. No volverán a pendientes.'))return;
+  pushUndo();
+  items.forEach(function(it){it.retiro.entregaHistorialBorrado=true;cqEntregaMarcarCambio(it.retiro);});
+  persist();renderEntregasPendientesGlobal();
+  toast(items.length===1?'Entrega borrada del historial':'Historial de entregados borrado');
+}
+function cqRenderCarpetaEntregas(items){
+  var cont=document.getElementById('cq-entregas-archivo-content');
+  if(!cont)return;
+  items=items.slice().sort(function(a,b){return String(b.retiro.llegoObraAt||b.retiro.fecha||'').localeCompare(String(a.retiro.llegoObraAt||a.retiro.fecha||''));});
+  var head='<div class="cq-entregas-archivo-head"><strong>📁 Entregados · '+items.length+'</strong><button class="cq-entregas-action cq-entregas-borrar" onclick="cqBorrarHistorialEntregas()" '+(!items.length?'disabled':'')+'>Borrar todos</button></div>';
+  if(!items.length){cont.innerHTML=head+'<div class="cq-entregas-vacio"><strong>No hay entregas en la carpeta</strong><span>Las entregas confirmadas aparecerán acá.</span></div>';return;}
+  var grupos=new Map();
+  items.forEach(function(it){var r=it.retiro,d=new Date(r.llegoObraAt||'');var fecha=!isNaN(d.getTime())?d.toLocaleDateString('es-AR'):(r.fecha?fmtFecha(r.fecha):'Sin fecha');if(!grupos.has(fecha))grupos.set(fecha,[]);grupos.get(fecha).push(it);});
+  cont.innerHTML=head+Array.from(grupos).map(function(grupo){
+    var filas=grupo[1].map(function(it){
+      var r=it.retiro,m=it.material,nom=r.materialName||(m&&m.nom)||'(material eliminado)',unidad=r.materialUnidad||(m&&m.unidad)||'';
+      return '<tr class="cq-llegadas-row-ok"><td><span class="badge cq-obra-badge" style="'+cqEstiloColorObra(it.obra)+'">'+cqEscapeHtml(it.obra)+'</span><div class="cq-entregas-acopio">'+cqEscapeHtml(it.acopioNombre)+'</div></td><td class="cq-llegadas-producto">'+cqEscapeHtml(nom)+'<div class="cq-entregas-archivo-meta">'+cqEscapeHtml(r.llegoObraPor||'')+'</div></td><td class="cq-llegadas-sub">'+cqEscapeHtml(r.subrubro||'—')+'</td><td class="cq-llegadas-qty">'+fmtN(Number(r.qty)||0,2)+' '+cqEscapeHtml(unidad)+'</td><td class="cq-llegadas-check"><button type="button" class="cq-entregas-borrar-uno" title="Borrar del historial" onclick="cqBorrarHistorialEntregas('+Number(it.acopioId)+','+Number(r.id)+')">Borrar</button></td></tr>';
+    }).join('');
+    return '<section class="cq-llegadas-day"><div class="cq-llegadas-day-hd"><span class="cq-llegadas-day-date">'+cqEscapeHtml(grupo[0])+'</span><span class="cq-llegadas-day-count">'+grupo[1].length+' entregados</span></div><div class="cq-llegadas-table-card"><div class="tbl-wrap"><table class="cq-llegadas-table"><thead><tr><th>Obra</th><th>Producto</th><th>Subrubro</th><th class="r">Cantidad</th><th>Historial</th></tr></thead><tbody>'+filas+'</tbody></table></div></div></section>';
+  }).join('');
 }
 
 function actualizarContadorEntregasPendientes(){
@@ -10075,6 +10243,8 @@ function marcarLlegadaObraGlobal(acopioId,retiroId,control){
   r.llegoObra=true;
   r.llegoObraAt=new Date().toISOString();
   r.llegoObraPor=cqNombreUsuarioLlegada();
+  r.entregaHistorialBorrado=false;
+  cqEntregaMarcarCambio(r);
   persist();
   actualizarContadorEntregasPendientes();
   renderEntregasPendientesGlobal();
@@ -10096,6 +10266,8 @@ function marcarTodasEntregasPendientes(){
     it.retiro.llegoObra=true;
     it.retiro.llegoObraAt=ahora;
     it.retiro.llegoObraPor=usuario;
+    it.retiro.entregaHistorialBorrado=false;
+    cqEntregaMarcarCambio(it.retiro);
   });
   persist();
   actualizarContadorEntregasPendientes();
@@ -10301,6 +10473,15 @@ function renderEntregasPendientesGlobal(){
   if(btnTodo)btnTodo.disabled=!items.length;
   var btnWsp=document.getElementById('cq-entregas-whatsapp');
   if(btnWsp)btnWsp.disabled=!items.length;
+  var archivo=cqTodosRetirosEntregados();
+  var carpeta=document.getElementById('cq-entregas-folder');
+  if(carpeta)carpeta.textContent=cqCarpetaEntregasAbierta?'← Pendientes ('+items.length+')':'📁 Entregados ('+archivo.length+')';
+  var panel=document.getElementById('cq-entregas-archivo-content');
+  if(panel)panel.style.display=cqCarpetaEntregasAbierta?'block':'none';
+  cont.style.display=cqCarpetaEntregasAbierta?'none':'block';
+  if(btnTodo)btnTodo.style.display=cqCarpetaEntregasAbierta?'none':'';
+  if(btnWsp)btnWsp.style.display=cqCarpetaEntregasAbierta?'none':'';
+  if(cqCarpetaEntregasAbierta){cqRenderCarpetaEntregas(archivo);return;}
 
   if(!items.length){
     cont.innerHTML='<div class="cq-entregas-vacio"><div class="cq-entregas-ok">✓</div><strong>No hay entregas pendientes</strong><span>Todo lo cargado fue confirmado como recibido en obra.</span></div>';
@@ -10355,7 +10536,7 @@ function renderControlLlegadas(){
   var a=getAcopio();
   if(!a){cont.innerHTML='';return;}
 
-  var retiros=(a.retiros||[]).slice().sort(function(x,y){
+  var retiros=(a.retiros||[]).filter(function(r){return Number(r.qty)>0 && r.entregaHistorialBorrado!==true && !cqEsServicioEntrega(r,getMat(r.matId));}).sort(function(x,y){
     var fx=String(x.fecha||''),fy=String(y.fecha||'');
     if(fx!==fy)return fy.localeCompare(fx); // fecha más nueva primero
     var ox=String(retiroObraLabel(x)||''),oy=String(retiroObraLabel(y)||'');
@@ -11309,7 +11490,7 @@ async function guardarEditRetiro(){
   var obraNuevaId=(document.getElementById('retiro-obra').value||'').trim();
   var mantenerObraActual=obraNuevaId==='__CQ_KEEP_CURRENT__';
 
-  if(!qty||qty<=0){alert('Cantidad inválida');return;}
+  if(!Number.isFinite(qty)||qty===0){alert('Cantidad distinta de cero requerida.');return;}
   if(cargarGastos&&!obraNuevaId){alert('Elegí una obra vinculada con Gastos.');return;}
 
   var obrasVinculadas=getObrasGastosObjects();
@@ -11348,6 +11529,12 @@ async function guardarEditRetiro(){
   if(!matNuevo){
     alert('El material original ya no existe en este acopio. Elegí en «Producto retirado» la ficha correcta antes de guardar. Si no sabés cuál era, cancelá: no se modificará nada.');
     return;
+  }
+  if((anterior.cargarPanol===true||cargarPanol)&&(Number(anterior.qty)<0||qty<0)){
+    alert('Por seguridad, las devoluciones vinculadas a Pañol se corrigen eliminando el movimiento desde Acopio y registrándolo nuevamente.');return;
+  }
+  if(anterior.cargarPanol===true && (a.retiros||[]).some(function(r){return r.cargarPanol===true&&Number(r.qty)<0&&String(r.matId)===String(anterior.matId);})){
+    alert('Este producto tiene devoluciones de Pañol. Eliminá primero las devoluciones antes de editar su ingreso.');return;
   }
   var cambioMaterial=String(anterior.matId)!==String(matNuevo.id);
   if(cambioMaterial && matNuevo.controlStock==='limitado'){
@@ -11859,6 +12046,8 @@ async function cqEliminarPanolRetiroExacto(acopioId,retiro,verificarFuente){
   var d0=snap0.data()||{};
   var mov0=Array.isArray(d0.movimientos)?d0.movimientos:[];
   var lotes0=Array.isArray(d0.lotes)?d0.lotes:[];
+  if(mov0.some(function(x){return x&&x.devolucionAcopio&&cqPanolIngresoCoincide(x,entradaId,acopioId,retiro.id);}))
+    return cqPanolGuardarDevolucion(acopioId,retiro,0,null,false,verificarFuente===true);
 
   var entradas=mov0.filter(function(x){
     return cqPanolIngresoCoincide(x,entradaId,acopioId,retiro.id);
@@ -16391,7 +16580,7 @@ document.addEventListener('click',function(e){
       if(i===0 && /codigo|código/i.test(code) && /material/i.test(name) && /cantidad/i.test(qtxt))continue;
       var byCode=code?idx.cod[norm(code)]:null,byName=name?idx.nom[norm(name)]:null,mat=(name&&byName)?byName:(byCode||byName||null),qty=num(qtxt),error='';
       if(!mat)error='Material no encontrado';
-      else if(!(qty>0))error='Cantidad inválida';
+      else if(!Number.isFinite(qty)||qty===0)error='Cantidad inválida';
       else if(byCode&&byName&&Number(byCode.id)!==Number(byName.id))error='Código y material no coinciden';
       out.push({line:i+1,code:code,name:name,qty:qty,mat:mat,error:error});
     }
@@ -16479,6 +16668,7 @@ document.addEventListener('click',function(e){
       sub=subMatch||'';
     }
     var rows=parse();if(!rows.length){alert('Cargá al menos una fila con Código, Material y Cantidad.');return;}
+    if(destinos.cargarPanol&&rows.some(function(r){return r.qty<0;})){alert('Registrá las devoluciones de Pañol individualmente para validar el stock disponible de cada producto.');return;}
     var bad=rows.filter(function(r){return r.error;});if(bad.length){cqPreviewCargaMasivaRetiros();alert('Hay '+bad.length+' fila'+(bad.length===1?'':'s')+' con error. Corregilas antes de registrar.');return;}
     var obras=indices.map(function(i){return {idx:i,obj:typeof obraGastosActualPorIdx==='function'?obraGastosActualPorIdx(i):null};}).filter(function(x){return !!x.obj;});
     if(obras.length!==indices.length){alert('No se pudo identificar una de las obras seleccionadas.');return;}

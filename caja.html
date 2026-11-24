@@ -169,6 +169,7 @@ html.cq-fast-1h-caja #cq-access-total{display:none!important}
   background:#d6453d;box-shadow:0 0 0 2px rgba(214,69,61,.10);
   vertical-align:middle;flex:0 0 6px
 }
+.materiales-sync-dot-cc.not-requested{background:#a5ada8;box-shadow:none}
 .materiales-sync-dot-cc.ok{background:#24a866;box-shadow:0 0 0 2px rgba(36,168,102,.10)}
 .materiales-sync-dot-cc.wait{background:#d9a52e;box-shadow:0 0 0 2px rgba(217,165,46,.10);animation:cqCcMatPulse 1.05s ease-in-out infinite}
 @keyframes cqCcMatPulse{0%,100%{opacity:.45}50%{opacity:1}}
@@ -530,7 +531,7 @@ body.cq-caja-cargando > .wrap{visibility:hidden!important}
 </div>
 </section>
 </main>
-<div class="modal-bg" id="movementModal"><div class="modal"><div class="modal-hd"><h3 id="movementTitle">Agregar gasto</h3><button class="close" onclick="closeModal('movementModal')">×</button></div><div class="modal-body"><form class="grid" id="movementForm" onsubmit="saveMovement(event)"><div id="cq-caja-config-msg" class="field full" role="status" aria-live="polite" hidden></div><input id="movementId" type="hidden"/><input id="movementType" type="hidden"/><div class="field"><label>Fecha</label><input id="mDate" required="" type="date"/></div><div class="field"><label>Importe</label><input id="mAmount" min="0.01" placeholder="0,00" required="" step="0.01" type="number"/></div><div class="field"><label>Moneda</label><select id="mCurrency"><option value="ars">Pesos (ARS)</option><option value="usd">Dólares (USD)</option></select></div><div class="field" id="mTcField"><label>Tipo de cambio</label><div class="cq-mtc-wrap"><span>$</span><input id="mTc" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="TC Gerencia"/></div><small class="cq-mtc-help" id="mTcHelp">Caja Gerencia · editable para este movimiento</small></div><div class="field full" id="destinationField"><label>Destino del gasto</label><div class="destination"><div class="dest-option office" id="destOffice" onclick="selectDestination('oficina')">🏢 Oficina</div><div class="dest-option work" id="destWork" onclick="selectDestination('obra')">🏗 Obra</div></div><input id="mDestType" type="hidden"/><select class="hide" id="mWork" style="margin-top:9px" onchange="fillCategories();updateMaterialesButtonCC()"><option value="">Seleccionar obra</option></select></div><input id="mConcept" type="hidden"/>
+<div class="modal-bg" id="movementModal"><div class="modal"><div class="modal-hd"><h3 id="movementTitle">Agregar gasto</h3><button class="close" onclick="closeModal('movementModal')">×</button></div><div class="modal-body"><form class="grid" id="movementForm" onsubmit="saveMovement(event)"><div id="cq-caja-config-msg" class="field full" role="status" aria-live="polite" hidden></div><input id="movementId" type="hidden"/><input id="movementType" type="hidden"/><div class="field"><label>Fecha</label><input id="mDate" required="" type="date"/></div><div class="field"><label>Importe</label><input id="mAmount" min="0.01" placeholder="0,00" required="" step="0.01" type="number"/></div><div class="field"><label>Moneda</label><select id="mCurrency"><option value="ars">Pesos (ARS)</option><option value="usd">Dólares (USD)</option></select></div><div class="field" id="mTcField"><label>Tipo de cambio</label><div class="cq-mtc-wrap"><span>$</span><input id="mTc" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="TC Gerencia"/></div><small class="cq-mtc-help" id="mTcHelp">Caja Gerencia · editable para este movimiento</small></div><div class="field full" id="destinationField"><label>Destino del gasto</label><div class="destination"><div class="dest-option office" id="destOffice" onclick="selectDestination('oficina')">🏢 Oficina</div><div class="dest-option work" id="destWork" onclick="selectDestination('obra',true)">🏗 Obra</div></div><input id="mDestType" type="hidden"/><select class="hide" id="mWork" style="margin-top:9px" onchange="fillCategories();updateMaterialesButtonCC()"><option value="">Seleccionar obra</option></select></div><input id="mConcept" type="hidden"/>
 <div class="field full" id="categoryField"><label>Categoría</label><select id="mCategory" onchange="fillSubrubros();updateMaterialesButtonCC()"><option value="">Seleccionar categoría</option></select></div>
 <div class="field full" id="subrubroField"><label>Subrubro</label>
 <div class="cq-search-combo">
@@ -842,10 +843,24 @@ async function cqUndoReconcile(before,current){
 }
 async function cqUndoLast(){
   if(!cqUndoState||cqUndoRunning)return;
+  if((db.movements||[]).some(m=>m.ccDeletePending))return alert('Hay una eliminación pendiente. Esperá la confirmación antes de deshacer.');
   const undo=cqUndoState;
   const current=cqCloneState(db);
   const restored=cqCloneState(undo.state);
   if(!restored)return;
+  // Una baja definitiva no debe levantar sus bloqueos remotos: al deshacerla,
+  // restaurar ese gasto con identidad nueva y mantener el ID anterior eliminado.
+  const idsActuales=new Set((current.movements||[]).map(m=>String(m.id)));
+  const idsBorrados=new Set((current.deletedMovementIds||[]).map(String));
+  for(const m of restored.movements||[]){
+    if(m.type==='gasto'&&!idsActuales.has(String(m.id))&&idsBorrados.has(String(m.id))&&
+       (m.materialesAgregar||m.materialesProducto||m.materialesSyncEstado==='ok')){
+      const anterior=String(m.id);
+      m.id=uuid();m.updatedAt=new Date().toISOString();
+      m.gastosSyncEstado='pendiente';m.materialesSyncEstado=m.materialesAgregar?'pendiente':'no';
+      restored.deletedMovementIds=[...new Set([...(restored.deletedMovementIds||[]).map(String),anterior])];
+    }
+  }
 
   cqUndoRunning=true;
   cqUndoRefresh();
@@ -1206,7 +1221,7 @@ async function loadCatalogoMaterialesCC(){
   try{
     if(window._cqGastosBridge){
       var f=window._cqGastosBridge;
-      var snap=await f.getDoc(f.doc(f.db,'materiales','data_planilla_exacta_v4'));
+      var snap=await f.getDoc(f.doc(f.db,'materiales','data_planilla_exacta_v4'),['matNombres','matCodigos','matCategorias','catRenames','deletedMatIds','materialesNuevos','extraMats']);
       if(snap.exists()){
         var d=snap.data()||{},ren=d.matNombres||{},cod=d.matCodigos||{},cats=d.matCategorias||{},catRen=d.catRenames||{};
         var deleted=(d.deletedMatIds||[]).map(Number);
@@ -1399,7 +1414,7 @@ function cqCcTodosMats(data){
     .concat(Array.isArray(data.extraMats)?data.extraMats:[]);
   return CQ_CC_MAT_BASE_DIRECTO.map(function(x){
     return {id:x.id,mat:x.mat,catName:x.catName,codigo:x.codigo||''};
-  }).concat(extras);
+  }).concat(extras).map(function(x){return {...x,mat:String(data.matNombres?.[x.id]||x.mat||''),catName:String(data.matCategorias?.[x.id]||x.catName||'VARIOS')};});
 }
 function cqCcResolverMat(data,ev){
   if(!Array.isArray(data.materialesNuevos))data.materialesNuevos=[];
@@ -1468,6 +1483,38 @@ function cqCcResolverMat(data,ev){
   }
   return mat;
 }
+function cqCcMaterialDeleteKeys(ev,cargas=[]){
+  const sid=String(ev.sourceMovementId||'').trim();
+  const ids=[String(ev.integrationId||'')];
+  const keys=[];
+  if(sid)keys.push('src:caja_chica|mov:'+sid+'|obra:'+cqCcNorm(ev.obraName));
+  (cargas||[]).forEach(c=>{
+    if(c.integracionId)ids.push(String(c.integracionId));
+    if(sid)keys.push('src:caja_chica|mov:'+sid+'|obra:'+cqCcNorm(c.obraNameOrigen||c.obraName));
+  });
+  return {ids:[...new Set(ids.filter(Boolean))],keys:[...new Set(keys)]};
+}
+function cqCcUnionMaterialDelete(a,b){return [...new Set([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])].map(String).filter(Boolean))];}
+function cqCcAddMaterialDelete(data,marks){
+  data.ignoredIntegrationIds=cqCcUnionMaterialDelete(data.ignoredIntegrationIds,marks.ids);
+  data.ignoredIntegrationKeys=cqCcUnionMaterialDelete(data.ignoredIntegrationKeys,marks.keys);
+}
+async function cqCcPersistMaterialDelete(ev){
+  const f=window._cqGastosBridge;
+  const main=f.doc(f.db,'materiales','data_planilla_exacta_v4');
+  const snap=await f.getDoc(main);
+  const rows=(snap.exists()&&Array.isArray(snap.data()?.cargas)?snap.data().cargas:[]).filter(c=>String(c.integracionId||'')===String(ev.integrationId)||(
+    !!ev.sourceMovementId&&String(c.sourceMovementId||'')===String(ev.sourceMovementId)&&['caja_chica','cq_caja_chica'].includes(String(c.origen||''))));
+  const marks=cqCcMaterialDeleteKeys(ev,rows);
+  // El documento lateral es el mismo que lee Materiales al abrir y sincronizar.
+  // Unión con los bloqueos anteriores; no bloquear compras idénticas de otro movimiento.
+  const ref=f.doc(f.db,'materiales','tombstones_cargas_v2');
+  await f.runTransaction(f.db,async tx=>{
+    const old=await tx.get(ref), d=old.exists()?old.data()||{}:{};
+    tx.set(ref,{...d,ids:cqCcUnionMaterialDelete(d.ids||d.ignoredIntegrationIds,marks.ids),keys:cqCcUnionMaterialDelete(d.keys||d.ignoredIntegrationKeys,marks.keys),updatedAt:new Date().toISOString()},{__createIfMissing:true});
+  });
+  return marks;
+}
 function cqCcAplicarEvento(data,ev){
   data=data||{};
   if(!Array.isArray(data.cargas))data.cargas=[];
@@ -1478,12 +1525,20 @@ function cqCcAplicarEvento(data,ev){
 
   var iid=String(ev.integrationId||'');
   if(!iid)return {data:data,cambio:false};
-  var idx=data.cargas.findIndex(function(c){return String(c&&c.integracionId||'')===iid;});
+  var coincide=function(c){return String(c&&c.integracionId||'')===iid||
+    (String(c?.sourceMovementId||'')===String(ev.sourceMovementId||'')&&!!ev.sourceMovementId&&['caja_chica','cq_caja_chica'].includes(String(c?.origen||'')));};
+  var idx=data.cargas.findIndex(coincide);
 
+  if(ev.active!==false){
+    const marks=cqCcMaterialDeleteKeys(ev);
+    if((data.ignoredIntegrationIds||[]).some(x=>marks.ids.includes(String(x)))||
+       (data.ignoredIntegrationKeys||[]).some(x=>marks.keys.includes(String(x))))
+      throw new Error('El vínculo fue eliminado definitivamente en Materiales.');
+  }
   if(ev.active===false){
     if(idx<0)return {data:data,cambio:false};
     var matId=data.cargas[idx].matId;
-    data.cargas.splice(idx,1);
+    data.cargas=data.cargas.filter(c=>!coincide(c));
 
     var sigue=data.cargas.some(function(c){return String(c.matId)===String(matId);});
     if(!sigue){
@@ -1500,7 +1555,7 @@ function cqCcAplicarEvento(data,ev){
 
   var obraIdx=cqCcResolverObra(data,ev.obraName||'');
   var mat=cqCcResolverMat(data,ev);
-  if(obraIdx<0||!mat)return {data:data,cambio:false};
+  if(obraIdx<0||!mat)throw new Error('No se pudo identificar la obra o el material.');
 
   var obras=cqCcObras(data);
   var prev=idx>=0?data.cargas[idx]:null;
@@ -1536,7 +1591,7 @@ function cqCcAplicarEvento(data,ev){
   else data.cargas.push(entry);
   return {data:data,cambio:true};
 }
-async function cqCcMaterializar(ev){
+async function cqCcMaterializar(ev,deleteMarks=null){
   if(!window._cqGastosBridge)throw new Error('Firebase no está listo');
   var f=window._cqGastosBridge;
   if(!f.runTransaction)throw new Error('Firebase transaccional no disponible');
@@ -1544,10 +1599,15 @@ async function cqCcMaterializar(ev){
   var ref=f.doc(f.db,'materiales','data_planilla_exacta_v4');
   await f.runTransaction(f.db,async function(tx){
     var snap=await tx.get(ref);
-    var data=snap.exists()?(snap.data()||{}):{};
+    if(!snap.exists()){
+      if(ev.active===false)return;
+      throw new Error('No se encontró el documento de Materiales.');
+    }
+    var data=snap.data()||{};
     try{delete data.updatedAt;}catch(_e){}
     var r=cqCcAplicarEvento(data,ev);
-    if(r.cambio){
+    if(deleteMarks&&ev.active===false)cqCcAddMaterialDelete(r.data,deleteMarks);
+    if(r.cambio||deleteMarks){
       r.data.updatedAt=new Date().toISOString();
       r.data.updatedByIntegration=String(ev.integrationId||'');
       tx.set(ref,r.data);
@@ -1570,10 +1630,17 @@ async function cqCcConfirmarMaterializado(m){
   return true;
 }
 
-async function syncMaterialesCC(m,oldM){
+function syncMaterialesCC(m,oldM){
+  return cqCcSerialLink('m:'+String(m.id),async()=>{
+    if(!cqCcCanWrite(m.id))return;
+    return cqCcSyncMateriales(m,oldM);
+  });
+}
+async function cqCcSyncMateriales(m,oldM){
   if(!window._cqGastosBridge)throw new Error('Firebase no está listo');
   const f=window._cqGastosBridge;
 
+  if(!m.materialesAgregar&&!oldM?.materialesAgregar)return;
   m.materialesSyncEstado='pendiente';
   m.materialesSyncError='';
   m.materialesSyncAt=new Date().toISOString();
@@ -1631,22 +1698,27 @@ async function syncMaterialesCC(m,oldM){
   save();render();
 }
 async function deleteLinkedMaterialesCC(m){
-  if(!m||!m.materialesAgregar||!window._cqGastosBridge)return true;
-  const f=window._cqGastosBridge;
-  const payload=ccMaterialesPayload(m,false);
-
-  // Eliminar primero del documento real de Materiales.
-  await cqCcMaterializar(payload);
-
-  // Respaldo auxiliar: si falla no invalida la eliminación real.
-  try{
-    await f.setDoc(f.doc(f.db,'materiales_integraciones',ccMaterialesIntegrationId(m)),payload);
-  }catch(e){
-    console.warn('Respaldo materiales_integraciones no disponible',e);
-  }
-  return true;
+  if(!m||m.type!=='gasto'||(!m.materialesAgregar&&!m.materialesProducto&&m.materialesSyncEstado!=='ok'))return true;
+  return cqCcSerialLink('m:'+String(m.id),async()=>{
+    if(!window._cqGastosBridge)throw new Error('Firebase no está listo para eliminar en Materiales.');
+    const f=window._cqGastosBridge;
+    const payload=ccMaterialesPayload(m,false);
+    // Primero registrar la baja persistente. Así una copia local vieja de Materiales
+    // no vuelve a incorporar la carga al fusionarse con Firebase.
+    const marks=await cqCcPersistMaterialDelete(payload);
+    await cqCcMaterializar(payload,marks);
+    // Desactivar también el evento para impedir que otra sesión lo reactive.
+    // Si nunca se solicitó Materiales, no crear un evento nuevo innecesario.
+    if(m.materialesAgregar){
+      await f.setDoc(f.doc(f.db,'materiales_integraciones',ccMaterialesIntegrationId(m)),payload);
+    }else{
+      const ref=f.doc(f.db,'materiales_integraciones',ccMaterialesIntegrationId(m));
+      const snap=await f.getDoc(ref);
+      if(snap.exists())await f.setDoc(ref,payload);
+    }
+    return true;
+  });
 }
-
 function obraLabelCC(id){
   const o=(gastosConfigCC?.obras||[]).find(x=>x.id===id);
   return o?.label||o?.short||id||'';
@@ -1665,7 +1737,7 @@ function syncDotCC(m){
 function materialDotCC(m){
   if(!m||m.type!=='gasto'||m.category!=='mat')return '';
   const st=m.materialesAgregar?(m.materialesSyncEstado||'error'):'no';
-  const cls=st==='ok'?'ok':(st==='pendiente'?'wait':'');
+  const cls=st==='ok'?'ok':(st==='pendiente'?'wait':(['no','omitido'].includes(st)?'not-requested':''));
   const title=st==='ok'
     ?'Sincronizado con Materiales'
     :(st==='pendiente'
@@ -1745,7 +1817,25 @@ function gastoPayloadCC(m){
     cajaChicaMovimientoId:String(m.id)
   };
 }
-async function upsertGastoCC(obraId,payload,removeOnly=false){
+const cqCcLinkQueues=new Map();
+function cqCcSerialLink(key,fn){
+  const prev=cqCcLinkQueues.get(key)||Promise.resolve();
+  const task=prev.catch(()=>{}).then(fn);
+  cqCcLinkQueues.set(key,task);
+  task.finally(()=>{if(cqCcLinkQueues.get(key)===task)cqCcLinkQueues.delete(key);}).catch(()=>{});
+  return task;
+}
+function cqCcLive(id){return (db.movements||[]).find(x=>String(x.id)===String(id));}
+function cqCcCanWrite(id){const m=cqCcLive(id);return !!m&&!m.ccDeletePending&&!(db.deletedMovementIds||[]).some(x=>String(x)===String(id));}
+function upsertGastoCC(obraId,payload,removeOnly=false){
+  const sid=String(payload?.cajaChicaMovimientoId||'');
+  return cqCcSerialLink('g:'+sid,async()=>{
+    if(!removeOnly&&!cqCcCanWrite(sid))return;
+    if(!removeOnly&&String(cqCcLive(sid)?.gastosObraId||'')!==String(obraId))return;
+    return cqCcWriteGasto(obraId,payload,removeOnly);
+  });
+}
+async function cqCcWriteGasto(obraId,payload,removeOnly=false){
   if(!window._cqGastosBridge)throw new Error('Firebase no está listo.');
   obraId=String(obraId||'').trim();
   if(!obraId)throw new Error('El movimiento no tiene una obra/destino válido para Gastos.');
@@ -1766,18 +1856,12 @@ async function upsertGastoCC(obraId,payload,removeOnly=false){
     : {...payload,activo:true,updatedAt:now};
   const body={gastosItems:{[id]:entry},updatedAtIntegraciones:now};
 
-  const write=f.setDoc(ref,body,{merge:true});
-  // Firestore puede dejar una promesa pendiente si el dispositivo pierde red.
-  // No dejar la UI eternamente en Sync: el reintento automático es idempotente.
-  await Promise.race([
-    write,
-    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Tiempo agotado al escribir en Gastos')),6500))
-  ]);
+  await f.setDoc(ref,body,{merge:true});
 }
 function cqCcSetCurrentSyncState(id, destino, estado, error=''){
   try{
     const cur=(db&&Array.isArray(db.movements))?db.movements.find(x=>String(x.id||'')===String(id||'')):null;
-    if(!cur)return false;
+    if(!cur||cur.ccDeletePending)return false;
     const at=new Date().toISOString();
     if(destino==='gastos'){
       cur.gastosSyncEstado=estado;
@@ -1793,7 +1877,7 @@ function cqCcSetCurrentSyncState(id, destino, estado, error=''){
 }
 
 async function syncMovementCC(m,oldM=null){
-  if(!m||m.type!=='gasto')return;
+  if(!m||m.type!=='gasto'||!cqCcCanWrite(m.id))return;
   const newObra=m.gastosObraId;
   const oldObra=oldM?.gastosObraId;
 
@@ -1856,7 +1940,8 @@ function launchSyncCC(m,oldM=null){
   });
 }
 async function deleteLinkedGastoCC(m){
-  if(!m||m.type!=='gasto'||!m.gastosObraId)return true;
+  if(!m||m.type!=='gasto')return true;
+  if(!m.gastosObraId)throw new Error('No se pudo identificar la obra vinculada en Gastos.');
   // NO ocultar el error: Deshacer debe enterarse si Gastos no pudo limpiarse.
   await upsertGastoCC(m.gastosObraId,gastoPayloadCC(m),true);
   return true;
@@ -1888,76 +1973,22 @@ function cqCcBackfillGastosObraIdHistoricos(){
 
 async function repararVinculosGastosCC(){
   const btn=document.getElementById('repairGastosBtn');
-  const oldHtml=btn?btn.innerHTML:'';
-  if(cqCcManualRepairRunning)return;
-  cqCcManualRepairRunning=true;
-  clearTimeout(cqCcGastosRepairTimer);
-  cqCcGastosRepairTimer=null;
-  if(btn){btn.disabled=true;btn.innerHTML='<span class="btn-icon">⏳</span>Reparando…';}
-
-  const timeout=(promise,ms,label)=>Promise.race([
-    promise,
-    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Tiempo agotado al reparar '+label)),ms))
-  ]);
-
+  if(cqCcManualRepairRunning||btn?.disabled)return;
+  const oldHtml=btn?.innerHTML;
+  if(btn){btn.disabled=true;btn.innerHTML='⏳ Reparando…';}
   try{
-    if(!window._cqGastosBridge||window.__cqFirebaseServerReadyCC!==true)throw new Error(window.__cqFirebaseLastErrorCC||'Firebase todavía no está conectado.');
-    try{if(!gastosConfigCC)await loadGastosConfigCC();}catch(e){console.warn('Config Gastos para reparación manual',e);}
-
-    const historicosActualizados=cqCcBackfillGastosObraIdHistoricos();
-    const candidatos=(db.movements||[]).filter(m=>
-      m&&m.type==='gasto'&&String(m.gastosObraId||'').trim()&&String(m.gastosSyncEstado||'')!=='ok'
-    );
-
-    if(!candidatos.length){
-      if(historicosActualizados)save();
-      render();
-      alert('No hay vínculos rojos o pendientes para reparar.');
-      return;
-    }
-
-    let reparados=0,errores=0;
-    const mensajes=[];
-    for(const m of candidatos){
-      const oid=String(m.gastosObraId||'').trim();
-      const label=obraLabelCC(oid)||oid||'movimiento';
-      m.gastosSyncEstado='pendiente';
-      m.gastosSyncError='';
-      m.gastosSyncAt=new Date().toISOString();
-      render();
-      try{
-        // Un movimiento por vez. El ID es estable, por lo que no genera duplicados.
-        await timeout(upsertGastoCC(oid,gastoPayloadCC(m),false),8000,label);
-        m.gastosSyncEstado='ok';
-        m.gastosSyncError='';
-        m.gastosSyncAt=new Date().toISOString();
-        reparados++;
-      }catch(e){
-        const msg=String(e&&e.message||e||'Error desconocido');
-        console.warn('Reparar Caja Chica → Gastos · '+label,e);
-        m.gastosSyncEstado='error';
-        m.gastosSyncError=msg;
-        m.gastosSyncAt=new Date().toISOString();
-        errores++;
-        mensajes.push(label+': '+msg);
-
-        // Si Firebase dejó de responder, no iniciar una cadena de operaciones colgadas.
-        if(msg.includes('Tiempo agotado'))break;
-      }
-      saveLocalCC();
-      render();
-    }
-
-    save();render();
-    const base=`${candidatos.length} pendientes · ${reparados} reparados · ${errores} con error`;
-    alert(mensajes.length?base+'\n\n'+mensajes.slice(0,4).join('\n'):base+'\n\nLos vínculos rojos fueron reparados.');
-  }catch(e){
-    console.warn('Reparación manual Caja Chica → Gastos',e);
-    alert('No se pudo reparar: '+String(e&&e.message||e));
-  }finally{
-    cqCcManualRepairRunning=false;
-    if(btn){btn.disabled=false;btn.innerHTML=oldHtml||'<span class="btn-icon">🔧</span>Reparar vínculos';}
-  }
+    if(!window._cqGastosBridge)throw new Error('Firebase todavía no está conectado.');
+    await window._cqGastosBridge.waitReady();
+    await cqCcResumeDeletes();
+    const limite=Date.now()+15000;
+    while((verifyingCC||verifyingMaterialesCC)&&Date.now()<limite)await new Promise(r=>setTimeout(r,100));
+    await verifyGastosCC({repair:true,auto:false,pendingOnly:true});
+    await verifyMaterialesCC();
+    const pending=(db.movements||[]).filter(m=>m.ccDeletePending||m.type==='gasto'&&(
+      m.gastosSyncEstado!=='ok'||m.materialesAgregar&&!['ok','omitido'].includes(m.materialesSyncEstado)));
+    alert(pending.length?pending.length+' movimientos todavía pendientes o con error. Tocá los puntos para ver el detalle.':'No quedan vínculos pendientes o con error.');
+  }catch(e){alert('No se pudo completar la reparación: '+String(e?.message||e));}
+  finally{if(btn){btn.disabled=false;btn.innerHTML=oldHtml;}}
 }
 window.repararVinculosGastosCC=repararVinculosGastosCC;
 
@@ -2007,8 +2038,8 @@ async function verifyGastosCC(options={}){
     // leía secuencialmente TODAS las obras de los cientos de movimientos,
     // demorando la confirmación de una salida nueva durante mucho tiempo.
     // Priorizar los movimientos recientes y dejar el resto para otras pasadas.
-    const gastos=db.movements.filter(m=>m&&m.type==='gasto'&&m.gastosObraId&&
-      (!auto||m.gastosSyncEstado!=='ok'));
+    const gastos=db.movements.filter(m=>m&&m.type==='gasto'&&!m.ccDeletePending&&m.gastosObraId&&
+      (!(auto||options.pendingOnly)||m.gastosSyncEstado!=='ok'));
     if(auto){
       gastos.sort((a,b)=>movementTimeCC(b)-movementTimeCC(a));
       gastos.splice(18);
@@ -2036,9 +2067,10 @@ async function verifyGastosCC(options={}){
       // Una escritura de Caja puede reemplazar db con un objeto fusionado
       // mientras esperamos las lecturas: trabajar siempre sobre el registro vivo.
       const m=db.movements.find(x=>String(x.id||'')===String(candidato.id||''));
-      if(!m||m.type!=='gasto')continue;
+      if(!m||m.type!=='gasto'||m.ccDeletePending)continue;
       if(auto&&m.gastosSyncEstado==='ok')continue;
       const arr=docs[m.gastosObraId];
+      if(arr===undefined)continue;
       let next='error',err='';
 
       if(arr===null){
@@ -2089,7 +2121,7 @@ async function verifyGastosCC(options={}){
 
     if(changed){save();render();}
 
-    const quedanMal=(db.movements||[]).some(m=>m&&m.type==='gasto'&&m.gastosObraId&&m.gastosSyncEstado!=='ok');
+    const quedanMal=(db.movements||[]).some(m=>m&&m.type==='gasto'&&!m.ccDeletePending&&m.gastosObraId&&m.gastosSyncEstado!=='ok');
     if(!quedanMal){
       cqCcGastosAutoRetryCount=0;
     }else if((needsAnotherRetry||auto) && cqCcGastosAutoRetryCount<CQ_CC_GASTOS_MAX_AUTO_RETRIES){
@@ -2114,67 +2146,40 @@ async function verifyGastosCC(options={}){
 }
 
 let verifyingMaterialesCC=false;
-async function verifyMaterialesCC(){
-  if(verifyingMaterialesCC||!window._cqGastosBridge)return;
+let cqCcMatRetry=null;
+let cqCcMatRetries=0;
+function cqCcScheduleMateriales(delay=1000,reset=false){
+  if(reset)cqCcMatRetries=0;
+  clearTimeout(cqCcMatRetry);
+  cqCcMatRetry=setTimeout(()=>verifyMaterialesCC().catch(console.warn),delay);
+}
+async function verifyMaterialesCC(options={}){
+  if(verifyingMaterialesCC||!window._cqGastosBridge||window.__cqFirebaseServerReadyCC!==true)return;
   verifyingMaterialesCC=true;
   try{
+    const movs=(db.movements||[]).filter(m=>m.type==='gasto'&&!m.ccDeletePending&&m.category==='mat'&&m.materialesAgregar&&Number(m.materialesCantidad)>0&&obraVisibleEnModuloCC(m.gastosObraId,'materiales')&&(options.all||m.materialesSyncEstado!=='ok'));
+    if(!movs.length)return;
     const f=window._cqGastosBridge;
-    const movs=db.movements.filter(m=>m.type==='gasto'&&m.category==='mat'&&obraVisibleEnModuloCC(m.gastosObraId,'materiales'));
-
-    // Autorreparación: si hay cargas vinculadas pendientes/rojas, Caja Chica
-    // vuelve a intentar materializarlas sin necesitar abrir Materiales.
-    for(const m of movs){
-      if(!m.materialesAgregar||!(Number(m.materialesCantidad)>0))continue;
-      try{
-        const ok=await cqCcConfirmarMaterializado(m);
-        if(!ok){
-          const payload=ccMaterialesPayload(m,true);
-          await cqCcMaterializar(payload);
-          try{
-            await f.setDoc(f.doc(f.db,'materiales_integraciones',ccMaterialesIntegrationId(m)),payload);
-          }catch(e){
-            console.warn('Respaldo materiales_integraciones no disponible',e);
-          }
-        }
-      }catch(e){
-        console.warn('Reintento Caja Chica → Materiales',e);
-      }
-    }
-
     const snap=await f.getDoc(f.doc(f.db,'materiales','data_planilla_exacta_v4'));
-    const cargas=snap.exists()&&Array.isArray((snap.data()||{}).cargas)?snap.data().cargas:[];
-    let changed=false;
-
-    movs.forEach(m=>{
-      let next='error',err='';
-      if(!m.materialesAgregar){
-        next='no';err='No se agregó a Materiales';
-      }else{
-        const iid=ccMaterialesIntegrationId(m);
-        const c=cargas.find(x=>String(x.integracionId||'')===String(iid));
-        if(!c){
-          next='error';err='La carga vinculada ya no existe en Materiales';
-        }else if(Math.abs((Number(c.qty)||0)-(Number(m.materialesCantidad)||0))>.0001){
-          next='error';err='La cantidad en Materiales no coincide';
-        }else if(m.materialesProducto&&m.materialesProducto.name&&
-                 String(c.matName||'').trim().toLowerCase()!==String(m.materialesProducto.name||'').trim().toLowerCase()){
-          next='error';err='El producto en Materiales no coincide';
-        }else{
-          next='ok';
-        }
-      }
-      if(m.materialesSyncEstado!==next||m.materialesSyncError!==err){
-        m.materialesSyncEstado=next;
-        m.materialesSyncError=err;
-        m.materialesSyncAt=new Date().toISOString();
-        changed=true;
-      }
-    });
-    if(changed){save();render();}
-  }catch(e){
-    console.warn('Verificación Caja Chica ↔ Materiales',e);
-  }finally{
+    if(!snap.exists())throw new Error('No se encontró el documento de Materiales.');
+    const cargas=Array.isArray(snap.data()?.cargas)?snap.data().cargas:[];
+    for(const candidate of movs){
+      const m=cqCcLive(candidate.id);
+      if(!m||m.ccDeletePending||!m.materialesAgregar)continue;
+      if(!options.all&&m.materialesSyncEstado==='ok')continue;
+      const c=cargas.find(x=>String(x.integracionId||'')===ccMaterialesIntegrationId(m));
+      const matches=c&&Math.abs(Number(c.qty)-Number(m.materialesCantidad))<.0001&&
+        cqCcNorm(c.matName)===cqCcNorm(m.materialesProducto?.name)&&
+        (cqCcNorm(c.obraName)===cqCcNorm(m.work)||cqCcClaveObra(c.obraName)&&cqCcClaveObra(c.obraName)===cqCcClaveObra(m.work));
+      try{
+        if(matches){if(m.materialesSyncEstado!=='ok'){cqCcSetCurrentSyncState(m.id,'materiales','ok','');save();render();}}
+        else await syncMaterialesCC(m,null);
+      }catch(e){cqCcSetCurrentSyncState(m.id,'materiales','error',String(e?.message||e));save();render();}
+    }
+  }catch(e){console.warn('Caja Chica → Materiales',e);}
+  finally{
     verifyingMaterialesCC=false;
+    if((db.movements||[]).some(m=>!m.ccDeletePending&&m.materialesAgregar&&obraVisibleEnModuloCC(m.gastosObraId,'materiales')&&m.materialesSyncEstado!=='ok')&&cqCcMatRetries<3){cqCcMatRetries++;cqCcScheduleMateriales(2000*cqCcMatRetries);}
   }
 }
 // CQ 21/10/2026 — Bajo consumo + autorreparación Caja Chica → Gastos.
@@ -2184,7 +2189,9 @@ setTimeout(()=>{
   const necesita=(db.movements||[]).some(m=>m&&m.type==='gasto'&&m.gastosObraId&&m.gastosSyncEstado!=='ok');
   if(necesita)cqCcScheduleGastosRepair(0,false);
 },1500);
-setTimeout(verifyMaterialesCC,1700);
+document.addEventListener('cq-gastos-bridge-ready',()=>{cqCcScheduleMateriales(600,true);cqCcResumeDeletes();});
+document.addEventListener('cq-firebase-server-ready',()=>{cqCcScheduleMateriales(800,true);cqCcResumeDeletes();});
+window.addEventListener('online',()=>{cqCcScheduleMateriales(1200,true);cqCcResumeDeletes();});
 document.addEventListener('cq-gastos-bridge-ready',()=>cqCcScheduleGastosRepair(180,true));
 document.addEventListener('cq-firebase-server-ready',()=>cqCcScheduleGastosRepair(350,true));
 window.addEventListener('online',()=>cqCcScheduleGastosRepair(250,true));
@@ -2205,8 +2212,14 @@ async function openMovement(type,id=''){
   document.getElementById('mAmount').value=m?.amount||'';
   document.getElementById('mCurrency').value=m?.currency||'ars';
   document.getElementById('mNotes').value=m?.notes||'';
-  ccMaterialesCantidad=Number(m?.materialesCantidad)||0;
-  ccMaterialSeleccionado=m?.materialesProducto?Object.assign({},m.materialesProducto):null;
+  ccMaterialesCantidad=0;
+  ccMaterialSeleccionado=null;
+  document.getElementById('mCategory').value='';
+  document.getElementById('mSubrubro').value='';
+  document.getElementById('mSubrubroSearch').value='';
+  document.getElementById('mDestType').value='';
+  document.getElementById('destOffice').classList.remove('active');
+  document.getElementById('destWork').classList.remove('active');
   const isGasto=actualType==='gasto';
   document.getElementById('destinationField').classList.toggle('hide',!isGasto);
   document.getElementById('categoryField').classList.toggle('hide',!isGasto);
@@ -2223,6 +2236,11 @@ async function openMovement(type,id=''){
   const avisoConfig=document.getElementById('cq-caja-config-msg');
   const btnGuardar=document.getElementById('movementSaveBtn');
   const faltaConfig=isGasto&&!gastosConfigCC;
+  modal.dataset.cqPreparando=faltaConfig?'1':'0';
+  ['mCategory','mSubrubroSearch','mWork'].forEach(id=>document.getElementById(id).disabled=!!faltaConfig);
+  document.getElementById('destinationField').style.pointerEvents=faltaConfig?'none':'';
+  document.getElementById('categoryField').style.pointerEvents=faltaConfig?'none':'';
+  document.getElementById('subrubroField').style.pointerEvents=faltaConfig?'none':'';
   if(avisoConfig){
     avisoConfig.hidden=!faltaConfig;
     avisoConfig.classList.remove('error');
@@ -2230,7 +2248,7 @@ async function openMovement(type,id=''){
   }
   if(btnGuardar)btnGuardar.disabled=!!faltaConfig;
   try{
-    if(isGasto)await loadGastosConfigCC(true);
+    if(isGasto&&!gastosConfigCC)await loadGastosConfigCC();
   }catch(e){
     if(modal.dataset.cqApertura!==apertura||!modal.classList.contains('open'))return;
     if(!gastosConfigCC){
@@ -2253,10 +2271,15 @@ async function openMovement(type,id=''){
     if(m?.gastosObraId&&m.gastosObraId!=='oficina')document.getElementById('mWork').value=m.gastosObraId;
     fillCategories(m?.category||'');
     fillSubrubros(m?.subrubro||'');
+    ccMaterialesCantidad=Number(m?.materialesCantidad)||0;
+    ccMaterialSeleccionado=m?.materialesProducto?Object.assign({},m.materialesProducto):null;
     updateMaterialesButtonCC();
   }else{
     document.getElementById('mConcept').value='Ingreso de efectivo';
   }
+  ['destinationField','categoryField','subrubroField'].forEach(id=>document.getElementById(id).style.pointerEvents='');
+  modal.dataset.cqPreparando='0';
+  ['mCategory','mSubrubroSearch','mWork'].forEach(id=>document.getElementById(id).disabled=false);
   if(avisoConfig){avisoConfig.hidden=true;avisoConfig.classList.remove('error');}
   if(btnGuardar)btnGuardar.disabled=false;
 }
@@ -2303,6 +2326,7 @@ function saveMovement(e){
   if(type==='gasto'&&destType==='obra'){
     obraIds=(window.cqObrasSeleccionadasCC||[]).map(String).filter(Boolean);
     if(!obraIds.length)return alert('Seleccioná al menos una obra.');
+    if(!id&&obraIds.some(oid=>!categoriasPermitidasCC(oid).includes(category)))return alert('La categoría no está habilitada para alguna de las obras seleccionadas.');
 
     if(id&&obraIds.length>1){
       return alert('Para modificar un movimiento existente seleccioná una sola obra.');
@@ -2455,6 +2479,7 @@ function saveMovement(e){
         item.materialesSyncAt=new Date().toISOString();
         cqCcSetCurrentSyncState(item.id,'materiales','error',item.materialesSyncError);
         save();render();
+        cqCcScheduleMateriales(1000,true);
       });
     }else if(before&&before.type==='gasto'){
       // Si una edición convierte un gasto en ingreso, quitar también sus vínculos anteriores.
@@ -2470,48 +2495,63 @@ function saveMovement(e){
     if(boton)boton.disabled=false;
   }
 }
+const cqCcDeleteRunning=new Set();
+let cqCcDeleteRetryTimer=null, cqCcDeleteRetries=0;
+function cqCcResumeDeletes(){
+  if(!window.__cqGastosBridge||window.__cqFirebaseServerReadyCC!==true||!window.__cqCajaDatosLeidosCC)return Promise.resolve();
+  return Promise.allSettled((db.movements||[]).filter(m=>m.ccDeletePending).map(m=>cqCcFinishDelete(m.id)));
+}
+function cqCcRetryDeletes(){
+  if(cqCcDeleteRetries>=3)return;
+  clearTimeout(cqCcDeleteRetryTimer);
+  cqCcDeleteRetryTimer=setTimeout(()=>{cqCcDeleteRetries++;cqCcResumeDeletes();},2000*(cqCcDeleteRetries+1));
+}
+async function cqCcFinishDelete(id){
+  const sid=String(id),mov=cqCcLive(sid);
+  if(!mov||!mov.ccDeletePending||cqCcDeleteRunning.has(sid))return;
+  cqCcDeleteRunning.add(sid);
+  mov.ccDeleteError='';render();
+  try{
+    if(mov.type==='gasto'){
+      if(!gastosConfigCC)await loadGastosConfigCC();
+      cqCcBackfillGastosObraIdHistoricos();
+      const live=cqCcLive(sid)||mov;
+      const results=await Promise.allSettled([deleteLinkedGastoCC(live),deleteLinkedMaterialesCC(live)]);
+      const failures=results.filter(x=>x.status==='rejected');
+      if(failures.length)throw new Error(failures.map(x=>String(x.reason?.message||x.reason)).join(' · '));
+    }
+    if(mov.cajaGerenciaVinculado||mov.origen==='cq_caja_gerencia'||mov.integrationId){
+      if(typeof window.__cqCajaChicaDeactivateGerenciaIntegration==='function')await window.__cqCajaChicaDeactivateGerenciaIntegration(mov);
+    }
+    db.deletedMovementIds=Array.isArray(db.deletedMovementIds)?db.deletedMovementIds:[];
+    if(!db.deletedMovementIds.some(x=>String(x)===sid))db.deletedMovementIds.push(sid);
+    db.movements=db.movements.filter(x=>String(x.id)!==sid);
+    save();render();
+    cqCcDeleteRetries=0;
+    const resumen=cqAuditMovementSummaryCC(mov);
+    cqRegistrarActividadCC('eliminar','movimiento',cqAuditDetalleMovimientoCC(mov,'eliminar'),{
+      movimientoId:sid,tipoMovimiento:String(mov.type||''),obraId:String(mov.gastosObraId||''),obra:String(mov.work||''),
+      importe:Number(mov.amount)||0,moneda:String(mov.currency||'ars'),tc:Number(mov.tc)||0,rubro:String(mov.category||''),subrubro:String(mov.subrubro||mov.concept||''),
+      concepto:String(mov.concept||''),comentario:String(mov.notes||''),producto:mov.materialesProducto?.name||'',codigoProducto:mov.materialesProducto?.code||'',cantidad:Number(mov.materialesCantidad)||0,contexto:resumen,versionAuditoria:3,formulario:cqAuditFormSnapshotCC(),antesCompleto:resumen,despuesCompleto:null,antes:resumen,despues:null
+    });
+  }catch(e){
+    const live=cqCcLive(sid);
+    if(live){live.ccDeleteError=String(e?.message||e);live.updatedAt=new Date().toISOString();save();render();}
+    cqCcRetryDeletes();
+  }finally{cqCcDeleteRunning.delete(sid);}
+}
 async function deleteMovement(id){
-  const sid=String(id||'');
-  const mov=db.movements.find(x=>String(x.id||'')===sid);
+  const mov=cqCcLive(id);
   if(!mov)return;
-  if(!confirm('¿Eliminar este movimiento?'))return;
+  if(mov.ccDeletePending){cqCcDeleteRetries=0;await cqCcFinishDelete(id);return;}
+  if(!confirm('¿Eliminar este movimiento y sus vínculos?'))return;
   cqUndoCapture('eliminación de movimiento');
-
-  // Registrar primero la eliminación persistente para que ningún merge,
-  // listener o integración pueda volver a crear el movimiento.
-  db.deletedMovementIds=Array.isArray(db.deletedMovementIds)?db.deletedMovementIds:[];
-  if(!db.deletedMovementIds.some(x=>String(x)===sid))db.deletedMovementIds.push(sid);
-  db.movements=db.movements.filter(x=>String(x.id||'')!==sid);
-  saveLocalCC();
-  render();
-
-  // Si vino de Caja Gerencia, apagar la integración de origen.
-  if(mov.cajaGerenciaVinculado || mov.origen==='cq_caja_gerencia' || mov.integrationId){
-    try{
-      if(typeof window.__cqCajaChicaDeactivateGerenciaIntegration==='function'){
-        await window.__cqCajaChicaDeactivateGerenciaIntegration(mov);
-      }
-    }catch(e){console.warn('No se pudo apagar integración de Caja Gerencia',e);}
-  }
-
-  if(mov.type==='gasto'){
-    try{await deleteLinkedGastoCC(mov);}catch(e){console.warn(e);}
-    try{await deleteLinkedMaterialesCC(mov);}catch(e){console.warn(e);}
-  }
-
-  // Publicar la eliminación después de desactivar vínculos.
-  save();
-  render();
-
-  const resumen=cqAuditMovementSummaryCC(mov);
-  cqRegistrarActividadCC('eliminar','movimiento',cqAuditDetalleMovimientoCC(mov,'eliminar'),{
-    movimientoId:String(mov.id),tipoMovimiento:String(mov.type||''),obraId:String(mov.gastosObraId||''),obra:String(mov.work||''),
-    importe:Number(mov.amount)||0,moneda:String(mov.currency||'ars'),tc:Number(mov.tc)||0,rubro:String(mov.category||''),rubroLabel:String(CAT_LABELS_CC[mov.category]||mov.category||''),
-    subrubro:String(mov.subrubro||mov.concept||''),concepto:String(mov.concept||''),comentario:String(mov.notes||''),
-    producto:mov.materialesProducto?String(mov.materialesProducto.name||''):'',codigoProducto:mov.materialesProducto?String(mov.materialesProducto.code||''):'',
-    cantidad:mov.materialesAgregar?Number(mov.materialesCantidad)||0:0,contexto:resumen,versionAuditoria:3,
-    formulario:cqAuditFormSnapshotCC(),antesCompleto:resumen,despuesCompleto:null,antes:resumen,despues:null
-  });
+  mov.ccDeletePending=true;
+  mov.ccDeleteError='';
+  mov.updatedAt=new Date().toISOString();
+  save();render();
+  cqCcDeleteRetries=0;
+  await cqCcFinishDelete(id);
 }
 function reportFilterOptionsCC(id,placeholder,rows,labelFn){
   const el=document.getElementById(id);if(!el)return;
@@ -2591,8 +2631,8 @@ function render(){
     <td class="amount ${x.type==='gasto'?'red':'green'}">${x.type==='gasto'?'- ':'+ '}${movementMainCC(x)}
       <span class="amount-usd">${x.type==='gasto'?'- ':'+ '}${movementSecondaryCC(x)} · TC ${formatExchangeRate(movementRateCC(x))}</span>
       <div class="row-actions cq-amount-actions">
-        ${dualSyncDotCC(x)}
-        <button class="mini" onclick="openMovement('${x.type}','${x.id}')" title="Editar" aria-label="Editar">✏️</button>
+        ${x.ccDeletePending?`<span class="note" style="color:#94600b" title="${esc(x.ccDeleteError||'Eliminando vínculos')}">${x.ccDeleteError?'Borrado pendiente · reintentar':'Eliminando…'}</span>`:dualSyncDotCC(x)}
+        <button class="mini" ${x.ccDeletePending?'disabled':''} onclick="openMovement('${x.type}','${x.id}')" title="Editar" aria-label="Editar">✏️</button>
         <button class="mini" onclick="deleteMovement('${x.id}')" title="Eliminar" aria-label="Eliminar">🗑️</button>
       </div>
     </td>
@@ -2768,6 +2808,7 @@ async function setDoc(ref,data,options={}){
   const params=[];
   if(options&&options.merge)cqFsLeafPathsCC(data||{}).forEach(fp=>params.push(["updateMask.fieldPaths",fp]));
   if(options&&options.__updateTime)params.push(["currentDocument.updateTime",String(options.__updateTime)]);
+  else if(options&&options.__exists===false)params.push(["currentDocument.exists","false"]);
   return cqFsRequestCC(ref,"PATCH",{fields:cqFsFieldsEncodeCC(data||{})},params,10000);
 }
 // Emulación de onSnapshot por HTTPS (no es un listener en tiempo real).
@@ -2802,6 +2843,7 @@ function onSnapshot(ref,next,error,options={}){
           next(snap);
         }
       }
+      if(!stopped&&typeof options.onHealthy==='function')options.onHealthy();
     }catch(e){if(!stopped&&error)error(e);}
     if(!stopped)timer=setTimeout(tick,document.visibilityState==="hidden"?60000:15000);
   };
@@ -2827,7 +2869,7 @@ async function runTransaction(_db,fn){
       const result=await fn(tx);
       for(const w of writes){
         const rs=reads.get(w.ref.path);
-        await setDoc(w.ref,w.data,{...(w.options||{}),__updateTime:rs&&rs._updateTime?rs._updateTime:undefined});
+        await setDoc(w.ref,w.data,{...(w.options||{}),__updateTime:rs&&rs._updateTime?rs._updateTime:undefined,__exists:w.options?.__createIfMissing&&rs&&!rs.exists()?false:undefined});
       }
       return result;
     }catch(e){
@@ -2879,6 +2921,7 @@ let cqUltimoSnapshotConfirmadoCC=null;
 // Firebase en curso borre un movimiento creado/modificado mientras esperaba.
 let localRevisionCC=0;
 let retryFailuresCC=0;
+let cqProbeFailuresCC=0;
 let serverReadyCC=false;
 // La primera apertura debe esperar la lectura y cualquier sincronización inicial real.
 // Se libera sólo al quedar ON estable: nunca mientras el encabezado muestre Sync.
@@ -2900,7 +2943,7 @@ function cqCajaLiberarSiListaCC(){
 }
 window.__cqFirebaseServerReadyCC=false;
 window.__cqFirebaseLastErrorCC='';
-window.__cqCajaBuild='2026-11-18-gastos-reintento-prioritario';
+window.__cqCajaBuild='2026-11-24-caja-vinculos-y-sync';
 
 function cqTimeoutCC(promise,ms,label='Firebase'){
   let t;
@@ -3159,10 +3202,12 @@ function refreshCC(){
   try{if(typeof render==="function")render();}catch(e){console.warn(e);}
 }
 async function saveRemoteCC(snapInicio=null){
-  if(savingCC||!dirtyCC)return false;
+  if(savingCC||!dirtyCC)return !dirtyCC;
+  // No iniciar otra escritura mientras la lectura inicial todavía no llegó.
+  if(!snapInicio&&!cqCajaLecturaInicialTerminadaCC&&!window.__cqCajaInicialConfirmada)return false;
   savingCC=true;
   let revisionGuardada=localRevisionCC;
-  let fallo=false;
+  let fallo=false, conflicto=false;
   setStatusCC("checking","Sync","Sincronizando Caja Chica con Firebase…");
   try{
     const fdb=await firebaseCC();
@@ -3175,7 +3220,7 @@ async function saveRemoteCC(snapInicio=null){
       // En el arranque, reutilizar la lectura YA confirmada por Firebase.
       // Evita una segunda GET de un documento grande que antes expiraba y
       // dejaba "Cargando Caja Chica" bloqueado innecesariamente.
-      latest=snapInicio||cqUltimoSnapshotConfirmadoCC||await cqTimeoutCC(getDocFromServer(ref),8000,'Lectura Firebase Caja Chica');
+      latest=snapInicio||cqUltimoSnapshotConfirmadoCC||await cqTimeoutCC(getDocFromServer(ref),12000,'Lectura Firebase Caja Chica');
       cqSetServerReadyCC(true,'');
       if(latest.exists()&&latest.data()&&latest.data().state){
         remoteState=normalizeCC(latest.data().state);
@@ -3217,7 +3262,7 @@ async function saveRemoteCC(snapInicio=null){
       updatedBy:String(window._cqUsuarioActual||"")
     },versionRemota
       ?{merge:false,__updateTime:versionRemota}
-      :{merge:false}),9000,'Escritura Firebase Caja Chica');
+      :{merge:false}),13000,'Escritura Firebase Caja Chica');
     // Nunca reutilizar una versión de Firebase si la escritura no devolvió
     // otra updateTime. Ante un conflicto (409/412) se releerá y fusionará.
     cqUltimoSnapshotConfirmadoCC=respuesta&&respuesta.updateTime
@@ -3237,7 +3282,8 @@ async function saveRemoteCC(snapInicio=null){
 
     try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
     retryFailuresCC=0;
-    setStatusCC("ok","ON","Firebase conectado");
+    if(dirtyCC)setStatusCC('checking','Sync','Confirmando otros cambios pendientes…');
+    else setStatusCC("ok","ON","Firebase conectado");
   }catch(e){
     fallo=true;
     retryFailuresCC=Math.min(retryFailuresCC+1,6);
@@ -3245,12 +3291,14 @@ async function saveRemoteCC(snapInicio=null){
     // Al fallar, no volver a escribir sobre una versión remota quizá antigua.
     cqUltimoSnapshotConfirmadoCC=null;
     const msg=String(e&&e.message||e||'Sin conexión Firebase');
-    setStatusCC("err","OFF",msg);
+    conflicto=!!(e&&(e.status===409||e.status===412||/FAILED_PRECONDITION|ABORTED|precondition/i.test(msg)));
+    if(conflicto)setStatusCC('checking','Sync','Otra sesión actualizó Caja Chica. Reintentando…');
+    else setStatusCC("err","OFF",msg);
   }finally{
     savingCC=false;
     if(dirtyCC){
       clearTimeout(timerCC);
-      const delay=fallo?Math.min(30000,2000*Math.pow(2,retryFailuresCC-1)):180;
+      const delay=conflicto?Math.min(2000,180*retryFailuresCC):fallo?Math.min(30000,2000*Math.pow(2,retryFailuresCC-1)):180;
       timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},delay);
       if(!fallo && !window.__cqCajaInicialConfirmada){
         setStatusCC('checking','Sync','Terminando cambios pendientes de Caja Chica…');
@@ -3266,9 +3314,9 @@ async function saveRemoteCC(snapInicio=null){
         window.__cqMovimientoEsperandoFirebase=false;
         if(typeof window.cqCajaAvisoGuardado==='function')
           window.cqCajaAvisoGuardado('ok',String(window.__cqMovimientoTipoPendiente||'Movimiento')+' confirmado en Firebase.');
-      }else if(fallo){
+      }else if(fallo&&!conflicto&&retryFailuresCC>=2){
         if(typeof window.cqCajaAvisoGuardado==='function')
-          window.cqCajaAvisoGuardado('err','No se confirmó en Firebase. El movimiento sigue pendiente; revisá el estado OFF y no borres los datos del navegador.');
+          window.cqCajaAvisoGuardado('err','Firebase todavía no confirmó el movimiento. Se reintentará automáticamente. No borres los datos del navegador.');
       }
     }
   }
@@ -3277,6 +3325,7 @@ async function saveRemoteCC(snapInicio=null){
 function scheduleCC(){
   markDirtyCC();
   clearTimeout(timerCC);
+  if(!cqCajaLecturaInicialTerminadaCC&&!window.__cqCajaInicialConfirmada)return;
   timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},250);
 }
 window.__cqCajaChicaSyncSchedule=scheduleCC;
@@ -3291,7 +3340,8 @@ function cqCambioRealInicialCC(next,remote){
      String(paraComparar.exchangeRateSource||'')===String(remotoNormalizado.exchangeRateSource||'')){
     paraComparar.exchangeRateUpdatedAt=remotoNormalizado.exchangeRateUpdatedAt;
   }
-  return JSON.stringify(paraComparar)!==JSON.stringify(remotoNormalizado);
+  const estable=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+  return estable(paraComparar)!==estable(remotoNormalizado);
 }
 
 async function startCC(){
@@ -3325,7 +3375,7 @@ async function startCC(){
     }
     const fdb=await firebaseCC();
     const ref=doc(fdb,CC_COL,CC_DOC);
-    const snap=await cqTimeoutCC(getDocFromServer(ref),8000,'Conexión inicial Firebase');
+    const snap=await cqTimeoutCC(getDocFromServer(ref),12000,'Conexión inicial Firebase');
     cqUltimoSnapshotConfirmadoCC=snap;
     cqSetServerReadyCC(true,'');
     const local=normalizeCC(cloneCC(window.__cqCajaChicaGetState()));
@@ -3353,7 +3403,7 @@ async function startCC(){
           // Reutiliza el snapshot inicial y protege contra cambios de otra
           // sesión con la precondición de updateTime del documento remoto.
           const confirmado=await saveRemoteCC(snap);
-          if(!confirmado)throw new Error('No se pudo guardar un cambio local pendiente. Firebase mantiene los datos originales.');
+          if(!confirmado)console.warn('Caja Chica: guardado local pendiente, se reintentará.');
         }else{
           clearDirtyCC();
           setBaseTokenCC(lastTokenCC);
@@ -3372,7 +3422,7 @@ async function startCC(){
         if(recuperarLocal){
           markDirtyCC();
           const confirmado=await saveRemoteCC(snap);
-          if(!confirmado)throw new Error('No se pudo recuperar un movimiento local pendiente.');
+          if(!confirmado)console.warn('Caja Chica: recuperación pendiente, se reintentará.');
         }
       }
       try{localStorage.setItem(MIGRATION_KEY,"1");}catch(e){}
@@ -3384,11 +3434,12 @@ async function startCC(){
         throw new Error('No se pudo confirmar la creación de Caja Chica en Firebase.');
     }
 
+    if(unsubCC){unsubCC();unsubCC=null;}
     unsubCC=onSnapshot(ref,s=>{
       // Guardar la versión auténtica incluso si ahora hay una escritura pendiente;
       // la precondición de Firebase evitará sobrescribir cambios de otro equipo.
-      cqUltimoSnapshotConfirmadoCC=s;
-      if(Date.now()<suppressCCUntil||savingCC||dirtyCC||timerCC)return;
+      if(!cqUltimoSnapshotConfirmadoCC?._updateTime||String(s._updateTime||'')>=String(cqUltimoSnapshotConfirmadoCC._updateTime||''))cqUltimoSnapshotConfirmadoCC=s;
+      if(savingCC||dirtyCC||timerCC)return;
       if(!s.exists()||!s.data()||!s.data().state)return;
       const token=String(s.data().updatedAt||"");
       if(token&&token===lastTokenCC)return;
@@ -3406,31 +3457,41 @@ async function startCC(){
 
       // Si el remoto que llegó era viejo y omitía movimientos/estados locales,
       // conservar lo local y reparar Firebase una sola vez. Sin polling.
-      if(JSON.stringify(next)!==JSON.stringify(remote)){
+      if(cqCambioRealInicialCC(next,remote)){
         markDirtyCC();
         clearTimeout(timerCC);
         timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},120);
       }
-      setStatusCC("ok","ON");
+      if(dirtyCC)setStatusCC('checking','Sync','Sincronizando cambios pendientes…');
+      else setStatusCC("ok","ON");
+      cqCcResumeDeletes();
     },e=>{
       console.warn("Caja Chica Firebase listener",e);
-      setStatusCC("err","OFF",String(e&&e.message||e||'Listener Firebase desconectado'));
-      initializedCC=false;
-      clearTimeout(timerCC);
-      if(navigator.onLine)timerCC=setTimeout(()=>{timerCC=null;if(!initializedCC)startCC();},5000);
+      cqProbeFailuresCC++;
+      if(!savingCC){
+        const msg=String(e&&e.message||e||'Listener Firebase desconectado');
+        if(navigator.onLine&&cqProbeFailuresCC===1&&serverReadyCC&&e?.code!=='permission-denied'&&e?.code!=='unauthenticated')setStatusCC('checking','Sync','Comprobando conexión: '+msg);
+        else setStatusCC('err','OFF',msg);
+      }
+      // El adaptador ya reintenta su lectura. No crear un segundo listener ni cancelar escrituras pendientes.
+      cqUltimoSnapshotConfirmadoCC=null;
     },{
       // Ya se leyó (y quizá se guardó) la versión completa durante startCC.
-      initialUpdateTime:String(cqUltimoSnapshotConfirmadoCC&&cqUltimoSnapshotConfirmadoCC._updateTime||'')
+      initialUpdateTime:String(cqUltimoSnapshotConfirmadoCC&&cqUltimoSnapshotConfirmadoCC._updateTime||''),
+      onHealthy:()=>{cqProbeFailuresCC=0;if(!dirtyCC&&!savingCC&&(!serverReadyCC||!document.querySelector('.cq-firebase-status')?.classList.contains('ok'))){setStatusCC('ok','ON','Firebase conectado');}else if(!serverReadyCC){cqSetServerReadyCC(true,'');setStatusCC('checking','Sync','Reintentando cambios pendientes…');}}
     });
 
     retryFailuresCC=0;
     cqCajaLecturaInicialTerminadaCC=true;
+    window.__cqCajaDatosLeidosCC=true;
+    if(dirtyCC&&!savingCC&&!timerCC)timerCC=setTimeout(()=>{timerCC=null;saveRemoteCC();},200);
+    cqCcResumeDeletes();
     // No abrir mientras se encuentre pendiente un guardado de la carga inicial.
     // Antes se ocultaba "Cargando" acá y 300 ms después volvía a aparecer "Sync".
     if(dirtyCC || savingCC || timerCC){
-      setStatusCC('checking','Sync','Terminando sincronización inicial…');
-      if(!window.__cqCajaInicialConfirmada && typeof window.cqSetCargaCaja==='function')
-        window.cqSetCargaCaja('loading','Terminando sincronización inicial de Caja Chica…');
+      if(serverReadyCC)setStatusCC('checking','Sync','Terminando sincronización inicial…');
+      // El saldo leído y la recuperación local ya fueron fusionados. No bloquear por un PATCH pendiente.
+      if(!window.__cqCajaInicialConfirmada && typeof window.cqSetCargaCaja==='function')window.cqSetCargaCaja('ok');
     }else{
       setStatusCC('ok','ON','Firebase conectado');
       cqCajaLiberarSiListaCC();
@@ -3648,7 +3709,7 @@ window.__cqCajaChicaDeactivateGerenciaIntegration=async function(mov){
     return found;
   }catch(e){
     console.warn("No se pudo desactivar integración Caja Gerencia → Caja Chica",e);
-    return false;
+    throw e;
   }
 };
 
@@ -3712,6 +3773,8 @@ setTimeout(()=>{if(window._cqAuthProfile)startCajaGerenciaIntegrations();},1200)
 
 
 async function cqReconnectFirebaseCC(){
+  if(savingCC||initializedCC&&!cqCajaLecturaInicialTerminadaCC)return;
+  clearTimeout(timerCC);timerCC=null;
   try{if(unsubCC){unsubCC();unsubCC=null;}}catch(e){}
   initializedCC=false;
   await startCC();
@@ -4166,7 +4229,9 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
 #movementForm{align-items:start}
 #categoryField{order:10}
 #subrubroField{order:11}
-#cq-obras-field-cc{order:12}
+#cq-obras-field-cc{order:5}
+#movementForm > .field:has(#ccMaterialesRow){order:12}
+#movementForm > .field:has(#ccMaterialesRow:not(.show)){display:none}
 #commentField{order:30}
 
 /* El select viejo de obra queda sólo como compatibilidad interna */
@@ -4463,7 +4528,7 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
   function ensureUI(){
     if(document.getElementById('cq-obras-field-cc'))return;
 
-    const sub=document.getElementById('subrubroField');
+    const sub=document.getElementById('destinationField');
     if(!sub)return;
 
     const field=document.createElement('div');
@@ -4538,6 +4603,10 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
 
       renderDistribucion();
       syncLegacyWork();
+      const catActual=document.getElementById('mCategory').value;
+      const subActual=document.getElementById('mSubrubro').value;
+      fillCategories(catActual);
+      if(subActual&&document.getElementById('mCategory').value===catActual)fillSubrubros(subActual);
       updateMaterialesButtonCC();
     });
 
@@ -4701,8 +4770,8 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     const field=document.getElementById('cq-obras-field-cc');
 
     // Las obras aparecen recién después de elegir categoría y subrubro.
-    field.classList.toggle('show',dest==='obra'&&!!cat&&!!sub);
-    if(dest!=='obra'||!cat||!sub){
+    field.classList.toggle('show',dest==='obra'&&document.getElementById('movementType').value==='gasto');
+    if(dest!=='obra'){
       document.getElementById('cq-obras-picker-cc')?.classList.remove('open');
     }
 
@@ -4717,20 +4786,24 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
   // mostrar todas las categorías de obra normal, y después filtrar
   // la lista de obras según compatibilidad con esa categoría.
   const oldFillCategories=window.fillCategories;
-  window.fillCategories=function(selected=''){
+  window.fillCategories=function(selected){
     const el=document.getElementById('mCategory');
+    const actual=el.value||'';
+    const subActual=document.getElementById('mSubrubro').value||'';
+    const textoActual=document.getElementById('mSubrubroSearch').value||'';
+    if(selected===undefined)selected=actual;
     const dest=document.getElementById('mDestType')?.value||'';
     let cats;
 
     if(dest==='oficina'){
       cats=categoriasPermitidasCC('oficina');
     }else if(dest==='obra'){
-      cats=[...categoriasPermitidasCC('obra')];
+      cats=[...categoriasPermitidasCC('obra')].filter(c=>cqObrasSeleccionadasCC.every(id=>categoriasPermitidasCC(id).includes(c)));
     }else{
       cats=[];
     }
 
-    if(selected&&!cats.includes(selected))cats.push(selected);
+    if(selected&&!cats.includes(selected)&&document.getElementById('movementId').value)cats.push(selected);
     el.innerHTML='<option value="">Seleccionar categoría</option>'+
       cats.map(k=>'<option value="'+k+'">'+esc(CAT_LABELS_CC[k]||k)+'</option>').join('');
 
@@ -4738,32 +4811,46 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     else if(cats.length===1)el.value=cats[0];
     else el.value='';
 
-    fillSubrubros();
+    // Mantener subrubro y texto si la categoría no cambió. No vaciar el formulario
+    // por reconstruir opciones tras elegir una obra o recibir parámetros.
+    const conservar=el.value===actual&&!!actual;
+    fillSubrubros(conservar?subActual:'');
+    if(conservar&&!subActual&&textoActual){
+      document.getElementById('mSubrubroSearch').value=textoActual;
+      renderSubrubroComboCC(textoActual);
+    }
     setTimeout(syncAfterCategoryOrSubrubro,0);
   };
 
   // Reemplazar selección de destino conservando el selector múltiple.
-  window.selectDestination=function(v){
+  window.selectDestination=function(v,abrir=false){
+    if(abrir&&document.getElementById('movementModal')?.dataset.cqPreparando==='1')return;
+    const previo=document.getElementById('mDestType').value;
     currentDestination=v;
     document.getElementById('mDestType').value=v;
     document.getElementById('destOffice').classList.toggle('active',v==='oficina');
     document.getElementById('destWork').classList.toggle('active',v==='obra');
     document.getElementById('mWork').classList.add('hide');
 
-    if(v==='oficina'){
+    if(v!=='obra'){
       cqObrasSeleccionadasCC=[];
       cqImportesPorObraCC={};
     }
 
     if(document.getElementById('movementType').value==='gasto'){
-      fillCategories(document.getElementById('mCategory').value||'');
+      fillCategories(previo===v?(document.getElementById('mCategory').value||''):'');
     }
-    setTimeout(syncAfterCategoryOrSubrubro,0);
+    syncAfterCategoryOrSubrubro();
+    if(abrir&&v==='obra'&&gastosConfigCC)setTimeout(()=>{if(document.getElementById('mDestType').value==='obra'&&document.getElementById('movementModal').classList.contains('open')){document.getElementById('cq-obras-picker-cc')?.classList.add('open');renderObrasLista();}},0);
   };
 
   // Al editar, cargar la obra existente y su importe.
   const oldOpenMovement=window.openMovement;
   window.openMovement=async function(type,id=''){
+    cqObrasSeleccionadasCC=[];
+    cqImportesPorObraCC={};
+    document.getElementById('cq-obras-field-cc')?.classList.remove('show');
+    document.getElementById('cq-obras-picker-cc')?.classList.remove('open');
     const pendiente=oldOpenMovement(type,id);
     const modal=document.getElementById('movementModal');
     const apertura=modal?.dataset.cqApertura;
@@ -4773,9 +4860,6 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     ensureUI();
 
     const m=id?db.movements.find(x=>x.id===id):null;
-    cqObrasSeleccionadasCC=[];
-    cqImportesPorObraCC={};
-
     if(m&&m.type==='gasto'&&m.destType==='obra'&&m.gastosObraId){
       const oid=String(m.gastosObraId);
       cqObrasSeleccionadasCC=[oid];
@@ -4950,10 +5034,16 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
   // El TC de Caja Gerencia se refresca en segundo plano y, si responde, actualiza el campo.
   const prevOpen=window.openMovement;
   window.openMovement=async function(type,id=''){
+    // Un segundo toque (o callback repetido) no reinicia una salida que ya se está editando.
+    const actual=document.getElementById('movementModal');
+    if(actual?.classList.contains('open'))return;
     bindTc();
 
     if(!id){
       cqTcUsuarioEditando=false;
+      const tc=tcGerenciaActual();
+      document.getElementById('mTc').value=tc>0?tc:'';
+      if(tc>0)setTcForm(tc,'gerencia');
       // No usar await acá: una lectura lenta/offline de Firebase no debe dejar
       // muertos los botones Registrar salida / Registrar ingreso.
       cargarTcGerenciaEnFormulario(true).catch(function(e){
@@ -4961,6 +5051,7 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
       });
     }
 
+    if(id){const existente=db.movements.find(x=>x.id===id);cqTcUsuarioEditando=Number(existente?.tc)>0;const valor=Number(existente?.tc)||tcGerenciaActual();document.getElementById('mTc').value=valor>0?valor:'';if(valor>0)setTcForm(valor,cqTcUsuarioEditando?'movimiento':'gerencia');}
     const pendiente=prevOpen(type,id);
     const modal=document.getElementById('movementModal');
     const apertura=modal?.dataset.cqApertura;
