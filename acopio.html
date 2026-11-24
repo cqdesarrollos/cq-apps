@@ -2914,6 +2914,13 @@ html.cq-fast-1h-acopio #cq-auth-guard{display:none!important}
 .cq-entregas-back{
   background:#fff;color:var(--green);
 }
+.cq-entregas-folder{background:#FFF4E2;color:#815513;border-color:#DDBB7D}
+.cq-entregas-archivo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:12px 0}
+.cq-entregas-archivo-head strong{font-size:15px;color:var(--green)}
+.cq-entregas-borrar{background:#FDECEA;color:var(--red);border-color:#E8B7AF}
+.cq-entregas-borrar-uno{border:1px solid #E8B7AF;border-radius:8px;background:#FFF4F2;color:var(--red);padding:7px 9px;cursor:pointer;font-weight:800;font-size:11px}
+.cq-entregas-archivo-meta{font-size:10px;color:#6F897B;margin-top:3px}
+
 .cq-obra-badge{
   font-weight:900!important;
   white-space:nowrap!important;
@@ -3885,10 +3892,12 @@ body.cq-acopio-cargando{overflow:hidden!important}
       <button type="button" class="cq-entregas-action cq-entregas-undo" id="cq-entregas-undo" onclick="deshacer()" disabled>↶ Deshacer</button>
       <button type="button" class="cq-entregas-action cq-entregas-all" id="cq-entregas-marcar-todo" onclick="marcarTodasEntregasPendientes()">✓ Marcar todo</button>
       <button type="button" class="cq-entregas-action cq-entregas-wsp" id="cq-entregas-whatsapp" onclick="compartirEntregasPendientesPDF()">◉ WhatsApp PDF</button>
+      <button type="button" class="cq-entregas-action cq-entregas-folder" id="cq-entregas-folder" onclick="cqToggleCarpetaEntregas()">📁 Entregados (0)</button>
       <button type="button" class="cq-entregas-action cq-entregas-back" onclick="goHome()">← Volver</button>
     </div>
   </div>
   <div id="cq-entregas-pendientes-content"></div>
+  <div id="cq-entregas-archivo-content" style="display:none"></div>
 </div>
 
 <!-- ═══════════════ TABS (dentro de un acopio) ═══════════════ -->
@@ -5024,7 +5033,9 @@ function currentVisibleTab(){
 function deshacer(){
   if(!undoStack.length){toast('No hay nada para deshacer');return;}
   try{
+    var antesUndoEntrega=DB;
     DB=sanitizeDB(JSON.parse(undoStack.pop()));
+    cqEntregaUndoEstado(antesUndoEntrega,DB);
     // Si Deshacer restauró un retiro eliminado, liberar únicamente ese tombstone.
     // Así el borrado normal sigue blindado contra snapshots viejos, pero Undo conserva su función.
     try{
@@ -5151,6 +5162,8 @@ async function saveToFirebase(){
             if(!idsLocales.has(rid) && !(tomb && cqRetirosBorradosPendientes && cqRetirosBorradosPendientes.has(tomb))){
               locales.push(r);
               idsLocales.add(rid);
+            }else if(idsLocales.has(rid)){
+              cqEntregaCopiarEstado(locales.find(function(x){return String(x&&x.id)===rid;}),r);
             }
           });
           acLocal.retiros=locales;
@@ -5241,6 +5254,8 @@ async function saveToFirebase(){
             if(!ids.has(rid) && !(tomb && cqRetirosBorradosPendientes && cqRetirosBorradosPendientes.has(tomb))){
               arr.push(r);
               ids.add(rid);
+            }else if(ids.has(rid)){
+              cqEntregaCopiarEstado(arr.find(function(x){return String(x&&x.id)===rid;}),r);
             }
           });
           acActual.retiros=arr;
@@ -6450,6 +6465,7 @@ function abrirMenuAcopios(){
 function abrirEntregasPendientes(){
   curAcopioId=null;
   cqSeccionAcopio='entregas';
+  cqCarpetaEntregasAbierta=false;
   cqOcultarVistasRaiz();
   document.getElementById('view-entregas-pendientes').style.display='block';
   cqResetHeaderRaiz();
@@ -9465,7 +9481,7 @@ async function cqGuardarRetiroFuenteExacto(acopioId,retiro,activo){
     }else{
       var copia=JSON.parse(JSON.stringify(retiro));
       var pos=ac.retiros.findIndex(function(r){return String(r&&r.id)===rid;});
-      if(pos>=0)ac.retiros[pos]=copia;
+      if(pos>=0){cqEntregaCopiarEstado(copia,ac.retiros[pos]);ac.retiros[pos]=copia;}
       else ac.retiros.push(copia);
     }
 
@@ -10100,31 +10116,90 @@ function marcarLlegadaObra(retiroId,checked){
   r.llegoObra=!!checked;
   r.llegoObraAt=checked?new Date().toISOString():'';
   r.llegoObraPor=checked?cqNombreUsuarioLlegada():'';
+  r.entregaHistorialBorrado=false;
+  cqEntregaMarcarCambio(r);
   persist();
   renderControlLlegadas();
   toast(checked?'✓ Material marcado como recibido en obra':'Llegada desmarcada');
 }
 
-function cqTodosRetirosPendientes(){
+// Control de entregas: sólo modifica el estado de recepción, nunca el retiro económico.
+var cqCarpetaEntregasAbierta=false;
+function cqEsServicioEntrega(r,m){
+  return [r&&r.materialName,m&&m.nom,r&&r.subrubro,m&&m.cat].some(function(v){
+    var n=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+    return /\bservicios?\s+(?:(?:de|del|para)\s+)?(?:entregas?|envios?|fletes?)\b/.test(n) || /^(?:entregas?|envios?|fletes?)\s+(?:de\s+)?servicios?$/.test(n);
+  });
+}
+function cqTodosRetirosEntrega(entregados){
   var salida=[];
   (DB.acopios||[]).forEach(function(a){
     (a.retiros||[]).forEach(function(r){
-      if(r && Number(r.qty)>0 && r.llegoObra!==true){
-        var m=(a.mats||[]).find(function(x){return String(x.id)===String(r.matId);});
-        var obra='';
-        if(r.obraHistorica) obra=r.obraHistorica;
-        else if(Array.isArray(a.obras) && a.obras[r.obraIdx]!=null) obra=a.obras[r.obraIdx];
-        salida.push({
-          acopioId:a.id,
-          acopioNombre:a.nombre||'Acopio',
-          retiro:r,
-          material:m,
-          obra:obra||'—'
-        });
-      }
+      if(!r || !(Number(r.qty)>0) || (r.llegoObra===true)!==entregados || r.entregaHistorialBorrado===true)return;
+      var m=(a.mats||[]).find(function(x){return String(x.id)===String(r.matId);});
+      if(cqEsServicioEntrega(r,m))return;
+      var obra=r.obraHistorica||(Array.isArray(a.obras)?a.obras[r.obraIdx]:'');
+      salida.push({acopioId:a.id,acopioNombre:a.nombre||'Acopio',retiro:r,material:m,obra:obra||'—'});
     });
   });
   return salida;
+}
+function cqTodosRetirosPendientes(){return cqTodosRetirosEntrega(false);}
+function cqTodosRetirosEntregados(){return cqTodosRetirosEntrega(true);}
+function cqEntregaVersion(r){return String(r&&(r.entregaEstadoAt||r.llegoObraAt)||'');}
+function cqEntregaMarcarCambio(r){
+  var previo=Date.parse(cqEntregaVersion(r))||0;
+  r.entregaEstadoAt=new Date(Math.max(Date.now(),previo+1)).toISOString();
+}
+function cqEntregaCopiarEstado(dest,src){
+  if(!dest||!src||cqEntregaVersion(src)<=cqEntregaVersion(dest))return;
+  ['llegoObra','llegoObraAt','llegoObraPor','entregaHistorialBorrado','entregaEstadoAt'].forEach(function(k){
+    if(Object.prototype.hasOwnProperty.call(src,k))dest[k]=src[k];else delete dest[k];
+  });
+}
+function cqEntregaUndoEstado(antes,despues){
+  (despues.acopios||[]).forEach(function(a){
+    var viejo=(antes.acopios||[]).find(function(x){return String(x.id)===String(a.id);});
+    if(!viejo)return;
+    (a.retiros||[]).forEach(function(r){
+      var v=(viejo.retiros||[]).find(function(x){return String(x.id)===String(r.id);});
+      if(!v)return;
+      if((r.llegoObra===true)!==(v.llegoObra===true)||(r.entregaHistorialBorrado===true)!==(v.entregaHistorialBorrado===true)||String(r.llegoObraAt||'')!==String(v.llegoObraAt||'')){
+        r.entregaEstadoAt=cqEntregaVersion(v)>cqEntregaVersion(r)?cqEntregaVersion(v):cqEntregaVersion(r);
+        cqEntregaMarcarCambio(r);
+      }
+    });
+  });
+}
+function cqToggleCarpetaEntregas(){
+  cqCarpetaEntregasAbierta=!cqCarpetaEntregasAbierta;
+  renderEntregasPendientesGlobal();
+}
+function cqBorrarHistorialEntregas(acopioId,retiroId){
+  var items=cqTodosRetirosEntregados().filter(function(it){return acopioId==null||(String(it.acopioId)===String(acopioId)&&String(it.retiro.id)===String(retiroId));});
+  if(!items.length)return;
+  var msg=acopioId==null?'¿Borrar las '+items.length+' entregas del historial?':'¿Borrar esta entrega del historial?';
+  if(!confirm(msg+'\n\nNo se eliminarán los retiros, materiales, gastos ni stock. No volverán a pendientes.'))return;
+  pushUndo();
+  items.forEach(function(it){it.retiro.entregaHistorialBorrado=true;cqEntregaMarcarCambio(it.retiro);});
+  persist();renderEntregasPendientesGlobal();
+  toast(items.length===1?'Entrega borrada del historial':'Historial de entregados borrado');
+}
+function cqRenderCarpetaEntregas(items){
+  var cont=document.getElementById('cq-entregas-archivo-content');
+  if(!cont)return;
+  items=items.slice().sort(function(a,b){return String(b.retiro.llegoObraAt||b.retiro.fecha||'').localeCompare(String(a.retiro.llegoObraAt||a.retiro.fecha||''));});
+  var head='<div class="cq-entregas-archivo-head"><strong>📁 Entregados · '+items.length+'</strong><button class="cq-entregas-action cq-entregas-borrar" onclick="cqBorrarHistorialEntregas()" '+(!items.length?'disabled':'')+'>Borrar todos</button></div>';
+  if(!items.length){cont.innerHTML=head+'<div class="cq-entregas-vacio"><strong>No hay entregas en la carpeta</strong><span>Las entregas confirmadas aparecerán acá.</span></div>';return;}
+  var grupos=new Map();
+  items.forEach(function(it){var r=it.retiro,d=new Date(r.llegoObraAt||'');var fecha=!isNaN(d.getTime())?d.toLocaleDateString('es-AR'):(r.fecha?fmtFecha(r.fecha):'Sin fecha');if(!grupos.has(fecha))grupos.set(fecha,[]);grupos.get(fecha).push(it);});
+  cont.innerHTML=head+Array.from(grupos).map(function(grupo){
+    var filas=grupo[1].map(function(it){
+      var r=it.retiro,m=it.material,nom=r.materialName||(m&&m.nom)||'(material eliminado)',unidad=r.materialUnidad||(m&&m.unidad)||'';
+      return '<tr class="cq-llegadas-row-ok"><td><span class="badge cq-obra-badge" style="'+cqEstiloColorObra(it.obra)+'">'+cqEscapeHtml(it.obra)+'</span><div class="cq-entregas-acopio">'+cqEscapeHtml(it.acopioNombre)+'</div></td><td class="cq-llegadas-producto">'+cqEscapeHtml(nom)+'<div class="cq-entregas-archivo-meta">'+cqEscapeHtml(r.llegoObraPor||'')+'</div></td><td class="cq-llegadas-sub">'+cqEscapeHtml(r.subrubro||'—')+'</td><td class="cq-llegadas-qty">'+fmtN(Number(r.qty)||0,2)+' '+cqEscapeHtml(unidad)+'</td><td class="cq-llegadas-check"><button type="button" class="cq-entregas-borrar-uno" title="Borrar del historial" onclick="cqBorrarHistorialEntregas('+Number(it.acopioId)+','+Number(r.id)+')">Borrar</button></td></tr>';
+    }).join('');
+    return '<section class="cq-llegadas-day"><div class="cq-llegadas-day-hd"><span class="cq-llegadas-day-date">'+cqEscapeHtml(grupo[0])+'</span><span class="cq-llegadas-day-count">'+grupo[1].length+' entregados</span></div><div class="cq-llegadas-table-card"><div class="tbl-wrap"><table class="cq-llegadas-table"><thead><tr><th>Obra</th><th>Producto</th><th>Subrubro</th><th class="r">Cantidad</th><th>Historial</th></tr></thead><tbody>'+filas+'</tbody></table></div></div></section>';
+  }).join('');
 }
 
 function actualizarContadorEntregasPendientes(){
@@ -10168,6 +10243,8 @@ function marcarLlegadaObraGlobal(acopioId,retiroId,control){
   r.llegoObra=true;
   r.llegoObraAt=new Date().toISOString();
   r.llegoObraPor=cqNombreUsuarioLlegada();
+  r.entregaHistorialBorrado=false;
+  cqEntregaMarcarCambio(r);
   persist();
   actualizarContadorEntregasPendientes();
   renderEntregasPendientesGlobal();
@@ -10189,6 +10266,8 @@ function marcarTodasEntregasPendientes(){
     it.retiro.llegoObra=true;
     it.retiro.llegoObraAt=ahora;
     it.retiro.llegoObraPor=usuario;
+    it.retiro.entregaHistorialBorrado=false;
+    cqEntregaMarcarCambio(it.retiro);
   });
   persist();
   actualizarContadorEntregasPendientes();
@@ -10394,6 +10473,15 @@ function renderEntregasPendientesGlobal(){
   if(btnTodo)btnTodo.disabled=!items.length;
   var btnWsp=document.getElementById('cq-entregas-whatsapp');
   if(btnWsp)btnWsp.disabled=!items.length;
+  var archivo=cqTodosRetirosEntregados();
+  var carpeta=document.getElementById('cq-entregas-folder');
+  if(carpeta)carpeta.textContent=cqCarpetaEntregasAbierta?'← Pendientes ('+items.length+')':'📁 Entregados ('+archivo.length+')';
+  var panel=document.getElementById('cq-entregas-archivo-content');
+  if(panel)panel.style.display=cqCarpetaEntregasAbierta?'block':'none';
+  cont.style.display=cqCarpetaEntregasAbierta?'none':'block';
+  if(btnTodo)btnTodo.style.display=cqCarpetaEntregasAbierta?'none':'';
+  if(btnWsp)btnWsp.style.display=cqCarpetaEntregasAbierta?'none':'';
+  if(cqCarpetaEntregasAbierta){cqRenderCarpetaEntregas(archivo);return;}
 
   if(!items.length){
     cont.innerHTML='<div class="cq-entregas-vacio"><div class="cq-entregas-ok">✓</div><strong>No hay entregas pendientes</strong><span>Todo lo cargado fue confirmado como recibido en obra.</span></div>';
@@ -10448,7 +10536,7 @@ function renderControlLlegadas(){
   var a=getAcopio();
   if(!a){cont.innerHTML='';return;}
 
-  var retiros=(a.retiros||[]).filter(function(r){return Number(r.qty)>0;}).sort(function(x,y){
+  var retiros=(a.retiros||[]).filter(function(r){return Number(r.qty)>0 && r.entregaHistorialBorrado!==true && !cqEsServicioEntrega(r,getMat(r.matId));}).sort(function(x,y){
     var fx=String(x.fecha||''),fy=String(y.fecha||'');
     if(fx!==fy)return fy.localeCompare(fx); // fecha más nueva primero
     var ox=String(retiroObraLabel(x)||''),oy=String(retiroObraLabel(y)||'');
