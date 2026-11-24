@@ -848,6 +848,19 @@ async function cqUndoLast(){
   const current=cqCloneState(db);
   const restored=cqCloneState(undo.state);
   if(!restored)return;
+  // Una baja definitiva no debe levantar sus bloqueos remotos: al deshacerla,
+  // restaurar ese gasto con identidad nueva y mantener el ID anterior eliminado.
+  const idsActuales=new Set((current.movements||[]).map(m=>String(m.id)));
+  const idsBorrados=new Set((current.deletedMovementIds||[]).map(String));
+  for(const m of restored.movements||[]){
+    if(m.type==='gasto'&&!idsActuales.has(String(m.id))&&idsBorrados.has(String(m.id))&&
+       (m.materialesAgregar||m.materialesProducto||m.materialesSyncEstado==='ok')){
+      const anterior=String(m.id);
+      m.id=uuid();m.updatedAt=new Date().toISOString();
+      m.gastosSyncEstado='pendiente';m.materialesSyncEstado=m.materialesAgregar?'pendiente':'no';
+      restored.deletedMovementIds=[...new Set([...(restored.deletedMovementIds||[]).map(String),anterior])];
+    }
+  }
 
   cqUndoRunning=true;
   cqUndoRefresh();
@@ -1470,6 +1483,38 @@ function cqCcResolverMat(data,ev){
   }
   return mat;
 }
+function cqCcMaterialDeleteKeys(ev,cargas=[]){
+  const sid=String(ev.sourceMovementId||'').trim();
+  const ids=[String(ev.integrationId||'')];
+  const keys=[];
+  if(sid)keys.push('src:caja_chica|mov:'+sid+'|obra:'+cqCcNorm(ev.obraName));
+  (cargas||[]).forEach(c=>{
+    if(c.integracionId)ids.push(String(c.integracionId));
+    if(sid)keys.push('src:caja_chica|mov:'+sid+'|obra:'+cqCcNorm(c.obraNameOrigen||c.obraName));
+  });
+  return {ids:[...new Set(ids.filter(Boolean))],keys:[...new Set(keys)]};
+}
+function cqCcUnionMaterialDelete(a,b){return [...new Set([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])].map(String).filter(Boolean))];}
+function cqCcAddMaterialDelete(data,marks){
+  data.ignoredIntegrationIds=cqCcUnionMaterialDelete(data.ignoredIntegrationIds,marks.ids);
+  data.ignoredIntegrationKeys=cqCcUnionMaterialDelete(data.ignoredIntegrationKeys,marks.keys);
+}
+async function cqCcPersistMaterialDelete(ev){
+  const f=window._cqGastosBridge;
+  const main=f.doc(f.db,'materiales','data_planilla_exacta_v4');
+  const snap=await f.getDoc(main);
+  const rows=(snap.exists()&&Array.isArray(snap.data()?.cargas)?snap.data().cargas:[]).filter(c=>String(c.integracionId||'')===String(ev.integrationId)||(
+    !!ev.sourceMovementId&&String(c.sourceMovementId||'')===String(ev.sourceMovementId)&&['caja_chica','cq_caja_chica'].includes(String(c.origen||''))));
+  const marks=cqCcMaterialDeleteKeys(ev,rows);
+  // El documento lateral es el mismo que lee Materiales al abrir y sincronizar.
+  // Unión con los bloqueos anteriores; no bloquear compras idénticas de otro movimiento.
+  const ref=f.doc(f.db,'materiales','tombstones_cargas_v2');
+  await f.runTransaction(f.db,async tx=>{
+    const old=await tx.get(ref), d=old.exists()?old.data()||{}:{};
+    tx.set(ref,{...d,ids:cqCcUnionMaterialDelete(d.ids||d.ignoredIntegrationIds,marks.ids),keys:cqCcUnionMaterialDelete(d.keys||d.ignoredIntegrationKeys,marks.keys),updatedAt:new Date().toISOString()},{__createIfMissing:true});
+  });
+  return marks;
+}
 function cqCcAplicarEvento(data,ev){
   data=data||{};
   if(!Array.isArray(data.cargas))data.cargas=[];
@@ -1484,6 +1529,12 @@ function cqCcAplicarEvento(data,ev){
     (String(c?.sourceMovementId||'')===String(ev.sourceMovementId||'')&&!!ev.sourceMovementId&&['caja_chica','cq_caja_chica'].includes(String(c?.origen||'')));};
   var idx=data.cargas.findIndex(coincide);
 
+  if(ev.active!==false){
+    const marks=cqCcMaterialDeleteKeys(ev);
+    if((data.ignoredIntegrationIds||[]).some(x=>marks.ids.includes(String(x)))||
+       (data.ignoredIntegrationKeys||[]).some(x=>marks.keys.includes(String(x))))
+      throw new Error('El vínculo fue eliminado definitivamente en Materiales.');
+  }
   if(ev.active===false){
     if(idx<0)return {data:data,cambio:false};
     var matId=data.cargas[idx].matId;
@@ -1540,7 +1591,7 @@ function cqCcAplicarEvento(data,ev){
   else data.cargas.push(entry);
   return {data:data,cambio:true};
 }
-async function cqCcMaterializar(ev){
+async function cqCcMaterializar(ev,deleteMarks=null){
   if(!window._cqGastosBridge)throw new Error('Firebase no está listo');
   var f=window._cqGastosBridge;
   if(!f.runTransaction)throw new Error('Firebase transaccional no disponible');
@@ -1555,7 +1606,8 @@ async function cqCcMaterializar(ev){
     var data=snap.data()||{};
     try{delete data.updatedAt;}catch(_e){}
     var r=cqCcAplicarEvento(data,ev);
-    if(r.cambio){
+    if(deleteMarks&&ev.active===false)cqCcAddMaterialDelete(r.data,deleteMarks);
+    if(r.cambio||deleteMarks){
       r.data.updatedAt=new Date().toISOString();
       r.data.updatedByIntegration=String(ev.integrationId||'');
       tx.set(ref,r.data);
@@ -1651,7 +1703,10 @@ async function deleteLinkedMaterialesCC(m){
     if(!window._cqGastosBridge)throw new Error('Firebase no está listo para eliminar en Materiales.');
     const f=window._cqGastosBridge;
     const payload=ccMaterialesPayload(m,false);
-    await cqCcMaterializar(payload);
+    // Primero registrar la baja persistente. Así una copia local vieja de Materiales
+    // no vuelve a incorporar la carga al fusionarse con Firebase.
+    const marks=await cqCcPersistMaterialDelete(payload);
+    await cqCcMaterializar(payload,marks);
     // Desactivar también el evento para impedir que otra sesión lo reactive.
     // Si nunca se solicitó Materiales, no crear un evento nuevo innecesario.
     if(m.materialesAgregar){
@@ -2181,6 +2236,8 @@ async function openMovement(type,id=''){
   const avisoConfig=document.getElementById('cq-caja-config-msg');
   const btnGuardar=document.getElementById('movementSaveBtn');
   const faltaConfig=isGasto&&!gastosConfigCC;
+  modal.dataset.cqPreparando=faltaConfig?'1':'0';
+  ['mCategory','mSubrubroSearch','mWork'].forEach(id=>document.getElementById(id).disabled=!!faltaConfig);
   document.getElementById('destinationField').style.pointerEvents=faltaConfig?'none':'';
   document.getElementById('categoryField').style.pointerEvents=faltaConfig?'none':'';
   document.getElementById('subrubroField').style.pointerEvents=faltaConfig?'none':'';
@@ -2221,6 +2278,8 @@ async function openMovement(type,id=''){
     document.getElementById('mConcept').value='Ingreso de efectivo';
   }
   ['destinationField','categoryField','subrubroField'].forEach(id=>document.getElementById(id).style.pointerEvents='');
+  modal.dataset.cqPreparando='0';
+  ['mCategory','mSubrubroSearch','mWork'].forEach(id=>document.getElementById(id).disabled=false);
   if(avisoConfig){avisoConfig.hidden=true;avisoConfig.classList.remove('error');}
   if(btnGuardar)btnGuardar.disabled=false;
 }
@@ -2749,6 +2808,7 @@ async function setDoc(ref,data,options={}){
   const params=[];
   if(options&&options.merge)cqFsLeafPathsCC(data||{}).forEach(fp=>params.push(["updateMask.fieldPaths",fp]));
   if(options&&options.__updateTime)params.push(["currentDocument.updateTime",String(options.__updateTime)]);
+  else if(options&&options.__exists===false)params.push(["currentDocument.exists","false"]);
   return cqFsRequestCC(ref,"PATCH",{fields:cqFsFieldsEncodeCC(data||{})},params,10000);
 }
 // Emulación de onSnapshot por HTTPS (no es un listener en tiempo real).
@@ -2809,7 +2869,7 @@ async function runTransaction(_db,fn){
       const result=await fn(tx);
       for(const w of writes){
         const rs=reads.get(w.ref.path);
-        await setDoc(w.ref,w.data,{...(w.options||{}),__updateTime:rs&&rs._updateTime?rs._updateTime:undefined});
+        await setDoc(w.ref,w.data,{...(w.options||{}),__updateTime:rs&&rs._updateTime?rs._updateTime:undefined,__exists:w.options?.__createIfMissing&&rs&&!rs.exists()?false:undefined});
       }
       return result;
     }catch(e){
@@ -4726,8 +4786,12 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
   // mostrar todas las categorías de obra normal, y después filtrar
   // la lista de obras según compatibilidad con esa categoría.
   const oldFillCategories=window.fillCategories;
-  window.fillCategories=function(selected=''){
+  window.fillCategories=function(selected){
     const el=document.getElementById('mCategory');
+    const actual=el.value||'';
+    const subActual=document.getElementById('mSubrubro').value||'';
+    const textoActual=document.getElementById('mSubrubroSearch').value||'';
+    if(selected===undefined)selected=actual;
     const dest=document.getElementById('mDestType')?.value||'';
     let cats;
 
@@ -4747,12 +4811,20 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     else if(cats.length===1)el.value=cats[0];
     else el.value='';
 
-    fillSubrubros();
+    // Mantener subrubro y texto si la categoría no cambió. No vaciar el formulario
+    // por reconstruir opciones tras elegir una obra o recibir parámetros.
+    const conservar=el.value===actual&&!!actual;
+    fillSubrubros(conservar?subActual:'');
+    if(conservar&&!subActual&&textoActual){
+      document.getElementById('mSubrubroSearch').value=textoActual;
+      renderSubrubroComboCC(textoActual);
+    }
     setTimeout(syncAfterCategoryOrSubrubro,0);
   };
 
   // Reemplazar selección de destino conservando el selector múltiple.
   window.selectDestination=function(v,abrir=false){
+    if(abrir&&document.getElementById('movementModal')?.dataset.cqPreparando==='1')return;
     const previo=document.getElementById('mDestType').value;
     currentDestination=v;
     document.getElementById('mDestType').value=v;
@@ -4788,9 +4860,6 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
     ensureUI();
 
     const m=id?db.movements.find(x=>x.id===id):null;
-    cqObrasSeleccionadasCC=[];
-    cqImportesPorObraCC={};
-
     if(m&&m.type==='gasto'&&m.destType==='obra'&&m.gastosObraId){
       const oid=String(m.gastosObraId);
       cqObrasSeleccionadasCC=[oid];
@@ -4965,6 +5034,9 @@ window.cqLimpiarMovimientosCajaGerenciaEliminados=function(){
   // El TC de Caja Gerencia se refresca en segundo plano y, si responde, actualiza el campo.
   const prevOpen=window.openMovement;
   window.openMovement=async function(type,id=''){
+    // Un segundo toque (o callback repetido) no reinicia una salida que ya se está editando.
+    const actual=document.getElementById('movementModal');
+    if(actual?.classList.contains('open'))return;
     bindTc();
 
     if(!id){
